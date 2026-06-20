@@ -142,7 +142,6 @@
             ms._docsURL           = "https://docs-ms.mudbourn.info"  -- opened by Settings › Documentation
             ms._updateManifestURL = nil  -- set to your MANIFEST.json URL (e.g. raw.githubusercontent.com/.../MANIFEST.json) to enable auto-update
 
-            require("hs.ipc")
             require("hs.eventtap")
             require("hs.mouse")
             require("hs.uielement")
