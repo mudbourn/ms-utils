@@ -1,0 +1,2338 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>mudscript Settings</title>
+        <style>
+            /* ── Font ───────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
+            /* ── Tokens — Devil May Cry 3 palette ───────────────────────────── */
+            /* ── Tokens — Devil May Cry 3 ──────────────────────────────── */
+            :root {
+                /* Depths of the Temen-ni-gru */
+                --bg: #060402; /* void */
+                --surface: #100806; /* ancient stone */
+                --surface2: #1c100c; /* raised surface */
+                --hover: #301610; /* ember hover */
+
+                /* Dante red / Vergil steel */
+                --accent: #c41a1a; /* crimson */
+                --accent-hi: #e52424; /* bright combat flash */
+
+                /* Status colours */
+                --success: #4a7820; /* hunter green */
+                --danger-bg: #1e0608; /* blood shadow bg */
+                --danger: #d42020; /* open wound */
+                --warning: #c47820; /* hellfire amber */
+
+                /* Text — aged manuscript */
+                --text: #f0ddb0; /* parchment */
+                --text2: rgba(210, 165, 100, 0.85);
+                --text3: rgba(160, 105, 60, 0.55);
+
+                /* Structure */
+                --border: rgba(130, 50, 22, 0.55);
+                --radius: 3px; /* sharp — industrial Gothic */
+                --radius-s: 2px;
+            }
+
+            /* ── Reset ───────────────────────────────────────────────────────── */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            html,
+            body {
+                height: 100%;
+                overflow: hidden;
+                background: var(--bg);
+            }
+            body {
+                font-family: "Almendra", Palatino, Georgia, serif;
+                font-size: 13px;
+                color: var(--text);
+                -webkit-font-smoothing: antialiased;
+            }
+            button {
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: inherit;
+                font: inherit;
+            }
+            input {
+                font: inherit;
+                color: inherit;
+                background: none;
+                border: none;
+                outline: none;
+            }
+            input[type="range"] {
+                -webkit-appearance: none;
+                appearance: none;
+            }
+
+            /* ── Layout ──────────────────────────────────────────────────────── */
+            #panel {
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+                background: var(--bg);
+                clip-path: url(#blade-clip);
+                overflow: hidden;
+            }
+
+            /* ── Header ──────────────────────────────────────────────────────── */
+            #header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 10px 12px 8px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px rgba(196, 26, 26, 0.12);
+                flex-shrink: 0;
+                -webkit-app-region: drag;
+                user-select: none;
+            }
+            #status-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--success);
+                flex-shrink: 0;
+                transition: background 0.2s;
+            }
+            #status-dot.off {
+                background: var(--danger);
+                box-shadow: 0 0 4px rgba(212, 32, 32, 0.6);
+            }
+            #status-text {
+                flex: 1;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            .header-btns {
+                display: flex;
+                gap: 4px;
+                -webkit-app-region: no-drag;
+            }
+            .btn-macro {
+                padding: 3px 10px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                transition: opacity 0.15s;
+            }
+            .btn-macro:hover {
+                opacity: 0.8;
+            }
+            .btn-enable {
+                background: var(--success);
+                color: #1e2214;
+            }
+            .btn-disable {
+                background: var(--danger);
+                color: #fff;
+            }
+            .btn-close {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                -webkit-app-region: no-drag;
+                transition: background 0.15s;
+            }
+            .btn-close:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+
+            /* ── Quick row ───────────────────────────────────────────────────── */
+            #quick-row {
+                display: flex;
+                gap: 6px;
+                padding: 7px 12px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
+            }
+            .btn-ghost {
+                flex: 1;
+                padding: 5px 8px;
+                border-radius: var(--radius-s);
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 11px;
+                font-weight: 500;
+                text-align: center;
+                transition:
+                    background 0.15s,
+                    color 0.15s;
+            }
+            .btn-ghost:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+
+            /* ── Scroll area ─────────────────────────────────────────────────── */
+            #scroll {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 8px 0 20px;
+            }
+            #scroll::-webkit-scrollbar {
+                width: 4px;
+            }
+            #scroll::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            #scroll::-webkit-scrollbar-thumb {
+                background: var(--surface2);
+                border-radius: 2px;
+            }
+
+            /* ── Sections ────────────────────────────────────────────────────── */
+            .section {
+                margin: 0 8px 4px;
+                border-radius: var(--radius);
+                overflow: hidden;
+            }
+            .section-head {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 9px 12px;
+                background: var(--surface);
+                cursor: pointer;
+                user-select: none;
+                box-shadow: inset 2px 0 0 transparent;
+                transition:
+                    background 0.15s,
+                    box-shadow 0.15s;
+            }
+            .section-head:hover {
+                background: var(--surface2);
+                box-shadow: inset 2px 0 0 rgba(196, 26, 26, 0.4);
+            }
+            .section-chevron {
+                font-size: 9px;
+                color: var(--text3);
+                transition: transform 0.2s;
+                flex-shrink: 0;
+            }
+            .section-head.open .section-chevron {
+                transform: rotate(90deg);
+                color: var(--accent);
+            }
+            .section-title {
+                font-weight: 700;
+                font-size: 11px;
+                color: var(--text2);
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                flex: 1;
+            }
+            .section-body {
+                background: var(--surface);
+                border-top: 1px solid var(--border);
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.25s ease;
+            }
+            .section-body.open {
+                max-height: 2000px;
+            }
+
+            /* ── Rows ────────────────────────────────────────────────────────── */
+            .row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 9px 12px;
+                border-bottom: 1px solid var(--border);
+                transition: background 0.12s;
+                min-height: 38px;
+            }
+            .row:last-child {
+                border-bottom: none;
+            }
+            .row:hover {
+                background: var(--surface2);
+                box-shadow: inset 2px 0 0 rgba(196, 26, 26, 0.4);
+            }
+            .row.disabled {
+                opacity: 0.35;
+                pointer-events: none;
+            }
+            .row-label {
+                flex: 1;
+                font-size: 13px;
+            }
+            .row-label small {
+                display: block;
+                color: var(--text3);
+                font-size: 11px;
+                margin-top: 1px;
+            }
+            .row-sub {
+                padding-left: 24px;
+            }
+
+            /* ── Toggle ──────────────────────────────────────────────────────── */
+            .toggle {
+                position: relative;
+                width: 36px;
+                height: 20px;
+                flex-shrink: 0;
+                cursor: pointer;
+            }
+            .toggle input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+                position: absolute;
+            }
+            .toggle-track {
+                position: absolute;
+                inset: 0;
+                border-radius: 10px;
+                background: var(--surface2);
+                transition: background 0.2s;
+            }
+            .toggle input:checked + .toggle-track {
+                background: var(--accent);
+            }
+            .toggle-thumb {
+                position: absolute;
+                top: 2px;
+                left: 2px;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: #fff;
+                transition: left 0.2s;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+            }
+            .toggle input:checked ~ .toggle-thumb {
+                left: 18px;
+            }
+
+            /* ── Segmented ───────────────────────────────────────────────────── */
+            .seg {
+                display: flex;
+                border-radius: var(--radius-s);
+                background: var(--surface2);
+                padding: 2px;
+                gap: 2px;
+                flex-shrink: 0;
+            }
+            .seg-btn {
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 500;
+                color: var(--text2);
+                transition:
+                    background 0.15s,
+                    color 0.15s;
+            }
+            .seg-btn.active {
+                background: var(--accent);
+                color: #fff;
+            }
+            .seg-btn:hover:not(.active) {
+                background: var(--hover);
+                color: var(--text);
+            }
+
+            /* ── Slider ──────────────────────────────────────────────────────── */
+            .slider-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 6px;
+            }
+            .slider-top {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .slider-val {
+                width: 44px;
+                text-align: right;
+                font-size: 12px;
+                color: var(--text2);
+                flex-shrink: 0;
+            }
+            .slider-val input[type="number"] {
+                width: 44px;
+                background: var(--surface2);
+                border-radius: var(--radius-s);
+                padding: 2px 4px;
+                font-size: 12px;
+                color: var(--text);
+                text-align: right;
+                -moz-appearance: textfield;
+            }
+            .slider-val input::-webkit-outer-spin-button,
+            .slider-val input::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+            }
+            input[type="range"] {
+                width: 100%;
+                height: 4px;
+                border-radius: 2px;
+                background: var(--surface2);
+                outline: none;
+                cursor: pointer;
+            }
+            input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: var(--accent);
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+            }
+            input[type="range"]::-moz-range-thumb {
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: var(--accent);
+                border: none;
+            }
+
+            /* ── Pill ────────────────────────────────────────────────────────── */
+            .pill {
+                display: inline-block;
+                padding: 2px 7px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 500;
+                background: var(--surface2);
+                color: var(--text2);
+                flex-shrink: 0;
+            }
+            .pill.accent {
+                background: var(--accent);
+                color: #fff;
+            }
+            .pill.success {
+                background: var(--success);
+                color: #1e2214;
+            }
+            .pill.danger {
+                background: var(--danger);
+                color: #fff;
+            }
+            .pill.warning {
+                background: var(--warning);
+                color: #2f3027;
+            }
+
+            /* ── Action buttons ──────────────────────────────────────────────── */
+            .btn-row {
+                display: flex;
+                gap: 6px;
+                padding: 8px 12px;
+                flex-wrap: wrap;
+            }
+            .btn-action {
+                flex: 1;
+                min-width: 80px;
+                padding: 7px 10px;
+                border-radius: var(--radius-s);
+                background: var(--surface2);
+                color: var(--text);
+                font-size: 12px;
+                font-weight: 500;
+                text-align: center;
+                transition: background 0.15s;
+            }
+            .btn-action:hover {
+                background: var(--hover);
+            }
+            .btn-action.accent {
+                background: var(--accent);
+                color: #fff;
+            }
+            .btn-action.danger {
+                background: var(--danger-bg);
+                color: var(--danger);
+                border: 1px solid rgba(212, 32, 32, 0.3);
+            }
+            .btn-action.danger:hover {
+                background: #2a0a0a;
+            }
+
+            /* ── Sound picker ────────────────────────────────────────────────── */
+            .sound-picker-wrap {
+                position: relative;
+                flex-shrink: 0;
+            }
+            .sound-picker-btn {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                padding: 3px 8px;
+                border-radius: var(--radius-s);
+                background: var(--surface2);
+                font-size: 11px;
+                color: var(--text2);
+                cursor: pointer;
+                transition: background 0.15s;
+                max-width: 120px;
+            }
+            .sound-picker-btn:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+            .sound-picker-btn .arrow {
+                font-size: 8px;
+                color: var(--text3);
+            }
+            .sound-list {
+                position: fixed;
+                min-width: 140px;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-s);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+                z-index: 100;
+                max-height: 200px;
+                overflow-y: auto;
+                display: none;
+            }
+            .sound-list.open {
+                display: block;
+            }
+            .sound-list::-webkit-scrollbar {
+                width: 4px;
+            }
+            .sound-list::-webkit-scrollbar-thumb {
+                background: var(--hover);
+            }
+            .sound-opt {
+                padding: 7px 10px;
+                font-size: 12px;
+                cursor: pointer;
+                color: var(--text2);
+                transition:
+                    background 0.1s,
+                    color 0.1s;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .sound-opt:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+            .sound-opt.selected {
+                color: var(--accent);
+            }
+            .sound-opt .check {
+                font-size: 10px;
+                width: 10px;
+                text-align: center;
+            }
+
+            /* ── Context menu ────────────────────────────────────────────────── */
+            #ctx-menu {
+                position: fixed;
+                min-width: 160px;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-s);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+                z-index: 150;
+                overflow: hidden;
+                display: none;
+            }
+            #ctx-menu.open {
+                display: block;
+            }
+            .ctx-header {
+                padding: 5px 10px 4px;
+                font-size: 10px;
+                font-weight: 600;
+                color: var(--text3);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                border-bottom: 1px solid var(--border);
+                user-select: none;
+            }
+            .ctx-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 7px 10px;
+                font-size: 12px;
+                color: var(--text2);
+                cursor: pointer;
+                transition:
+                    background 0.1s,
+                    color 0.1s;
+                user-select: none;
+            }
+            .ctx-item:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+            .ctx-item.danger {
+                color: var(--danger);
+            }
+            .ctx-item.danger:hover {
+                background: var(--danger-bg);
+            }
+            .ctx-item .ctx-icon {
+                font-size: 11px;
+                width: 14px;
+                text-align: center;
+                flex-shrink: 0;
+                opacity: 0.7;
+            }
+            .ctx-divider {
+                height: 1px;
+                background: var(--border);
+                margin: 2px 0;
+            }
+
+            /* ── Divider ─────────────────────────────────────────────────────── */
+            .divider {
+                height: 1px;
+                background: var(--border);
+                margin: 4px 0;
+            }
+
+            /* ── Sub-group label ─────────────────────────────────────────────── */
+            .group-label {
+                padding: 6px 12px 2px;
+                font-size: 10px;
+                font-weight: 600;
+                color: var(--text3);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            /* ── Toast ───────────────────────────────────────────────────────── */
+            #toast {
+                position: fixed;
+                bottom: 16px;
+                left: 50%;
+                transform: translateX(-50%) translateY(60px);
+                background: var(--surface2);
+                color: var(--text);
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 500;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+                pointer-events: none;
+                transition:
+                    transform 0.25s ease,
+                    opacity 0.25s ease;
+                opacity: 0;
+                z-index: 200;
+                white-space: pre-line;
+                max-width: 280px;
+                text-align: center;
+                line-height: 1.5;
+            }
+            #toast.visible {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+
+            /* ── Modal ───────────────────────────────────────────────────────── */
+            #modal-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 300;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s;
+            }
+            #modal-overlay.open {
+                opacity: 1;
+                pointer-events: all;
+            }
+            #modal {
+                background: var(--surface);
+                border-top: 2px solid var(--accent);
+                border-radius: var(--radius);
+                padding: 20px;
+                width: 300px;
+                box-shadow:
+                    0 16px 48px rgba(0, 0, 0, 0.7),
+                    0 0 0 1px var(--border);
+                transform: scale(0.95);
+                transition: transform 0.2s;
+            }
+            #modal-overlay.open #modal {
+                transform: scale(1);
+            }
+            #modal-title {
+                font-size: 14px;
+                font-weight: 700;
+                margin-bottom: 8px;
+            }
+            #modal-msg {
+                font-size: 12px;
+                color: var(--text2);
+                line-height: 1.5;
+                white-space: pre-line;
+            }
+            #modal-input {
+                margin-top: 10px;
+                width: 100%;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-s);
+                padding: 7px 10px;
+                font-size: 13px;
+                color: var(--text);
+                display: none;
+            }
+            #modal-input.show {
+                display: block;
+            }
+            .modal-btns {
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }
+            .modal-btns button {
+                flex: 1;
+                padding: 8px;
+                border-radius: var(--radius-s);
+                font-size: 13px;
+                font-weight: 600;
+                background: var(--surface2);
+                color: var(--text);
+                transition: background 0.15s;
+            }
+            .modal-btns button:hover {
+                background: var(--hover);
+            }
+            .modal-btns button.primary {
+                background: var(--accent);
+                color: #fff;
+            }
+            .modal-btns button.primary:hover {
+                background: var(--accent-hi);
+            }
+            .modal-btns button.destructive {
+                background: var(--danger-bg);
+                color: var(--danger);
+                border: 1px solid rgba(212, 32, 32, 0.3);
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Blade-tip clip shape. objectBoundingBox units (0–1) scale with
+             the element so the curve proportions hold at any panel height.
+             Each corner: cubic bezier pulled hard toward the corner point
+             (cp1 nearly at the tip) then exits cleanly along the adjacent edge. -->
+        <svg
+            width="0"
+            height="0"
+            xmlns="http://www.w3.org/2000/svg"
+            style="position: absolute; pointer-events: none; overflow: visible"
+        >
+            <defs>
+                <clipPath id="blade-clip" clipPathUnits="objectBoundingBox">
+                    <path
+                        d="
+                        M 0,0.03
+                        C 0,0.001 0.04,0 0.05,0
+                        L 0.95,0
+                        C 0.96,0 1,0.001 1,0.03
+                        L 1,0.97
+                        C 1,0.999 0.96,1 0.95,1
+                        L 0.05,1
+                        C 0.04,1 0,0.999 0,0.97
+                        Z
+                    "
+                    />
+                </clipPath>
+            </defs>
+        </svg>
+        <div id="panel">
+            <!-- Header -->
+            <div id="header">
+                <div id="status-dot"></div>
+                <span id="status-text">Macros</span>
+                <div class="header-btns">
+                    <button
+                        class="btn-macro btn-enable"
+                        onmouseenter="playSlot('hover')"
+                        onclick="
+                            playSlot('interact');
+                            sendToHost({ action: 'setMacros', value: 1 });
+                        "
+                    >
+                        Enable
+                    </button>
+                    <button
+                        class="btn-macro btn-disable"
+                        onmouseenter="playSlot('hover')"
+                        onclick="
+                            playSlot('interact');
+                            sendToHost({ action: 'setMacros', value: 0 });
+                        "
+                    >
+                        Disable
+                    </button>
+                    <button
+                        class="btn-close"
+                        onmouseenter="playSlot('hover')"
+                        onclick="
+                            playSlot('back');
+                            sendToHost({ action: 'close' });
+                        "
+                    >
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick row -->
+            <div id="quick-row">
+                <button
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        sendToHost({ action: 'reloadMacros' });
+                    "
+                >
+                    ↺ Macros
+                </button>
+                <button
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        sendToHost({ action: 'reloadSettings' });
+                    "
+                >
+                    ↺ Settings
+                </button>
+            </div>
+
+            <!-- Scrollable content -->
+            <div id="scroll"></div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast"></div>
+
+        <!-- Modal -->
+        <div id="modal-overlay">
+            <div id="modal">
+                <div id="modal-title"></div>
+                <div id="modal-msg"></div>
+                <input id="modal-input" type="text" />
+                <div class="modal-btns">
+                    <button
+                        id="modal-cancel"
+                        onmouseenter="playSlot('hover')"
+                        onclick="
+                            playSlot('back');
+                            closeModal(false);
+                        "
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        id="modal-confirm"
+                        class="primary"
+                        onmouseenter="playSlot('hover')"
+                        onclick="
+                            playSlot('interact');
+                            closeModal(true);
+                        "
+                    >
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Context menu -->
+        <div id="ctx-menu"></div>
+
+        <script>
+            "use strict";
+
+            // ── State ──────────────────────────────────────────────────────────
+            let S = {};
+            let _openSections = new Set(["macros", "settings"]);
+            let _openSoundPicker = null;
+            let _modalResolve = null;
+            let _toastTimer = null;
+            let _ctxTarget = null; // { macro: m } — what was right-clicked
+
+            // ── Context menu ───────────────────────────────────────────────────
+            function closeCtxMenu() {
+                const el = document.getElementById("ctx-menu");
+                el.classList.remove("open");
+                _ctxTarget = null;
+            }
+
+            function showCtxMenu(x, y, items, title) {
+                const el = document.getElementById("ctx-menu");
+                el.innerHTML = "";
+                if (title) {
+                    const hdr = document.createElement("div");
+                    hdr.className = "ctx-header";
+                    hdr.textContent = title;
+                    el.appendChild(hdr);
+                }
+                for (const item of items) {
+                    if (item === "divider") {
+                        const d = document.createElement("div");
+                        d.className = "ctx-divider";
+                        el.appendChild(d);
+                        continue;
+                    }
+                    const row = document.createElement("div");
+                    row.className = "ctx-item" + (item.danger ? " danger" : "");
+                    if (item.icon) {
+                        const ico = document.createElement("span");
+                        ico.className = "ctx-icon";
+                        ico.textContent = item.icon;
+                        row.appendChild(ico);
+                    }
+                    const lbl = document.createElement("span");
+                    lbl.textContent = item.label;
+                    row.appendChild(lbl);
+                    row.addEventListener("mouseenter", () => playSlot("hover"));
+                    row.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        playSlot("interact");
+                        closeCtxMenu();
+                        item.action();
+                    });
+                    el.appendChild(row);
+                }
+
+                // Position: try to stay within viewport
+                el.classList.add("open");
+                const mw = el.offsetWidth || 160;
+                const mh = el.offsetHeight || 80;
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                el.style.left = Math.min(x, vw - mw - 4) + "px";
+                el.style.top = Math.min(y, vh - mh - 4) + "px";
+            }
+
+            // Close ctx menu on any left-click or Escape.
+            // preventDefault on contextmenu suppresses the native WebKit menu everywhere.
+            document.addEventListener("click", () => closeCtxMenu());
+            document.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                closeCtxMenu();
+            });
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") closeCtxMenu();
+            });
+
+            // ── Bridge ─────────────────────────────────────────────────────────
+            function sendToHost(msg) {
+                const s = JSON.stringify(msg);
+                if (window.chrome?.webview)
+                    window.chrome.webview.postMessage(s);
+                else if (window.webkit?.messageHandlers?.ms)
+                    window.webkit.messageHandlers.ms.postMessage(s);
+            }
+
+            // ── Window drag ────────────────────────────────────────────────────
+            // borderless windows ignore -webkit-app-region (isMovable=false by default)
+            // so we implement drag manually via the Lua moveWindow action.
+            (function () {
+                let _drag = null;
+                document
+                    .getElementById("header")
+                    .addEventListener("mousedown", (e) => {
+                        if (
+                            e.target.closest(
+                                ".header-btns, button, input, select",
+                            )
+                        )
+                            return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            sendToHost({
+                                action: "moveWindow",
+                                dx: ev.screenX - _drag.ox,
+                                dy: ev.screenY - _drag.oy,
+                            });
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+            })();
+
+            // ── Sound ──────────────────────────────────────────────────────────
+            const _lastSlot = {};
+            function playSlot(slot) {
+                const now = Date.now();
+                if (now - (_lastSlot[slot] || 0) < 50) return;
+                _lastSlot[slot] = now;
+                sendToHost({ action: "playSlot", slot });
+            }
+
+            // ── Toast ──────────────────────────────────────────────────────────
+            function showAlert(msg) {
+                const el = document.getElementById("toast");
+                el.textContent = msg;
+                el.classList.add("visible");
+                clearTimeout(_toastTimer);
+                _toastTimer = setTimeout(
+                    () => el.classList.remove("visible"),
+                    3000,
+                );
+            }
+
+            // ── Modal ──────────────────────────────────────────────────────────
+            function openModal(
+                title,
+                msg,
+                confirmLabel = "OK",
+                cancelLabel = "Cancel",
+                withInput = false,
+                defaultVal = "",
+            ) {
+                return new Promise((resolve) => {
+                    _modalResolve = resolve;
+                    document.getElementById("modal-title").textContent = title;
+                    document.getElementById("modal-msg").textContent = msg;
+                    const inp = document.getElementById("modal-input");
+                    if (withInput) {
+                        inp.classList.add("show");
+                        inp.value = defaultVal;
+                        setTimeout(() => inp.focus(), 100);
+                    } else {
+                        inp.classList.remove("show");
+                    }
+                    document.getElementById("modal-confirm").textContent =
+                        confirmLabel;
+                    document.getElementById("modal-cancel").textContent =
+                        cancelLabel;
+                    document
+                        .getElementById("modal-overlay")
+                        .classList.add("open");
+                });
+            }
+            function closeModal(confirmed) {
+                const val = document.getElementById("modal-input").value;
+                document
+                    .getElementById("modal-overlay")
+                    .classList.remove("open");
+                if (_modalResolve) {
+                    _modalResolve({ confirmed, value: val });
+                    _modalResolve = null;
+                }
+            }
+            document
+                .getElementById("modal-overlay")
+                .addEventListener("click", (e) => {
+                    if (e.target === e.currentTarget) closeModal(false);
+                });
+            document
+                .getElementById("modal-input")
+                .addEventListener("keydown", (e) => {
+                    if (e.key === "Enter") {
+                        playSlot("interact");
+                        closeModal(true);
+                    }
+                    if (e.key === "Escape") {
+                        playSlot("back");
+                        closeModal(false);
+                    }
+                });
+
+            // ── Helpers ────────────────────────────────────────────────────────
+            function h(tag, attrs = {}, ...children) {
+                const el = document.createElement(tag);
+                for (const [k, v] of Object.entries(attrs)) {
+                    if (k === "cls") el.className = v;
+                    else if (k.startsWith("on"))
+                        el.addEventListener(k.slice(2), v);
+                    else el.setAttribute(k, v);
+                }
+                for (const c of children) {
+                    if (c == null) continue;
+                    el.appendChild(
+                        typeof c === "string" ? document.createTextNode(c) : c,
+                    );
+                }
+                return el;
+            }
+
+            function toggle(checked, onchange) {
+                const label = h(
+                    "label",
+                    { cls: "toggle" },
+                    h("input", { type: "checkbox", onchange }),
+                    h("div", { cls: "toggle-track" }),
+                    h("div", { cls: "toggle-thumb" }),
+                );
+                label.querySelector("input").checked = checked;
+                return label;
+            }
+
+            function seg(options, active, onselect) {
+                const wrap = h("div", { cls: "seg" });
+                for (const o of options) {
+                    const btn = h(
+                        "button",
+                        {
+                            cls:
+                                "seg-btn" +
+                                (o.value === active ? " active" : ""),
+                            onmouseenter: () => playSlot("hover"),
+                            onclick: () => {
+                                playSlot("interact");
+                                onselect(o.value);
+                            },
+                        },
+                        o.label,
+                    );
+                    wrap.appendChild(btn);
+                }
+                return wrap;
+            }
+
+            function section(id, title, buildFn, defaultOpen = false) {
+                const isOpen = _openSections.has(id);
+                const head = h(
+                    "div",
+                    { cls: "section-head" + (isOpen ? " open" : "") },
+                    h("span", { cls: "section-chevron" }, "▶"),
+                    h("span", { cls: "section-title" }, title),
+                );
+                const body = h("div", {
+                    cls: "section-body" + (isOpen ? " open" : ""),
+                });
+                buildFn(body);
+                head.addEventListener("mouseenter", () => playSlot("hover"));
+                head.addEventListener("click", () => {
+                    playSlot("interact");
+                    const open = !_openSections.has(id);
+                    if (open) _openSections.add(id);
+                    else _openSections.delete(id);
+                    head.classList.toggle("open", open);
+                    body.classList.toggle("open", open);
+                    if (open) {
+                        // Wait for the CSS max-height transition (250ms) then scroll
+                        // the bottom of the newly-expanded section into view.
+                        setTimeout(() => {
+                            const wrap = head.parentElement;
+                            wrap.scrollIntoView({
+                                block: "nearest",
+                                behavior: "smooth",
+                            });
+                        }, 260);
+                    }
+                });
+                const wrap = h("div", { cls: "section" });
+                wrap.appendChild(head);
+                wrap.appendChild(body);
+                return wrap;
+            }
+
+            function row(
+                label,
+                sublabel,
+                control,
+                extra = "",
+                ctxItems = null,
+            ) {
+                const r = h("div", {
+                    cls: "row " + extra,
+                    onmouseenter: () => playSlot("hover"),
+                });
+                const lbl = h("div", { cls: "row-label" }, label);
+                if (sublabel) lbl.appendChild(h("small", {}, sublabel));
+                r.appendChild(lbl);
+                if (control) r.appendChild(control);
+                r.addEventListener("contextmenu", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (ctxItems && ctxItems.length > 0) {
+                        playSlot("interact");
+                        showCtxMenu(e.clientX, e.clientY, ctxItems, label);
+                    }
+                });
+                return r;
+            }
+
+            function btnRow(...buttons) {
+                const wrap = h("div", { cls: "btn-row" });
+                for (const b of buttons) wrap.appendChild(b);
+                return wrap;
+            }
+
+            function actionBtn(label, cls, action) {
+                return h(
+                    "button",
+                    {
+                        cls: "btn-action " + (cls || ""),
+                        onmouseenter: () => playSlot("hover"),
+                        onclick: () => {
+                            playSlot("interact");
+                            action();
+                        },
+                    },
+                    label,
+                );
+            }
+
+            function divider() {
+                return h("div", { cls: "divider" });
+            }
+            function groupLabel(txt) {
+                return h("div", { cls: "group-label" }, txt);
+            }
+
+            // ── Sound picker ───────────────────────────────────────────────────
+            function soundPicker(slotId, assigned, soundNames) {
+                const display = assigned || "off";
+                const wrap = h("div", { cls: "sound-picker-wrap" });
+                const btn = h(
+                    "div",
+                    {
+                        cls: "sound-picker-btn",
+                        onmouseenter: () => playSlot("hover"),
+                    },
+                    display,
+                    h("span", { cls: "arrow" }, "▾"),
+                );
+                const list = h("div", { cls: "sound-list" });
+
+                const opts = [
+                    { name: "None", value: "" },
+                    ...soundNames.map((n) => ({ name: n, value: n })),
+                ];
+                for (const opt of opts) {
+                    const isSelected = opt.value === (assigned || "");
+                    const item = h(
+                        "div",
+                        { cls: "sound-opt" + (isSelected ? " selected" : "") },
+                        h("span", { cls: "check" }, isSelected ? "✓" : ""),
+                        opt.name,
+                    );
+                    item.addEventListener("mouseenter", () =>
+                        playSlot("hover"),
+                    );
+                    item.addEventListener("click", () => {
+                        playSlot("interact");
+                        sendToHost({
+                            action: "setSoundAssign",
+                            slot: slotId,
+                            name: opt.value,
+                        });
+                        if (list._scrollHandler) {
+                            document
+                                .getElementById("scroll")
+                                .removeEventListener(
+                                    "scroll",
+                                    list._scrollHandler,
+                                );
+                            list._scrollHandler = null;
+                        }
+                        list.classList.remove("open");
+                        _openSoundPicker = null;
+                    });
+                    list.appendChild(item);
+                }
+
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    playSlot("interact");
+                    if (_openSoundPicker && _openSoundPicker !== list)
+                        _openSoundPicker.classList.remove("open");
+                    const open = !list.classList.contains("open");
+                    list.classList.toggle("open", open);
+                    if (open) {
+                        // Position after toggling open so offsetWidth is valid
+                        const positionList = () => {
+                            const rect = btn.getBoundingClientRect();
+                            const w = list.offsetWidth || 140;
+                            list.style.top = rect.bottom + 4 + "px";
+                            list.style.left =
+                                Math.max(4, rect.right - w) + "px";
+                        };
+                        positionList();
+                        // Reposition while the scroll container scrolls
+                        const scrollEl = document.getElementById("scroll");
+                        list._scrollHandler = positionList;
+                        scrollEl.addEventListener(
+                            "scroll",
+                            list._scrollHandler,
+                        );
+                    }
+                    _openSoundPicker = open ? list : null;
+                });
+
+                wrap.appendChild(btn);
+                wrap.appendChild(list);
+                return wrap;
+            }
+
+            document.addEventListener("click", () => {
+                if (_openSoundPicker) {
+                    if (_openSoundPicker._scrollHandler) {
+                        document
+                            .getElementById("scroll")
+                            .removeEventListener(
+                                "scroll",
+                                _openSoundPicker._scrollHandler,
+                            );
+                        _openSoundPicker._scrollHandler = null;
+                    }
+                    _openSoundPicker.classList.remove("open");
+                    _openSoundPicker = null;
+                }
+            });
+
+            // ── Sections ───────────────────────────────────────────────────────
+
+            function buildMacros(body) {
+                const main = (S.macros || []).filter((m) => m.group === "main");
+                const optional = (S.macros || []).filter(
+                    (m) => m.group === "optional",
+                );
+
+                function macroRow(m) {
+                    const r = h("div", {
+                        cls: "row",
+                        onmouseenter: () => playSlot("hover"),
+                    });
+                    r.appendChild(h("div", { cls: "row-label" }, m.label));
+                    if (m.bind)
+                        r.appendChild(h("span", { cls: "pill" }, m.bind));
+                    r.appendChild(
+                        toggle(m.enabled, (e) => {
+                            sendToHost({
+                                action: "setMacroEnabled",
+                                id: m.id,
+                                value: e.target.checked,
+                            });
+                        }),
+                    );
+
+                    // Right-click context menu
+                    r.addEventListener("contextmenu", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        playSlot("interact");
+                        const items = [
+                            {
+                                icon: "⌨",
+                                label: "Rebind…",
+                                action: () =>
+                                    sendToHost({
+                                        action: "startRebind",
+                                        id: m.id,
+                                    }),
+                            },
+                        ];
+                        if (m.bind) {
+                            items.push("divider");
+                            items.push({
+                                icon: "↺",
+                                label: "Reset Bind",
+                                danger: true,
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetBind",
+                                        id: m.id,
+                                    }),
+                            });
+                        }
+                        showCtxMenu(e.clientX, e.clientY, items, m.label);
+                    });
+
+                    return r;
+                }
+
+                if (main.length) {
+                    body.appendChild(groupLabel("Main"));
+                    main.forEach((m) => body.appendChild(macroRow(m)));
+                }
+                if (optional.length) {
+                    body.appendChild(groupLabel("Optional"));
+                    optional.forEach((m) => body.appendChild(macroRow(m)));
+                }
+            }
+
+            // ── Reusable slider row builder ────────────────────────────────────────
+            // Builds a complete slider row element and returns it.
+            // label (string), hint (string|null), min/max/step (number),
+            // unit (string|null), val (number), onChange(v), ctxItems (array|null)
+            function buildSlider(
+                label,
+                hint,
+                min,
+                max,
+                step,
+                unit,
+                val,
+                onChange,
+                ctxItems,
+            ) {
+                const wrap = h("div", {
+                    cls: "row slider-row",
+                    onmouseenter: () => playSlot("hover"),
+                });
+                if (ctxItems && ctxItems.length) {
+                    wrap.addEventListener("contextmenu", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        playSlot("interact");
+                        showCtxMenu(e.clientX, e.clientY, ctxItems, label);
+                    });
+                }
+                const top = h("div", { cls: "slider-top" });
+                const lbl = h("div", { cls: "row-label" }, label);
+                if (hint) lbl.appendChild(h("small", {}, hint));
+                top.appendChild(lbl);
+                const numInput = h("input", {
+                    type: "number",
+                    step: String(step || 1),
+                    min: String(min),
+                    max: String(max),
+                });
+                numInput.value = val;
+                const valDiv = h("div", { cls: "slider-val" });
+                valDiv.appendChild(numInput);
+                if (unit) {
+                    const uSpan = document.createElement("span");
+                    uSpan.textContent = unit;
+                    uSpan.style.cssText =
+                        "font-size:11px;opacity:0.55;margin-left:3px;";
+                    valDiv.appendChild(uSpan);
+                }
+                top.appendChild(valDiv);
+                wrap.appendChild(top);
+                const slider = h("input", {
+                    type: "range",
+                    min: String(min),
+                    max: String(max),
+                    step: String(step || 1),
+                });
+                slider.value = val;
+                const decimals = step && step < 1 ? 2 : 0;
+                slider.addEventListener("input", () => {
+                    numInput.value = parseFloat(slider.value).toFixed(decimals);
+                });
+                slider.addEventListener("change", () =>
+                    onChange(parseFloat(slider.value)),
+                );
+                numInput.addEventListener("change", () => {
+                    const v = Math.max(
+                        min,
+                        Math.min(max, parseFloat(numInput.value) || min),
+                    );
+                    slider.value = v;
+                    onChange(v);
+                });
+                wrap.appendChild(slider);
+                return wrap;
+            }
+
+            // ── buildTools — system settings (moved from Settings) ─────────────────
+            function buildTools(body) {
+                const hidden = S.hiddenFeatures || {};
+
+                // Camera Sensitivity
+                if (!hidden.sensitivity) {
+                    body.appendChild(
+                        buildSlider(
+                            "Camera Sensitivity",
+                            null,
+                            0.1,
+                            4,
+                            0.05,
+                            null,
+                            S.sensitivity ?? 1.5,
+                            (v) =>
+                                sendToHost({
+                                    action: "setSensitivity",
+                                    value: v,
+                                }),
+                            [
+                                {
+                                    icon: "↺",
+                                    label: "Reset to default",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetSetting",
+                                            key: "sensitivity",
+                                        }),
+                                },
+                            ],
+                        ),
+                    );
+                }
+
+                const hasTrackpad = !hidden.trackpad;
+                const hasSocd = !hidden.socd;
+                const hasIndep = !hidden.independentBinds;
+
+                if (
+                    !hidden.sensitivity &&
+                    (hasTrackpad || hasSocd || hasIndep)
+                ) {
+                    body.appendChild(divider());
+                }
+
+                // Trackpad Mode
+                if (hasTrackpad) {
+                    body.appendChild(
+                        row(
+                            "Trackpad / Pen Mode",
+                            null,
+                            toggle(S.trackpadMode ?? false, (e) =>
+                                sendToHost({
+                                    action: "setTrackpadMode",
+                                    value: e.target.checked,
+                                }),
+                            ),
+                            "",
+                            [
+                                {
+                                    icon: "↺",
+                                    label: "Reset to default",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetSetting",
+                                            key: "trackpadMode",
+                                        }),
+                                },
+                            ],
+                        ),
+                    );
+                }
+
+                // SOCD
+                if (hasSocd) {
+                    body.appendChild(
+                        row(
+                            "SOCD Cleaning",
+                            null,
+                            toggle(S.socdEnabled ?? false, (e) =>
+                                sendToHost({
+                                    action: "setSocdEnabled",
+                                    value: e.target.checked,
+                                }),
+                            ),
+                            "",
+                            [
+                                {
+                                    icon: "↺",
+                                    label: "Reset to default",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetSetting",
+                                            key: "socdEnabled",
+                                        }),
+                                },
+                            ],
+                        ),
+                    );
+                    if (S.socdEnabled) {
+                        body.appendChild(
+                            row(
+                                "SOCD Mode",
+                                null,
+                                seg(
+                                    [
+                                        {
+                                            label: "Last Wins",
+                                            value: "lastWins",
+                                        },
+                                        {
+                                            label: "Neutral",
+                                            value: "neutral",
+                                        },
+                                        {
+                                            label: "First Wins",
+                                            value: "firstWins",
+                                        },
+                                    ],
+                                    S.socdMode ?? "lastWins",
+                                    (v) =>
+                                        sendToHost({
+                                            action: "setSocdMode",
+                                            value: v,
+                                        }),
+                                ),
+                                "row-sub",
+                                [
+                                    {
+                                        icon: "↺",
+                                        label: "Reset to default",
+                                        action: () =>
+                                            sendToHost({
+                                                action: "resetSetting",
+                                                key: "socdMode",
+                                            }),
+                                    },
+                                ],
+                            ),
+                        );
+                    }
+                }
+
+                // Independent Binds
+                if (hasIndep) {
+                    body.appendChild(
+                        row(
+                            "Independent Binds",
+                            null,
+                            toggle(S.independentBindsEnabled ?? false, (e) =>
+                                sendToHost({
+                                    action: "setIndependentBinds",
+                                    value: e.target.checked,
+                                }),
+                            ),
+                            "",
+                            [
+                                {
+                                    icon: "↺",
+                                    label: "Reset to default",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetSetting",
+                                            key: "independentBinds",
+                                        }),
+                                },
+                            ],
+                        ),
+                    );
+                }
+
+                body.appendChild(divider());
+
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Save as Default", "", async () => {
+                            const r = await openModal(
+                                "Save as Default",
+                                "Save current settings as the new default?\nThe existing default will be archived.",
+                                "Save",
+                            );
+                            if (r.confirmed)
+                                sendToHost({ action: "saveDefault" });
+                        }),
+                        actionBtn("Reset to Default", "danger", async () => {
+                            const r = await openModal(
+                                "Reset to Default",
+                                "Reset all settings to the saved default?\nCurrent settings will be overwritten.",
+                                "Reset",
+                            );
+                            if (r.confirmed)
+                                sendToHost({ action: "resetToDefault" });
+                        }),
+                    ),
+                );
+            }
+
+            // ── renderUserItem — shared renderer for user-defined items ─────────────
+            // Used by both buildSettings (Settings section) and buildUserSection.
+            function renderUserItem(body, item) {
+                if (item.type === "divider") {
+                    body.appendChild(divider());
+                } else if (item.type === "groupLabel") {
+                    body.appendChild(groupLabel(item.label || ""));
+                } else if (item.type === "toggle") {
+                    const ctxItems =
+                        item.default !== undefined
+                            ? [
+                                  {
+                                      icon: "↺",
+                                      label: "Reset to default",
+                                      action: () =>
+                                          sendToHost({
+                                              action: "resetUserSetting",
+                                              key: item.key,
+                                          }),
+                                  },
+                              ]
+                            : null;
+                    body.appendChild(
+                        row(
+                            item.label || item.key,
+                            item.hint || null,
+                            toggle(item.value ?? false, (e) =>
+                                sendToHost({
+                                    action: "userSettingChange",
+                                    key: item.key,
+                                    value: e.target.checked,
+                                }),
+                            ),
+                            "",
+                            ctxItems,
+                        ),
+                    );
+                } else if (item.type === "slider") {
+                    const ctxItems =
+                        item.default !== undefined
+                            ? [
+                                  {
+                                      icon: "↺",
+                                      label: "Reset to default",
+                                      action: () =>
+                                          sendToHost({
+                                              action: "resetUserSetting",
+                                              key: item.key,
+                                          }),
+                                  },
+                              ]
+                            : null;
+                    body.appendChild(
+                        buildSlider(
+                            item.label || item.key,
+                            item.hint || null,
+                            item.min ?? 0,
+                            item.max ?? 100,
+                            item.step ?? 1,
+                            item.unit || null,
+                            item.value ?? item.default ?? 0,
+                            (v) =>
+                                sendToHost({
+                                    action: "userSettingChange",
+                                    key: item.key,
+                                    value: v,
+                                }),
+                            ctxItems,
+                        ),
+                    );
+                } else if (item.type === "seg") {
+                    const ctxItems =
+                        item.default !== undefined
+                            ? [
+                                  {
+                                      icon: "↺",
+                                      label: "Reset to default",
+                                      action: () =>
+                                          sendToHost({
+                                              action: "resetUserSetting",
+                                              key: item.key,
+                                          }),
+                                  },
+                              ]
+                            : null;
+                    body.appendChild(
+                        row(
+                            item.label || item.key,
+                            item.hint || null,
+                            seg(
+                                item.options || [],
+                                item.value ?? item.default,
+                                (v) =>
+                                    sendToHost({
+                                        action: "userSettingChange",
+                                        key: item.key,
+                                        value: v,
+                                    }),
+                            ),
+                            "",
+                            ctxItems,
+                        ),
+                    );
+                } else if (item.type === "action") {
+                    const btn = actionBtn(
+                        item.btnLabel || "Run",
+                        item.danger ? "danger" : "",
+                        () =>
+                            sendToHost({
+                                action: "userSettingAction",
+                                key: item.key,
+                            }),
+                    );
+                    if (item.label) {
+                        body.appendChild(
+                            row(item.label, item.hint || null, btn, "", null),
+                        );
+                    } else {
+                        body.appendChild(btnRow(btn));
+                    }
+                }
+            }
+
+            // ── buildSettings — user-defined settings ──────────────────────────────
+            function buildSettings(body) {
+                const items = S.userSettings || [];
+                if (items.length === 0) {
+                    body.appendChild(groupLabel("No settings defined."));
+                    const r = h("div", { cls: "row" });
+                    const lbl = h("div", { cls: "row-label" });
+                    lbl.appendChild(
+                        h(
+                            "small",
+                            {},
+                            "Use ms.settings.define() in your macro pack.",
+                        ),
+                    );
+                    r.appendChild(lbl);
+                    body.appendChild(r);
+                    return;
+                }
+                for (const item of items) {
+                    renderUserItem(body, item);
+                }
+            }
+
+            // ── buildUserSection — custom user-defined sections ────────────────────
+            function buildUserSection(body, menu) {
+                for (const item of menu.items || []) {
+                    renderUserItem(body, item);
+                }
+            }
+
+            function buildSound(body) {
+                // Master toggle
+                body.appendChild(
+                    row(
+                        "Sound Effects",
+                        null,
+                        toggle(S.soundEnabled ?? true, (e) =>
+                            sendToHost({
+                                action: "setSoundEnabled",
+                                value: e.target.checked,
+                            }),
+                        ),
+                        "",
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to default",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "soundEnabled",
+                                    }),
+                            },
+                        ],
+                    ),
+                );
+
+                // Volume slider
+                const volWrap = h("div", {
+                    cls: "row slider-row",
+                    onmouseenter: () => playSlot("hover"),
+                });
+                volWrap.addEventListener("contextmenu", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    playSlot("interact");
+                    showCtxMenu(
+                        e.clientX,
+                        e.clientY,
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to 100",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "soundVolume",
+                                    }),
+                            },
+                        ],
+                        "Volume",
+                    );
+                });
+                const volTop = h("div", { cls: "slider-top" });
+                volTop.appendChild(h("div", { cls: "row-label" }, "Volume"));
+                const volNum = h("input", {
+                    type: "number",
+                    min: "0",
+                    max: "100",
+                    step: "1",
+                });
+                volNum.value = S.soundVolume ?? 100;
+                const volDiv = h("div", { cls: "slider-val" });
+                volDiv.appendChild(volNum);
+                volTop.appendChild(volDiv);
+                volWrap.appendChild(volTop);
+                const volSlider = h("input", {
+                    type: "range",
+                    min: "0",
+                    max: "100",
+                    step: "1",
+                });
+                volSlider.value = S.soundVolume ?? 100;
+                volSlider.addEventListener("input", () => {
+                    volNum.value = volSlider.value;
+                });
+                volSlider.addEventListener("change", () =>
+                    sendToHost({
+                        action: "setSoundVolume",
+                        value: parseInt(volSlider.value),
+                    }),
+                );
+                volNum.addEventListener("change", () => {
+                    const v = Math.max(
+                        0,
+                        Math.min(100, parseInt(volNum.value) || 0),
+                    );
+                    volSlider.value = v;
+                    sendToHost({ action: "setSoundVolume", value: v });
+                });
+                volWrap.appendChild(volSlider);
+                body.appendChild(volWrap);
+
+                body.appendChild(divider());
+
+                // Slot pickers
+                const SLOTS = [
+                    { id: "load", label: "Load Complete" },
+                    { id: "alert", label: "Alert / Notice" },
+                    { id: "enabled", label: "Macros Enabled" },
+                    { id: "disabled", label: "Macros Disabled" },
+                    { id: "update", label: "Setting Updated" },
+                    { id: "reset", label: "Setting Reset" },
+                    { id: "interact", label: "Menu Interact" },
+                    { id: "hover", label: "Menu Hover" },
+                    { id: "back", label: "Menu Back" },
+                    { id: "settingsOpen", label: "Settings Open" },
+                    { id: "settingsClose", label: "Settings Close" },
+                ];
+                body.appendChild(groupLabel("Event Slots"));
+                const names = S.soundNames || [];
+                for (const slot of SLOTS) {
+                    const assigned = (S.soundAssign || {})[slot.id] || "";
+                    body.appendChild(
+                        row(
+                            slot.label,
+                            null,
+                            soundPicker(slot.id, assigned, names),
+                            "",
+                            assigned
+                                ? [
+                                      {
+                                          icon: "✕",
+                                          label: "Clear",
+                                          action: () =>
+                                              sendToHost({
+                                                  action: "setSoundAssign",
+                                                  slot: slot.id,
+                                                  name: "",
+                                              }),
+                                      },
+                                  ]
+                                : null,
+                        ),
+                    );
+                }
+            }
+
+            function buildProfiles(body) {
+                const current = S.currentProfile || "";
+                const profiles = S.profiles || [];
+                if (current)
+                    body.appendChild(
+                        h("div", { cls: "group-label" }, "Active: " + current),
+                    );
+
+                for (const name of profiles) {
+                    const isCurrent = name === current;
+                    const r = h("div", {
+                        cls: "row" + (isCurrent ? " disabled" : ""),
+                        onmouseenter: () => playSlot("hover"),
+                    });
+                    r.appendChild(h("div", { cls: "row-label" }, name));
+                    if (isCurrent)
+                        r.appendChild(
+                            h("span", { cls: "pill success" }, "Active"),
+                        );
+                    else
+                        r.addEventListener("click", async () => {
+                            playSlot("interact");
+                            const res = await openModal(
+                                "Switch Profile",
+                                `Switch to "${name}"?\n\nThe current profile will be archived and settings reloaded.`,
+                                "Switch",
+                            );
+                            if (res.confirmed)
+                                sendToHost({ action: "switchProfile", name });
+                        });
+                    r.addEventListener("contextmenu", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (isCurrent) return;
+                        playSlot("interact");
+                        showCtxMenu(
+                            e.clientX,
+                            e.clientY,
+                            [
+                                {
+                                    icon: "↗",
+                                    label: "Switch to this profile",
+                                    action: async () => {
+                                        const res = await openModal(
+                                            "Switch Profile",
+                                            `Switch to "${name}"?\n\nThe current profile will be archived and settings reloaded.`,
+                                            "Switch",
+                                        );
+                                        if (res.confirmed)
+                                            sendToHost({
+                                                action: "switchProfile",
+                                                name,
+                                            });
+                                    },
+                                },
+                            ],
+                            name,
+                        );
+                    });
+                    body.appendChild(r);
+                }
+
+                body.appendChild(divider());
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Import Profile…", "", () =>
+                            sendToHost({ action: "importProfile" }),
+                        ),
+                    ),
+                );
+            }
+
+            function buildDeveloper(body) {
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Debug Roblox", "", () =>
+                            sendToHost({ action: "debugRoblox" }),
+                        ),
+                        actionBtn("Edit Macros", "", () =>
+                            sendToHost({ action: "editMacros" }),
+                        ),
+                    ),
+                );
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Open Console", "", () =>
+                            sendToHost({ action: "openConsole" }),
+                        ),
+                        actionBtn("Edit Theme", "", () =>
+                            sendToHost({ action: "editTheme" }),
+                        ),
+                    ),
+                );
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Reload Theme", "", () =>
+                            sendToHost({ action: "reloadTheme" }),
+                        ),
+                    ),
+                );
+
+                body.appendChild(divider());
+
+                // Integrity
+                const status = S.integrityStatus || "uninitialized";
+                const hash = S.integrityHash
+                    ? S.integrityHash.slice(0, 16) + "…"
+                    : "—";
+                const trusted = status === "trusted";
+
+                let statusPill;
+                if (status === "trusted")
+                    statusPill = h(
+                        "span",
+                        { cls: "pill success" },
+                        "✓ Trusted",
+                    );
+                else if (status === "mismatch")
+                    statusPill = h(
+                        "span",
+                        { cls: "pill danger" },
+                        "⚠ Mismatch",
+                    );
+                else statusPill = h("span", { cls: "pill" }, "Not set");
+                body.appendChild(row("init.lua Integrity", hash, statusPill));
+
+                // Trust row — greyed when trusted
+                const trustRow = h("div", {
+                    cls: "row" + (trusted ? " disabled" : ""),
+                    onmouseenter: () => {
+                        if (!trusted) playSlot("hover");
+                    },
+                });
+                trustRow.appendChild(
+                    h(
+                        "div",
+                        { cls: "row-label" },
+                        trusted
+                            ? "✓ Trust Current Version"
+                            : "Trust Current Version…",
+                    ),
+                );
+                if (!trusted) {
+                    trustRow.addEventListener("click", async () => {
+                        playSlot("interact");
+                        const prompt =
+                            status === "uninitialized"
+                                ? `Seal this init.lua as the trusted baseline?\nHash: ${hash}`
+                                : `Hash mismatch — trust the CURRENT (possibly modified) version?\nHash: ${hash}`;
+                        const r = await openModal(
+                            "Trust Current Version",
+                            prompt,
+                            "Trust",
+                        );
+                        if (r.confirmed)
+                            sendToHost({ action: "trustCurrentVersion" });
+                    });
+                }
+                body.appendChild(trustRow);
+
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Check Integrity", "", () =>
+                            sendToHost({ action: "checkIntegrity" }),
+                        ),
+                    ),
+                );
+
+                // Delete hash — only shown when a hash is actually on record
+                if (status !== "uninitialized") {
+                    body.appendChild(divider());
+                    body.appendChild(
+                        btnRow(
+                            actionBtn(
+                                "Delete Trusted Hash",
+                                "danger",
+                                async () => {
+                                    const r = await openModal(
+                                        "Delete Trusted Hash",
+                                        "This removes tamper protection entirely.\n\n" +
+                                            "From this point on mudscript will load ANY version of init.lua " +
+                                            "without warning — including maliciously modified ones.\n\n" +
+                                            "You are on your own. Proceed only if you know what you are doing.",
+                                        "Delete — I understand the risk",
+                                    );
+                                    if (r.confirmed)
+                                        sendToHost({
+                                            action: "deleteTrustedHash",
+                                        });
+                                },
+                            ),
+                        ),
+                    );
+                }
+            }
+
+            function buildHelp(body) {
+                const meta = S.macroMeta || {};
+                if (meta.name) {
+                    body.appendChild(
+                        h(
+                            "div",
+                            { cls: "group-label" },
+                            meta.name +
+                                (meta.author ? " — " + meta.author : ""),
+                        ),
+                    );
+                }
+
+                const btns = [
+                    actionBtn("About", "", () => {
+                        const msg =
+                            "mudscript Utility Library\nBy: mudbourn — mudbourn.info" +
+                            (meta.name
+                                ? `\n\n${meta.name}` +
+                                  (meta.author ? `\nBy: ${meta.author}` : "")
+                                : "");
+                        showAlert(msg);
+                    }),
+                    actionBtn("Documentation", "", () =>
+                        sendToHost({
+                            action: "openURL",
+                            url: (S.docsURL || "") + "?platform=mac",
+                        }),
+                    ),
+                ];
+                if (S.updateManifestURL) {
+                    btns.push(
+                        actionBtn("Check for Update", "accent", async () => {
+                            const r = await openModal(
+                                "Check for Update",
+                                "Download and apply the latest init.lua?\n\nCurrent file will be backed up and Hammerspoon will reload.",
+                                "Update",
+                            );
+                            if (r.confirmed)
+                                sendToHost({ action: "checkForUpdate" });
+                        }),
+                    );
+                }
+                body.appendChild(btnRow(...btns));
+            }
+
+            // ── Render ─────────────────────────────────────────────────────────
+            function render() {
+                const scroll = document.getElementById("scroll");
+                const scrollTop = scroll.scrollTop;
+                scroll.innerHTML = "";
+
+                scroll.appendChild(section("macros", "Macros", buildMacros));
+                scroll.appendChild(
+                    section("settings", "Settings", buildSettings),
+                );
+                scroll.appendChild(section("tools", "Tools", buildTools));
+                for (const menu of S.userMenus || []) {
+                    const title = menu.icon
+                        ? menu.icon + " " + menu.title
+                        : menu.title;
+                    scroll.appendChild(
+                        section("user_" + menu.id, title, (body) =>
+                            buildUserSection(body, menu),
+                        ),
+                    );
+                }
+                scroll.appendChild(section("sound", "Sound", buildSound));
+                scroll.appendChild(
+                    section("profiles", "Profiles", buildProfiles),
+                );
+                scroll.appendChild(
+                    section("developer", "Developer", buildDeveloper),
+                );
+                scroll.appendChild(section("help", "Help", buildHelp));
+
+                scroll.scrollTop = scrollTop;
+            }
+
+            // ── Theme application ──────────────────────────────────────────────
+
+            function applyFont(font, fontURL) {
+                if (!font) return;
+                if (fontURL) {
+                    // Inject or replace a @font-face rule for a local font file.
+                    let el = document.getElementById("_ms-custom-font");
+                    if (!el) {
+                        el = document.createElement("style");
+                        el.id = "_ms-custom-font";
+                        document.head.appendChild(el);
+                    }
+                    el.textContent = `@font-face { font-family: "${font}"; src: url("${fontURL}"); }`;
+                }
+                document.body.style.fontFamily = `"${font}", Almendra, Palatino, Georgia, serif`;
+            }
+
+            function applyWraith(wraithURL) {
+                const panel = document.getElementById("panel");
+                if (wraithURL) {
+                    // Body becomes the full expanded canvas; #panel is centred within it.
+                    document.body.style.backgroundImage = `url("${wraithURL}")`;
+                    document.body.style.backgroundSize = "100% 100%";
+                    document.body.style.backgroundRepeat = "no-repeat";
+                    document.body.style.padding = "12.5%";
+                    document.body.style.boxSizing = "border-box";
+                    if (panel) panel.style.height = "100%";
+                } else {
+                    document.body.style.backgroundImage = "";
+                    document.body.style.backgroundSize = "";
+                    document.body.style.backgroundRepeat = "";
+                    document.body.style.padding = "";
+                    document.body.style.boxSizing = "";
+                    if (panel) panel.style.height = "";
+                }
+            }
+
+            function applyTheme(t) {
+                if (!t) return;
+                const r = document.documentElement.style;
+                if (t.bg) r.setProperty("--bg", t.bg);
+                if (t.surface) r.setProperty("--surface", t.surface);
+                if (t.surface2) r.setProperty("--surface2", t.surface2);
+                if (t.hover) r.setProperty("--hover", t.hover);
+                if (t.accent) r.setProperty("--accent", t.accent);
+                if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
+                if (t.success) r.setProperty("--success", t.success);
+                if (t.dangerBg) r.setProperty("--danger-bg", t.dangerBg);
+                if (t.danger) r.setProperty("--danger", t.danger);
+                if (t.warning) r.setProperty("--warning", t.warning);
+                if (t.text) r.setProperty("--text", t.text);
+                if (t.radius !== undefined) {
+                    r.setProperty("--radius", t.radius + "px");
+                    r.setProperty(
+                        "--radius-s",
+                        Math.max(0, t.radius - 1) + "px",
+                    );
+                }
+                applyFont(t.font, t.fontURL);
+                applyWraith(t.wraithURL);
+            }
+
+            // ── receiveState ───────────────────────────────────────────────────
+            function receiveState(state) {
+                S = state;
+                applyTheme(S.theme);
+                const dot = document.getElementById("status-dot");
+                const text = document.getElementById("status-text");
+                const enabled = S.macrosEnabled ?? false;
+                dot.className = enabled ? "" : "off";
+                text.textContent =
+                    "Macros: " + (enabled ? "ENABLED" : "DISABLED");
+                render();
+            }
+
+            // ── Init ───────────────────────────────────────────────────────────
+            document.addEventListener("DOMContentLoaded", () => {
+                sendToHost({ action: "ready" });
+            });
+        </script>
+    </body>
+</html>
