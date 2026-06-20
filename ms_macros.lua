@@ -64,6 +64,92 @@
             end
         -- END --
 
+        -- High Leap Assist --
+            local HighLeapAssistFunction = ms.fn(function()
+                local MovingCheck = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
+                if not MovingCheck then
+                    ms.press("w")
+                    ms.wait(10)
+                end
+                for i = 1, 3 do
+                    ms.type("e")
+                    ms.wait(2)
+                end
+                ms.wait(30)
+                for i = 1, 2 do
+                    ms.type("space")
+                end
+                ms.wait(10)
+                    local JumpHigh = function()
+                        if ms.isSub("jumpHigh") then
+                            ms.sound(JumpHighSound, true)
+                            for i = 1, 60 do
+                                ms.cam.move(0, -3145)
+                                ms.wait(1)
+                                ms.cam.move(0, -3145)
+                                ms.wait(.5)
+                            end
+                            ms.wait(50)
+                            ms.cam.move(0, 262)
+                            return true
+                        end
+                        return false
+                    end
+
+                    local JumpLow = function()
+                        if ms.isSub("jumpLow") then
+                            ms.sound(JumpLowSound, true)
+                            for i = 1, 14 do
+                                ms.cam.move(0, -370)
+                                ms.wait(1)
+                                ms.cam.move(0, -370)
+                                ms.wait(.5)
+                            end
+                            ms.wait(50)
+                            ms.cam.move(0, 308)
+                            return true
+                        end
+                        return false
+                    end
+
+                    local JumpDefault = function()
+                        ms.sound(JumpNormalSound, true)
+                        for i = 1, 14 do
+                            ms.cam.move(0, -185)
+                            ms.wait(1)
+                            ms.cam.move(0, -185)
+                            ms.wait(.5)
+                        end
+                        ms.wait(50)
+                        ms.cam.move(0, -69)
+                    end
+
+                    if not JumpHigh() then
+                        if not JumpLow() then
+                            JumpDefault()
+                        end
+                    end
+                    ms.release("space")
+                    ms.wait(100)
+                    if not MovingCheck then ms.release("w") end
+                    ms.wait(20)
+                    ms.wait(600)
+            end)
+
+            ms.bind.define("superJump", function()
+                if ms.modHeld("superThrow") then ThrowTrickFunction()
+                else HighLeapAssistFunction() end
+            end, {
+                group   = "main",
+                label   = "High Leap Assist",
+                cooldown = 3200,
+                default = {type="mouse", button=3},
+            })
+
+            ms.bind.define("jumpHigh",   HighLeapAssistFunction,  { sub="superJump",  label="Jump High",   mod="v"   })
+            ms.bind.define("jumpLow",    HighLeapAssistFunction,  { sub="superJump",  label="Jump Low",    mod="x"   })
+        -- END --
+
         -- Throw Trick --
             local ThrowTrickFunction = ms.fn(function()
                 ms.sound(ThrowTrickSound, true)
@@ -154,79 +240,9 @@
                 end
                 if not ThrowLow() then ThrowDefault() end
             end)
-        -- END --
 
-        -- High Leap Assist --
-            local HighLeapAssistFunction = ms.fn(function()
-                local MovingCheck = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
-                if not MovingCheck then
-                    ms.press("w")
-                    ms.wait(10)
-                end
-                for i = 1, 3 do
-                    ms.type("e")
-                    ms.wait(2)
-                end
-                ms.wait(30)
-                for i = 1, 2 do
-                    ms.type("space")
-                end
-                ms.wait(10)
-                    local JumpHigh = function()
-                        if ms.isSub("jumpHigh") then
-                            ms.sound(JumpHighSound, true)
-                            for i = 1, 60 do
-                                ms.cam.move(0, -3145)
-                                ms.wait(1)
-                                ms.cam.move(0, -3145)
-                                ms.wait(.5)
-                            end
-                            ms.wait(50)
-                            ms.cam.move(0, 262)
-                            return true
-                        end
-                        return false
-                    end
-
-                    local JumpLow = function()
-                        if ms.isSub("jumpLow") then
-                            ms.sound(JumpLowSound, true)
-                            for i = 1, 14 do
-                                ms.cam.move(0, -370)
-                                ms.wait(1)
-                                ms.cam.move(0, -370)
-                                ms.wait(.5)
-                            end
-                            ms.wait(50)
-                            ms.cam.move(0, 308)
-                            return true
-                        end
-                        return false
-                    end
-
-                    local JumpDefault = function()
-                        ms.sound(JumpNormalSound, true)
-                        for i = 1, 14 do
-                            ms.cam.move(0, -185)
-                            ms.wait(1)
-                            ms.cam.move(0, -185)
-                            ms.wait(.5)
-                        end
-                        ms.wait(50)
-                        ms.cam.move(0, -69)
-                    end
-
-                    if not JumpHigh() then
-                        if not JumpLow() then
-                            JumpDefault()
-                        end
-                    end
-                    ms.release("space")
-                    ms.wait(100)
-                    if not MovingCheck then ms.release("w") end
-                    ms.wait(20)
-                    ms.wait(600)
-            end)
+            ms.bind.define("superThrow", ThrowTrickFunction,      { sub="superJump",  label="Throw Trick", mod="alt" })
+            ms.bind.define("throwLow",   ThrowTrickFunction,      { sub="superThrow", label="Throw Low",   mod="v"   })
         -- END --
 
         -- Swing Cancel --
@@ -237,7 +253,16 @@
                 ms.wait(5)
                 ms.type("1")
                 ms.wait(500)
-            end)
+            end
+
+            ms.bind.define("fakeSwing", function()
+                if string.find(ms.app(), "Roblox") then FakeSwingFunction() end
+            end, {
+                group   = "main",
+                label   = "Swing Cancel",
+                cooldown = 780,
+                default = {type="mouse", button=4},
+            })
         -- END --
 
         -- Quick Reset --
@@ -263,6 +288,12 @@
                 -- ms.wait(2000)
                 ms.release("space")
             end)
+
+            ms.bind.define("quickReset", QuickResetFunction, {
+                group   = "optional",
+                label   = "Quick Reset",
+                default = {type="key", mods={"alt"}, key="escape"},
+            })
         -- END --
 
         -- Quick Slide --
@@ -278,6 +309,12 @@
                 ms.sound(QuickSlideSound, true)
                 ms.wait(200)
             end)
+
+            ms.bind.define("quickSG", QuickSlideFunction, {
+                group   = "optional",
+                label   = "Quick Slide",
+                default = {type="key", mods={"alt"}, key="z"},
+            })
         -- END --
 
         -- Slide Setup --
@@ -326,6 +363,12 @@
                 ms.type("z")
                 ms.wait(2000)
             end)
+
+            ms.bind.define("sgSetup", SlideSetupFunction, {
+                group   = "optional",
+                label   = "Slide Setup",
+                default = {type="key", mods={"alt"}, key="\\"},
+            })
         -- END --
 
         -- Action Spammer --
@@ -344,7 +387,7 @@
                 ms.Mouse(Release, Left, WindowTL, 452, d3)
                 ms.wait(10)
                 while ms.keystate("=") do
-                    ms.Mouse(Click, Left, Mouse, 0, 0)
+                    ms.Mouse(Click, Left, Mouse, nil, nil)
                     ms.wait(15)
                 end
                 ms.wait(300)
@@ -352,9 +395,16 @@
                 ms.type("z")
                 ms.wait(60)
             end)
+
+
+            ms.bind.define("frameDump", ActionSpammerFunction, {
+                group   = "optional",
+                label   = "Action Spammer",
+                default = {type="key", mods={}, key="="},
+            })
         -- END --
 
-        -- Load Second Account --
+        -- Load Second Account (PRIVATE SERVER, MUST HAVE PSCMDS) --
             local SpawnAltFunction = ms.fn(function()
                 local t = 100
                     ms.sound(SpawnAltSound, true)
@@ -387,54 +437,6 @@
                     ms.wait(t)
                     ms.type("return")
             end)
-        -- END --
-    -- END Macro Functions --
-
-    -- Binds --
-        -- Main Macro Binds --
-            ms.bind.define("superJump", function()
-                if ms.modHeld("superThrow") then ThrowTrickFunction()
-                else HighLeapAssistFunction() end
-            end, {
-                group   = "main",
-                label   = "High Leap Assist",
-                cooldown = 3200,
-                default = {type="mouse", button=3},
-            })
-
-            ms.bind.define("superThrow", ThrowTrickFunction,      { sub="superJump",  label="Throw Trick", mod="alt" })
-            ms.bind.define("throwLow",   ThrowTrickFunction,      { sub="superThrow", label="Throw Low",   mod="v"   })
-            ms.bind.define("jumpHigh",   HighLeapAssistFunction,  { sub="superJump",  label="Jump High",   mod="v"   })
-            ms.bind.define("jumpLow",    HighLeapAssistFunction,  { sub="superJump",  label="Jump Low",    mod="x"   })
-
-            ms.bind.define("fakeSwing", function()
-                if string.find(ms.app(), "Roblox") then FakeSwingFunction() end
-            end, {
-                group   = "main",
-                label   = "Swing Cancel",
-                cooldown = 780,
-                default = {type="mouse", button=4},
-            })
-        -- END --
-
-        -- Optional Macro Binds --
-            ms.bind.define("quickReset", QuickResetFunction, {
-                group   = "optional",
-                label   = "Quick Reset",
-                default = {type="key", mods={"alt"}, key="escape"},
-            })
-
-            ms.bind.define("quickSG", QuickSlideFunction, {
-                group   = "optional",
-                label   = "Quick Slide",
-                default = {type="key", mods={"alt"}, key="z"},
-            })
-
-            ms.bind.define("sgSetup", SlideSetupFunction, {
-                group   = "optional",
-                label   = "Slide Setup",
-                default = {type="key", mods={"alt"}, key="\\"},
-            })
 
             ms.bind.define("spawnAlt", SpawnAltFunction, {
                 group   = "optional",
@@ -442,13 +444,9 @@
                 default = {type="key", mods={"alt"}, key="="},
                 enabled = false,
             })
+        -- END --
 
-            ms.bind.define("frameDump", ActionSpammerFunction, {
-                group   = "optional",
-                label   = "Action Spammer",
-                default = {type="key", mods={}, key="="},
-            })
-
+        -- Mouse Position Grabber --
             ms.bind.define("mousePos", function()
                 local x, y = ms.mousePos()
                 ms.alert(string.format("Mouse: %.0f, %.0f", x, y), 3)
@@ -459,5 +457,5 @@
                 default = {type="key", mods={}, key="f8"},
             })
         -- END --
-    -- END Binds --
+    -- END Macro Functions --
 -- END Combat Warriors Macros --
