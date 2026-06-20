@@ -226,8 +226,10 @@
                         local cx     = x + (w - cw) / 2  -- centred within the screen
 
                         local c = hs.canvas.new({ x = cx, y = y, w = cw, h = ch })
-                        -- overlay sits above Roblox's game window (level 3 / floating does not)
-                        c:level(hs.canvas.windowLevels.overlay)
+                        -- NSStatusWindowLevel (25) — above all normal app and game windows.
+                        -- Do NOT use windowLevels.overlay: it may be nil in some Hammerspoon
+                        -- builds, and c:level(nil) throws, silently killing the whole toast.
+                        c:level(hs.canvas.windowLevels.status or 25)
                         c:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
                         c:alpha(alpha or 0)
                         c:appendElements(
@@ -4607,18 +4609,14 @@
             local function _buildPanel()
                 local panel = hs.webview.new(_panelFrame(), { developerExtrasEnabled = true }, _ucMS)
                 if not panel then return nil end
-                -- titled(1) + closable(2) + resizable(8) + fullSizeContentView(32768).
-                -- fullSizeContentView makes the HTML fill the entire frame including the
-                -- title bar zone — the dark HTML header visually replaces the grey band.
-                -- titleVisibility("hidden") removes the title text; the traffic lights
-                -- remain but overlay the HTML header rather than a separate grey bar.
-                pcall(function() panel:windowStyle(1 + 2 + 8 + 32768) end)
-                pcall(function() panel:titleVisibility("hidden") end)
+                -- Borderless (0): no title bar, no traffic lights, no chrome.
+                -- The HTML has its own close button; native window decorations aren't needed.
+                -- shadow(true) keeps depth cues without any chrome.
+                pcall(function() panel:windowStyle(0) end)
                 pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
                 pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
                 pcall(function() panel:allowTextEntry(true) end)
                 pcall(function() panel:shadow(true) end)
-                pcall(function() panel:windowTitle("mudscript Settings") end)
                 pcall(function() panel:closeOnEscape(true) end)
                 -- Keep _open in sync when the user closes via the X button or Escape.
                 pcall(function()
