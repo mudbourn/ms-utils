@@ -11,6 +11,7 @@ Windows documentation will cover:
 
 - AutoHotkey script structure and macro file layout
 - Keyboard and mouse action primitives
+- Camera engine
 - Cooldown and bind system
 - Settings and profiles
 
