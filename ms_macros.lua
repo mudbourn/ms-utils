@@ -6,6 +6,24 @@
     }
 -- End Creator Credits --
 
+-- Pack Settings --
+    ms.settings.define({
+        key     = "clickLevel",
+        label   = "Click Method",
+        hint    = "Switches the method used to perform click sequences",
+        type    = "seg",
+        options = {
+            { label = "1", value = 1 },
+            { label = "2", value = 2 },
+            { label = "3", value = 3 },
+            { label = "4", value = 4 },
+        },
+        default  = 3,
+        save     = true,
+        onChange = function(v) ms.setClickLevel(v) end,
+    })
+-- END --
+
 -- Combat Warriors Macros --
     -- Macro Functions --
         -- Helper Variables & Functions --
@@ -145,8 +163,9 @@
                     ms.press("w")
                     ms.wait(10)
                 end
-                for i = 1, 4 do
+                for i = 1, 3 do
                     ms.type("e")
+                    ms.wait(2)
                 end
                 ms.wait(30)
                 for i = 1, 2 do
@@ -379,6 +398,7 @@
             end, {
                 group   = "main",
                 label   = "High Leap Assist",
+                cooldown = 3200,
                 default = {type="mouse", button=3},
             })
 

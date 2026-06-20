@@ -17,7 +17,7 @@
             do
                 local _home      = os.getenv("HOME")
                 local _initPath  = _home .. "/.hammerspoon/init.lua"
-                local _trustPath = _home .. "/.hammerspoon/.ms_trusted_hash"
+                local _trustPath = _home .. "/.hammerspoon/data/.ms_trusted_hash"
 
                 local function _hashFile(path)
                     local out = hs.execute("shasum -a 256 '" .. path:gsub("'", "'\\'") .. "' 2>/dev/null")
@@ -80,6 +80,26 @@
                 end
             end
         -- END --
+
+        -- One-time migration: move settings/hash files from root into data/ ──────
+        -- Safe to run on every reload; skips files that already exist at the new path.
+        do
+            local _h = os.getenv("HOME") .. "/.hammerspoon"
+            os.execute("mkdir -p '" .. _h .. "/data'")
+            local function _mvToData(name)
+                local src = _h .. "/" .. name
+                local dst = _h .. "/data/" .. name
+                if hs.fs.attributes(dst) then return end
+                if not hs.fs.attributes(src) then return end
+                local f = io.open(src, "rb"); if not f then return end
+                local c = f:read("*all"); f:close()
+                local g = io.open(dst, "wb"); if not g then return end
+                g:write(c); g:close(); os.remove(src)
+            end
+            _mvToData("ms_settings.json")
+            _mvToData("ms_settings_default.json")
+            _mvToData(".ms_trusted_hash")
+        end
 
         -- 1. Prefix Variables & State Tracking --
             ms = {}
@@ -144,6 +164,38 @@
             ms._docsURL           = "https://docs-ms.mudbourn.info"  -- opened by Settings › Documentation
             ms._updateManifestURL = nil  -- set to your MANIFEST.json URL (e.g. raw.githubusercontent.com/.../MANIFEST.json) to enable auto-update
 
+            -- User Settings & Menu API State ─────────────────────────────────────
+            ms.settings          = {}  -- user settings API namespace
+            ms.menu              = {}  -- custom section API namespace (ms.menu.define)
+            ms._menubar          = nil  -- hs.menubar instance (menu-bar icon); set in Section 7
+            ms.features          = {}  -- feature visibility API namespace
+            ms._userSettingDefs  = {}  -- ordered list of all setting/item definitions
+            ms._userSettingIndex = {}  -- key → def, for O(1) lookup
+            ms._userSettingVals  = {}  -- key → current live value
+            ms._userMenuDefs     = {}  -- ordered list of ms.menu.define() entries
+            ms._hiddenFeatures   = {}  -- set: name → true (from ms.features.hide())
+            -- Theme defaults — matches the shipped data/ms_theme.json baseline.
+            -- ms.loadTheme() overrides these with the user's file at startup.
+            ms._themeDefaults = {
+                bg       = "#060402",
+                surface  = "#100806",
+                surface2 = "#1c100c",
+                hover    = "#301610",
+                accent   = "#c41a1a",
+                accentHi = "#e52424",
+                success  = "#4a7820",
+                dangerBg = "#1e0608",
+                danger   = "#d42020",
+                warning  = "#c47820",
+                text     = "#f0ddb0",
+                radius   = 3,
+                font     = "Almendra",
+                wraith   = "",
+            }
+            ms._theme = {}
+            for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
+            ms._themeLoaded = false  -- set true by ms.loadTheme() when a file loads successfully
+
             require("hs.eventtap")
             require("hs.mouse")
             require("hs.uielement")
@@ -175,11 +227,12 @@
                     if hs_app then hs_app:activate() end
 
                     hs.timer.doAfter(0.25, function()
-                        -- Announce before handing focus back so the toast is visible
-                        -- as Roblox comes to the front.
-                        local win = roblox:mainWindow()
-                        if win then win:focus() end
-                        roblox:activate()
+                        -- Re-fetch the app handle; the captured reference can become
+                        -- stale between the outer and inner timer callbacks.
+                        local app = hs.application.get("Roblox") or roblox
+                        local ok, win = pcall(function() return app:mainWindow() end)
+                        if ok and win then pcall(function() win:focus() end) end
+                        pcall(function() app:activate() end)
                     end)
                 end
             end)
@@ -320,55 +373,73 @@
                         animateEntry(entry, f.y, f.y, 1, 0, onDone)
                     end
 
-                    return function(msg, duration, noDefaultSound)
-                        duration = duration or 2
-
-                        -- Play alert sound if loaded, post-startup, and not suppressed.
-                        -- Uses ms.playSlot so the name stored in soundAssign is correctly
-                        -- resolved to a file path via ms.sounds.
-                        if loadfinish == 1 and not noDefaultSound then
-                            ms.playSlot("alert")
+                    -- dismissAll: instantly clears all active toasts without animation.
+                    -- Used by _doNotify to cut off a previous state toast before
+                    -- showing the new one.
+                    local function dismissAll()
+                        for i = #queue, 1, -1 do
+                            local e = queue[i]
+                            if e.timer      then e.timer:stop();      e.timer      = nil end
+                            if e._animTimer then e._animTimer:stop(); e._animTimer = nil end
+                            if e.canvas     then pcall(function() e.canvas:delete() end); e.canvas = nil end
                         end
-
-                        if #queue >= maxAlerts then
-                            local oldest = queue[1]
-                            if oldest._animTimer then oldest._animTimer:stop() end
-                            if oldest.timer then oldest.timer:stop() end
-                            fadeOut(oldest, function()
-                                if oldest.canvas then oldest.canvas:delete() end
-                            end)
-                            table.remove(queue, 1)
-                        end
-
-                        local entry = { msg = msg, canvas = nil, timer = nil, h = nil }
-                        table.insert(queue, entry)
-                        redraw(entry)
-
-                        entry.timer = hs.timer.doAfter(duration, function()
-                            for i, e in ipairs(queue) do
-                                if e == entry then
-                                    table.remove(queue, i)
-                                    fadeOut(e, function()
-                                        if e.canvas then e.canvas:delete() end
-                                    end)
-                                    redraw(nil)
-                                    break
-                                end
-                            end
-                        end)
+                        queue = {}
                     end
+
+                    -- Return a table callable via __call so ms.alert(...) works and
+                    -- ms.alert.dismissAll() is a plain field — Lua functions can't be indexed.
+                    return setmetatable({ dismissAll = dismissAll }, {
+                        __call = function(_, msg, duration, noDefaultSound)
+                            duration = duration or 2
+
+                            -- Play alert sound if loaded, post-startup, and not suppressed.
+                            -- Uses ms.playSlot so the name stored in soundAssign is correctly
+                            -- resolved to a file path via ms.sounds.
+                            if loadfinish == 1 and not noDefaultSound then
+                                ms.playSlot("alert")
+                            end
+
+                            if #queue >= maxAlerts then
+                                local oldest = queue[1]
+                                if oldest._animTimer then oldest._animTimer:stop() end
+                                if oldest.timer then oldest.timer:stop() end
+                                fadeOut(oldest, function()
+                                    if oldest.canvas then oldest.canvas:delete() end
+                                end)
+                                table.remove(queue, 1)
+                            end
+
+                            local entry = { msg = msg, canvas = nil, timer = nil, h = nil }
+                            table.insert(queue, entry)
+                            redraw(entry)
+
+                            entry.timer = hs.timer.doAfter(duration, function()
+                                for i, e in ipairs(queue) do
+                                    if e == entry then
+                                        table.remove(queue, i)
+                                        fadeOut(e, function()
+                                            if e.canvas then e.canvas:delete() end
+                                        end)
+                                        redraw(nil)
+                                        break
+                                    end
+                                end
+                            end)
+                        end,
+                    })
                 end)()
             -- END Alerts --
 
             -- Settings Menu --
-                local settingsPath = os.getenv("HOME") .. "/.hammerspoon/ms_settings.txt"
-                local jsonPath     = os.getenv("HOME") .. "/.hammerspoon/ms_settings.json"
-                local defaultPath  = os.getenv("HOME") .. "/.hammerspoon/ms_settings_default.json"
-                local archivePath  = os.getenv("HOME") .. "/.hammerspoon/backups/"
-                local macrosPath   = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
-                local profilesPath = os.getenv("HOME") .. "/.hammerspoon/profiles/"
+                local settingsPath    = os.getenv("HOME") .. "/.hammerspoon/ms_settings.txt"
+                local jsonPath        = os.getenv("HOME") .. "/.hammerspoon/data/ms_settings.json"
+                local defaultPath     = os.getenv("HOME") .. "/.hammerspoon/data/ms_settings_default.json"
+                local archivePath     = os.getenv("HOME") .. "/.hammerspoon/backups/"
+                local macrosPath      = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
+                local profilesPath    = os.getenv("HOME") .. "/.hammerspoon/profiles/"
                 local initPath        = os.getenv("HOME") .. "/.hammerspoon/init.lua"
-                local trustedHashPath = os.getenv("HOME") .. "/.hammerspoon/.ms_trusted_hash"
+                local trustedHashPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_trusted_hash"
+                local themePath       = os.getenv("HOME") .. "/.hammerspoon/data/ms_theme.json"
 
                 ms.bindConfig = {}
                 ms.bindHandles = {}
@@ -391,6 +462,36 @@
                         end
                     end
                     if key then return {type="key", mods=mods, key=key} end
+                    return nil
+                end
+
+                -- ── User Settings — validation helpers ──────────────────────────────────────
+                local _SETTING_TYPES = {
+                    toggle = true, slider = true, seg       = true,
+                    action = true, divider = true, groupLabel = true,
+                }
+                -- Feature names ms.features.hide() is permitted to suppress.
+                -- "sound" and "profiles" are intentionally excluded.
+                local _HIDEABLE_FEATURES = {
+                    socd             = true,
+                    trackpad         = true,
+                    independentBinds = true,
+                    sensitivity      = true,
+                }
+                -- Returns the validated (and possibly clamped) value, or nil on failure.
+                local function _validateUserValue(def, value)
+                    if def.type == "toggle" then
+                        if value == true or value == false then return value end
+                    elseif def.type == "slider" then
+                        local n = tonumber(value)
+                        if n then return math.max(def.min or 0, math.min(def.max or 100, n)) end
+                    elseif def.type == "seg" then
+                        if type(def.options) == "table" then
+                            for _, opt in ipairs(def.options) do
+                                if opt.value == value then return value end
+                            end
+                        end
+                    end
                     return nil
                 end
 
@@ -443,6 +544,23 @@
                             if entry.cooldown ~= nil then
                                 local n = tonumber(entry.cooldown)
                                 if n and n >= 0 then ms.cooldowns[id] = math.floor(n) end
+                            end
+                        end
+                    end
+                    -- Apply user-defined settings from the "user" sub-table.
+                    -- Runs last so user settings always take final effect.
+                    -- Fires onChange callbacks, which sync system bridges (e.g. ms.setClickLevel).
+                    if data.user and type(data.user) == "table" then
+                        for key, value in pairs(data.user) do
+                            local uDef = ms._userSettingIndex[key]
+                            if uDef and uDef.type ~= "action" then
+                                local validated = _validateUserValue(uDef, value)
+                                if validated ~= nil then
+                                    ms._userSettingVals[key] = validated
+                                    if type(uDef.onChange) == "function" then
+                                        pcall(uDef.onChange, validated)
+                                    end
+                                end
                             end
                         end
                     end
@@ -525,6 +643,7 @@
                         soundVolume      = ms.soundVolume,
                         soundAssign      = ms.soundAssign,
                         importedSounds   = ms.importedSounds or {},
+                        user             = ms._userSettingVals or {},
                         macros = {},
                     }
                     -- Enabled state per macro
@@ -586,12 +705,11 @@
                             ms._applySettings(data)
                             return
                         end
-                        print("Settings: JSON file found but could not be decoded.")
+                        -- JSON present but unreadable; fall through to flat-file check.
                     end
                     -- Auto-convert from old flat file if JSON is absent
                     local oldF = io.open(settingsPath, "r")
                     if oldF then
-                        print("Settings: converting flat file to JSON.")
                         local data, skipped = ms._convertFlatSettings(oldF)
                         oldF:close()
                         ms._applySettings(data)
@@ -614,7 +732,6 @@
                         local data = hs.json.decode(content)
                         if data then
                             ms._applySettings(data)
-                            print("Settings: loaded from default file.")
                             return
                         end
                     end
@@ -626,7 +743,6 @@
                         local data2 = hs.json.decode(content2)
                         if data2 then ms._applySettings(data2) end
                     end
-                    print("Settings: initialized from macro declarations.")
                 end
 
                 -- Archives the current default and saves the current settings in its place.
@@ -680,6 +796,15 @@
                     ms.modConfig  = {}
                     ms.cooldowns  = {}
                     ms._applySettings(data)
+                    -- Also reset user-defined settings to their declared defaults.
+                    for key, def in pairs(ms._userSettingIndex) do
+                        if def.type ~= "action" and def.default ~= nil then
+                            ms._userSettingVals[key] = def.default
+                            if type(def.onChange) == "function" then
+                                pcall(def.onChange, def.default)
+                            end
+                        end
+                    end
                     ms.saveSettings()
                     ms.bind.rebind()
                     ms.cam.updateAnchor()
@@ -698,8 +823,328 @@
                     ms.socdApply()
                     ms.playSlot("update")
                     ms.alert("Settings reloaded.", 5, true)
-                    ms.alert("Sensitivity: " .. tostring(CUR_CAM_SENS) .. " | Click Level: " .. tostring(clickLevel), 5, true)
+                    ms.alert("Sensitivity: " .. tostring(CUR_CAM_SENS), 5, true)
                 end
+
+                -- ── User Settings & Menu API ─────────────────────────────────────────────────────────────────────
+                --
+                -- These functions are called from ms_macros.lua (after ms.macroMeta, before
+                -- macro functions) to declare custom settings, panel sections, and to hide
+                -- unused built-in features.
+                --
+                -- Callbacks (onChange, onAction) defined in ms_macros.lua run inside the
+                -- macro sandbox — they have access to ms.* functions and safe Lua builtins,
+                -- but cannot touch hs.*, io.*, os.*, or any filesystem / shell API.
+                --
+                -- Quick reference:
+                --
+                --   ms.settings.define({ key="k", type="toggle", default=false,
+                --       label="My Toggle", onChange=function(v) end })
+                --
+                --   ms.settings.define({ key="k", type="slider", min=0, max=100,
+                --       step=1, unit="ms", default=50, label="My Slider",
+                --       onChange=function(v) end })
+                --
+                --   ms.settings.define({ key="k", type="seg",
+                --       options={{label="A",value="a"},{label="B",value="b"}},
+                --       default="a", label="My Seg", onChange=function(v) end })
+                --
+                --   ms.settings.define({ key="k", type="action",
+                --       label="Row label", btnLabel="Run", danger=false,
+                --       onAction=function() end })
+                --
+                --   ms.settings.define({ type="divider" })
+                --   ms.settings.define({ type="groupLabel", label="My Group" })
+                --
+                --   ms.settings.get("k")          -- read current value
+                --   ms.settings.set("k", value)   -- write + save + fire onChange
+                --
+                --   ms.menu.define({ id="sec", title="My Section", icon="⚔",
+                --       items={ {type="toggle", key="k", ...}, ... } })
+                --
+                --   ms.features.hide("socd")          -- hide SOCD rows in Tools
+                --   ms.features.hide("trackpad")      -- hide Trackpad row in Tools
+                --   ms.features.hide("sensitivity")   -- hide Sensitivity slider in Tools
+                --   ms.features.hide("independentBinds") -- hide Ind. Binds row in Tools
+                --
+                -- ── ms.settings.define(def) ────────────────────────────────────────────────────────────────────
+                -- Registers one setting or visual item in the Settings section.
+                -- Items appear in declaration order.
+                --
+                ms.settings.define = function(def)
+                    assert(type(def) == "table",
+                        "ms.settings.define: argument must be a table")
+                    local t = def.type
+                    assert(_SETTING_TYPES[t],
+                        "ms.settings.define: unknown type '" .. tostring(t) .. "'")
+                    -- Visual-only items need no key or value.
+                    if t == "divider" or t == "groupLabel" then
+                        table.insert(ms._userSettingDefs, def)
+                        return
+                    end
+                    -- All interactive items need a unique key.
+                    local key = def.key
+                    assert(type(key) == "string" and #key > 0,
+                        "ms.settings.define: 'key' is required for type '" .. t .. "'")
+                    assert(not ms._userSettingIndex[key],
+                        "ms.settings.define: duplicate key '" .. key .. "'")
+                    if def.onChange then
+                        assert(type(def.onChange) == "function",
+                            "ms.settings.define: onChange must be a function")
+                    end
+                    if def.onAction then
+                        assert(type(def.onAction) == "function",
+                            "ms.settings.define: onAction must be a function")
+                    end
+                    ms._userSettingIndex[key] = def
+                    table.insert(ms._userSettingDefs, def)
+                    -- Action items carry no stored value.
+                    if t == "action" then return end
+                    -- Seed with declared default; _applySettings will override with the
+                    -- saved value once settings load from disk (after ms_macros.lua runs).
+                    ms._userSettingVals[key] = def.default
+                    if def.default ~= nil and type(def.onChange) == "function" then
+                        pcall(def.onChange, def.default)
+                    end
+                end
+
+                -- ── ms.settings.get(key) ──────────────────────────────────────────────────────────────────────
+                -- Returns the current value of a user setting, or its declared default.
+                -- Safe to call inside ms.fn()-wrapped macro bodies at any time.
+                --
+                ms.settings.get = function(key)
+                    assert(type(key) == "string", "ms.settings.get: key must be a string")
+                    local def = ms._userSettingIndex[key]
+                    if not def then return nil end
+                    local v = ms._userSettingVals[key]
+                    return v ~= nil and v or def.default
+                end
+
+                -- ── ms.settings.set(key, value) ────────────────────────────────────────────────────────────
+                -- Programmatically updates a user setting.
+                -- Validates the value, persists if save ~= false, and fires onChange.
+                --
+                ms.settings.set = function(key, value)
+                    assert(type(key) == "string", "ms.settings.set: key must be a string")
+                    local def = ms._userSettingIndex[key]
+                    if not def then
+                        print("ms.settings.set: unknown key '" .. tostring(key) .. "'")
+                        return
+                    end
+                    if def.type == "action" then
+                        print("ms.settings.set: action items have no value (key='" .. key .. "')")
+                        return
+                    end
+                    local validated = _validateUserValue(def, value)
+                    if validated == nil then
+                        print("ms.settings.set: invalid value " .. tostring(value)
+                            .. " for key '" .. key .. "'")
+                        return
+                    end
+                    ms._userSettingVals[key] = validated
+                    if def.save ~= false then ms.saveSettings() end
+                    if type(def.onChange) == "function" then
+                        pcall(def.onChange, validated)
+                    end
+                end
+
+                -- ── ms.menu.define(def) ────────────────────────────────────────────────────────────────────────
+                -- Registers a custom panel section that appears below the Tools section.
+                -- Sections appear in the order ms.menu.define is called.
+                --
+                --   id    (required) Unique identifier string.
+                --   title (required) Header text shown in the panel.
+                --   icon  (optional) Emoji prepended to the title in the panel header.
+                --   items (required) Array of item definitions (same fields as
+                --                    ms.settings.define entries). Each item with a key
+                --                    is automatically reachable via ms.settings.get/set.
+                --
+                ms.menu.define = function(def)
+                    assert(type(def) == "table",
+                        "ms.menu.define: argument must be a table")
+                    assert(type(def.id) == "string" and #def.id > 0,
+                        "ms.menu.define: 'id' is required")
+                    assert(type(def.title) == "string" and #def.title > 0,
+                        "ms.menu.define: 'title' is required")
+                    assert(type(def.items) == "table",
+                        "ms.menu.define: 'items' must be a table")
+                    -- Register each keyed item so ms.settings.get/set works for them.
+                    for _, item in ipairs(def.items) do
+                        if type(item) == "table"
+                            and type(item.key) == "string" and #item.key > 0
+                            and not ms._userSettingIndex[item.key] then
+                            if item.onChange then
+                                assert(type(item.onChange) == "function",
+                                    "ms.menu.define: item onChange must be a function")
+                            end
+                            ms._userSettingIndex[item.key] = item
+                            if item.type ~= "action" then
+                                ms._userSettingVals[item.key] = item.default
+                                if item.default ~= nil and type(item.onChange) == "function" then
+                                    pcall(item.onChange, item.default)
+                                end
+                            end
+                        end
+                    end
+                    table.insert(ms._userMenuDefs, def)
+                end
+
+                -- ── ms.features.hide(name) ───────────────────────────────────────────────────────────────────
+                -- Hides a built-in panel feature for this macro pack session.
+                -- Purely cosmetic — the underlying feature remains functional.
+                -- The item reappears when the call is removed and Hammerspoon reloads.
+                --
+                -- Accepted names:
+                --   "sensitivity"        Camera Sensitivity slider in Tools
+                --   "socd"               SOCD Cleaning + Mode rows in Tools
+                --   "trackpad"           Trackpad / Pen Mode row in Tools
+                --   "independentBinds"   Independent Binds row in Tools
+                --
+                -- Note: "sound" and "profiles" cannot be hidden.
+                --
+                ms.features.hide = function(name)
+                    if not _HIDEABLE_FEATURES[name] then
+                        print("ms.features.hide: '" .. tostring(name)
+                            .. "' is not a hideable feature. "
+                            .. "Accepted: sensitivity, socd, trackpad, independentBinds")
+                        return
+                    end
+                    ms._hiddenFeatures[name] = true
+                end
+
+                -- ── ms.setClickLevel(n) ─────────────────────────────────────────────────────────────────────────
+                -- Bridge function: updates the system clickLevel variable from a
+                -- ms.settings.define onChange callback in ms_macros.lua.
+                -- This is the correct way to sync click level when it is declared as a
+                -- user setting. Valid values: 1, 2, 3, 4.
+                --
+                ms.setClickLevel = function(n)
+                    n = tonumber(n)
+                    if n and (n == 1 or n == 2 or n == 3 or n == 4) then
+                        clickLevel = n
+                    end
+                end
+
+                -- ── END User Settings & Menu API ─────────────────────────────────────────────────────────────────────
+
+                -- ── Theme System ─────────────────────────────────────────────────────
+                --
+                -- Loads data/ms_theme.json and validates every value.
+                -- Safe to call multiple times; always resets to _themeDefaults first.
+                -- Called at startup after loadSettings(), and on demand via the
+                -- "Reload Theme" panel action.
+                --
+                ms.loadTheme = function()
+                    for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
+                    local f = io.open(themePath, "r")
+                    if not f then return end
+                    local content = f:read("*all"); f:close()
+                    local data = hs.json.decode(content)
+                    if not data then return end
+                    ms._themeLoaded = true
+                    -- Validate hex color fields.
+                    local colorKeys = {
+                        "bg","surface","surface2","hover",
+                        "accent","accentHi","success","dangerBg",
+                        "danger","warning","text",
+                    }
+                    for _, k in ipairs(colorKeys) do
+                        if type(data[k]) == "string"
+                            and data[k]:match("^#[0-9a-fA-F]+$")
+                        then
+                            ms._theme[k] = data[k]
+                        end
+                    end
+                    -- Validate radius (0–40, integer).
+                    if type(data.radius) == "number" then
+                        ms._theme.radius = math.max(0, math.min(40, math.floor(data.radius)))
+                    end
+                    -- Validate font (strip dangerous CSS characters).
+                    if type(data.font) == "string" and #data.font > 0 then
+                        local clean = data.font:gsub("[;{}()<>\"']", "")
+                        if #clean > 0 then ms._theme.font = clean end
+                    end
+                    -- Validate wraith (must be a relative path inside ~/.hammerspoon/).
+                    if type(data.wraith) == "string" then
+                        local wp = data.wraith:gsub("%.%.", "")  -- strip traversal
+                        ms._theme.wraith = wp
+                    end
+                end
+
+                -- ── END Theme System ─────────────────────────────────────────────────
+
+                -- ── Capability Detection — ms.has(feature) ───────────────────────────────────
+                --
+                -- Returns true if the named feature is present and configured.
+                -- Safe to call from ms_macros.lua at any point after ms.macroMeta.
+                -- Use this to guard optional features so packs degrade gracefully
+                -- when a user hasn't configured something or on an older install.
+                --
+                -- Flags:
+                --   "theme"        data/ms_theme.json was loaded (custom values on disk)
+                --   "wraith"       theme has a wraith path and the PNG file exists
+                --   "sound"        sound is enabled and at least one file is indexed
+                --   "socd"         SOCD engine is currently enabled
+                --   "trackpad"     trackpad mode is currently enabled
+                --   "profiles"     at least one valid profile exists in profiles/
+                --   "userSettings" ms.settings.define API is present (version compat)
+                --   "userMenu"     ms.menu.define API is present (version compat)
+                --   "integrity"    init.lua matches its trusted hash
+                --   "hidinject"    hidinject binary is present in bin/
+                --
+                ms.has = function(feature)
+                    local home = os.getenv("HOME") .. "/.hammerspoon"
+
+                    if feature == "theme" then
+                        return ms._themeLoaded == true
+
+                    elseif feature == "wraith" then
+                        local w = ms._theme and ms._theme.wraith
+                        if not w or w == "" then return false end
+                        return hs.fs.attributes(home .. "/" .. w) ~= nil
+
+                    elseif feature == "sound" then
+                        return ms.soundEnabled == true
+                            and next(ms.sounds or {}) ~= nil
+
+                    elseif feature == "socd" then
+                        return ms.socdEnabled == true
+
+                    elseif feature == "trackpad" then
+                        return ms.trackpadMode == true
+
+                    elseif feature == "profiles" then
+                        local pPath = home .. "/profiles/"
+                        if not hs.fs.attributes(pPath) then return false end
+                        for entry in hs.fs.dir(pPath) do
+                            if entry ~= "." and entry ~= ".." then
+                                if hs.fs.attributes(pPath .. entry .. "/ms_macros.lua") then
+                                    return true
+                                end
+                            end
+                        end
+                        return false
+
+                    elseif feature == "userSettings" then
+                        return type(ms.settings) == "table"
+                            and type(ms.settings.define) == "function"
+
+                    elseif feature == "userMenu" then
+                        return type(ms.menu) == "table"
+                            and type(ms.menu.define) == "function"
+
+                    elseif feature == "integrity" then
+                        return ms.integrity ~= nil
+                            and ms.integrity.check() == "trusted"
+
+                    elseif feature == "hidinject" then
+                        return hs.fs.attributes(home .. "/bin/hidinject") ~= nil
+
+                    end
+                    return false
+                end
+
+                -- ── END Capability Detection ──────────────────────────────────────────────────
 
                 -- ── Profile Management ──────────────────────────────────────────────
 
@@ -744,7 +1189,6 @@
                     if f then
                         f:write(hs.json.encode(data, true))
                         f:close()
-                        print("Settings: built default settings from macro declarations.")
                     end
                 end
 
@@ -1011,46 +1455,64 @@
                     local roblox = hs.application.get("Roblox")
                     -- Normalize: chooseFileOrFolder may use string keys ("1") not integer keys (1).
                     local selectedPath
-                    if type(result) == "string" then
-                        selectedPath = result
-                    elseif type(result) == "table" then
-                        for _, v in pairs(result) do
-                            if type(v) == "string" then selectedPath = v; break end
-                        end
+                    for _, v in pairs(result or {}) do
+                        if type(v) == "string" then selectedPath = v; break end
                     end
                     if not selectedPath then
-                        if roblox then roblox:activate() end; return
+                        if roblox then pcall(function() roblox:activate() end) end
+                        return
                     end
                     local meta = readMacroMeta(selectedPath)
                     if not meta or not meta.name or meta.name == "" then
-                        if roblox then roblox:activate() end
+                        if roblox then pcall(function() roblox:activate() end) end
                         ms.alert("Could not read profile name.\nMake sure the file has ms.macroMeta = { name = \"...\" }.", 6)
                         return
                     end
                     local folderName = sanitizeName(meta.name)
-                    hs.fs.mkdir(profilesPath)
-                    hs.fs.mkdir(profilesPath .. folderName)
-                    local f = io.open(selectedPath, "r")
+                    -- Ensure the profiles directory and target subfolder both exist.
+                    local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                    hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
+                    if not hs.fs.attributes(profilesPath .. folderName) then
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Could not create profile folder.", 3)
+                        return
+                    end
+                    -- Read source file in binary mode (same as sound import).
+                    local f = io.open(selectedPath, "rb")
                     if not f then
-                        if roblox then roblox:activate() end
-                        ms.alert("Could not read the selected file.", 3); return
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Could not read the selected file.", 3)
+                        return
                     end
                     local content = f:read("*all"); f:close()
+                    -- Security audit before writing anything.
                     local auditErrs = auditMacros(content)
                     if #auditErrs > 0 then
-                        if roblox then roblox:activate() end
+                        if roblox then pcall(function() roblox:activate() end) end
                         ms.alert("Import rejected — security scan failed:\n  • "
                             .. table.concat(auditErrs, "\n  • "), 8)
                         return
                     end
-                    local g = io.open(profilesPath .. folderName .. "/ms_macros.lua", "w")
-                    if not g then
-                        if roblox then roblox:activate() end
-                        ms.alert("Could not write to profiles folder.", 3); return
+                    -- Write to profiles folder in binary mode.
+                    local dst    = profilesPath .. folderName .. "/ms_macros.lua"
+                    local copied = false
+                    local g = io.open(dst, "wb")
+                    if g then
+                        g:write(content); g:close()
+                        copied = true
                     end
-                    g:write(content); g:close()
+                    -- Fallback: shell cp (same pattern as sound import).
+                    if not copied then
+                        local _, st = hs.execute("/bin/cp " .. sq(selectedPath) .. " " .. sq(dst))
+                        copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
+                    end
+                    if not copied then
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if importing from outside ~/.hammerspoon.", 5)
+                        return
+                    end
                     ms.playSlot("update")
-                    if roblox then roblox:activate() end
+                    if roblox then pcall(function() roblox:activate() end) end
                     hs.timer.doAfter(0.2, function()
                         ms.alert("Profile \"" .. meta.name .. "\" imported.\nSwitch to it from Settings > Profiles.", 5, true)
                     end)
@@ -1363,9 +1825,9 @@
                     end
                 -- END SOCD Engine --
 
-                if ms.menu then ms.menu:delete() end
-                ms.menu = hs.menubar.new()
-                ms.menu:setIcon(os.getenv("HOME") .. "/.hammerspoon/icons/ms_icon_gen.tiff", true)
+                if ms._menubar then pcall(function() ms._menubar:delete() end) end
+                ms._menubar = hs.menubar.new()
+                ms._menubar:setIcon(os.getenv("HOME") .. "/.hammerspoon/ui/icons/ms_icon_gen.tiff", true)
                 -- The NSMenu dropdown below is kept (as an unused local) for reference/rollback
                 -- only. It is no longer wired to ms.menu — Section 10 (ms.ui) replaces it with
                 -- the webview Settings panel. Open it via the menu-bar icon or Alt+P.
@@ -2036,7 +2498,6 @@
                         table.insert(sub, {
                             title = "Import Sound Files...",
                             fn = function()
-                                print("ms: import fn called")
                                 ms.playSlot("alert")
                                 hs.focus()
                                 -- Strip trailing slash before testing attributes
@@ -2046,7 +2507,6 @@
                                     hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
                                     true, false, true
                                 )
-                                print("ms: import result type=" .. type(result) .. " val=" .. tostring(result))
                                 -- chooseFileOrFolder may return string keys ("1","2"...) instead
                                 -- of integer keys (1,2...) depending on the Hammerspoon version.
                                 -- Normalize to a plain integer-indexed table so ipairs works.
@@ -2054,11 +2514,7 @@
                                 for _, v in pairs(result or {}) do
                                     if type(v) == "string" then table.insert(paths, v) end
                                 end
-                                print("ms: import: " .. #paths .. " path(s) after normalise")
-                                if #paths == 0 then
-                                    print("ms: import: no valid paths, returning")
-                                    return
-                                end
+                                if #paths == 0 then return end
                                 result = paths
 
                                 -- Ensure sounds directory exists
@@ -2072,13 +2528,10 @@
                                 local function sq(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
 
                                 local added, failed = {}, {}
-                                print("ms: import: " .. #result .. " file(s) selected")
                                 for _, srcPath in ipairs(result) do
                                     local filename   = srcPath:match("([^/]+)$")
                                     local importName = filename and (filename:match("^(.+)%.[^%.]+$") or filename)
-                                    print("ms: import: trying " .. tostring(srcPath))
                                     if not filename or not importName then
-                                        print("ms: import: bad filename, skipping")
                                         table.insert(failed, srcPath); goto nextFile
                                     end
                                     local dst = SoundLib .. filename
@@ -2094,30 +2547,28 @@
                                             if g then
                                                 g:write(content); g:close()
                                                 copied = true
-                                                print("ms: import: io.open copy OK → " .. dst)
                                             else
-                                                print("ms: import: io.open write failed → " .. dst)
+                                                print("ms: import: io.open write failed for " .. tostring(srcPath))
                                             end
                                         else
-                                            print("ms: import: io.open read failed ← " .. srcPath)
+                                            print("ms: import: io.open read failed for " .. tostring(srcPath))
                                         end
                                         -- Fallback: shell cp (catches cases where io.open
                                         -- lacks access but the shell subprocess does).
                                         if not copied then
                                             local _, st = hs.execute("/bin/cp " .. sq(srcPath) .. " " .. sq(dst))
                                             copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
-                                            print("ms: import: shell cp " .. (copied and "OK" or "FAILED") .. " (st=" .. tostring(st) .. ")")
+                                            if not copied then
+                                                print("ms: import: shell cp failed for " .. tostring(srcPath))
+                                            end
                                         end
                                         if not copied then
                                             table.insert(failed, importName); goto nextFile
                                         end
-                                    else
-                                        print("ms: import: already in sounds folder, skipping copy")
                                     end
                                     ms.importedSounds = ms.importedSounds or {}
                                     ms.importedSounds[importName] = filename
                                     table.insert(added, importName)
-                                    print("ms: import: registered " .. importName)
                                     ::nextFile::
                                 end
 
@@ -2508,33 +2959,6 @@
                                 os.execute("open " .. os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua")
                             end },
                             { title = "-" },
-                            { title = "Click Level: " .. tostring(clickLevel), disabled = true },
-                            { title = "Set Click Level...", fn = function()
-                                ms.playSlot("alert")
-                                hs.focus()
-                                local btn, value = hs.dialog.textPrompt("Click Level", "Enter click level (1, 2, 3, or 4):", tostring(clickLevel), "Set", "Cancel")
-                                if btn == "Set" then
-                                    local num = tonumber(value)
-                                    if num and (num == 1 or num == 2 or num == 3 or num == 4) then
-                                        clickLevel = num
-                                        ms.saveSettings()
-                                        ms.playSlot("update")
-                                        ms.alert("Click level set to " .. tostring(num), 2, true)
-                                    else
-                                        ms.alert("Invalid value. Must be an integer between 1 and 4.", 2)
-                                    end
-                                end
-                                local roblox = hs.application.get("Roblox")
-                                if roblox then roblox:activate() end
-                            end },
-                            { title = "Reset Click Level", fn = function()
-                                local default = (ms.macroDefaults and ms.macroDefaults.frameLevel) or 3
-                                clickLevel = default
-                                ms.saveSettings()
-                                ms.playSlot("reset")
-                                ms.alert("Click level reset to " .. tostring(default), 2, true)
-                            end },
-                            { title = "-" },
                             {
                                 title    = _trusted and "\xe2\x9c\x93 Trust Current Version" or "Trust Current Version...",
                                 disabled = _trusted or nil,
@@ -2660,7 +3084,7 @@
                                                 ms.playSlot("settingsOpen")
                                                 ms._menuHoverStart()
                                                 ms._menuVisible = true
-                                                ms.menu:popupMenu(ms._biasedMenuPt(ms._lastMenuPoint))
+                                                ms._menubar:popupMenu(ms._biasedMenuPt(ms._lastMenuPoint))
                                                 ms._menuVisible = false
                                                 ms._menuHoverStop()
                                                 if not ms._menuFnFired then
@@ -2691,7 +3115,7 @@
             -- legacy NSMenu dropdown built above. ms.ui is defined later in the file,
             -- but that's fine — this callback only runs once the user actually clicks
             -- the icon, by which point the whole config has finished loading.
-            ms.menu:setClickCallback(function() ms.ui.toggle() end)
+            ms._menubar:setClickCallback(function() ms.ui.toggle() end)
         -- END --
 
         -- 3. Keyboard Actions --
@@ -3084,8 +3508,8 @@
             ms.getRobloxWin = function()
                 local app = hs.application.get("Roblox")
                 if not app then return nil end
-                local win = app:mainWindow()
-                return win or nil
+                local ok, win = pcall(function() return app:mainWindow() end)
+                return (ok and win) or nil
             end
 
             ms.winCenter = function()
@@ -3338,23 +3762,22 @@
             -- _doNotify as a stored local upvalue, so it can't be GC'd, and any
             -- error in the callback still surfaces in the console.
             local _debounceTimer = nil
+            local _stateSound    = nil  -- handle to the last state-change sound
 
             local function _doNotify(state)
-                if loadfinish ~= 1 then
-                    print("_doNotify: suppressed (loadfinish=" .. tostring(loadfinish) .. ", state=" .. tostring(state) .. ")")
-                    return
-                end
-                -- Cancel any in-flight toast for a previous state so rapid
-                -- enable→disable→enable collapses to one settled notification.
+                if loadfinish ~= 1 then return end
+                -- Cancel any pending debounce; rapid toggles collapse to the settled state.
                 if _debounceTimer then _debounceTimer:stop(); _debounceTimer = nil end
-                _debounceTimer = hs.timer.doAfter(1.0, function()
+                _debounceTimer = hs.timer.doAfter(0.05, function()
                     _debounceTimer = nil
-                    print("_doNotify: firing state=" .. tostring(state))
+                    -- Cut off any previous state sound and toast before showing the new ones.
+                    if _stateSound then pcall(function() _stateSound:stop() end); _stateSound = nil end
+                    ms.alert.dismissAll()
                     if state == 1 then
-                        ms.playSlot("enabled")
+                        _stateSound = ms.playSlot("enabled")
                         ms.alert("Macros: ENABLED",  3, true)
                     else
-                        ms.playSlot("disabled")
+                        _stateSound = ms.playSlot("disabled")
                         ms.alert("Macros: DISABLED", 3, true)
                     end
                 end)
@@ -3400,8 +3823,6 @@
                         ms._robloxActive = false
                         if BindValidity == 1 then
                             ms.setMacros(0, ms._inputOpen)
-                        elseif not ms._inputOpen then
-                            _doNotify(0)
                         end
                     end
                 elseif eventType == hs.application.watcher.launched and appName == "Roblox" then
@@ -3423,15 +3844,19 @@
             end)
 
             hs.hotkey.bind({ "alt" }, "F10", function()
+                if not ms._robloxActive then return end
                 ms.setMacros(0)
-                print("Emergency Reset Triggered")
             end)
 
             hs.hotkey.bind({"alt"}, "[", function()
+                if not ms._robloxActive then return end
                 hs.reload()
             end)
 
-            hs.hotkey.bind({"alt"}, "]", function() ms.reloadSettings() end)
+            hs.hotkey.bind({"alt"}, "]", function()
+                if not ms._robloxActive then return end
+                ms.reloadSettings()
+            end)
 
             -- hs.hotkey is blocked during NSMenu's modal tracking loop, so Alt+P
             -- would only fire *after* the menu closes — too late to close it.
@@ -3445,7 +3870,10 @@
             -- *during* NSMenu's modal tracking loop, since hs.hotkey is blocked
             -- while a native menu is open — is no longer needed for a normal
             -- window, so a plain hotkey bind is sufficient here.
-            hs.hotkey.bind({ "alt" }, "p", function() ms.ui.toggle() end)
+            hs.hotkey.bind({ "alt" }, "p", function()
+                if not ms._robloxActive then return end
+                ms.ui.toggle()
+            end)
         -- END --
 
         -- 9. Misc --
@@ -3589,6 +4017,7 @@
                     end
                 end
                 s:play()
+                return s  -- return handle so callers can stop playback
             end
 
             -- Plays the sound assigned to a named slot (e.g. "update", "reset", "alert").
@@ -3617,8 +4046,7 @@
                     path = ms.sounds and ms.sounds[slotId]
                 end
                 if not path then return false end
-                ms.sound(path)
-                return true
+                return ms.sound(path) or false  -- return handle (or false) to callers
             end
 
             -- Returns the menu open point pulled 25% toward the screen center.
@@ -4098,7 +4526,8 @@
 
             ms.ui = { _panel = nil, _open = false }
 
-            local uiHTMLPath = os.getenv("HOME") .. "/.hammerspoon/ms_settings_ui.html"
+            local uiHTMLPath  = os.getenv("HOME") .. "/.hammerspoon/ui/ms_settings_ui.html"
+            local uiBasePath  = "file://" .. os.getenv("HOME") .. "/.hammerspoon/ui/"
             local panelW, panelH = 340, 620
 
             -- Read fresh from disk on every (re)build so edits to the HTML file take
@@ -4153,11 +4582,86 @@
                 local status, curHash = ms.integrity.check()
                 local meta = ms.macroMeta or {}
 
+                -- Serialize user setting defs (strip function references for JSON).
+                local userSettings = {}
+                for _, def in ipairs(ms._userSettingDefs) do
+                    local item = {
+                        type    = def.type,
+                        key     = def.key,
+                        label   = def.label,
+                        hint    = def.hint,
+                    }
+                    if def.type == "slider" then
+                        item.min  = def.min;  item.max  = def.max
+                        item.step = def.step; item.unit = def.unit
+                    elseif def.type == "seg" then
+                        item.options = def.options
+                    elseif def.type == "action" then
+                        item.btnLabel = def.btnLabel; item.danger = def.danger
+                    end
+                    if def.key then
+                        item.value   = ms.settings.get(def.key)
+                        item.default = def.default
+                    end
+                    table.insert(userSettings, item)
+                end
+                -- Serialize custom section defs.
+                local userMenus = {}
+                for _, menuDef in ipairs(ms._userMenuDefs) do
+                    local items = {}
+                    for _, item in ipairs(menuDef.items) do
+                        local entry = {
+                            type  = item.type,
+                            key   = item.key,
+                            label = item.label,
+                            hint  = item.hint,
+                        }
+                        if item.type == "slider" then
+                            entry.min  = item.min;  entry.max  = item.max
+                            entry.step = item.step; entry.unit = item.unit
+                        elseif item.type == "seg" then
+                            entry.options = item.options
+                        elseif item.type == "action" then
+                            entry.btnLabel = item.btnLabel; entry.danger = item.danger
+                        end
+                        if item.key then
+                            entry.value   = ms.settings.get(item.key)
+                            entry.default = item.default
+                        end
+                        table.insert(items, entry)
+                    end
+                    table.insert(userMenus, {
+                        id    = menuDef.id,
+                        title = menuDef.title,
+                        icon  = menuDef.icon,
+                        items = items,
+                    })
+                end
+
+                -- Build theme state (resolve file paths to file:// URLs for the panel).
+                local themeOut = {}
+                for k, v in pairs(ms._theme) do themeOut[k] = v end
+                -- Resolve wraith to a file:// URL; strip the raw path from the payload.
+                if themeOut.wraith and themeOut.wraith ~= "" then
+                    local wp = os.getenv("HOME") .. "/.hammerspoon/" .. themeOut.wraith
+                    themeOut.wraithURL = hs.fs.attributes(wp) and ("file://" .. wp) or nil
+                end
+                themeOut.wraith = nil
+                -- Resolve font file to a file:// URL if it looks like a path.
+                if themeOut.font and themeOut.font:match("%.[ot]tf$")
+                    or (themeOut.font and themeOut.font:match("%.woff2?$"))
+                then
+                    local fp = os.getenv("HOME") .. "/.hammerspoon/" .. themeOut.font
+                    if hs.fs.attributes(fp) then
+                        themeOut.fontURL  = "file://" .. fp
+                        themeOut.font = themeOut.font:match("([^/\\]+)%.[^%.]+$") or themeOut.font
+                    end
+                end
+
                 return {
                     macrosEnabled           = (BindValidity == 1),
                     macros                  = macros,
                     sensitivity             = CUR_CAM_SENS or 1.5,
-                    clickLevel              = clickLevel or 3,
                     trackpadMode            = ms.trackpadMode or false,
                     socdEnabled             = ms.socdEnabled or false,
                     socdMode                = ms.socdMode or "lastWins",
@@ -4173,6 +4677,10 @@
                     macroMeta               = { name = meta.name, author = meta.author },
                     docsURL                 = ms._docsURL,
                     updateManifestURL       = ms._updateManifestURL,
+                    userSettings            = userSettings,
+                    userMenus               = userMenus,
+                    hiddenFeatures          = ms._hiddenFeatures,
+                    theme                   = themeOut,
                 }
             end
 
@@ -4332,8 +4840,25 @@
 
                 debugRoblox = function() ms.debugRoblox() end,
 
+                openConsole = function() hs.openConsole() end,
+
                 editMacros = function()
                     os.execute("open " .. os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua")
+                end,
+
+                editTheme = function()
+                    os.execute("open " .. themePath)
+                end,
+
+                reloadTheme = function()
+                    ms.loadTheme()
+                    -- Rebuild the panel if open so wraith/size changes take effect.
+                    if ms.ui._open then
+                        ms.ui.hide()
+                        hs.timer.doAfter(0.1, function() ms.ui.show() end)
+                    else
+                        ms.ui.refresh()
+                    end
                 end,
 
                 trustCurrentVersion = function()
@@ -4405,9 +4930,9 @@
                         local roblox = hs.application.get("Roblox")
                         if roblox then
                             hs.timer.doAfter(0.05, function()
-                                local win = roblox:mainWindow()
-                                if win then win:focus() end
-                                roblox:activate()
+                                local ok, win = pcall(function() return roblox:mainWindow() end)
+                                if ok and win then pcall(function() win:focus() end) end
+                                pcall(function() roblox:activate() end)
                             end)
                         end
                     end
@@ -4509,16 +5034,13 @@
                     end)
                 end,
 
-                -- Resets a single setting to its macro-pack default (ms.macroDefaults).
+                -- Resets a single system setting to its macro-pack default (ms.macroDefaults).
                 resetSetting = function(data)
                     local key = data.key
                     local def = ms.macroDefaults or {}
                     if key == "sensitivity" then
                         CUR_CAM_SENS = tonumber(def.sensitivity) or 1.5
                         ms.saveSettings(); ms.cam.updateMultiplier()
-                    elseif key == "clickLevel" then
-                        clickLevel = tonumber(def.frameLevel) or 3
-                        ms.saveSettings()
                     elseif key == "trackpadMode" then
                         ms.trackpadMode = (def.trackpadMode == true)
                         ms.saveSettings(); ms.bind.rebind()
@@ -4538,6 +5060,35 @@
                         ms.soundVolume = 100
                         ms.saveSettings()
                     end
+                    ms.playSlot("reset")
+                    ms.ui.refresh()
+                end,
+
+                -- Changes a user-defined setting value from the panel.
+                -- Routes through ms.settings.set for validation, persistence, and onChange.
+                userSettingChange = function(data)
+                    if not data.key then return end
+                    ms.settings.set(data.key, data.value)
+                    ms.playSlot("update")
+                    ms.ui.refresh()
+                end,
+
+                -- Fires the onAction callback for an action-type user setting.
+                userSettingAction = function(data)
+                    if not data.key then return end
+                    local def = ms._userSettingIndex[data.key]
+                    if def and def.type == "action" and type(def.onAction) == "function" then
+                        pcall(def.onAction)
+                    end
+                    ms.ui.refresh()
+                end,
+
+                -- Resets a user-defined setting to its declared default value.
+                resetUserSetting = function(data)
+                    if not data.key then return end
+                    local def = ms._userSettingIndex[data.key]
+                    if not def or def.default == nil then return end
+                    ms.settings.set(data.key, def.default)
                     ms.playSlot("reset")
                     ms.ui.refresh()
                 end,
@@ -4583,10 +5134,19 @@
             local function _panelFrame()
                 local screen = hs.screen.mainScreen():frame()
                 local w, h = panelW, panelH
+                -- Expand 1.25× when a valid wraith image is configured.
+                -- The extra space is pure padding for the PNG frame; inner content unchanged.
+                if ms._theme and ms._theme.wraith and ms._theme.wraith ~= "" then
+                    local wp = os.getenv("HOME") .. "/.hammerspoon/" .. ms._theme.wraith
+                    if hs.fs.attributes(wp) then
+                        w = math.floor(w * 1.25)
+                        h = math.floor(h * 1.25)
+                    end
+                end
                 -- Default: centered on screen
                 local x = screen.x + (screen.w - w) / 2
                 local y = screen.y + (screen.h - h) / 2
-                local ok, iconFrame = pcall(function() return ms.menu and ms.menu:frame() end)
+                local ok, iconFrame = pcall(function() return ms._menubar and ms._menubar:frame() end)
                 if ok and iconFrame and iconFrame.x and iconFrame.x > 0 then
                     x = iconFrame.x + iconFrame.w - w
                     y = iconFrame.y + iconFrame.h + 4
@@ -4618,15 +5178,15 @@
                             local roblox = hs.application.get("Roblox")
                             if roblox then
                                 hs.timer.doAfter(0.05, function()
-                                    local win = roblox:mainWindow()
-                                    if win then win:focus() end
-                                    roblox:activate()
+                                    local ok, win = pcall(function() return roblox:mainWindow() end)
+                                    if ok and win then pcall(function() win:focus() end) end
+                                    pcall(function() roblox:activate() end)
                                 end)
                             end
                         end
                     end)
                 end)
-                panel:html(_loadPanelHTML())
+                panel:html(_loadPanelHTML(), uiBasePath)
                 return panel
             end
 
@@ -4655,9 +5215,9 @@
                 if roblox then
                     ms._inputOpen = true
                     hs.timer.doAfter(0.05, function()
-                        local win = roblox:mainWindow()
-                        if win then win:focus() end
-                        roblox:activate()
+                        local ok, win = pcall(function() return roblox:mainWindow() end)
+                        if ok and win then pcall(function() win:focus() end) end
+                        pcall(function() roblox:activate() end)
                     end)
                 end
             end
@@ -4837,6 +5397,7 @@
             end
             ms._discoverSounds()
             ms.loadSettings()
+            ms.loadTheme()
             ms.cam.updateMultiplier()
             ms.bind.rebind()
             ms.socdApply()
@@ -4862,17 +5423,14 @@
 
         _G._loadfinishTimer = hs.timer.doAfter(3000 / 1000, function()
             _G._loadfinishTimer = nil
-            print("Enabling macro status notices.")
             loadfinish = 1
         end)
 
         if notice ~= 1 then
             hs.timer.doAfter(0.5, function()
-                print("ms: firing startup toast")
-                local ok, err = pcall(function()
+                pcall(function()
                     ms.alert("Macros loaded. Press ⌥ and P to open settings.", 6)
                 end)
-                if not ok then print("ms: startup toast error: " .. tostring(err)) end
             end)
             notice = 1
         end

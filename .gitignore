@@ -1,8 +1,9 @@
 # Per-user trust baseline — never commit; each user generates their own
-.ms_trusted_hash
+data/.ms_trusted_hash
 
 # Per-user runtime settings
-ms_settings.json
+data/ms_settings.json
+data/ms_theme.json
 
 # Backup archives
 backups/
