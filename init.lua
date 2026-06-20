@@ -1,85 +1,86 @@
 -- Core System ---- PLEASE EDIT CAREFULLY --
     -- Hammerspoon mudscript Utility Library --
-        -- hs.reload() re-runs this whole file but never tears down old native
-        -- objects (watchers, timers, hotkeys). Without this, every reload
-        -- leaves the previous ms._appWatcher running forever, stacked on top
-        -- of every watcher from every reload before it. Stop the prior
-        -- generation before this load creates a new one.
-        if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
+        -- 0. Guardian --
+            -- hs.reload() re-runs this whole file but never tears down old native
+            -- objects (watchers, timers, hotkeys). Without this, every reload
+            -- leaves the previous ms._appWatcher running forever, stacked on top
+            -- of every watcher from every reload before it. Stop the prior
+            -- generation before this load creates a new one.
+            if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
 
-        -- ── Guardian: pre-load tamper check ───────────────────────────────
-        -- Hashes init.lua BEFORE any ms library code or macros are loaded.
-        -- A mismatch shows a blocking dialog and returns immediately —
-        -- nothing below this block runs: no key bindings, no macros, nothing.
-        -- If no trusted hash exists yet (first run), loading continues and a
-        -- reminder fires later via the 3-second deferred check.
-        do
-            local _home      = os.getenv("HOME")
-            local _initPath  = _home .. "/.hammerspoon/init.lua"
-            local _trustPath = _home .. "/.hammerspoon/.ms_trusted_hash"
+            -- ── Guardian: pre-load tamper check ───────────────────────────────
+            -- Hashes init.lua BEFORE any ms library code or macros are loaded.
+            -- A mismatch shows a blocking dialog and returns immediately —
+            -- nothing below this block runs: no key bindings, no macros, nothing.
+            -- If no trusted hash exists yet (first run), loading continues and a
+            -- reminder fires later via the 3-second deferred check.
+            do
+                local _home      = os.getenv("HOME")
+                local _initPath  = _home .. "/.hammerspoon/init.lua"
+                local _trustPath = _home .. "/.hammerspoon/.ms_trusted_hash"
 
-            local function _hashFile(path)
-                local out = hs.execute("shasum -a 256 '" .. path:gsub("'", "'\\'") .. "' 2>/dev/null")
-                return (out and #out >= 64) and out:sub(1, 64):lower() or nil
-            end
-
-            local function _readTrusted()
-                local f = io.open(_trustPath, "r")
-                if not f then return nil end
-                local h = f:read("*all"); f:close()
-                h = h and h:match("^%s*([0-9a-fA-F]+)%s*$")
-                return (h and #h == 64) and h:lower() or nil
-            end
-
-            local _cur     = _hashFile(_initPath)
-            local _trusted = _readTrusted()
-
-            if _cur == nil then
-                -- shasum unavailable or read error — can't verify; log and continue.
-                print("Guardian: could not hash init.lua (shasum unavailable?); skipping check.")
-            elseif _trusted and _cur ~= _trusted then
-                -- MISMATCH — block everything.
-                pcall(function()
-                    local _snd = hs.sound.getByFile(_home .. "/.hammerspoon/sounds/Error.wav")
-                    if _snd then _snd:play() end
-                end)
-                hs.focus()
-                local _choice = hs.dialog.blockAlert(
-                    "\xe2\x9a\xa0 init.lua Modified \xe2\x80\x94 mudscript Did Not Load",
-                    "init.lua does not match its trusted hash.\n"
-                        .. "mudscript is BLOCKED. No macros or key bindings are active.\n\n"
-                        .. "Expected: " .. _trusted:sub(1, 16) .. "\xe2\x80\xa6\n"
-                        .. "Current:  " .. _cur:sub(1, 16) .. "\xe2\x80\xa6\n\n"
-                        .. "If you did NOT make this change, your init.lua may\n"
-                        .. "have been tampered with. Do not proceed.\n\n"
-                        .. "If you made this change yourself and want to re-trust,\n"
-                        .. "click \"Delete Hash & Reload\" to clear the baseline.\n"
-                        .. "mudscript will load WITHOUT protection until you re-trust.",
-                    "Keep Blocked",
-                    "Delete Hash & Reload"
-                )
-                if _choice == "Delete Hash & Reload" then
-                    hs.focus()
-                    local _confirm = hs.dialog.blockAlert(
-                        "Delete Trusted Hash?",
-                        "From this point on mudscript will load ANY version of\n"
-                            .. "init.lua without warning \xe2\x80\x94 including maliciously\n"
-                            .. "modified ones.\n\n"
-                            .. "You are on your own. Proceed only if you know\n"
-                            .. "what you are doing.",
-                        "Cancel",
-                        "Delete \xe2\x80\x94 I understand the risk"
-                    )
-                    if _confirm == "Delete \xe2\x80\x94 I understand the risk" then
-                        os.remove(_trustPath)
-                        hs.reload()
-                    end
+                local function _hashFile(path)
+                    local out = hs.execute("shasum -a 256 '" .. path:gsub("'", "'\\'") .. "' 2>/dev/null")
+                    return (out and #out >= 64) and out:sub(1, 64):lower() or nil
                 end
-                return  -- hard stop either way
+
+                local function _readTrusted()
+                    local f = io.open(_trustPath, "r")
+                    if not f then return nil end
+                    local h = f:read("*all"); f:close()
+                    h = h and h:match("^%s*([0-9a-fA-F]+)%s*$")
+                    return (h and #h == 64) and h:lower() or nil
+                end
+
+                local _cur     = _hashFile(_initPath)
+                local _trusted = _readTrusted()
+
+                if _cur == nil then
+                    -- shasum unavailable or read error — can't verify; log and continue.
+                    print("Guardian: could not hash init.lua (shasum unavailable?); skipping check.")
+                elseif _trusted and _cur ~= _trusted then
+                    -- MISMATCH — block everything.
+                    pcall(function()
+                        local _snd = hs.sound.getByFile(_home .. "/.hammerspoon/sounds/Error.wav")
+                        if _snd then _snd:play() end
+                    end)
+                    hs.focus()
+                    local _choice = hs.dialog.blockAlert(
+                        "\xe2\x9a\xa0 init.lua Modified \xe2\x80\x94 mudscript Did Not Load",
+                        "init.lua does not match its trusted hash.\n"
+                            .. "mudscript is BLOCKED. No macros or key bindings are active.\n\n"
+                            .. "Expected: " .. _trusted:sub(1, 16) .. "\xe2\x80\xa6\n"
+                            .. "Current:  " .. _cur:sub(1, 16) .. "\xe2\x80\xa6\n\n"
+                            .. "If you did NOT make this change, your init.lua may\n"
+                            .. "have been tampered with. Do not proceed.\n\n"
+                            .. "If you made this change yourself and want to re-trust,\n"
+                            .. "click \"Delete Hash & Reload\" to clear the baseline.\n"
+                            .. "mudscript will load WITHOUT protection until you re-trust.",
+                        "Keep Blocked",
+                        "Delete Hash & Reload"
+                    )
+                    if _choice == "Delete Hash & Reload" then
+                        hs.focus()
+                        local _confirm = hs.dialog.blockAlert(
+                            "Delete Trusted Hash?",
+                            "From this point on mudscript will load ANY version of\n"
+                                .. "init.lua without warning \xe2\x80\x94 including maliciously\n"
+                                .. "modified ones.\n\n"
+                                .. "You are on your own. Proceed only if you know\n"
+                                .. "what you are doing.",
+                            "Cancel",
+                            "Delete \xe2\x80\x94 I understand the risk"
+                        )
+                        if _confirm == "Delete \xe2\x80\x94 I understand the risk" then
+                            os.remove(_trustPath)
+                            hs.reload()
+                        end
+                    end
+                    return  -- hard stop either way
+                end
             end
-        end
-        -- ── End Guardian ──────────────────────────────────────────────────
-        -- 0. Prefix Variables & State Tracking --
+        -- END --
+        -- 1. Prefix Variables & State Tracking --
             ms = {}
             ms.vars = {}
             ms.keytrack = {}
@@ -185,7 +186,7 @@
             end)
         -- END --
 
-        -- 1. Conditions, States, and UI Elements--
+        -- 2. Conditions, States, and UI Elements--
             ms.app = function() return hs.application.frontmostApplication():name() end
 
             -- Alerts --
@@ -2682,7 +2683,7 @@
             ms.menu:setClickCallback(function() ms.ui.toggle() end)
         -- END --
 
-        -- 2. Keyboard Actions --
+        -- 3. Keyboard Actions --
             local hskeymap = {
                 left = 123, right = 124, down = 125, up = 126,
                 shift = 56, lshift = 56, rshift = 62,
@@ -2854,7 +2855,7 @@
             end
         -- END --
 
-        -- 3. Mouse Actions --
+        -- 4. Mouse Actions --
 
 
             ms.scroll = function(direction, clicks)
@@ -3040,7 +3041,7 @@
             end
         -- END --
 
-        -- 4. Delay --
+        -- 5. Delay --
             ms.wait = function(ms_time)
                 local co = coroutine.running()
                 if co then
@@ -3068,7 +3069,7 @@
             end
         -- END --
 
-        -- 5. Resolution & Window Scaling --
+        -- 6. Resolution & Window Scaling --
             ms.getRobloxWin = function()
                 local app = hs.application.get("Roblox")
                 if not app then return nil end
@@ -3169,7 +3170,7 @@
             end
         -- END --
 
-        -- 6. Camera Engine --
+        -- 7. Camera Engine --
             ms.cam = {
                 anchor = nil,
                 -- button 5 is a synthetic-only internal channel: sits beyond the range of
@@ -3318,7 +3319,7 @@
             ms.cam._setupWatcher()
         -- END --
 
-        -- 7. Macro Bind Controller
+        -- 8. Macro Bind Controller
 
             -- Notification system for enable/disable state changes.
             -- Both the sound and the toast are debounced together — only the
@@ -3460,7 +3461,7 @@
             hs.hotkey.bind({ "alt" }, "p", function() ms.ui.toggle() end)
         -- END --
 
-        -- 8. Misc --
+        -- 9. Misc --
             -- Wraps fn to run inside a coroutine when called, guaranteeing that
             -- ms.wait always has a coroutine context and never hits the blocking
             -- usleep fallback. async defaults to true; pass false to skip the wrap.
@@ -3727,7 +3728,7 @@
             end
         -- END --
 
-        -- 9. Registry, Bind System & Sub-item Helpers --
+        -- 10. Registry, Bind System & Sub-item Helpers --
 
             -- Single entry point for declaring a macro and optionally wiring its function.
             -- Signature: ms.bind.define(id, fn, opts)  — preferred: action first, config last
@@ -4098,7 +4099,7 @@
             end
         -- END --
 
-        -- 10. Webview Settings Panel --
+        -- 11. Webview Settings Panel --
             -- Replaces the native NSMenu dropdown (Section 1, now dead code under
             -- `_legacyNativeMenuBuilder`) with the custom HTML/CSS/JS panel in
             -- ms_settings_ui.html, hosted in an hs.webview. The page talks to this
@@ -4638,164 +4639,165 @@
                 if ms.ui._open then ms.ui.hide() else ms.ui.show() end
             end
         -- END --
-
-        -- Load ms_macros.lua inside a restricted sandbox environment.
-        -- Blocks direct hs API access, require, filesystem ops, and environment
-        -- escape hatches. The ms table is wrapped in a proxy that errors on any
-        -- write except ms.macroMeta.
-        --
-        -- Note: unknown globals fall through to the real _G rather than erroring.
-        -- This is a conservative bridge; once §1.2 (ms.fn) lands and all direct
-        -- coroutine usage is wrapped, this fallback can be tightened to error on
-        -- any unlisted global.
-        do
-            local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
-
-            -- Frozen ms proxy: permits reads of all existing ms.* keys,
-            -- permits ms.macroMeta writes only; ms.macroDefaults is owned by init.lua.
-            local frozenMs = setmetatable({}, {
-                __index    = ms,
-                __newindex = function(t, k, v)
-                    if k == "macroMeta" then
-                        rawset(ms, k, v)
-                    else
-                        error("ms_macros.lua: unauthorized write to ms." .. tostring(k)
-                            .. "  —  only ms.macroMeta and ms.bind.define are permitted.", 2)
-                    end
-                end,
-            })
-
-            -- Globals that are explicitly blocked and will error on access.
-            local BLOCKED = {
-                hs=true, require=true, os=true, io=true,
-                _G=true, load=true, loadfile=true, loadstring=true,
-                dofile=true, rawget=true, rawset=true,
-                debug=true, package=true, collectgarbage=true,
-                setfenv=true, getfenv=true,
-                setmetatable=true, getmetatable=true,
-            }
-
-            local sandbox = {
-                ms        = frozenMs,
-                -- Safe Lua builtins
-                math      = math,
-                string    = string,
-                table     = table,
-                coroutine = coroutine,  -- needed until ms.fn replaces direct coroutine use
-                ipairs    = ipairs,
-                pairs     = pairs,
-                next      = next,
-                select    = select,
-                pcall     = pcall,
-                xpcall    = xpcall,
-                tostring  = tostring,
-                tonumber  = tonumber,
-                type      = type,
-                unpack    = table.unpack or unpack,
-                error     = error,
-                assert    = assert,
-                print     = print,
-                -- ms.Mouse operation constants (seeded explicitly so the sandbox
-                -- __newindex cannot overwrite them in _G via the fallthrough).
-                Move        = Move,        Click       = Click,       DoubleClick  = DoubleClick,
-                TripleClick = TripleClick, Drag        = Drag,        Press        = Press,
-                Release     = Release,
-                -- ms.Mouse button constants
-                Left        = Left,        Right       = Right,       Center       = Center,
-                Button4     = Button4,     Button5     = Button5,
-                -- ms.Mouse reference constants
-                Unscaled     = Unscaled,
-                Absolute     = Absolute,   Mouse        = Mouse,
-                WindowTL     = WindowTL,   WindowTR     = WindowTR,
-                WindowBL     = WindowBL,   WindowBR     = WindowBR,   WindowCenter = WindowCenter,
-                ScreenTL     = ScreenTL,   ScreenTR     = ScreenTR,
-                ScreenBL     = ScreenBL,   ScreenBR     = ScreenBR,   ScreenCenter = ScreenCenter,
-            }
-
-            setmetatable(sandbox, {
-                __index = function(t, k)
-                    if BLOCKED[k] then
-                        error("ms_macros.lua: access to '" .. tostring(k)
-                            .. "' is not permitted.", 2)
-                    end
-                    -- Fall through to real globals (safe read-only bridge for any
-                    -- additional constants the macro author may define in init.lua).
-                    return rawget(_G, k)
-                end,
-                -- All global writes from ms_macros.lua are forbidden.
-                -- Previously this fell through to rawset(_G, k, v), which let macro
-                -- code silently overwrite init.lua globals such as BindValidity and
-                -- REF_W. Now any bare global assignment is a hard error; macro
-                -- authors must use 'local' for all variables.
-                __newindex = function(t, k, v)
-                    error("ms_macros.lua: cannot write global '" .. tostring(k)
-                        .. "' — use 'local' for all variables.", 2)
-                end,
-            })
-
-            -- Security audit: scan the raw source before any code is executed.
-            -- Hard-errors on policy violations so a tampered file never reaches loadfile.
+        -- 12. ??? --
+            -- Load ms_macros.lua inside a restricted sandbox environment.
+            -- Blocks direct hs API access, require, filesystem ops, and environment
+            -- escape hatches. The ms table is wrapped in a proxy that errors on any
+            -- write except ms.macroMeta.
+            --
+            -- Note: unknown globals fall through to the real _G rather than erroring.
+            -- This is a conservative bridge; once §1.2 (ms.fn) lands and all direct
+            -- coroutine usage is wrapped, this fallback can be tightened to error on
+            -- any unlisted global.
             do
-                local af = io.open(macrosPath, "r")
-                if not af then
-                    error("ms_macros.lua: cannot open file for security audit: " .. macrosPath)
-                end
-                local rawSrc = af:read("*all"); af:close()
-                local auditErrs = auditMacros(rawSrc)
-                if #auditErrs > 0 then
-                    local msg = "ms_macros.lua failed security audit ("
-                        .. #auditErrs .. " violation"
-                        .. (#auditErrs > 1 and "s" or "") .. "):\n"
-                    for _, e in ipairs(auditErrs) do
-                        msg = msg .. "  • " .. e .. "\n"
+                local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
+
+                -- Frozen ms proxy: permits reads of all existing ms.* keys,
+                -- permits ms.macroMeta writes only; ms.macroDefaults is owned by init.lua.
+                local frozenMs = setmetatable({}, {
+                    __index    = ms,
+                    __newindex = function(t, k, v)
+                        if k == "macroMeta" then
+                            rawset(ms, k, v)
+                        else
+                            error("ms_macros.lua: unauthorized write to ms." .. tostring(k)
+                                .. "  —  only ms.macroMeta and ms.bind.define are permitted.", 2)
+                        end
+                    end,
+                })
+
+                -- Globals that are explicitly blocked and will error on access.
+                local BLOCKED = {
+                    hs=true, require=true, os=true, io=true,
+                    _G=true, load=true, loadfile=true, loadstring=true,
+                    dofile=true, rawget=true, rawset=true,
+                    debug=true, package=true, collectgarbage=true,
+                    setfenv=true, getfenv=true,
+                    setmetatable=true, getmetatable=true,
+                }
+
+                local sandbox = {
+                    ms        = frozenMs,
+                    -- Safe Lua builtins
+                    math      = math,
+                    string    = string,
+                    table     = table,
+                    coroutine = coroutine,  -- needed until ms.fn replaces direct coroutine use
+                    ipairs    = ipairs,
+                    pairs     = pairs,
+                    next      = next,
+                    select    = select,
+                    pcall     = pcall,
+                    xpcall    = xpcall,
+                    tostring  = tostring,
+                    tonumber  = tonumber,
+                    type      = type,
+                    unpack    = table.unpack or unpack,
+                    error     = error,
+                    assert    = assert,
+                    print     = print,
+                    -- ms.Mouse operation constants (seeded explicitly so the sandbox
+                    -- __newindex cannot overwrite them in _G via the fallthrough).
+                    Move        = Move,        Click       = Click,       DoubleClick  = DoubleClick,
+                    TripleClick = TripleClick, Drag        = Drag,        Press        = Press,
+                    Release     = Release,
+                    -- ms.Mouse button constants
+                    Left        = Left,        Right       = Right,       Center       = Center,
+                    Button4     = Button4,     Button5     = Button5,
+                    -- ms.Mouse reference constants
+                    Unscaled     = Unscaled,
+                    Absolute     = Absolute,   Mouse        = Mouse,
+                    WindowTL     = WindowTL,   WindowTR     = WindowTR,
+                    WindowBL     = WindowBL,   WindowBR     = WindowBR,   WindowCenter = WindowCenter,
+                    ScreenTL     = ScreenTL,   ScreenTR     = ScreenTR,
+                    ScreenBL     = ScreenBL,   ScreenBR     = ScreenBR,   ScreenCenter = ScreenCenter,
+                }
+
+                setmetatable(sandbox, {
+                    __index = function(t, k)
+                        if BLOCKED[k] then
+                            error("ms_macros.lua: access to '" .. tostring(k)
+                                .. "' is not permitted.", 2)
+                        end
+                        -- Fall through to real globals (safe read-only bridge for any
+                        -- additional constants the macro author may define in init.lua).
+                        return rawget(_G, k)
+                    end,
+                    -- All global writes from ms_macros.lua are forbidden.
+                    -- Previously this fell through to rawset(_G, k, v), which let macro
+                    -- code silently overwrite init.lua globals such as BindValidity and
+                    -- REF_W. Now any bare global assignment is a hard error; macro
+                    -- authors must use 'local' for all variables.
+                    __newindex = function(t, k, v)
+                        error("ms_macros.lua: cannot write global '" .. tostring(k)
+                            .. "' — use 'local' for all variables.", 2)
+                    end,
+                })
+
+                -- Security audit: scan the raw source before any code is executed.
+                -- Hard-errors on policy violations so a tampered file never reaches loadfile.
+                do
+                    local af = io.open(macrosPath, "r")
+                    if not af then
+                        error("ms_macros.lua: cannot open file for security audit: " .. macrosPath)
                     end
-                    error(msg, 0)
+                    local rawSrc = af:read("*all"); af:close()
+                    local auditErrs = auditMacros(rawSrc)
+                    if #auditErrs > 0 then
+                        local msg = "ms_macros.lua failed security audit ("
+                            .. #auditErrs .. " violation"
+                            .. (#auditErrs > 1 and "s" or "") .. "):\n"
+                        for _, e in ipairs(auditErrs) do
+                            msg = msg .. "  • " .. e .. "\n"
+                        end
+                        error(msg, 0)
+                    end
+                end
+
+                -- Load the file with the sandbox as its environment.
+                -- Lua 5.2+: loadfile accepts an env parameter directly.
+                -- Lua 5.1 fallback: use setfenv if available.
+                local chunk, loadErr
+                if _VERSION and _VERSION >= "Lua 5.2" or not setfenv then
+                    chunk, loadErr = loadfile(macrosPath, "bt", sandbox)
+                else
+                    chunk, loadErr = loadfile(macrosPath)
+                    if chunk then setfenv(chunk, sandbox) end
+                end
+                if not chunk then
+                    error("ms_macros.lua: failed to load: " .. tostring(loadErr))
+                end
+                local ok, runErr = pcall(chunk)
+                if not ok then
+                    error("ms_macros.lua: error during execution: " .. tostring(runErr))
+                end
+
+                -- Validation pass
+                if not ms.macroMeta then
+                    print("Warning: ms_macros.lua did not set ms.macroMeta.")
+                    hs.timer.doAfter(0.5, function()
+                        ms.alert("Warning: ms_macros.lua did not declare ms.macroMeta.", 6)
+                    end)
+                end
+                if not next(ms.registry._defs) then
+                    error("ms_macros.lua: no ms.bind.define calls found — file may be malformed.")
                 end
             end
 
-            -- Load the file with the sandbox as its environment.
-            -- Lua 5.2+: loadfile accepts an env parameter directly.
-            -- Lua 5.1 fallback: use setfenv if available.
-            local chunk, loadErr
-            if _VERSION and _VERSION >= "Lua 5.2" or not setfenv then
-                chunk, loadErr = loadfile(macrosPath, "bt", sandbox)
-            else
-                chunk, loadErr = loadfile(macrosPath)
-                if chunk then setfenv(chunk, sandbox) end
-            end
-            if not chunk then
-                error("ms_macros.lua: failed to load: " .. tostring(loadErr))
-            end
-            local ok, runErr = pcall(chunk)
-            if not ok then
-                error("ms_macros.lua: error during execution: " .. tostring(runErr))
-            end
-
-            -- Validation pass
-            if not ms.macroMeta then
-                print("Warning: ms_macros.lua did not set ms.macroMeta.")
-                hs.timer.doAfter(0.5, function()
-                    ms.alert("Warning: ms_macros.lua did not declare ms.macroMeta.", 6)
-                end)
-            end
-            if not next(ms.registry._defs) then
-                error("ms_macros.lua: no ms.bind.define calls found — file may be malformed.")
-            end
-        end
-
-        -- Macro pack preferred defaults — seeded into ms_settings_default.json on first run.
-        -- Defined here (not in ms_macros.lua) so they cannot be accidentally removed by the user.
-        -- Values already saved in ms_settings.json always take priority and are never overwritten.
-        ms.macroDefaults = {
-            sensitivity  = 1.5,
-            frameLevel   = 3,
-            trackpadMode = false,
-            socdEnabled  = false,
-            socdMode     = "lastWins",
-            macros = {
-                spawnAlt = { enabled = false },
-            },
-        }
+            -- Macro pack preferred defaults — seeded into ms_settings_default.json on first run.
+            -- Defined here (not in ms_macros.lua) so they cannot be accidentally removed by the user.
+            -- Values already saved in ms_settings.json always take priority and are never overwritten.
+            ms.macroDefaults = {
+                sensitivity  = 1.5,
+                frameLevel   = 3,
+                trackpadMode = false,
+                socdEnabled  = false,
+                socdMode     = "lastWins",
+                macros = {
+                    spawnAlt = { enabled = false },
+                },
+            }
+        -- END ??? --
     -- END Hammerspoon mudscript Utility Library --
 
     -- Startup Executions --
