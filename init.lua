@@ -190,18 +190,24 @@
 
             -- Alerts --
                 ms.alert = (function()
-                    local queue = {}
+                    local queue = {}              -- active toast entries
                     local maxAlerts = 4
-                    local screenW = hs.screen.mainScreen():frame().w
-                    local screenH = hs.screen.mainScreen():frame().h
-                    local bottomY = 150
+                    local bottomY   = 150         -- px above the bottom of the usable area
                     local animDuration = 0.25
-                    local animSteps = 20
+                    local animSteps    = 20
 
-                    local function makeCanvas(msg, y, alpha)
+                    -- Recalculated on every render so display changes and
+                    -- secondary-monitor setups always position correctly.
+                    local function screenBounds()
+                        local f = hs.screen.mainScreen():frame()
+                        -- f.y is the top of the usable area in absolute coords.
+                        -- f.y + f.h is the absolute bottom (above the dock).
+                        return f.x, f.y, f.w, f.y + f.h
+                    end
+
+                    local function makeCanvas(msg, x, y, w, alpha)
                         local padding = 16
-                        local lineH = 20
-                        local charsPerLine = 999
+                        local lineH   = 20
 
                         local lines = {}
                         for line in (msg .. "\n"):gmatch("([^\n]*)\n") do
@@ -213,35 +219,36 @@
                             if #line > longestLine then longestLine = #line end
                         end
 
-                        local charW = 8
-                        local w = math.max(200, math.min(600, longestLine * charW + padding * 2))
-                        local textH = #lines * lineH
-                        local h = textH + padding * 2
-                        local x = (screenW - w) / 2
+                        local charW  = 8
+                        local cw     = math.max(200, math.min(600, longestLine * charW + padding * 2))
+                        local textH  = #lines * lineH
+                        local ch     = textH + padding * 2
+                        local cx     = x + (w - cw) / 2  -- centred within the screen
 
-                        local c = hs.canvas.new({ x = x, y = y, w = w, h = h })
-                        c:level(hs.canvas.windowLevels.floating)
+                        local c = hs.canvas.new({ x = cx, y = y, w = cw, h = ch })
+                        -- overlay sits above Roblox's game window (level 3 / floating does not)
+                        c:level(hs.canvas.windowLevels.overlay)
                         c:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
                         c:alpha(alpha or 0)
                         c:appendElements(
                             {
-                                type = "rectangle",
+                                type   = "rectangle",
                                 action = "fill",
                                 fillColor = { black = 1, alpha = 0.75 },
                                 roundedRectRadii = { xRadius = 10, yRadius = 10 }
                             },
                             {
-                                type = "text",
-                                text = msg,
-                                textFont = "Helvetica",
-                                textSize = 14,
-                                textColor = { white = 1, alpha = 1 },
+                                type          = "text",
+                                text          = msg,
+                                textFont      = "Helvetica",
+                                textSize      = 14,
+                                textColor     = { white = 1, alpha = 1 },
                                 textAlignment = "center",
-                                frame = { x = padding, y = padding, w = w - padding * 2, h = textH }
+                                frame         = { x = padding, y = padding, w = cw - padding * 2, h = textH }
                             }
                         )
                         c:show()
-                        return c, h
+                        return c, ch
                     end
 
                     local function animateEntry(entry, fromY, toY, fromAlpha, toAlpha, onDone)
@@ -249,9 +256,9 @@
                         if entry._animTimer then entry._animTimer:stop() end
                         entry._animTimer = hs.timer.doEvery(animDuration / animSteps, function()
                             step = step + 1
-                            local t = step / animSteps
+                            local t    = step / animSteps
                             local ease = 1 - (1 - t) ^ 3
-                            local y = fromY + (toY - fromY) * ease
+                            local y     = fromY     + (toY     - fromY)     * ease
                             local alpha = fromAlpha + (toAlpha - fromAlpha) * ease
                             if entry.canvas then
                                 local f = entry.canvas:frame()
@@ -267,7 +274,10 @@
                     end
 
                     local function redraw(newEntry)
-                        for i, entry in ipairs(queue) do
+                        local sx, sy, sw, sBottom = screenBounds()
+
+                        -- Ensure every queued entry has a height measurement.
+                        for _, entry in ipairs(queue) do
                             if not entry.h then
                                 local lines = {}
                                 for line in (entry.msg .. "\n"):gmatch("([^\n]*)\n") do
@@ -277,19 +287,19 @@
                             end
                         end
 
-                        local currentY = screenH - bottomY
+                        local currentY = sBottom - bottomY
                         for i = #queue, 1, -1 do
-                            local entry = queue[i]
+                            local entry   = queue[i]
                             local targetY = currentY - entry.h
                             currentY = targetY - 8
 
                             if entry == newEntry then
                                 if not entry.canvas then
-                                    local c, h = makeCanvas(entry.msg, screenH - bottomY, 0)
+                                    local c, h = makeCanvas(entry.msg, sx, sBottom - bottomY, sw, 0)
                                     entry.canvas = c
-                                    entry.h = h
+                                    entry.h      = h
                                 end
-                                animateEntry(entry, screenH - bottomY, targetY, 0, 1, nil)
+                                animateEntry(entry, sBottom - bottomY, targetY, 0, 1, nil)
                             else
                                 if entry.canvas then
                                     local f = entry.canvas:frame()
