@@ -3347,7 +3347,7 @@
                 -- Cancel any in-flight toast for a previous state so rapid
                 -- enable→disable→enable collapses to one settled notification.
                 if _debounceTimer then _debounceTimer:stop(); _debounceTimer = nil end
-                _debounceTimer = hs.timer.doAfter(0.25, function()
+                _debounceTimer = hs.timer.doAfter(1.0, function()
                     _debounceTimer = nil
                     print("_doNotify: firing state=" .. tostring(state))
                     if state == 1 then
