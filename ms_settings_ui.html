@@ -892,9 +892,13 @@
                 el.style.top = Math.min(y, vh - mh - 4) + "px";
             }
 
-            // Close ctx menu on any left-click or Escape
+            // Close ctx menu on any left-click or Escape.
+            // preventDefault on contextmenu suppresses the native WebKit menu everywhere.
             document.addEventListener("click", () => closeCtxMenu());
-            document.addEventListener("contextmenu", () => closeCtxMenu());
+            document.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                closeCtxMenu();
+            });
             document.addEventListener("keydown", (e) => {
                 if (e.key === "Escape") closeCtxMenu();
             });
@@ -1077,7 +1081,13 @@
                 return wrap;
             }
 
-            function row(label, sublabel, control, extra = "") {
+            function row(
+                label,
+                sublabel,
+                control,
+                extra = "",
+                ctxItems = null,
+            ) {
                 const r = h("div", {
                     cls: "row " + extra,
                     onmouseenter: () => playSlot("hover"),
@@ -1086,6 +1096,14 @@
                 if (sublabel) lbl.appendChild(h("small", {}, sublabel));
                 r.appendChild(lbl);
                 if (control) r.appendChild(control);
+                r.addEventListener("contextmenu", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (ctxItems && ctxItems.length > 0) {
+                        playSlot("interact");
+                        showCtxMenu(e.clientX, e.clientY, ctxItems, label);
+                    }
+                });
                 return r;
             }
 
@@ -1295,6 +1313,27 @@
                     cls: "row slider-row",
                     onmouseenter: () => playSlot("hover"),
                 });
+                sensWrap.addEventListener("contextmenu", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    playSlot("interact");
+                    showCtxMenu(
+                        e.clientX,
+                        e.clientY,
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to default",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "sensitivity",
+                                    }),
+                            },
+                        ],
+                        "Camera Sensitivity",
+                    );
+                });
                 const sensTop = h("div", { cls: "slider-top" });
                 sensTop.appendChild(
                     h("div", { cls: "row-label" }, "Camera Sensitivity"),
@@ -1353,6 +1392,18 @@
                                     value: v,
                                 }),
                         ),
+                        "",
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to default",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "clickLevel",
+                                    }),
+                            },
+                        ],
                     ),
                 );
 
@@ -1369,6 +1420,18 @@
                                 value: e.target.checked,
                             }),
                         ),
+                        "",
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to default",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "trackpadMode",
+                                    }),
+                            },
+                        ],
                     ),
                 );
 
@@ -1383,6 +1446,18 @@
                                 value: e.target.checked,
                             }),
                         ),
+                        "",
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to default",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "socdEnabled",
+                                    }),
+                            },
+                        ],
                     ),
                 );
                 if (S.socdEnabled) {
@@ -1404,6 +1479,17 @@
                                     }),
                             ),
                             "row-sub",
+                            [
+                                {
+                                    icon: "↺",
+                                    label: "Reset to default",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetSetting",
+                                            key: "socdMode",
+                                        }),
+                                },
+                            ],
                         ),
                     );
                 }
@@ -1419,6 +1505,18 @@
                                 value: e.target.checked,
                             }),
                         ),
+                        "",
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to default",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "independentBinds",
+                                    }),
+                            },
+                        ],
                     ),
                 );
 
@@ -1460,6 +1558,18 @@
                                 value: e.target.checked,
                             }),
                         ),
+                        "",
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to default",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "soundEnabled",
+                                    }),
+                            },
+                        ],
                     ),
                 );
 
@@ -1467,6 +1577,27 @@
                 const volWrap = h("div", {
                     cls: "row slider-row",
                     onmouseenter: () => playSlot("hover"),
+                });
+                volWrap.addEventListener("contextmenu", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    playSlot("interact");
+                    showCtxMenu(
+                        e.clientX,
+                        e.clientY,
+                        [
+                            {
+                                icon: "↺",
+                                label: "Reset to 100",
+                                action: () =>
+                                    sendToHost({
+                                        action: "resetSetting",
+                                        key: "soundVolume",
+                                    }),
+                            },
+                        ],
+                        "Volume",
+                    );
                 });
                 const volTop = h("div", { cls: "slider-top" });
                 volTop.appendChild(h("div", { cls: "row-label" }, "Volume"));
@@ -1533,6 +1664,21 @@
                             slot.label,
                             null,
                             soundPicker(slot.id, assigned, names),
+                            "",
+                            assigned
+                                ? [
+                                      {
+                                          icon: "✕",
+                                          label: "Clear",
+                                          action: () =>
+                                              sendToHost({
+                                                  action: "setSoundAssign",
+                                                  slot: slot.id,
+                                                  name: "",
+                                              }),
+                                      },
+                                  ]
+                                : null,
                         ),
                     );
                 }
@@ -1568,6 +1714,35 @@
                             if (res.confirmed)
                                 sendToHost({ action: "switchProfile", name });
                         });
+                    r.addEventListener("contextmenu", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (isCurrent) return;
+                        playSlot("interact");
+                        showCtxMenu(
+                            e.clientX,
+                            e.clientY,
+                            [
+                                {
+                                    icon: "↗",
+                                    label: "Switch to this profile",
+                                    action: async () => {
+                                        const res = await openModal(
+                                            "Switch Profile",
+                                            `Switch to "${name}"?\n\nThe current profile will be archived and settings reloaded.`,
+                                            "Switch",
+                                        );
+                                        if (res.confirmed)
+                                            sendToHost({
+                                                action: "switchProfile",
+                                                name,
+                                            });
+                                    },
+                                },
+                            ],
+                            name,
+                        );
+                    });
                     body.appendChild(r);
                 }
 

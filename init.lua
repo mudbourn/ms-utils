@@ -4518,6 +4518,39 @@
                     end)
                 end,
 
+                -- Resets a single setting to its macro-pack default (ms.macroDefaults).
+                resetSetting = function(data)
+                    local key = data.key
+                    local def = ms.macroDefaults or {}
+                    if key == "sensitivity" then
+                        CUR_CAM_SENS = tonumber(def.sensitivity) or 1.5
+                        ms.saveSettings(); ms.cam.updateMultiplier()
+                    elseif key == "clickLevel" then
+                        clickLevel = tonumber(def.frameLevel) or 3
+                        ms.saveSettings()
+                    elseif key == "trackpadMode" then
+                        ms.trackpadMode = (def.trackpadMode == true)
+                        ms.saveSettings(); ms.bind.rebind()
+                    elseif key == "socdEnabled" then
+                        ms.socdEnabled = (def.socdEnabled == true)
+                        ms.saveSettings(); ms.socdApply()
+                    elseif key == "socdMode" then
+                        ms.socdMode = def.socdMode or "lastWins"
+                        ms.saveSettings()
+                    elseif key == "independentBinds" then
+                        ms.independentBindsEnabled = (def.independentBinds == true)
+                        ms.saveSettings(); ms.bind.rebind()
+                    elseif key == "soundEnabled" then
+                        ms.soundEnabled = true
+                        ms.saveSettings()
+                    elseif key == "soundVolume" then
+                        ms.soundVolume = 100
+                        ms.saveSettings()
+                    end
+                    ms.playSlot("reset")
+                    ms.ui.refresh()
+                end,
+
                 -- Resets a macro's bind back to its defined default.
                 resetBind = function(data)
                     if not data.id then return end
@@ -4574,11 +4607,12 @@
             local function _buildPanel()
                 local panel = hs.webview.new(_panelFrame(), { developerExtrasEnabled = true }, _ucMS)
                 if not panel then return nil end
-                -- titled(1) + closable(2) + resizable(8) = 11.
-                -- A borderless (0) window has no compositor surface and never renders.
-                -- "titled" is the minimum needed for the window to actually appear.
-                -- titleVisibility("hidden") removes the title text so it looks chrome-free.
-                pcall(function() panel:windowStyle(1 + 2 + 8) end)
+                -- titled(1) + closable(2) + resizable(8) + fullSizeContentView(32768).
+                -- fullSizeContentView makes the HTML fill the entire frame including the
+                -- title bar zone — the dark HTML header visually replaces the grey band.
+                -- titleVisibility("hidden") removes the title text; the traffic lights
+                -- remain but overlay the HTML header rather than a separate grey bar.
+                pcall(function() panel:windowStyle(1 + 2 + 8 + 32768) end)
                 pcall(function() panel:titleVisibility("hidden") end)
                 pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
                 pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
