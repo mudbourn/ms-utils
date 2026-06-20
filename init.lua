@@ -4861,7 +4861,8 @@
             ms.alert(msg, 6)
         end
 
-        hs.timer.doAfter(3000 / 1000, function()
+        _G._loadfinishTimer = hs.timer.doAfter(3000 / 1000, function()
+            _G._loadfinishTimer = nil
             print("Enabling macro status notices.")
             -- Seed last-notified so the first real toggle doesn't duplicate
             -- the startup announcement that already played at 0.55 s.
