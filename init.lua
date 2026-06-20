@@ -3333,32 +3333,31 @@
         -- 8. Macro Bind Controller
 
             -- Notification for enable/disable state changes.
-            -- Synchronous — no deferred timers that can swallow errors silently.
-            -- Dedup: same state won't fire again within 350 ms (handles rapid
-            -- app-switching without the complexity of the old pending/timer system).
-            ms._lastNotifyTime  = 0
-            ms._lastNotifyState = nil
+            -- _doNotify is called synchronously by setMacros — no outer deferral
+            -- that could swallow errors silently. The debounce lives *inside*
+            -- _doNotify as a stored local upvalue, so it can't be GC'd, and any
+            -- error in the callback still surfaces in the console.
+            local _debounceTimer = nil
 
             local function _doNotify(state)
                 if loadfinish ~= 1 then
                     print("_doNotify: suppressed (loadfinish=" .. tostring(loadfinish) .. ", state=" .. tostring(state) .. ")")
                     return
                 end
-                local now = hs.timer.absoluteTime()
-                if state == ms._lastNotifyState and (now - ms._lastNotifyTime) < 0.35 then
-                    print("_doNotify: deduped (state=" .. tostring(state) .. ")")
-                    return
-                end
-                ms._lastNotifyTime  = now
-                ms._lastNotifyState = state
-                print("_doNotify: firing state=" .. tostring(state))
-                if state == 1 then
-                    ms.playSlot("enabled")
-                    ms.alert("Macros: ENABLED",  3, true)
-                else
-                    ms.playSlot("disabled")
-                    ms.alert("Macros: DISABLED", 3, true)
-                end
+                -- Cancel any in-flight toast for a previous state so rapid
+                -- enable→disable→enable collapses to one settled notification.
+                if _debounceTimer then _debounceTimer:stop(); _debounceTimer = nil end
+                _debounceTimer = hs.timer.doAfter(0.25, function()
+                    _debounceTimer = nil
+                    print("_doNotify: firing state=" .. tostring(state))
+                    if state == 1 then
+                        ms.playSlot("enabled")
+                        ms.alert("Macros: ENABLED",  3, true)
+                    else
+                        ms.playSlot("disabled")
+                        ms.alert("Macros: DISABLED", 3, true)
+                    end
+                end)
             end
 
             ms.setMacros = function(state, silent)
@@ -4864,9 +4863,6 @@
         _G._loadfinishTimer = hs.timer.doAfter(3000 / 1000, function()
             _G._loadfinishTimer = nil
             print("Enabling macro status notices.")
-            -- Seed last-notified so the first real toggle doesn't duplicate
-            -- the startup announcement that already played at 0.55 s.
-            ms._lastNotifyState = BindValidity == 1 and 1 or 0
             loadfinish = 1
         end)
 
