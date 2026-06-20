@@ -253,7 +253,7 @@
                 ms.wait(5)
                 ms.type("1")
                 ms.wait(500)
-            end
+            end)
 
             ms.bind.define("fakeSwing", function()
                 if string.find(ms.app(), "Roblox") then FakeSwingFunction() end
