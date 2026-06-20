@@ -105,7 +105,7 @@
                 flex-direction: column;
                 height: 100vh;
                 background: var(--bg);
-                border-radius: 10px;
+                clip-path: url(#blade-clip);
                 overflow: hidden;
             }
 
@@ -767,6 +767,34 @@
         </style>
     </head>
     <body>
+        <!-- Blade-tip clip shape. objectBoundingBox units (0–1) scale with
+             the element so the curve proportions hold at any panel height.
+             Each corner: cubic bezier pulled hard toward the corner point
+             (cp1 nearly at the tip) then exits cleanly along the adjacent edge. -->
+        <svg
+            width="0"
+            height="0"
+            xmlns="http://www.w3.org/2000/svg"
+            style="position: absolute; pointer-events: none; overflow: visible"
+        >
+            <defs>
+                <clipPath id="blade-clip" clipPathUnits="objectBoundingBox">
+                    <path
+                        d="
+                        M 0,0.03
+                        C 0,0.001 0.04,0 0.05,0
+                        L 0.95,0
+                        C 0.96,0 1,0.001 1,0.03
+                        L 1,0.97
+                        C 1,0.999 0.96,1 0.95,1
+                        L 0.05,1
+                        C 0.04,1 0,0.999 0,0.97
+                        Z
+                    "
+                    />
+                </clipPath>
+            </defs>
+        </svg>
         <div id="panel">
             <!-- Header -->
             <div id="header">
