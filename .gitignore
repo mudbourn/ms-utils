@@ -1,0 +1,14 @@
+# Per-user trust baseline — never commit; each user generates their own
+.ms_trusted_hash
+
+# Per-user runtime settings
+ms_settings.json
+
+# Backup archives
+backups/
+
+# Hammerspoon Spoons (local installs)
+Spoons/
+
+# macOS
+.DS_Store
