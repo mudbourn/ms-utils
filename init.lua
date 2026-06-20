@@ -3340,11 +3340,18 @@
             ms._lastNotifyState = nil
 
             local function _doNotify(state)
-                if loadfinish ~= 1 then return end
+                if loadfinish ~= 1 then
+                    print("_doNotify: suppressed (loadfinish=" .. tostring(loadfinish) .. ", state=" .. tostring(state) .. ")")
+                    return
+                end
                 local now = hs.timer.absoluteTime()
-                if state == ms._lastNotifyState and (now - ms._lastNotifyTime) < 0.35 then return end
+                if state == ms._lastNotifyState and (now - ms._lastNotifyTime) < 0.35 then
+                    print("_doNotify: deduped (state=" .. tostring(state) .. ")")
+                    return
+                end
                 ms._lastNotifyTime  = now
                 ms._lastNotifyState = state
+                print("_doNotify: firing state=" .. tostring(state))
                 if state == 1 then
                     ms.playSlot("enabled")
                     ms.alert("Macros: ENABLED",  3, true)
