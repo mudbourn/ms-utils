@@ -36,7 +36,7 @@
             body {
                 height: 100%;
                 overflow: hidden;
-                background: var(--bg);
+                background: transparent;
             }
             body {
                 font-family:
@@ -73,6 +73,7 @@
                 flex-direction: column;
                 height: 100vh;
                 background: var(--bg);
+                border-radius: 10px;
                 overflow: hidden;
             }
 
@@ -911,6 +912,41 @@
                 else if (window.webkit?.messageHandlers?.ms)
                     window.webkit.messageHandlers.ms.postMessage(s);
             }
+
+            // ── Window drag ────────────────────────────────────────────────────
+            // borderless windows ignore -webkit-app-region (isMovable=false by default)
+            // so we implement drag manually via the Lua moveWindow action.
+            (function () {
+                let _drag = null;
+                document
+                    .getElementById("header")
+                    .addEventListener("mousedown", (e) => {
+                        if (
+                            e.target.closest(
+                                ".header-btns, button, input, select",
+                            )
+                        )
+                            return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            sendToHost({
+                                action: "moveWindow",
+                                dx: ev.screenX - _drag.ox,
+                                dy: ev.screenY - _drag.oy,
+                            });
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+            })();
 
             // ── Sound ──────────────────────────────────────────────────────────
             const _lastSlot = {};

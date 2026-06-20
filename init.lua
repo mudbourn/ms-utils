@@ -4228,6 +4228,16 @@
 
                 close = function() ms.ui.hide() end,
 
+                moveWindow = function(data)
+                    if not ms.ui._panel then return end
+                    pcall(function()
+                        local f  = ms.ui._panel:frame()
+                        local dx = tonumber(data.dx) or 0
+                        local dy = tonumber(data.dy) or 0
+                        ms.ui._panel:frame({ x = f.x + dx, y = f.y + dy, w = f.w, h = f.h })
+                    end)
+                end,
+
                 reloadMacros = function() hs.reload() end,
 
                 reloadSettings = function()
