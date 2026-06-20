@@ -3332,15 +3332,19 @@
 
         -- 8. Macro Bind Controller
 
-            -- Notification system for enable/disable state changes.
-            -- Debounced: rapid toggling collapses to one toast for the final state.
-            ms._notifyTimer      = nil
-            ms._notifyPending    = nil
-            ms._notifyLastPosted = nil
+            -- Notification for enable/disable state changes.
+            -- Synchronous — no deferred timers that can swallow errors silently.
+            -- Dedup: same state won't fire again within 350 ms (handles rapid
+            -- app-switching without the complexity of the old pending/timer system).
+            ms._lastNotifyTime  = 0
+            ms._lastNotifyState = nil
 
             local function _doNotify(state)
                 if loadfinish ~= 1 then return end
-                ms._notifyLastPosted = state
+                local now = hs.timer.absoluteTime()
+                if state == ms._lastNotifyState and (now - ms._lastNotifyTime) < 0.35 then return end
+                ms._lastNotifyTime  = now
+                ms._lastNotifyState = state
                 if state == 1 then
                     ms.playSlot("enabled")
                     ms.alert("Macros: ENABLED",  3, true)
@@ -3350,39 +3354,11 @@
                 end
             end
 
-            local function _armNotifyTimer()
-                if ms._notifyTimer then ms._notifyTimer:stop() end
-                ms._notifyTimer = hs.timer.doAfter(0.35, function()
-                    ms._notifyTimer = nil
-                    local p = ms._notifyPending
-                    ms._notifyPending = nil
-                    if p ~= nil and p ~= ms._notifyLastPosted then
-                        _doNotify(p)
-                    end
-                end)
-            end
-
-            -- Deferred off the event-handler stack so hs.canvas.new() never
-            -- blocks the input pipeline. Immediate if no timer is running.
-            ms._notifyMacroState = function(state)
-                hs.timer.doAfter(0, function()
-                    if ms._notifyTimer == nil then
-                        if state ~= ms._notifyLastPosted then
-                            _doNotify(state)
-                            _armNotifyTimer()
-                        end
-                    else
-                        ms._notifyPending = state
-                        _armNotifyTimer()
-                    end
-                end)
-            end
-
             ms.setMacros = function(state, silent)
                 if state == 1 and BindValidity ~= 1 then
                     BindValidity = 1
                     pcall(function() ms.cam.enable() end)
-                    if not silent then ms._notifyMacroState(1) end
+                    if not silent then _doNotify(1) end
                 elseif state == 0 and BindValidity ~= 0 then
                     BindValidity = 0
                     ms.cancelMacros()
@@ -3392,7 +3368,7 @@
                     end
                     ms.running = {}
                     pcall(function() ms.cam.disable() end)
-                    if not silent then ms._notifyMacroState(0) end
+                    if not silent then _doNotify(0) end
                 end
             end
 
@@ -3405,9 +3381,6 @@
                         ms.cam._setupWatcher()
                         if fromDialog then
                             -- Returning from a Hammerspoon dialog/panel: re-enable silently.
-                            if ms._notifyTimer then ms._notifyTimer:stop(); ms._notifyTimer = nil end
-                            ms._notifyPending    = nil
-                            ms._notifyLastPosted = 1
                             BindValidity = 1
                             pcall(function() ms.cam.enable() end)
                         else
@@ -3422,7 +3395,7 @@
                         if BindValidity == 1 then
                             ms.setMacros(0, ms._inputOpen)
                         elseif not ms._inputOpen then
-                            ms._notifyMacroState(0)
+                            _doNotify(0)
                         end
                     end
                 elseif eventType == hs.application.watcher.launched and appName == "Roblox" then
@@ -4883,9 +4856,9 @@
 
         hs.timer.doAfter(3000 / 1000, function()
             print("Enabling macro status notices.")
-            -- Seed last-posted to the current state so the first notification
-            -- only fires on an actual change, not unconditionally on the first toggle.
-            ms._notifyLastPosted = BindValidity == 1 and 1 or 0
+            -- Seed last-notified so the first real toggle doesn't duplicate
+            -- the startup announcement that already played at 0.55 s.
+            ms._lastNotifyState = BindValidity == 1 and 1 or 0
             loadfinish = 1
         end)
 
