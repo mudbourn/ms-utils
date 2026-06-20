@@ -5,6 +5,31 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>mudscript Settings</title>
         <style>
+            /* ── Font ───────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
             /* ── Tokens — Devil May Cry 3 palette ───────────────────────────── */
             /* ── Tokens — Devil May Cry 3 ──────────────────────────────── */
             :root {
@@ -50,11 +75,7 @@
                 background: var(--bg);
             }
             body {
-                font-family:
-                    system-ui,
-                    -apple-system,
-                    "Segoe UI",
-                    sans-serif;
+                font-family: "Almendra", Palatino, Georgia, serif;
                 font-size: 13px;
                 color: var(--text);
                 -webkit-font-smoothing: antialiased;
