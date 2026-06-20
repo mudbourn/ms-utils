@@ -6,22 +6,33 @@
         <title>mudscript Settings</title>
         <style>
             /* ── Tokens — Devil May Cry 3 palette ───────────────────────────── */
+            /* ── Tokens — Devil May Cry 3 ──────────────────────────────── */
             :root {
-                --bg: #1e1208;
-                --surface: #2a1510;
-                --surface2: #401617;
-                --hover: #693a2b;
-                --accent: #bc6f4e;
-                --success: #7a9448;
-                --danger: #1a0608;
-                --danger-text: #e06060;
-                --warning: #e7b67c;
-                --text: #efdf9f;
-                --text2: rgba(231, 182, 124, 0.65);
-                --text3: rgba(188, 111, 78, 0.5);
-                --border: rgba(105, 58, 43, 0.45);
-                --radius: 8px;
-                --radius-s: 5px;
+                /* Depths of the Temen-ni-gru */
+                --bg: #060402; /* void */
+                --surface: #100806; /* ancient stone */
+                --surface2: #1c100c; /* raised surface */
+                --hover: #301610; /* ember hover */
+
+                /* Dante red / Vergil steel */
+                --accent: #c41a1a; /* crimson */
+                --accent-hi: #e52424; /* bright combat flash */
+
+                /* Status colours */
+                --success: #4a7820; /* hunter green */
+                --danger-bg: #1e0608; /* blood shadow bg */
+                --danger: #d42020; /* open wound */
+                --warning: #c47820; /* hellfire amber */
+
+                /* Text — aged manuscript */
+                --text: #f0ddb0; /* parchment */
+                --text2: rgba(210, 165, 100, 0.85);
+                --text3: rgba(160, 105, 60, 0.55);
+
+                /* Structure */
+                --border: rgba(130, 50, 22, 0.55);
+                --radius: 3px; /* sharp — industrial Gothic */
+                --radius-s: 2px;
             }
 
             /* ── Reset ───────────────────────────────────────────────────────── */
@@ -36,7 +47,7 @@
             body {
                 height: 100%;
                 overflow: hidden;
-                background: transparent;
+                background: var(--bg);
             }
             body {
                 font-family:
@@ -85,6 +96,7 @@
                 padding: 10px 12px 8px;
                 background: var(--surface);
                 border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px rgba(196, 26, 26, 0.12);
                 flex-shrink: 0;
                 -webkit-app-region: drag;
                 user-select: none;
@@ -99,6 +111,7 @@
             }
             #status-dot.off {
                 background: var(--danger);
+                box-shadow: 0 0 4px rgba(212, 32, 32, 0.6);
             }
             #status-text {
                 flex: 1;
@@ -205,10 +218,14 @@
                 background: var(--surface);
                 cursor: pointer;
                 user-select: none;
-                transition: background 0.15s;
+                box-shadow: inset 2px 0 0 transparent;
+                transition:
+                    background 0.15s,
+                    box-shadow 0.15s;
             }
             .section-head:hover {
                 background: var(--surface2);
+                box-shadow: inset 2px 0 0 rgba(196, 26, 26, 0.4);
             }
             .section-chevron {
                 font-size: 9px;
@@ -218,13 +235,14 @@
             }
             .section-head.open .section-chevron {
                 transform: rotate(90deg);
+                color: var(--accent);
             }
             .section-title {
-                font-weight: 600;
-                font-size: 12px;
+                font-weight: 700;
+                font-size: 11px;
                 color: var(--text2);
                 text-transform: uppercase;
-                letter-spacing: 0.5px;
+                letter-spacing: 1.5px;
                 flex: 1;
             }
             .section-body {
@@ -253,6 +271,7 @@
             }
             .row:hover {
                 background: var(--surface2);
+                box-shadow: inset 2px 0 0 rgba(196, 26, 26, 0.4);
             }
             .row.disabled {
                 opacity: 0.35;
@@ -450,12 +469,12 @@
                 color: #fff;
             }
             .btn-action.danger {
-                background: #3a1212;
-                color: var(--danger-text);
-                border: 1px solid #5a1a1a;
+                background: var(--danger-bg);
+                color: var(--danger);
+                border: 1px solid rgba(212, 32, 32, 0.3);
             }
             .btn-action.danger:hover {
-                background: #4a1515;
+                background: #2a0a0a;
             }
 
             /* ── Sound picker ────────────────────────────────────────────────── */
@@ -573,10 +592,10 @@
                 color: var(--text);
             }
             .ctx-item.danger {
-                color: var(--danger-text);
+                color: var(--danger);
             }
             .ctx-item.danger:hover {
-                background: #3a1212;
+                background: var(--danger-bg);
             }
             .ctx-item .ctx-icon {
                 font-size: 11px;
@@ -656,10 +675,13 @@
             }
             #modal {
                 background: var(--surface);
+                border-top: 2px solid var(--accent);
                 border-radius: var(--radius);
                 padding: 20px;
                 width: 300px;
-                box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+                box-shadow:
+                    0 16px 48px rgba(0, 0, 0, 0.7),
+                    0 0 0 1px var(--border);
                 transform: scale(0.95);
                 transition: transform 0.2s;
             }
@@ -714,11 +736,12 @@
                 color: #fff;
             }
             .modal-btns button.primary:hover {
-                background: #ce8060;
+                background: var(--accent-hi);
             }
             .modal-btns button.destructive {
-                background: var(--danger);
-                color: #fff;
+                background: var(--danger-bg);
+                color: var(--danger);
+                border: 1px solid rgba(212, 32, 32, 0.3);
             }
         </style>
     </head>
