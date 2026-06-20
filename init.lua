@@ -80,6 +80,7 @@
                 end
             end
         -- END --
+
         -- 1. Prefix Variables & State Tracking --
             ms = {}
             ms.vars = {}
@@ -176,8 +177,6 @@
                     hs.timer.doAfter(0.25, function()
                         -- Announce before handing focus back so the toast is visible
                         -- as Roblox comes to the front.
-                        ms.playSlot("enabled")
-                        ms.alert("Macros: ENABLED", 3, true)
                         local win = roblox:mainWindow()
                         if win then win:focus() end
                         roblox:activate()
@@ -3322,8 +3321,7 @@
         -- 8. Macro Bind Controller
 
             -- Notification system for enable/disable state changes.
-            -- Both the sound and the toast are debounced together — only the
-            -- final settled state after rapid toggling produces a sound + banner.
+            -- Debounced: rapid toggling collapses to one toast for the final state.
             ms._notifyTimer      = nil
             ms._notifyPending    = nil
             ms._notifyLastPosted = nil
@@ -3348,13 +3346,12 @@
                     ms._notifyPending = nil
                     if p ~= nil and p ~= ms._notifyLastPosted then
                         _doNotify(p)
-                        _armNotifyTimer()
                     end
                 end)
             end
 
-            -- Defers the entire body off the event-handler call stack via
-            -- doAfter(0) so hs.canvas.new() never blocks the input pipeline.
+            -- Deferred off the event-handler stack so hs.canvas.new() never
+            -- blocks the input pipeline. Immediate if no timer is running.
             ms._notifyMacroState = function(state)
                 hs.timer.doAfter(0, function()
                     if ms._notifyTimer == nil then
@@ -3376,9 +3373,8 @@
                     if not silent then ms._notifyMacroState(1) end
                 elseif state == 0 and BindValidity ~= 0 then
                     BindValidity = 0
-                    ms.cancelMacros()  -- stop coroutines, release held keys/buttons
+                    ms.cancelMacros()
                     ms.keytrack = {}
-                    -- Stop all running cooldown timers and clear the table.
                     for _, timer in pairs(ms.running) do
                         if timer and timer.stop then timer:stop() end
                     end
