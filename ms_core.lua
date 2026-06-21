@@ -2081,6 +2081,13 @@ YQIDAQAB
                             if _sf then _sf:write(manifest.signature); _sf:close() end
                             hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
                             os.remove(_sigPath .. ".b64")
+                            -- Confirm the decoded file exists and is non-empty before verifying.
+                            local _sigAttr = hs.fs.attributes(_sigPath)
+                            if not _sigAttr or _sigAttr.size == 0 then
+                                os.remove(_keyPath); os.remove(_msgPath)
+                                ms.alert("Update aborted: could not decode signature.\nbase64 decode produced no output.", 8)
+                                return
+                            end
                             -- Write the signed message (the sha256 hex string).
                             local _mf = io.open(_msgPath, "w")
                             if _mf then _mf:write(manifest.sha256:lower()); _mf:close() end
@@ -2152,6 +2159,19 @@ YQIDAQAB
                 end
 
                 -- ── End System Integrity / Update System ─────────────────────────────────
+
+                -- Freeze ms.integrity so macro-sandbox code cannot overwrite security
+                -- functions (e.g. ms.integrity.check = function() return "trusted" end).
+                -- Reads still work normally; writes error immediately.
+                do
+                    local _intImpl = ms.integrity
+                    ms.integrity = setmetatable({}, {
+                        __index    = _intImpl,
+                        __newindex = function(_, k)
+                            error("ms.integrity is read-only (attempted write to '" .. tostring(k) .. "')", 2)
+                        end,
+                    })
+                end
 
                 -- Returns the effective bind config for an id, accounting for trackpad mode overrides
                 ms.effectiveBind = function(id)
@@ -6458,15 +6478,23 @@ YQIDAQAB
                     ScreenBL     = ScreenBL,   ScreenBR     = ScreenBR,   ScreenCenter = ScreenCenter,
                 }
 
+                -- Explicit allowlist of _G constants macro code may read.
+                -- Defined once here; referenced by the sandbox __index closure below.
+                local _MACRO_G = {
+                    REF_W=true, REF_H=true, REF_SENS=true,
+                    CUR_CAM_SENS=true, SoundLib=true,
+                    BindValidity=true, clickLevel=true,
+                    loadfinish=true,
+                }
+
                 setmetatable(sandbox, {
                     __index = function(t, k)
                         if BLOCKED[k] then
                             error("ms_macros.lua: access to '" .. tostring(k)
                                 .. "' is not permitted.", 2)
                         end
-                        -- Fall through to real globals (safe read-only bridge for any
-                        -- additional constants the macro author may define in init.lua).
-                        return rawget(_G, k)
+                        if _MACRO_G[k] then return rawget(_G, k) end
+                        return nil
                     end,
                     -- All global writes from ms_macros.lua are forbidden.
                     -- Previously this fell through to rawset(_G, k, v), which let macro
