@@ -2216,16 +2216,9 @@
                 body.appendChild(divider());
                 body.appendChild(
                     btnRow(
-                        actionBtn("Import Profile\u2026", "", () =>
-                            sendToHost({ action: "importProfile" }),
-                        ),
                         actionBtn("Import .mspkg", "", () =>
                             sendToHost({ action: "importProfilePkg" }),
                         ),
-                    ),
-                );
-                body.appendChild(
-                    btnRow(
                         actionBtn("Export .mspkg", "", () =>
                             sendToHost({ action: "exportProfilePkg" }),
                         ),
