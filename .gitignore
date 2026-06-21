@@ -19,3 +19,8 @@ Spoons/
 
 # Key files — never commit
 *.pem
+
+# Compiled AHK binary and downloaded AHK libraries — not tracked
+lib/WebView2.ahk
+lib/WebView2/
+lib/Jxon.ahk

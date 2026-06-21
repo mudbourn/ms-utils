@@ -261,6 +261,15 @@
             // Suppress native right-click context menu.
             document.addEventListener("contextmenu", (e) => e.preventDefault());
 
+            function sendToHost(msg) {
+                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
+                if (window.chrome?.webview) {
+                    window.chrome.webview.postMessage(s);
+                } else {
+                    window.webkit.messageHandlers.guardian.postMessage(s);
+                }
+            }
+
             // ── Drag to move window ───────────────────────────────────────────
             let _drag = null;
             document.addEventListener("mousedown", (e) => {
@@ -274,9 +283,7 @@
                 _drag.x = e.screenX;
                 _drag.y = e.screenY;
                 if (dx !== 0 || dy !== 0) {
-                    window.webkit.messageHandlers.guardian.postMessage(
-                        JSON.stringify({ action: "move", dx, dy }),
-                    );
+                    sendToHost({ action: "move", dx, dy });
                 }
             });
             document.addEventListener("mouseup", () => {
@@ -292,9 +299,7 @@
             }
 
             function keepBlocked() {
-                window.webkit.messageHandlers.guardian.postMessage(
-                    "keepBlocked",
-                );
+                sendToHost("keepBlocked");
             }
 
             function showConfirm() {
@@ -308,9 +313,7 @@
             }
 
             function confirmDelete() {
-                window.webkit.messageHandlers.guardian.postMessage(
-                    "confirmDelete",
-                );
+                sendToHost("confirmDelete");
             }
         </script>
     </body>

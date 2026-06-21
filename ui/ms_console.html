@@ -280,10 +280,14 @@
         <div id="titlebar">
             <span id="titlebar-title">mudscript — console</span>
             <div id="titlebar-btns">
-                <button onclick="send({action:'openWatcher'})">[watcher]</button>
-                <button onclick="send({action:'openKeys'})">[keys]</button>
+                <button onclick="send({ action: 'openWatcher' })">
+                    [watcher]
+                </button>
+                <button onclick="send({ action: 'openKeys' })">[keys]</button>
                 <button onclick="doClear()">[clear]</button>
-                <button class="btn-close" onclick="send({action:'close'})">[&times;]</button>
+                <button class="btn-close" onclick="send({ action: 'close' })">
+                    [&times;]
+                </button>
             </div>
         </div>
 
@@ -305,17 +309,24 @@
         <script>
             "use strict";
 
-            const MAX_ENTRIES     = 500;
-            const SCROLL_THRESH   = 60;
-            let   _dragging       = false;
-            let   _dragX          = 0;
-            let   _dragY          = 0;
+            const MAX_ENTRIES = 500;
+            const SCROLL_THRESH = 60;
+            let _dragging = false;
+            let _dragX = 0;
+            let _dragY = 0;
 
             // ── Utilities ─────────────────────────────────────────────────
+            function sendToHost(msg) {
+                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
+                if (window.chrome?.webview) {
+                    window.chrome.webview.postMessage(s);
+                } else {
+                    window.webkit.messageHandlers.msConsole.postMessage(s);
+                }
+            }
+
             function send(obj) {
-                window.webkit.messageHandlers.msConsole.postMessage(
-                    JSON.stringify(obj),
-                );
+                sendToHost(obj);
             }
 
             function pad2(n) {
@@ -344,34 +355,34 @@
             // ── appendEntry ───────────────────────────────────────────────
             // entry = { ts?: string, type?: string, msg: string }
             function appendEntry(entry) {
-                const log  = document.getElementById("log");
+                const log = document.getElementById("log");
                 const near = isNearBottom();
 
                 const type = entry.type || "print";
-                const ts   = entry.ts   || nowTs();
-                const msg  = String(entry.msg ?? "");
+                const ts = entry.ts || nowTs();
+                const msg = String(entry.msg ?? "");
 
                 const LABELS = {
-                    print:  "print",
+                    print: "print",
                     result: "result",
-                    error:  "error",
-                    macro:  "macro",
-                    input:  "input",
+                    error: "error",
+                    macro: "macro",
+                    input: "input",
                 };
 
                 const row = document.createElement("div");
                 row.className = "entry entry-" + type;
 
                 const tsEl = document.createElement("span");
-                tsEl.className   = "ts";
+                tsEl.className = "ts";
                 tsEl.textContent = "[" + ts + "]";
 
                 const badge = document.createElement("span");
-                badge.className   = "badge badge-" + type;
+                badge.className = "badge badge-" + type;
                 badge.textContent = LABELS[type] ?? type;
 
                 const msgEl = document.createElement("span");
-                msgEl.className   = "msg";
+                msgEl.className = "msg";
                 msgEl.textContent = type === "input" ? "> " + msg : msg;
 
                 row.appendChild(tsEl);
@@ -406,7 +417,7 @@
             // ── Actions ───────────────────────────────────────────────────
             function doRun() {
                 const input = document.getElementById("code-input");
-                const code  = input.value.trim();
+                const code = input.value.trim();
                 if (!code) return;
                 appendEntry({ ts: nowTs(), type: "input", msg: code });
                 send({ action: "execute", code });
@@ -435,23 +446,27 @@
                     if (e.button !== 0) return;
                     if (e.target.closest("#titlebar-btns")) return;
                     _dragging = true;
-                    _dragX    = e.screenX;
-                    _dragY    = e.screenY;
+                    _dragX = e.screenX;
+                    _dragY = e.screenY;
                 });
 
             document.addEventListener("mousemove", (e) => {
                 if (!_dragging) return;
                 const dx = e.screenX - _dragX;
                 const dy = e.screenY - _dragY;
-                _dragX   = e.screenX;
-                _dragY   = e.screenY;
+                _dragX = e.screenX;
+                _dragY = e.screenY;
                 if (dx !== 0 || dy !== 0) {
                     send({ action: "move", dx, dy });
                 }
             });
 
-            document.addEventListener("mouseup",    () => { _dragging = false; });
-            document.addEventListener("mouseleave", () => { _dragging = false; });
+            document.addEventListener("mouseup", () => {
+                _dragging = false;
+            });
+            document.addEventListener("mouseleave", () => {
+                _dragging = false;
+            });
 
             // ── Suppress native context menu ──────────────────────────────
             document.addEventListener("contextmenu", (e) => e.preventDefault());

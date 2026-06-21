@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths: [ms_core.lua]
+    paths: [ms_core.lua, ms_core.ahk]
 
 jobs:
   stamp:
@@ -16,7 +16,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute hash and sign MANIFEST
+      - name: Compute hash and sign macOS MANIFEST
+        if: contains(github.event.head_commit.modified, 'ms_core.lua')
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
@@ -24,16 +25,20 @@ jobs:
           VERSION=$(jq -r '.version // "1.0.0"' MANIFEST.json)
           URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua"
 
-          # Build base MANIFEST with jq — no Python, no heredoc, no quoting issues.
-          jq -n \
-            --arg version "$VERSION" \
-            --arg sha256  "$SHA256"  \
-            --arg url     "$URL"     \
-            '{"version":$version,"sha256":$sha256,"url":$url}' > MANIFEST.json
+          # Preserve existing Windows fields while updating macOS fields.
+          WIN_URL=$(jq -r '.windows_url // ""' MANIFEST.json)
+          WIN_SHA=$(jq -r '.windows_sha256 // ""' MANIFEST.json)
+          WIN_SIG=$(jq -r '.windows_signature // ""' MANIFEST.json)
 
-          # Sign when the private key secret is available.
-          # Without the secret the workflow still succeeds — signature is just omitted
-          # until MS_SIGNING_KEY is added to GitHub Secrets and the workflow re-runs.
+          jq -n \
+            --arg version  "$VERSION"  \
+            --arg sha256   "$SHA256"   \
+            --arg url      "$URL"      \
+            --arg wurl     "$WIN_URL"  \
+            --arg wsha     "$WIN_SHA"  \
+            --arg wsig     "$WIN_SIG"  \
+            '{"version":$version,"sha256":$sha256,"url":$url,"windows_url":$wurl,"windows_sha256":$wsha,"windows_signature":$wsig}' > MANIFEST.json
+
           if [ -n "$MS_SIGNING_KEY" ]; then
             printf '%s\n' "$MS_SIGNING_KEY" > /tmp/private.pem
             printf '%s'   "$SHA256"         > /tmp/msg.bin
@@ -42,9 +47,45 @@ jobs:
             rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
             jq --arg sig "$SIG" '. + {"signature":$sig}' MANIFEST.json > /tmp/manifest.json
             mv /tmp/manifest.json MANIFEST.json
-            echo "Signed."
+            echo "Signed macOS runtime."
           else
             echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
+          fi
+
+      - name: Sign Windows runtime
+        if: contains(github.event.head_commit.modified, 'ms_core.ahk')
+        env:
+          MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
+        run: |
+          WIN_SHA=$(sha256sum ms_core.ahk | awk '{print $1}')
+          WIN_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.ahk"
+
+          # Preserve existing macOS fields while updating Windows fields.
+          VERSION=$(jq -r '.version // "1.0.0"' MANIFEST.json)
+          MAC_SHA=$(jq -r '.sha256 // ""' MANIFEST.json)
+          MAC_URL=$(jq -r '.url // ""' MANIFEST.json)
+          MAC_SIG=$(jq -r '.signature // ""' MANIFEST.json)
+
+          jq -n \
+            --arg version "$VERSION"  \
+            --arg sha256  "$MAC_SHA"  \
+            --arg url     "$MAC_URL"  \
+            --arg sig     "$MAC_SIG"  \
+            --arg wurl    "$WIN_URL"  \
+            --arg wsha    "$WIN_SHA"  \
+            '{"version":$version,"sha256":$sha256,"url":$url,"signature":$sig,"windows_url":$wurl,"windows_sha256":$wsha}' > MANIFEST.json
+
+          if [ -n "$MS_SIGNING_KEY" ]; then
+            printf '%s\n' "$MS_SIGNING_KEY" > /tmp/private.pem
+            printf '%s'   "$WIN_SHA"         > /tmp/msg.bin
+            openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
+            WIN_SIG=$(base64 -w0 /tmp/sig.bin)
+            rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
+            jq --arg wsig "$WIN_SIG" '. + {"windows_signature":$wsig}' MANIFEST.json > /tmp/manifest.json
+            mv /tmp/manifest.json MANIFEST.json
+            echo "Signed Windows runtime."
+          else
+            echo "Warning: MS_SIGNING_KEY not set — hash stamped, no Windows signature."
           fi
 
       - name: Commit MANIFEST.json

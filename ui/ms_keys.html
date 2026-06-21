@@ -11,6 +11,9 @@
                 --accent: #c41a1a;
                 --text: #f0ddb0;
                 --text2: rgba(210, 165, 100, 0.75);
+                --mouse: #c47820;
+                --scroll: #4a9078;
+                --move: rgba(210, 165, 100, 0.38);
                 --radius: 3px;
             }
 
@@ -31,18 +34,7 @@
                 background: var(--bg);
                 color: var(--text);
                 font-family: "Almendra", Palatino, Georgia, serif;
-                font-size: 12px;
-                line-height: 1.5;
-                overflow: hidden;
-            }
-
-            body {
-                display: flex;
-                flex-direction: column;
-            }
-
-            /* ── Titlebar ───────────────────────────────────────────────────── */
-            #titlebar {
+                font-size: 13px;
                 height: 32px;
                 -webkit-app-region: drag;
                 display: flex;
@@ -85,14 +77,36 @@
                 color: var(--text);
             }
 
-            /* ── Active keys section ────────────────────────────────────────── */
-            #active-section {
+            /* ── Two-column main area ─────────────────────────────────────────── */
+            #main {
+                flex: 1;
+                display: flex;
+                min-height: 0;
+            }
+
+            .col {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+                min-height: 0;
+            }
+
+            /* 1px vertical divider between columns */
+            #col-sep {
+                width: 1px;
+                background: var(--border);
                 flex-shrink: 0;
-                min-height: 80px;
+            }
+
+            /* ── State section (top of each column) ──────────────────────────── */
+            .state-section {
+                flex-shrink: 0;
                 padding: 8px 14px 10px;
                 display: flex;
                 flex-direction: column;
-                gap: 6px;
+                gap: 5px;
+                min-height: 80px;
             }
 
             .section-label {
@@ -100,17 +114,17 @@
                 font-variant: small-caps;
                 letter-spacing: 1px;
                 color: var(--text2);
-                flex-shrink: 0;
             }
 
-            #pills-row {
+            /* ── Pills row (shared by keys and mouse buttons) ─────────────────── */
+            .pills-row {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 4px;
                 align-content: flex-start;
             }
 
-            .key-pill {
+            .pill {
                 background: var(--surface2);
                 border: 1px solid var(--border);
                 color: var(--text);
@@ -121,46 +135,65 @@
                 white-space: nowrap;
             }
 
-            /* ── Divider ────────────────────────────────────────────────────── */
-            .divider {
+            .pill-mouse {
+                border-color: rgba(196, 120, 32, 0.5);
+                color: var(--mouse);
+            }
+
+            /* ── Mouse position display ───────────────────────────────────────── */
+            #mouse-pos {
+                font-size: 11px;
+                color: var(--text2);
+                font-variant-numeric: tabular-nums;
+                letter-spacing: 0.3px;
+            }
+
+            #mouse-pos span {
+                color: var(--text);
+            }
+
+            /* ── Horizontal divider between state and log ─────────────────────── */
+            .col-divider {
                 height: 1px;
                 background: var(--border);
                 flex-shrink: 0;
             }
 
-            /* ── Recent events section ──────────────────────────────────────── */
-            #recent {
+            /* ── Scrollable event log ─────────────────────────────────────────── */
+            .event-log {
                 flex: 1;
                 overflow-y: auto;
                 padding: 4px 0;
                 min-height: 0;
             }
 
-            #recent::-webkit-scrollbar {
-                width: 5px;
+            .event-log::-webkit-scrollbar {
+                width: 4px;
             }
-
-            #recent::-webkit-scrollbar-track {
+            .event-log::-webkit-scrollbar-track {
                 background: transparent;
             }
-
-            #recent::-webkit-scrollbar-thumb {
+            .event-log::-webkit-scrollbar-thumb {
                 background: var(--border);
                 border-radius: 3px;
             }
 
-            /* ── Entry rows ─────────────────────────────────────────────────── */
+            /* ── Entry rows ───────────────────────────────────────────────────── */
             .entry {
                 display: flex;
                 align-items: baseline;
-                gap: 6px;
+                gap: 5px;
                 padding: 2px 14px;
-                font-size: 12px;
-                line-height: 1.55;
+                font-size: 13px;
+                line-height: 1.6;
             }
 
             .entry:hover {
                 background: var(--surface);
+            }
+
+            .entry.move-entry {
+                opacity: 0.5;
             }
 
             .ts {
@@ -173,50 +206,95 @@
             .arrow {
                 flex-shrink: 0;
             }
-
             .arrow-down {
                 color: var(--text);
             }
-
             .arrow-up {
                 color: var(--text2);
             }
-
             .arrow-mouse {
-                color: var(--text2);
+                color: var(--mouse);
+            }
+            .arrow-scroll {
+                color: var(--scroll);
+            }
+            .arrow-move {
+                color: var(--move);
             }
 
             .key-name {
                 color: var(--text);
                 word-break: break-word;
             }
-
             .mouse-name {
-                color: #c47820;
+                color: var(--mouse);
                 word-break: break-word;
+            }
+            .scroll-name {
+                color: var(--scroll);
+                word-break: break-word;
+            }
+            .move-name {
+                color: var(--move);
+                font-variant-numeric: tabular-nums;
+                word-break: break-word;
+            }
+            .pos-dim {
+                color: var(--text2);
+                font-size: 10px;
             }
         </style>
     </head>
     <body>
         <div id="titlebar">
-            <span id="titlebar-text">mudscript — key monitor</span>
+            <span id="titlebar-text">mudscript — input monitor</span>
             <button class="tb-btn" onclick="clearLog()">[clear]</button>
             <button class="tb-btn" onclick="closePanel()">[×]</button>
         </div>
-        <div id="active-section">
-            <span class="section-label">Active</span>
-            <div id="pills-row"></div>
+
+        <div id="main">
+            <!-- ── Keys column ─────────────────────────────────────────────── -->
+            <div class="col" id="keys-col">
+                <div class="state-section">
+                    <span class="section-label">Keys</span>
+                    <div class="pills-row" id="keys-pills"></div>
+                </div>
+                <div class="col-divider"></div>
+                <div class="event-log" id="keys-log"></div>
+            </div>
+
+            <div id="col-sep"></div>
+
+            <!-- ── Mouse column ────────────────────────────────────────────── -->
+            <div class="col" id="mouse-col">
+                <div class="state-section">
+                    <span class="section-label">Mouse</span>
+                    <div id="mouse-pos">
+                        x: <span id="mx">—</span>&nbsp;&nbsp;y:
+                        <span id="my">—</span>
+                    </div>
+                    <div class="pills-row" id="mouse-pills"></div>
+                </div>
+                <div class="col-divider"></div>
+                <div class="event-log" id="mouse-log"></div>
+            </div>
         </div>
-        <div class="divider"></div>
-        <div id="recent"></div>
 
         <script>
             "use strict";
 
             document.addEventListener("contextmenu", (e) => e.preventDefault());
 
+            function sendToHost(msg) {
+                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
+                if (window.chrome?.webview) {
+                    window.chrome.webview.postMessage(s);
+                } else {
+                    window.webkit.messageHandlers.msKeys.postMessage(s);
+                }
+            }
+
             // ── Drag ──────────────────────────────────────────────────────────
-            let _dragging = false;
             (function () {
                 let _drag = null;
                 document
@@ -224,22 +302,18 @@
                     .addEventListener("mousedown", (e) => {
                         if (e.target.closest(".tb-btn")) return;
                         _drag = { ox: e.screenX, oy: e.screenY };
-                        _dragging = true;
                         const onMove = (ev) => {
                             if (!_drag) return;
-                            window.webkit.messageHandlers.msKeys.postMessage(
-                                JSON.stringify({
-                                    action: "move",
-                                    dx: ev.screenX - _drag.ox,
-                                    dy: ev.screenY - _drag.oy,
-                                }),
-                            );
+                            sendToHost({
+                                action: "move",
+                                dx: ev.screenX - _drag.ox,
+                                dy: ev.screenY - _drag.oy,
+                            });
                             _drag.ox = ev.screenX;
                             _drag.oy = ev.screenY;
                         };
                         const onUp = () => {
                             _drag = null;
-                            _dragging = false;
                             window.removeEventListener("mousemove", onMove);
                             window.removeEventListener("mouseup", onUp);
                         };
@@ -248,10 +322,20 @@
                     });
             })();
 
-            // ── Scroll helpers ─────────────────────────────────────────────────
+            // ── Constants ─────────────────────────────────────────────────────
             const MAX_ENTRIES = 300;
             const NEAR_BOTTOM = 48;
+            const BTN_NAMES = {
+                0: "Left",
+                1: "Right",
+                2: "Middle",
+                3: "Btn4",
+                4: "Btn5",
+            };
 
+            function btnName(n) {
+                return BTN_NAMES[n] ?? "M" + n;
+            }
             function isNearBottom(el) {
                 return (
                     el.scrollHeight - el.scrollTop - el.clientHeight <=
@@ -259,89 +343,148 @@
                 );
             }
 
-            // ── Entry builder ──────────────────────────────────────────────────
+            // ── Entry builder ─────────────────────────────────────────────────
             function buildRow(entry) {
                 const row = document.createElement("div");
-                row.className = "entry";
+                const t = entry.type;
 
-                const ts = document.createElement("span");
-                ts.className = "ts";
-                ts.textContent = "[" + entry.ts + "]";
+                if (t === "mousemove") {
+                    row.className = "entry move-entry";
+                    const ts = mkSpan("ts", "[" + (entry.ts || "") + "]");
+                    const arr = mkSpan("arrow arrow-move", "→");
+                    const name = mkSpan("move-name", entry.x + ", " + entry.y);
+                    row.append(ts, arr, name);
+                    return row;
+                }
+
+                row.className = "entry";
+                const ts = mkSpan("ts", "[" + (entry.ts || "") + "]");
                 row.appendChild(ts);
 
-                const isMouse = entry.type === "mouse";
-
-                const arrow = document.createElement("span");
-                arrow.className = "arrow";
-                if (isMouse) {
-                    arrow.classList.add("arrow-mouse");
-                    arrow.textContent = "⊙";
-                } else if (entry.down) {
-                    arrow.classList.add("arrow-down");
-                    arrow.textContent = "↓";
-                } else {
-                    arrow.classList.add("arrow-up");
-                    arrow.textContent = "↑";
+                if (t === "key") {
+                    const arr = mkSpan(
+                        "arrow " + (entry.down ? "arrow-down" : "arrow-up"),
+                        entry.down ? "↓" : "↑",
+                    );
+                    const name = mkSpan("key-name", entry.key || "");
+                    row.append(arr, name);
+                } else if (t === "mouse") {
+                    const arr = mkSpan(
+                        "arrow " + (entry.down ? "arrow-mouse" : "arrow-up"),
+                        entry.down ? "↓" : "↑",
+                    );
+                    const name = mkSpan("mouse-name", btnName(entry.button));
+                    const pos = mkSpan(
+                        "pos-dim",
+                        "  " + entry.x + ", " + entry.y,
+                    );
+                    row.append(arr, name, pos);
+                } else if (t === "scroll") {
+                    const arr = mkSpan(
+                        "arrow arrow-scroll",
+                        entry.direction === "up" ? "↑" : "↓",
+                    );
+                    const name = mkSpan(
+                        "scroll-name",
+                        "scroll " +
+                            entry.direction +
+                            (entry.amount > 1 ? " ×" + entry.amount : ""),
+                    );
+                    row.append(arr, name);
                 }
-                row.appendChild(arrow);
-
-                const name = document.createElement("span");
-                if (isMouse) {
-                    name.className = "mouse-name";
-                    name.textContent =
-                        "Mouse " + (entry.button != null ? entry.button : "");
-                } else {
-                    name.className = "key-name";
-                    name.textContent = entry.key || "";
-                }
-                row.appendChild(name);
 
                 return row;
             }
 
-            // ── Public API ─────────────────────────────────────────────────────
+            function mkSpan(cls, text) {
+                const s = document.createElement("span");
+                s.className = cls;
+                s.textContent = text;
+                return s;
+            }
+
+            // ── Route entry to the correct log column ─────────────────────────
             function appendEntry(entry) {
-                const recent = document.getElementById("recent");
-                const atBottom = isNearBottom(recent);
-                recent.appendChild(buildRow(entry));
-                while (recent.childElementCount > MAX_ENTRIES) {
-                    recent.removeChild(recent.firstElementChild);
-                }
-                if (atBottom) recent.scrollTop = recent.scrollHeight;
+                const t = entry.type;
+                const isMouseSide =
+                    t === "mouse" || t === "scroll" || t === "mousemove";
+                const log = document.getElementById(
+                    isMouseSide ? "mouse-log" : "keys-log",
+                );
+                const atBottom = isNearBottom(log);
+                log.appendChild(buildRow(entry));
+                while (log.childElementCount > MAX_ENTRIES)
+                    log.removeChild(log.firstElementChild);
+                if (atBottom) log.scrollTop = log.scrollHeight;
             }
 
             function loadHistory(entries) {
-                const recent = document.getElementById("recent");
-                recent.innerHTML = "";
-                const frag = document.createDocumentFragment();
-                (entries || []).forEach((e) => frag.appendChild(buildRow(e)));
-                recent.appendChild(frag);
-                recent.scrollTop = recent.scrollHeight;
+                const keysLog = document.getElementById("keys-log");
+                const mouseLog = document.getElementById("mouse-log");
+                keysLog.innerHTML = "";
+                mouseLog.innerHTML = "";
+                const kf = document.createDocumentFragment();
+                const mf = document.createDocumentFragment();
+                (entries || []).forEach((e) => {
+                    const isMouseSide =
+                        e.type === "mouse" ||
+                        e.type === "scroll" ||
+                        e.type === "mousemove";
+                    (isMouseSide ? mf : kf).appendChild(buildRow(e));
+                });
+                keysLog.appendChild(kf);
+                mouseLog.appendChild(mf);
+                keysLog.scrollTop = keysLog.scrollHeight;
+                mouseLog.scrollTop = mouseLog.scrollHeight;
             }
 
+            // ── Active keys pills ─────────────────────────────────────────────
             function updateActiveKeys(names) {
-                const row = document.getElementById("pills-row");
+                const row = document.getElementById("keys-pills");
                 row.innerHTML = "";
                 (names || []).forEach((name) => {
                     const pill = document.createElement("span");
-                    pill.className = "key-pill";
+                    pill.className = "pill";
                     pill.textContent = name;
                     row.appendChild(pill);
                 });
             }
 
-            // ── Button actions ─────────────────────────────────────────────────
+            // ── Mouse state (position + active buttons) ───────────────────────
+            function updateMouseState(state) {
+                // Position
+                if (state.x != null)
+                    document.getElementById("mx").textContent = state.x;
+                if (state.y != null)
+                    document.getElementById("my").textContent = state.y;
+                // Active button pills
+                const row = document.getElementById("mouse-pills");
+                row.innerHTML = "";
+                (state.buttons || []).forEach((b) => {
+                    const pill = document.createElement("span");
+                    pill.className = "pill pill-mouse";
+                    pill.textContent = btnName(b);
+                    row.appendChild(pill);
+                });
+            }
+
+            // ── Position-only fast update (bypasses full state rebuild) ───────
+            function updateMousePos(pos) {
+                if (pos.x != null)
+                    document.getElementById("mx").textContent = pos.x;
+                if (pos.y != null)
+                    document.getElementById("my").textContent = pos.y;
+            }
+
+            // ── Button actions ────────────────────────────────────────────────
             function clearLog() {
-                document.getElementById("recent").innerHTML = "";
-                window.webkit.messageHandlers.msKeys.postMessage(
-                    JSON.stringify({ action: "clear" }),
-                );
+                document.getElementById("keys-log").innerHTML = "";
+                document.getElementById("mouse-log").innerHTML = "";
+                sendToHost({ action: "clear" });
             }
 
             function closePanel() {
-                window.webkit.messageHandlers.msKeys.postMessage(
-                    JSON.stringify({ action: "close" }),
-                );
+                sendToHost({ action: "close" });
             }
         </script>
     </body>

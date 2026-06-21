@@ -2,5 +2,8 @@
   "version": "1.0.0",
   "sha256": "b08a99554f78bb4c1e83c75424d001b8e4592db9f1444851fc83225197710518",
   "url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua",
-  "signature": "aldgynW68EfbepG3cVFUJlBvCn20aWymLhGNAANufMzm3W4qUXdsc8EACD+TNgLRNsT48RVdeJysd4grpYCTYHCLuIGaguLFpMCUBCdK82LY2yRVjlJK3gOPfrEkS3fA7hI4TcP0Fqz77r8E89FUaVt4PlZsptBvtg9T3KplN+WfKB9jKXPWbYclHxC1yNtxiH6OBaMzp8dtjROnqXiKR847eD5YJLwJeZn3jWMEXNVM8+YsGcJKbo8kLiG0JLmBw/m5kBFCqmUQo+OcVGMcAu68nvvXih8TF0azj+WcOH0E2/iDfpZM0MJ0CtwzcW5mwuRHHRBH+5iIaDH2IKlZJA=="
+  "signature": "aldgynW68EfbepG3cVFUJlBvCn20aWymLhGNAANufMzm3W4qUXdsc8EACD+TNgLRNsT48RVdeJysd4grpYCTYHCLuIGaguLFpMCUBCdK82LY2yRVjlJK3gOPfrEkS3fA7hI4TcP0Fqz77r8E89FUaVt4PlZsptBvtg9T3KplN+WfKB9jKXPWbYclHxC1yNtxiH6OBaMzp8dtjROnqXiKR847eD5YJLwJeZn3jWMEXNVM8+YsGcJKbo8kLiG0JLmBw/m5kBFCqmUQo+OcVGMcAu68nvvXih8TF0azj+WcOH0E2/iDfpZM0MJ0CtwzcW5mwuRHHRBH+5iIaDH2IKlZJA==",
+  "windows_url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.ahk",
+  "windows_sha256": "",
+  "windows_signature": ""
 }

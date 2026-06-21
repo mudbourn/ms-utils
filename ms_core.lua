@@ -6253,9 +6253,8 @@ YQIDAQAB
                 ms.dev.console.show = function()
                     if not ms.dev._consolePanel then
                         local screen  = hs.screen.mainScreen():frame()
-                        local w, h    = 360, 640
-                        local _step   = 24
-                        local x = screen.x + screen.w - w - _step * 2 - 20
+                        local w, h    = 450, 800
+                        local x = screen.x + screen.w - w - 20
                         local y = screen.y + 20
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
                             { developerExtrasEnabled = true }, _ucCon)
@@ -6313,10 +6312,9 @@ YQIDAQAB
                 ms.dev.watcher.show = function()
                     if not ms.dev._watcherPanel then
                         local screen  = hs.screen.mainScreen():frame()
-                        local w, h    = 270, 480
-                        local _step   = 24
-                        local x = screen.x + screen.w - 360 - _step * 2 - 20 + _step
-                        local y = screen.y + 20 + _step
+                        local w, h    = 360, 640
+                        local x = screen.x + screen.w - w - 20
+                        local y = screen.y + 44
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
                             { developerExtrasEnabled = true }, _ucWatcher)
                         if not panel then return end
@@ -6372,10 +6370,9 @@ YQIDAQAB
                 ms.dev.keys.show = function()
                     if not ms.dev._keysPanel then
                         local screen  = hs.screen.mainScreen():frame()
-                        local w, h    = 270, 480
-                        local _step   = 24
-                        local x = screen.x + screen.w - 360 - _step * 2 - 20 + _step * 2
-                        local y = screen.y + 20 + _step * 2
+                        local w, h    = 640, 640
+                        local x = screen.x + screen.w - w - 20
+                        local y = screen.y + 68
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
                             { developerExtrasEnabled = true }, _ucKeys)
                         if not panel then return end

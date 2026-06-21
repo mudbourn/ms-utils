@@ -980,11 +980,12 @@
 
             // ── Bridge ─────────────────────────────────────────────────────────
             function sendToHost(msg) {
-                const s = JSON.stringify(msg);
-                if (window.chrome?.webview)
+                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
+                if (window.chrome?.webview) {
                     window.chrome.webview.postMessage(s);
-                else if (window.webkit?.messageHandlers?.ms)
+                } else {
                     window.webkit.messageHandlers.ms.postMessage(s);
+                }
             }
 
             // ── Window drag ────────────────────────────────────────────────────
