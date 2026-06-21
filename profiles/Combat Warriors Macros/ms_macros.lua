@@ -229,6 +229,19 @@
 
             ms.bind.define("superThrow", ThrowTrickFunction,      { sub="superJump",  label="Throw Trick", mod="alt" })
             ms.bind.define("throwLow",   ThrowTrickFunction,      { sub="superThrow", label="Throw Low",   mod="v"   })
+
+            ms.bind.define("superJump", function()
+                if ms.modHeld("superThrow") then ThrowTrickFunction()
+                else HighLeapAssistFunction() end
+            end, {
+                group   = "main",
+                label   = "High Leap Assist",
+                cooldown = 3200,
+                default = {type="mouse", button=3},
+            })
+
+            ms.bind.define("jumpHigh", HighLeapAssistFunction, { sub="superJump", label="Jump High", mod="v" })
+            ms.bind.define("jumpLow",  HighLeapAssistFunction, { sub="superJump", label="Jump Low",  mod="x" })
         -- END --
 
         -- Swing Cancel --
@@ -357,7 +370,7 @@
             })
         -- END --
 
-        -- Action Spammer --
+        -- Action Spammer & Load Second Account --
             local ActionSpammerFunction = ms.fn(function()
                 local d3 = getD3()
                 ms.type("z")
@@ -375,17 +388,7 @@
                 ms.wait(60)
             end)
 
-            ms.bind.define("frameDump", function()
-                if ms._currentFlags and ms._currentFlags.alt then SpawnAltFunction()
-                else ActionSpammerFunction() end
-            end, {
-                group   = "optional",
-                label   = "Lag Simulator (Micro Profiler)",
-                default = {type="key", mods={}, key="="},
-            })
-        -- END --
-
-        -- Load Second Account (PRIVATE SERVER, MUST HAVE PSCMDS) --
+            -- (defined before frameDump to avoid a forward-reference)
             local SpawnAltFunction = ms.fn(function()
                 local t = 100
                     ms.sound(SpawnAltSound, true)
@@ -419,7 +422,16 @@
                     ms.type("return")
             end)
 
-            ms.bind.define("spawnAlt", SpawnAltFunction, { sub="frameDump",  label="Load Second Account", mod="alt" })
+            ms.bind.define("frameDump", function()
+                if ms._currentFlags and ms._currentFlags.alt then SpawnAltFunction()
+                else ActionSpammerFunction() end
+            end, {
+                group   = "optional",
+                label   = "Lag Simulator (Micro Profiler)",
+                default = {type="key", mods={}, key="="},
+            })
+
+            ms.bind.define("spawnAlt", SpawnAltFunction, { sub="frameDump", label="Load Second Account", mod="alt" })
         -- END --
 
         -- Mouse Position Grabber --
