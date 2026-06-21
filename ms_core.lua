@@ -1791,6 +1791,185 @@ YQIDAQAB
                     end)
                 end
 
+                -- Exports the current active profile as a .mspkg zip package.
+                -- Bundles ms_macros.lua + optional defaults/theme/sounds into
+                -- ~/Downloads/<name>.mspkg and reveals it in Finder.
+                local function exportProfilePkg()
+                    ms.playSlot("alert")
+                    local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                    local name = sanitizeName((ms.macroMeta and ms.macroMeta.name) or "unnamed")
+                    local outName = name .. ".mspkg"
+                    local outPath = os.getenv("HOME") .. "/Downloads/" .. outName
+                    local tmpDir  = archivePath .. "mspkg_export/"
+                    os.execute("mkdir -p " .. sq(archivePath))
+                    os.execute("rm -rf " .. sq(tmpDir))
+                    os.execute("mkdir -p " .. sq(tmpDir))
+                    -- ms_macros.lua (required)
+                    local _, cpOk = hs.execute("/bin/cp " .. sq(macrosPath) .. " " .. sq(tmpDir .. "ms_macros.lua"))
+                    if not hs.fs.attributes(tmpDir .. "ms_macros.lua") then
+                        ms.alert("Export failed: could not read ms_macros.lua.", 4)
+                        os.execute("rm -rf " .. sq(tmpDir)); return
+                    end
+                    -- ms_settings_default.json (optional)
+                    if hs.fs.attributes(defaultPath) then
+                        hs.execute("/bin/cp " .. sq(defaultPath) .. " " .. sq(tmpDir .. "ms_settings_default.json"))
+                    end
+                    -- ms_theme.json (optional)
+                    if hs.fs.attributes(themePath) then
+                        hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(tmpDir .. "ms_theme.json"))
+                    end
+                    -- Sounds referenced in ms.soundAssign that are user-imported (optional)
+                    local soundsDir = tmpDir .. "sounds/"
+                    local soundsCopied = 0
+                    for _, soundName in pairs(ms.soundAssign or {}) do
+                        local filename = soundName and ms.importedSounds and ms.importedSounds[soundName]
+                        if filename then
+                            local srcSnd = SoundLib .. filename
+                            if hs.fs.attributes(srcSnd) then
+                                os.execute("mkdir -p " .. sq(soundsDir))
+                                hs.execute("/bin/cp " .. sq(srcSnd) .. " " .. sq(soundsDir .. filename))
+                                soundsCopied = soundsCopied + 1
+                            end
+                        end
+                    end
+                    -- Zip the staging dir with relative paths
+                    hs.execute("cd " .. sq(tmpDir) .. " && zip -r " .. sq(outPath) .. " . 2>/dev/null")
+                    os.execute("rm -rf " .. sq(tmpDir))
+                    if hs.fs.attributes(outPath) then
+                        ms.playSlot("update")
+                        hs.execute("open -R " .. sq(outPath))
+                        local msg = "Exported " .. outName .. " to ~/Downloads/"
+                        if soundsCopied > 0 then
+                            msg = msg .. "\n" .. soundsCopied .. " sound" .. (soundsCopied > 1 and "s" or "") .. " bundled."
+                        end
+                        ms.alert(msg, 5, true)
+                    else
+                        ms.alert("Export failed: could not create " .. outName .. ".", 4)
+                    end
+                end
+
+                -- Imports a .mspkg zip package into profiles/.
+                -- Validates ms_macros.lua, copies optional assets, auto-adds bundled sounds.
+                local function importProfilePkg()
+                    ms.playSlot("alert")
+                    hs.focus()
+                    local result = hs.dialog.chooseFileOrFolder(
+                        "Select a .mspkg profile package to import",
+                        os.getenv("HOME") .. "/Downloads/",
+                        true, false, false, { "mspkg", "zip" }
+                    )
+                    local roblox = hs.application.get("Roblox")
+                    local selectedPath
+                    for _, v in pairs(result or {}) do
+                        if type(v) == "string" then selectedPath = v; break end
+                    end
+                    if not selectedPath then
+                        if roblox then pcall(function() roblox:activate() end) end
+                        return
+                    end
+                    local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                    local tmpDir = archivePath .. "mspkg_import/"
+                    os.execute("mkdir -p " .. sq(archivePath))
+                    os.execute("rm -rf " .. sq(tmpDir))
+                    os.execute("mkdir -p " .. sq(tmpDir))
+                    hs.execute("unzip -o " .. sq(selectedPath) .. " -d " .. sq(tmpDir) .. " 2>/dev/null")
+                    local macroSrc = tmpDir .. "ms_macros.lua"
+                    if not hs.fs.attributes(macroSrc) then
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Import failed: package does not contain ms_macros.lua.", 5)
+                        os.execute("rm -rf " .. sq(tmpDir)); return
+                    end
+                    local mf = io.open(macroSrc, "rb")
+                    if not mf then
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Import failed: could not read ms_macros.lua from package.", 4)
+                        os.execute("rm -rf " .. sq(tmpDir)); return
+                    end
+                    local content = mf:read("*all"); mf:close()
+                    local auditErrs = auditMacros(content)
+                    if #auditErrs > 0 then
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Import rejected \xe2\x80\x94 security scan failed:\n  \xe2\x80\xa2 " .. table.concat(auditErrs, "\n  \xe2\x80\xa2 "), 8)
+                        os.execute("rm -rf " .. sq(tmpDir)); return
+                    end
+                    local meta = readMacroMeta(macroSrc)
+                    if not meta or not meta.name or meta.name == "" then
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Import failed: could not read profile name from ms_macros.lua.", 5)
+                        os.execute("rm -rf " .. sq(tmpDir)); return
+                    end
+                    local folderName = sanitizeName(meta.name)
+                    hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
+                    -- ms_macros.lua
+                    local dst = profilesPath .. folderName .. "/ms_macros.lua"
+                    local copied = false
+                    local gf = io.open(dst, "wb")
+                    if gf then gf:write(content); gf:close(); copied = true end
+                    if not copied then
+                        local _, st = hs.execute("/bin/cp " .. sq(macroSrc) .. " " .. sq(dst))
+                        copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
+                    end
+                    if not copied then
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Import failed: could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if needed.", 5)
+                        os.execute("rm -rf " .. sq(tmpDir)); return
+                    end
+                    -- ms_settings_default.json (optional)
+                    local defSrc = tmpDir .. "ms_settings_default.json"
+                    if hs.fs.attributes(defSrc) then
+                        hs.execute("/bin/cp " .. sq(defSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
+                    end
+                    -- ms_theme.json (optional)
+                    local themeSrc = tmpDir .. "ms_theme.json"
+                    if hs.fs.attributes(themeSrc) then
+                        hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
+                    end
+                    -- sounds/ (optional) — copy into SoundLib, skip existing, track in importedSounds
+                    local soundsDir = tmpDir .. "sounds/"
+                    local soundsAdded = {}
+                    if hs.fs.attributes(soundsDir) then
+                        local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
+                        if not hs.fs.attributes(slibDir) then
+                            hs.execute("mkdir -p '" .. SoundLib .. "'")
+                        end
+                        for file in hs.fs.dir(soundsDir) do
+                            if file ~= "." and file ~= ".." then
+                                local importName = file:match("^(.+)%.[^%.]+$") or file
+                                local srcSnd = soundsDir .. file
+                                local dstSnd = SoundLib .. file
+                                if not hs.fs.attributes(dstSnd) then
+                                    local sf = io.open(srcSnd, "rb")
+                                    if sf then
+                                        local data = sf:read("*all"); sf:close()
+                                        local out = io.open(dstSnd, "wb")
+                                        if out then
+                                            out:write(data); out:close()
+                                            ms.importedSounds = ms.importedSounds or {}
+                                            ms.importedSounds[importName] = file
+                                            table.insert(soundsAdded, importName)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        if #soundsAdded > 0 then
+                            ms.saveSettings()
+                            ms._discoverSounds()
+                        end
+                    end
+                    os.execute("rm -rf " .. sq(tmpDir))
+                    if roblox then pcall(function() roblox:activate() end) end
+                    ms.playSlot("update")
+                    hs.timer.doAfter(0.2, function()
+                        local msg = "\"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles."
+                        if #soundsAdded > 0 then
+                            msg = msg .. "\n" .. #soundsAdded .. " sound" .. (#soundsAdded > 1 and "s" or "") .. " added to library."
+                        end
+                        ms.alert(msg, 6, true)
+                        ms.ui.refresh()
+                    end)
+                end
+
                 -- ── End Profile Management ───────────────────────────────────────────
 
                 -- ── System Integrity / Update System ─────────────────────────────────
@@ -5214,7 +5393,9 @@ YQIDAQAB
                 switchProfile = function(data) if data.name then switchProfile(data.name) end end,
 
                 -- importProfile() drives its own native file picker / alerts.
-                importProfile = function() importProfile() end,
+                importProfile    = function() importProfile() end,
+                importProfilePkg = function() importProfilePkg() end,
+                exportProfilePkg = function() exportProfilePkg() end,
 
                 importSounds = function()
                     ms.playSlot("alert")
