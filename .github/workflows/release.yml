@@ -43,20 +43,22 @@ jobs:
           fi
 
           # Write MANIFEST.json.
-          python3 - <<PYEOF
+          # Values are passed via env vars to avoid shell-quoting inside Python.
+          VERSION="$VERSION" SHA256="$SHA256" URL="$URL" SIG="$SIG" \
+          python3 -c "
 import json, os
 m = {
-    "version": "$VERSION",
-    "sha256":  "$SHA256",
-    "url":     "$URL",
+    'version': os.environ['VERSION'],
+    'sha256':  os.environ['SHA256'],
+    'url':     os.environ['URL'],
 }
-sig = "$SIG"
+sig = os.environ.get('SIG', '')
 if sig:
-    m["signature"] = sig
-with open("MANIFEST.json", "w") as f:
+    m['signature'] = sig
+with open('MANIFEST.json', 'w') as f:
     json.dump(m, f, indent=2)
-    f.write("\n")
-PYEOF
+    f.write('\\n')
+"
 
       - name: Commit MANIFEST.json
         run: |
