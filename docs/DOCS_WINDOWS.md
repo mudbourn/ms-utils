@@ -1,13 +1,13 @@
 # mudscript Utility Library — Windows Reference
 
-> **Runtime:** `ms_windows.ahk` — AutoHotkey v2 mirror of the `ms.*` API from `ms_core.lua`.  
-> **Macro file:** your `.ahk` script — `#Include ms_windows.ahk` at the top, then write macros using the same `ms.*` calls.
+> **Runtime:** `ms_core.ahk` — AutoHotkey v2 mirror of the `ms.*` API from `ms_core.lua`.  
+> **Macro file:** your `.ahk` script — `#Include ms_core.ahk` at the top, then write macros using the same `ms.*` calls.
 
 ---
 
 ## 1. Overview
 
-The Windows runtime mirrors the full `ms.*` API so that macro logic written for macOS can be ported with minimal changes. The runtime file is `ms_windows.ahk`; include it at the top of your macro script.
+The Windows runtime mirrors the full `ms.*` API so that macro logic written for macOS can be ported with minimal changes. The runtime file is `ms_core.ahk`; include it at the top of your macro script.
 
 Every macro file has the same four sections as `ms_macros.lua`:
 
