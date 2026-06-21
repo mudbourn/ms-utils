@@ -6,6 +6,7 @@ data/ms_settings.json
 data/ms_theme.json
 
 # Developer tool logs
+data/ms_dev.log
 data/guardian_agent.log
 
 # Backup archives
@@ -24,3 +25,6 @@ Spoons/
 lib/WebView2.ahk
 lib/WebView2/
 lib/Jxon.ahk
+
+# Development planning docs — not shipped
+docs/WINDOWS_PORT_PLAN.md
