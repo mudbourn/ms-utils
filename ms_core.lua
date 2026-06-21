@@ -3483,7 +3483,7 @@ YQIDAQAB
                         return {
                             { title = "About", fn = function()
                                 ms.playSlot("interact")
-                                ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 10)
+                                ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn — https://mudbourn.info", 6)
                                 if ms.macroMeta then
                                     local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
                                     if ms.macroMeta.author then msg = msg .. "By: " .. ms.macroMeta.author end
