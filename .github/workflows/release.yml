@@ -20,26 +20,39 @@ jobs:
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
-          SHA256=$(shasum -a 256 ms_core.lua | awk '{print $1}')
+          # sha256sum is the standard Linux command; produces the same output as
+          # macOS's `shasum -a 256`.
+          SHA256=$(sha256sum ms_core.lua | awk '{print $1}')
           VERSION=$(python3 -c "import json; print(json.load(open('MANIFEST.json')).get('version','1.0.0'))")
           URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua"
+          SIG=""
 
-          # Write private key, sign the SHA-256 hex string, clean up.
-          printf '%s' "$MS_SIGNING_KEY" > /tmp/private.pem
-          printf '%s' "$SHA256"         > /tmp/msg.bin
-          openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
-          SIG=$(base64 -w0 /tmp/sig.bin)
-          rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
+          # Sign only when the private key secret is available.
+          # If MS_SIGNING_KEY is not yet configured the workflow still succeeds
+          # and stamps the hash — the signature field is simply omitted until
+          # the secret is added and the workflow re-runs.
+          if [ -n "$MS_SIGNING_KEY" ]; then
+            printf '%s\n' "$MS_SIGNING_KEY" > /tmp/private.pem
+            printf '%s'   "$SHA256"         > /tmp/msg.bin
+            openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
+            SIG=$(base64 -w0 /tmp/sig.bin)
+            rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
+            echo "Signed — signature: ${SIG:0:32}…"
+          else
+            echo "Warning: MS_SIGNING_KEY secret not set — stamping hash only, no signature."
+          fi
 
-          # Write MANIFEST.json with updated hash + signature.
+          # Write MANIFEST.json.
           python3 - <<PYEOF
-import json
+import json, os
 m = {
-    "version":   "$VERSION",
-    "sha256":    "$SHA256",
-    "url":       "$URL",
-    "signature": "$SIG",
+    "version": "$VERSION",
+    "sha256":  "$SHA256",
+    "url":     "$URL",
 }
+sig = "$SIG"
+if sig:
+    m["signature"] = sig
 with open("MANIFEST.json", "w") as f:
     json.dump(m, f, indent=2)
     f.write("\n")
