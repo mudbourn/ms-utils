@@ -1813,22 +1813,6 @@
                                 return
                             end
                             ms.integrity.writeTrustedHash(actualHash)
-                            -- Re-stamp the local MANIFEST.json so it always reflects the
-                            -- installed file.  Users can't push to GitHub, but keeping the
-                            -- local copy in sync means the Guardian's first-run auto-seed
-                            -- works correctly after every update without manual intervention.
-                            pcall(function()
-                                local mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
-                                local mf    = io.open(mPath, "w")
-                                if mf then
-                                    mf:write(hs.json.encode({
-                                        version = newVersion,
-                                        sha256  = actualHash,
-                                        url     = manifest.url,
-                                    }, true))
-                                    mf:close()
-                                end
-                            end)
                             ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
                             hs.timer.doAfter(3, function() hs.reload() end)
                         end)
