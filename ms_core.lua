@@ -214,7 +214,7 @@ YQIDAQAB
                 _keysPanelPos    = nil,
                 _activeKeys      = {},
             }
-            local _devLogPath = os.getenv("HOME") .. "/.hammerspoon/data/ms_dev.log"
+            local _devLogPath = os.getenv("HOME") .. "/Documents/ms_dev.log"
             local _devBusy          = false
             local _devKeyNoticeSent = false  -- true after first key notice; reset on any non-key event
 
