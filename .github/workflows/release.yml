@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [ms_core.lua]
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute hash and sign MANIFEST
+        env:
+          MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
+        run: |
+          SHA256=$(shasum -a 256 ms_core.lua | awk '{print $1}')
+          VERSION=$(python3 -c "import json; print(json.load(open('MANIFEST.json')).get('version','1.0.0'))")
+          URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua"
+
+          # Write private key, sign the SHA-256 hex string, clean up.
+          printf '%s' "$MS_SIGNING_KEY" > /tmp/private.pem
+          printf '%s' "$SHA256"         > /tmp/msg.bin
+          openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
+          SIG=$(base64 -w0 /tmp/sig.bin)
+          rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
+
+          # Write MANIFEST.json with updated hash + signature.
+          python3 - <<PYEOF
+import json
+m = {
+    "version":   "$VERSION",
+    "sha256":    "$SHA256",
+    "url":       "$URL",
+    "signature": "$SIG",
+}
+with open("MANIFEST.json", "w") as f:
+    json.dump(m, f, indent=2)
+    f.write("\n")
+PYEOF
+
+      - name: Commit MANIFEST.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.json
+          git diff --staged --quiet || git commit -m "chore: auto-stamp MANIFEST [skip ci]"
+          git push

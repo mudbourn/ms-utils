@@ -139,6 +139,20 @@
             ms._docsURL           = "https://docs-ms.mudbourn.info"  -- opened by Settings › Documentation
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
 
+            -- RSA-2048 public key used to verify MANIFEST.json signatures.
+            -- The matching private key lives in GitHub Secrets (MS_SIGNING_KEY) and
+            -- is never stored in this repository.  GitHub Actions signs every
+            -- MANIFEST.json automatically whenever ms_core.lua is pushed to main.
+            -- Replace this placeholder after running the one-time key generation:
+            --   openssl genrsa -out private.pem 2048
+            --   openssl rsa -in private.pem -pubout -out public.pem
+            --   → paste public.pem content here, add private.pem to GitHub Secrets
+            ms._updatePublicKey = [[
+-----BEGIN PUBLIC KEY-----
+PLACEHOLDER - REPLACE WITH YOUR RSA PUBLIC KEY
+-----END PUBLIC KEY-----
+]]
+
             -- User Settings & Menu API State ─────────────────────────────────────
             ms.settings          = {}  -- user settings API namespace
             ms.menu              = {}  -- custom section API namespace (ms.menu.define)
@@ -1763,6 +1777,42 @@
                         if not manifest or not manifest.sha256 or not manifest.url then
                             ms.alert("Update failed: manifest missing 'sha256' or 'url' field.", 5)
                             return
+                        end
+                        -- Verify the manifest signature when a public key is configured.
+                        -- A missing signature field is allowed (backward-compat / unsigned
+                        -- releases during development).  An INVALID signature is a hard
+                        -- abort — it means the manifest was tampered with after signing.
+                        if manifest.signature and manifest.signature ~= ""
+                            and ms._updatePublicKey
+                            and not ms._updatePublicKey:find("PLACEHOLDER") then
+                            local _tmpDir  = archivePath
+                            local _keyPath = _tmpDir .. "upd_pub.pem"
+                            local _sigPath = _tmpDir .. "upd_sig.bin"
+                            local _msgPath = _tmpDir .. "upd_msg.bin"
+                            os.execute("mkdir -p '" .. _tmpDir .. "'")
+                            -- Write public key.
+                            local _kf = io.open(_keyPath, "w")
+                            if _kf then _kf:write(ms._updatePublicKey); _kf:close() end
+                            -- Decode base64 signature to binary.
+                            local _sf = io.open(_sigPath .. ".b64", "w")
+                            if _sf then _sf:write(manifest.signature); _sf:close() end
+                            hs.execute("base64 -d '" .. _sigPath .. ".b64' > '" .. _sigPath .. "' 2>/dev/null")
+                            os.remove(_sigPath .. ".b64")
+                            -- Write the signed message (the sha256 hex string).
+                            local _mf = io.open(_msgPath, "w")
+                            if _mf then _mf:write(manifest.sha256:lower()); _mf:close() end
+                            -- Verify.
+                            local _, _ok = hs.execute(
+                                "openssl dgst -sha256 -verify '" .. _keyPath ..
+                                "' -signature '" .. _sigPath ..
+                                "' '" .. _msgPath .. "' 2>/dev/null"
+                            )
+                            os.remove(_keyPath); os.remove(_sigPath); os.remove(_msgPath)
+                            if not _ok then
+                                ms.alert("Update aborted: manifest signature is invalid.\n"
+                                    .. "This may indicate a tampered or forged update.", 8)
+                                return
+                            end
                         end
                         local newVersion   = manifest.version or "?"
                         local expectedHash = manifest.sha256:lower()

@@ -13,3 +13,5 @@ Spoons/
 
 # macOS
 .DS_Store
+private.pem
+*.pem

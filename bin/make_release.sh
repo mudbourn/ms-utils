@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
 # bin/make_release.sh
 # ─────────────────────────────────────────────────────────────────────────────
-# Stamps the SHA-256 of ms_core.lua into MANIFEST.json so that:
-#   1. The auto-update system can verify downloaded files against it.
-#   2. Fresh installs auto-seed the trusted hash on first load — no manual
-#      "Trust Current Version" step required for clean GitHub installs.
+# Stamps the SHA-256 of ms_core.lua into MANIFEST.json locally.
+# Signing is handled automatically by GitHub Actions (.github/workflows/release.yml)
+# whenever ms_core.lua is pushed to main — you do not need to sign manually.
 #
-# Run this before every commit that changes ms_core.lua:
+# Use this script when you want to verify the hash locally before pushing,
+# or to bump the version number:
 #   bash bin/make_release.sh [version]
-#
-# The optional version argument (e.g. "1.2.0") updates MANIFEST.json's
-# "version" field.  If omitted, the existing version is preserved.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail

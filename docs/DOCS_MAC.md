@@ -1,6 +1,6 @@
 # mudscript Utility Library — Reference
 
-> **Scope:** everything exposed through the `ms` table and related globals in `init.lua`.  
+> **Scope:** everything exposed through the `ms` table and related globals in `ms_core.lua`.  
 > **Macro file:** `ms_macros.lua` — loaded automatically on every reload; the only file you normally edit.
 
 ---
@@ -934,7 +934,7 @@ These are plain globals available from `ms_macros.lua`.
 | `ms.soundEnabled` | Master on/off (bool) |
 | `ms.soundVolume` | Volume 0–100 |
 | `ms.soundAssign` | Per-slot sound overrides: `{ load=name, update=name, hover=name, … }`. See §12 for all slot names. |
-| `ms._updateManifestURL` | Set to a MANIFEST.json URL to enable the Check for Update feature. `nil` by default. |
+| `ms._updateManifestURL` | URL of the `MANIFEST.json` used by the update system. Points to the GitHub repo by default. |
 
 ---
 
@@ -959,9 +959,9 @@ These are plain globals available from `ms_macros.lua`.
 
 ### Overview
 
-The system integrity check detects unauthorised modifications to `init.lua` by comparing its SHA-256 hash to a stored baseline. The update system fetches a new `init.lua` from a URL you provide, verifies its hash before installing, backs up the old file, and reloads automatically.
+The system integrity check detects unauthorised modifications to `ms_core.lua` by comparing its SHA-256 hash to a stored baseline. The update system fetches a new `ms_core.lua` from GitHub, verifies its signature and hash before installing, backs up the old file, and reloads automatically.
 
-The trusted hash is stored in `~/.hammerspoon/.ms_trusted_hash` — one line, 64 hex characters. It is only written when you explicitly trust a version; normal reloads never change it.
+The trusted hash is stored in `~/.hammerspoon/data/.ms_trusted_hash` — one line, 64 hex characters. It is seeded automatically from `MANIFEST.json` on a clean install, and updated after every successful update. Normal reloads never change it.
 
 ---
 
@@ -994,7 +994,7 @@ Synchronously SHA-256 hashes a file via `shasum -a 256`. Returns the 64-characte
 
 ### `ms.integrity.readTrustedHash()` / `ms.integrity.writeTrustedHash(hash)`
 
-Read or write the baseline hash file at `~/.hammerspoon/.ms_trusted_hash`. `readTrustedHash` returns the hash string or `nil` if the file doesn't exist.
+Read or write the baseline hash file at `~/.hammerspoon/data/.ms_trusted_hash`.
 
 ---
 
