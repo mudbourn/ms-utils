@@ -1901,21 +1901,20 @@ YQIDAQAB
                             -- openssl base64 -d works on both macOS LibreSSL and Linux OpenSSL.
                             -- The standard `base64` command uses -D on macOS and -d on Linux,
                             -- so openssl is the portable choice.
-                            hs.execute("openssl base64 -d -in '" .. _sigPath .. ".b64' -out '" .. _sigPath .. "' 2>/dev/null")
+                            hs.execute("openssl base64 -d -in '" .. _sigPath .. ".b64' -out '" .. _sigPath .. "'")
                             os.remove(_sigPath .. ".b64")
                             -- Write the signed message (the sha256 hex string).
                             local _mf = io.open(_msgPath, "w")
                             if _mf then _mf:write(manifest.sha256:lower()); _mf:close() end
-                            -- Verify.
-                            local _, _ok = hs.execute(
+                            -- Verify — capture output so errors surface in the alert.
+                            local _out, _ok = hs.execute(
                                 "openssl dgst -sha256 -verify '" .. _keyPath ..
                                 "' -signature '" .. _sigPath ..
-                                "' '" .. _msgPath .. "' 2>/dev/null"
+                                "' '" .. _msgPath .. "'"
                             )
                             os.remove(_keyPath); os.remove(_sigPath); os.remove(_msgPath)
                             if not _ok then
-                                ms.alert("Update aborted: manifest signature is invalid.\n"
-                                    .. "This may indicate a tampered or forged update.", 8)
+                                ms.alert("Update aborted: signature verification failed.\n" .. tostring(_out), 12)
                                 return
                             end
                         end
