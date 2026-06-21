@@ -1,5 +1,6 @@
 {
-  "sha256" : "4066dc3edb72ab999f84dee221c79d2e7a1c456c1096bff0d92e5e7290994296",
-  "url" : "https:\/\/raw.githubusercontent.com\/mudbourn\/ms-utils\/main\/ms_core.lua",
-  "version" : "1.0.0"
+  "version": "1.0.0",
+  "sha256": "ba58a7c34ddbf3445e716e249a17decaf6f2c7fa65138c517a54cc6786fb4e60",
+  "url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua",
+  "signature": "Rynl+xZKVsiWbY0BF5BhGpbzj0JisxvRKka19X2QDkIqkueGNuz/OeRiKMoAITICOtIHbvLkFPReL04xKiHzlhHrsFn+aTTk9FgsLagyIS57m64fTjjh1h3ioMzpwNDrbwHf2GGLS3QD5C07JPEN7yrpC0L/umFWVEpRRQ3AaRpM+ck+GkbQ3Qgc/1TKTEB6aYLaYsX2gBHcs0wyevDfg7bFQXxWMSBS6/FeRq9gCW8YLTafHuAJzYCplpdmseXEtwcGOPd0wv/L5GFyPeHXfLOvV7ymaOUfzrufRsGZBB/DxrswX2FHJYb7INcIYeTy0Xwojs089VlUWsy6JsrSjw=="
 }
