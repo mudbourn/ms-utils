@@ -3977,9 +3977,12 @@
                             ms.setMacros(1)
                         end
                     else
-                        -- If the settings panel is open, this is just the webview taking
-                        -- focus — don't disable macros or change any state at all.
-                        if ms.ui._open then return end
+                        -- If the settings panel is open and Hammerspoon itself is taking
+                        -- focus, this is just the webview — don't disable macros or
+                        -- change any state at all.  But if a third app (browser, terminal,
+                        -- etc.) activates while the panel is open, still clear
+                        -- ms._robloxActive so that / and return don't fire outside Roblox.
+                        if ms.ui._open and appName == "Hammerspoon" then return end
                         ms._inputOpen    = (appName == "Hammerspoon") and ms._robloxActive
                         ms._robloxActive = false
                         if BindValidity == 1 then
@@ -5970,11 +5973,32 @@
         ms.bind.rebind()
         ms.socdApply()
         -- System integrity: mismatch is impossible here — the guardian blocked it at
-        -- load time before any ms code ran. Only surface the first-run reminder.
+        -- load time before any ms code ran.  If no trusted hash exists yet, try to
+        -- auto-seed from MANIFEST.json before showing the manual-trust reminder.
+        -- This means a clean install cloned from GitHub is trusted silently on first
+        -- run — no "Trust Current Version" needed — as long as the developer kept
+        -- MANIFEST.json in sync (via bin/make_release.sh) before pushing.
         hs.timer.doAfter(3, function()
-            if ms.integrity.check() == "uninitialized" then
-                ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
+            if ms.integrity.check() ~= "uninitialized" then return end
+            -- Attempt bootstrap: read sha256 from MANIFEST.json and compare to
+            -- the live file.  Only trust if they match exactly — this prevents
+            -- a stale or tampered MANIFEST from silently seeding the wrong hash.
+            local _mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
+            local _mf    = io.open(_mPath, "r")
+            if _mf then
+                local _ok, _manifest = pcall(hs.json.decode, _mf:read("*all")); _mf:close()
+                if _ok and type(_manifest) == "table"
+                    and type(_manifest.sha256) == "string"
+                    and #_manifest.sha256 == 64 then
+                    local _cur = ms.integrity.hashFile(corePath)
+                    if _cur and _cur:lower() == _manifest.sha256:lower() then
+                        ms.integrity.writeTrustedHash(_cur)
+                        return  -- clean install — seeded silently, no alert needed
+                    end
+                end
             end
+            -- MANIFEST missing, stale, or hash mismatch — ask the user to trust manually.
+            ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
         end)
         -- Play the load-complete sound right after startup finishes.
         -- loadfinish is still 0 here (toast suppression), but playSlot
