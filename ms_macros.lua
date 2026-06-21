@@ -34,6 +34,7 @@
             local JumpNormalSound = SoundLib .. "JumpNormal.wav"
             local ThrowTrickSound = SoundLib .. "ThrowTrick.wav"
             local SpawnAltSound   = SoundLib .. "SpawnAlt.wav"
+            local ThrowTrickEndSound   = SoundLib .. "ThrowTrickEnd.wav"
 
 
             local getD1 = function()
@@ -237,6 +238,7 @@
                     ms.wait(20)
                     ms.scroll("down", 2000)
                     ms.wait(3000)
+                    ms.sound(ThrowTrickSound, true)
                 end
                 if not ThrowLow() then ThrowDefault() end
             end)
