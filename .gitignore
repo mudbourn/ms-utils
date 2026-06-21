@@ -20,6 +20,3 @@ Spoons/
 
 # Key files — never commit
 *.pem
-private.pem
-*.pem
-*.pem
