@@ -1898,7 +1898,10 @@ YQIDAQAB
                             -- Decode base64 signature to binary.
                             local _sf = io.open(_sigPath .. ".b64", "w")
                             if _sf then _sf:write(manifest.signature); _sf:close() end
-                            hs.execute("base64 -d '" .. _sigPath .. ".b64' > '" .. _sigPath .. "' 2>/dev/null")
+                            -- openssl base64 -d works on both macOS LibreSSL and Linux OpenSSL.
+                            -- The standard `base64` command uses -D on macOS and -d on Linux,
+                            -- so openssl is the portable choice.
+                            hs.execute("openssl base64 -d -in '" .. _sigPath .. ".b64' -out '" .. _sigPath .. "' 2>/dev/null")
                             os.remove(_sigPath .. ".b64")
                             -- Write the signed message (the sha256 hex string).
                             local _mf = io.open(_msgPath, "w")
