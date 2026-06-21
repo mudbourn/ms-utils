@@ -1896,12 +1896,11 @@ YQIDAQAB
                             local _kf = io.open(_keyPath, "w")
                             if _kf then _kf:write(ms._updatePublicKey); _kf:close() end
                             -- Decode base64 signature to binary.
+                            -- Use macOS native `base64 -D` — openssl base64 silently
+                            -- fails to write its -out file on macOS LibreSSL.
                             local _sf = io.open(_sigPath .. ".b64", "w")
                             if _sf then _sf:write(manifest.signature); _sf:close() end
-                            -- openssl base64 -d works on both macOS LibreSSL and Linux OpenSSL.
-                            -- The standard `base64` command uses -D on macOS and -d on Linux,
-                            -- so openssl is the portable choice.
-                            hs.execute("openssl base64 -d -in '" .. _sigPath .. ".b64' -out '" .. _sigPath .. "'")
+                            hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
                             os.remove(_sigPath .. ".b64")
                             -- Write the signed message (the sha256 hex string).
                             local _mf = io.open(_msgPath, "w")
