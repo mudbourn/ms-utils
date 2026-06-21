@@ -308,8 +308,8 @@ YQIDAQAB
                 end
             end
 
-            ms.dev._onMouseEvent = function(button, isDown)
-                _devWrite({ type = "mouse", button = button, down = isDown })
+            ms.dev._onMouseEvent = function(button, isDown, x, y)
+                _devWrite({ type = "mouse", button = button, down = isDown, x = x, y = y })
             end
 
             hs.timer.doAfter(0.3, function()
@@ -722,7 +722,9 @@ YQIDAQAB
                                 end
                             end
                             if entry.mod ~= nil then
-                                ms.modConfig[id] = (entry.mod == "") and nil or entry.mod
+                                                -- "" = explicitly cleared (no modifier); nil = use declared default.
+                                                -- Both are stored as-is so the cleared state persists after reload.
+                                                ms.modConfig[id] = entry.mod
                             end
                             if entry.cooldown ~= nil then
                                 local n = tonumber(entry.cooldown)
@@ -3310,6 +3312,29 @@ YQIDAQAB
                         { title = "-" },
                         { title = (ms.independentBindsEnabled and "✓" or "✗") .. " Independent Binds", fn = function()
                             ms.independentBindsEnabled = not ms.independentBindsEnabled
+                            -- When turning ON from the native menu, also clear conflicting sub binds.
+                            if ms.independentBindsEnabled then
+                                local function _bk(c)
+                                    if not c then return nil end
+                                    if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
+                                    local m = {}; for _, v in ipairs(c.mods or {}) do table.insert(m, v) end
+                                    table.sort(m); return "key:" .. table.concat(m, ",") .. ":" .. (c.key or "")
+                                end
+                                local used = {}
+                                for _, rid in ipairs(ms.registry._defList or {}) do
+                                    local rd = ms.registry._defs[rid]
+                                    if rd and not rd.sub then
+                                        local k = _bk(ms.effectiveBind(rid)); if k then used[k] = rid end
+                                    end
+                                end
+                                for sid, sc in pairs(ms.subBinds or {}) do
+                                    local k = _bk(sc)
+                                    if k then
+                                        if used[k] then ms.subBinds[sid] = nil
+                                        else used[k] = sid end
+                                    end
+                                end
+                            end
                             ms.saveSettings()
                             ms.bind.rebind()
                             ms.playSlot("update")
@@ -3649,6 +3674,10 @@ YQIDAQAB
                 return false
             end
 
+            -- Track previous modifier flag state so flagsChanged can emit
+            -- discrete down/up events to the input monitor.
+            local _prevModFlags = { shift = false, alt = false, ctrl = false, cmd = false }
+
             ms._keyListener = hs.eventtap.new({
                 hs.eventtap.event.types.keyDown,
                 hs.eventtap.event.types.keyUp,
@@ -3669,6 +3698,28 @@ YQIDAQAB
                     ms.keytrack[61] = flags.ctrl
                     ms.keytrack[55] = flags.cmd
                     ms.keytrack[54] = flags.cmd
+                    -- Emit discrete down/up events to the input monitor for each
+                    -- modifier that changed state.
+                    if ms.dev and ms.dev._onKeyEvent then
+                        local now = {
+                            shift = flags.shift and true or false,
+                            alt   = flags.alt   and true or false,
+                            ctrl  = flags.ctrl  and true or false,
+                            cmd   = flags.cmd   and true or false,
+                        }
+                        local modNames = {
+                            { k="shift", code=56, name="shift" },
+                            { k="alt",   code=58, name="alt"   },
+                            { k="ctrl",  code=59, name="ctrl"  },
+                            { k="cmd",   code=55, name="cmd"   },
+                        }
+                        for _, m in ipairs(modNames) do
+                            if now[m.k] ~= _prevModFlags[m.k] then
+                                pcall(ms.dev._onKeyEvent, m.code, m.name, now[m.k])
+                            end
+                        end
+                        _prevModFlags = now
+                    end
                     return false
                 end
 
@@ -3858,7 +3909,9 @@ YQIDAQAB
 
                         -- Always log to the input monitor regardless of BindValidity.
                         if ms.dev and ms.dev._onMouseEvent then
-                            pcall(ms.dev._onMouseEvent, b, isDown)
+                            local _mp = hs.mouse.absolutePosition()
+                            pcall(ms.dev._onMouseEvent, b, isDown,
+                                math.floor(_mp.x), math.floor(_mp.y))
                         end
 
                         if BindValidity ~= 1 then return false end
@@ -5432,7 +5485,38 @@ YQIDAQAB
                 end,
 
                 setIndependentBinds = function(data)
-                    ms.independentBindsEnabled = (data.value == true)
+                    local turningOn = (data.value == true)
+                    ms.independentBindsEnabled = turningOn
+                    -- When turning ON: pre-clear any sub bind that conflicts with a root
+                    -- bind or with another sub bind, so rebind() starts clean.
+                    if turningOn then
+                        local function bindKey(c)
+                            if not c then return nil end
+                            if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
+                            local mods = {}
+                            for _, m in ipairs(c.mods or {}) do table.insert(mods, m) end
+                            table.sort(mods)
+                            return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
+                        end
+                        local usedKeys = {}
+                        for _, id in ipairs(ms.registry._defList or {}) do
+                            local def = ms.registry._defs[id]
+                            if def and not def.sub then
+                                local k = bindKey(ms.effectiveBind(id))
+                                if k then usedKeys[k] = id end
+                            end
+                        end
+                        for subId, c in pairs(ms.subBinds or {}) do
+                            local k = bindKey(c)
+                            if k then
+                                if usedKeys[k] then
+                                    ms.subBinds[subId] = nil
+                                else
+                                    usedKeys[k] = subId
+                                end
+                            end
+                        end
+                    end
                     ms.saveSettings()
                     ms.bind.rebind()
                     ms.playSlot("update")
@@ -5905,6 +5989,11 @@ YQIDAQAB
                     -- Sub-items use subBinds; root binds use bindConfig.
                     if def.sub then
                         ms.subBinds[data.id] = nil
+                        -- In independent bind mode, clearing a sub's bind means it can no
+                        -- longer fire at all — disable it so the UI reflects that.
+                        if ms.independentBindsEnabled then
+                            ms.binds[data.id] = false
+                        end
                     else
                         ms.bindConfig[data.id] = nil
                     end
@@ -5928,10 +6017,12 @@ YQIDAQAB
                     ms.ui.refresh()
                 end,
 
-                -- Clears the modifier key for a sub-item, reverting to its declared default.
+                -- Clears the modifier key for a sub-item to "no modifier" (empty string).
+                -- An empty string means "explicitly cleared", distinct from nil which means
+                -- "use declared default". getMod() returns "" → keystate("") = false.
                 clearModifier = function(data)
                     if not data.id then return end
-                    ms.modConfig[data.id] = nil
+                    ms.modConfig[data.id] = ""
                     ms.saveSettings()
                     ms.bind.rebind()
                     ms.playSlot("reset")

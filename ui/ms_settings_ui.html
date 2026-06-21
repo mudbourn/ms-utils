@@ -476,7 +476,7 @@
             }
             .pill.warning {
                 background: var(--warning);
-                color: #2f3027;
+                color: #1a1208;
             }
 
             /* ── Action buttons ──────────────────────────────────────────────── */
@@ -1407,10 +1407,27 @@
                         onmouseenter: () => playSlot("hover"),
                     });
                     r.appendChild(h("div", { cls: "row-label" }, sub.label));
-                    if (sub.mod)
-                        r.appendChild(h("span", { cls: "pill" }, sub.mod));
-                    if (sub.bind)
-                        r.appendChild(h("span", { cls: "pill" }, sub.bind));
+                    if (S.independentBindsEnabled) {
+                        // In independent bind mode: show the independent bind as primary.
+                        // Show "unbound" warning when no bind is configured.
+                        if (sub.bind) {
+                            r.appendChild(
+                                h("span", { cls: "pill accent" }, sub.bind),
+                            );
+                        } else {
+                            r.appendChild(
+                                h("span", { cls: "pill warning" }, "unbound"),
+                            );
+                        }
+                        // Modifier shown as a small secondary pill.
+                        if (sub.mod)
+                            r.appendChild(h("span", { cls: "pill" }, sub.mod));
+                    } else {
+                        if (sub.mod)
+                            r.appendChild(h("span", { cls: "pill" }, sub.mod));
+                        if (sub.bind)
+                            r.appendChild(h("span", { cls: "pill" }, sub.bind));
+                    }
                     // If this sub-item itself has sub-items, show them as nested pills.
                     if (sub.subsubs && sub.subsubs.length) {
                         const nest = h("div", { cls: "row-subsubs" });
@@ -1421,6 +1438,65 @@
                                 ss.label,
                             );
                             if (ss.mod) chip.title = "mod: " + ss.mod;
+                            chip.style.cursor = "context-menu";
+                            chip.addEventListener("contextmenu", (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                playSlot("interact");
+                                const items = [
+                                    {
+                                        icon: "⌨",
+                                        label: "Change Modifier\u2026",
+                                        action: () =>
+                                            sendToHost({
+                                                action: "startModRebind",
+                                                id: ss.id,
+                                            }),
+                                    },
+                                ];
+                                if (ss.mod) {
+                                    items.push("divider");
+                                    items.push({
+                                        icon: "↺",
+                                        label: "Clear Modifier",
+                                        danger: true,
+                                        action: () =>
+                                            sendToHost({
+                                                action: "clearModifier",
+                                                id: ss.id,
+                                            }),
+                                    });
+                                }
+                                if (S.independentBindsEnabled) {
+                                    items.push("divider");
+                                    items.push({
+                                        icon: "⌨",
+                                        label: "Rebind Independent\u2026",
+                                        action: () =>
+                                            sendToHost({
+                                                action: "startRebind",
+                                                id: ss.id,
+                                            }),
+                                    });
+                                    if (ss.bind)
+                                        items.push({
+                                            icon: "↺",
+                                            label: "Clear Independent Bind",
+                                            danger: true,
+                                            action: () =>
+                                                sendToHost({
+                                                    action: "resetBind",
+                                                    id: ss.id,
+                                                }),
+                                        });
+                                }
+                                showCtxMenu(
+                                    e.clientX,
+                                    e.clientY,
+                                    items,
+                                    ss.label,
+                                );
+                            });
                             nest.appendChild(chip);
                         });
                         r.appendChild(nest);
