@@ -204,6 +204,102 @@ YQIDAQAB
             require("hs.menubar")
             require("hs.application")
 
+            -- ── Developer Tools — ms.dev ───────────────────────────────────────────────────
+            ms.dev = {
+                _consolePanel    = nil,
+                _watcherPanel    = nil,
+                _keysPanel       = nil,
+                _consolePanelPos = nil,
+                _watcherPanelPos = nil,
+                _keysPanelPos    = nil,
+                _activeKeys      = {},
+            }
+            local _devLogPath = os.getenv("HOME") .. "/.hammerspoon/data/ms_dev.log"
+            local _devBusy          = false
+            local _devKeyNoticeSent = false  -- true after first key notice; reset on any non-key event
+
+            local function _devWrite(entry)
+                if _devBusy then return end
+                _devBusy = true
+                entry.ts = os.date("%H:%M:%S")
+                pcall(function()
+                    local f = io.open(_devLogPath, "a")
+                    if f then f:write(hs.json.encode(entry) .. "\n"); f:close() end
+                end)
+                local ok, json = pcall(hs.json.encode, entry)
+                if ok then
+                    local t = entry.type
+                    -- Key/mouse events go to the Key Monitor only.
+                    -- The console gets one dim notice per burst of key activity;
+                    -- the notice resets whenever any non-key event fires so the
+                    -- next burst of keys shows a fresh line.
+                    if t == "key" or t == "mouse" then
+                        if ms.dev._consolePanel and not _devKeyNoticeSent then
+                            _devKeyNoticeSent = true
+                            local notice = { ts = entry.ts, type = "print",
+                                             msg = "\xe2\x8c\xa8  key activity \xe2\x80\x94 see Key Monitor" }
+                            local nok, njson = pcall(hs.json.encode, notice)
+                            if nok then
+                                pcall(function()
+                                    ms.dev._consolePanel:evaluateJavaScript(
+                                        "appendEntry(" .. njson .. ")")
+                                end)
+                            end
+                        end
+                    else
+                        _devKeyNoticeSent = false  -- reset: next key burst gets a fresh notice
+                        if ms.dev._consolePanel then
+                            pcall(function()
+                                ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                            end)
+                        end
+                    end
+                    if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error") then
+                        pcall(function()
+                            ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                        end)
+                    end
+                    if ms.dev._keysPanel and (t=="key" or t=="mouse") then
+                        pcall(function()
+                            ms.dev._keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                        end)
+                    end
+                end
+                _devBusy = false
+            end
+
+            local _origPrint = print
+            _G.print = function(...)
+                _origPrint(...)
+                local parts = {}
+                for i = 1, select('#', ...) do parts[i] = tostring(select(i, ...)) end
+                _devWrite({ type = "print", msg = table.concat(parts, "\t") })
+            end
+
+            ms.dev._onMacroFire = function(id, label)
+                _devWrite({ type = "macro", id = id, label = label or id })
+            end
+
+            ms.dev._onKeyEvent = function(keyCode, keyName, isDown)
+                _devWrite({ type = "key", key = keyName or ("code:" .. tostring(keyCode)), down = isDown })
+                if isDown then ms.dev._activeKeys[keyCode] = keyName or tostring(keyCode)
+                else            ms.dev._activeKeys[keyCode] = nil end
+                if ms.dev._keysPanel then
+                    local active = {}
+                    for _, name in pairs(ms.dev._activeKeys) do table.insert(active, name) end
+                    local aok, aj = pcall(hs.json.encode, active)
+                    if aok then
+                        pcall(function()
+                            ms.dev._keysPanel:evaluateJavaScript("updateActiveKeys(" .. aj .. ")")
+                        end)
+                    end
+                end
+            end
+
+            ms.dev._onMouseEvent = function(button, isDown)
+                _devWrite({ type = "mouse", button = button, down = isDown })
+            end
+
             hs.timer.doAfter(0.3, function()
                 local roblox = hs.application.get("Roblox")
                 if roblox then
@@ -3390,6 +3486,9 @@ YQIDAQAB
                 if type == hs.eventtap.event.types.keyDown then
                     local isRepeat = ms.keytrack[keyCode] == true
                     ms.keytrack[keyCode] = true
+                    if not isRepeat and ms.dev then
+                        pcall(ms.dev._onKeyEvent, keyCode, hs.keycodes.map[keyCode], true)
+                    end
                     -- Toggle macro state via in-game keys ( / = disable, Enter = enable ).
                     if not isRepeat and ms._robloxActive then
                         if     keyCode == 44 then ms.setMacros(0)
@@ -3421,6 +3520,9 @@ YQIDAQAB
                     end
                 elseif type == hs.eventtap.event.types.keyUp then
                     ms.keytrack[keyCode] = false
+                    if ms.dev then
+                        pcall(ms.dev._onKeyEvent, keyCode, hs.keycodes.map[keyCode], false)
+                    end
                     if ms._keyBindings then
                         for _, binding in pairs(ms._keyBindings) do
                             if binding and binding.keyCode == keyCode then
@@ -4555,6 +4657,7 @@ YQIDAQAB
                                     ms.running[group] = nil
                                 end)
                                 ms._activeSub = id
+                                if ms.dev then pcall(ms.dev._onMacroFire, id, def.label) end
                                 fn()
                             end
                             if c.type == "mouse" then
@@ -4576,6 +4679,7 @@ YQIDAQAB
                                 ms.running[group] = nil
                             end)
                             ms._activeSub = nil  -- clear sub-item state before root bind fires
+                            if ms.dev then pcall(ms.dev._onMacroFire, id, def.label) end
                             fn()
                         end
                         if c.type == "mouse" then
@@ -5298,6 +5402,10 @@ YQIDAQAB
 
                 checkForUpdate = function() ms.integrity.update() end,
 
+                openConsole  = function() ms.dev.console.toggle() end,
+                openWatcher  = function() ms.dev.watcher.toggle() end,
+                openKeys     = function() ms.dev.keys.toggle()   end,
+
                 -- Triggered by right-click › Rebind… on a macro row in the webview.
                 -- Runs the same eventtap capture used by the native menu rebind flow.
                 startRebind = function(data)
@@ -5837,6 +5945,249 @@ YQIDAQAB
                         ms.ui._panel:evaluateJavaScript("openLuaModal(" .. json .. ")")
                     end)
                 end)
+            end
+        -- END --
+
+        -- 13. Developer Panels --
+            do
+                local _devBase = "file://" .. os.getenv("HOME") .. "/.hammerspoon/ui/"
+                local _home    = os.getenv("HOME")
+
+                -- Helper: read the dev log and push history to a panel.
+                local function _loadDevHistory(panel, filter)
+                    local f = io.open(_devLogPath, "r")
+                    if not f then return end
+                    local entries = {}
+                    for line in f:lines() do
+                        local ok, entry = pcall(hs.json.decode, line)
+                        if ok and entry and (not filter or filter(entry)) then
+                            table.insert(entries, entry)
+                        end
+                    end
+                    f:close()
+                    if #entries == 0 then return end
+                    local ok, json = pcall(hs.json.encode, entries)
+                    if ok then
+                        pcall(function()
+                            panel:evaluateJavaScript("loadHistory(" .. json .. ")")
+                        end)
+                    end
+                end
+
+                -- Helper: make a small floating panel.
+                local function _makeDevPanel(ucName, w, h, xOff, yOff)
+                    local uc = hs.webview.usercontent.new(ucName)
+                    local screen = hs.screen.mainScreen():frame()
+                    local x = screen.x + screen.w - w - xOff
+                    local y = screen.y + yOff
+                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h }, { developerExtrasEnabled = true }, uc)
+                    if not panel then return nil, uc end
+                    pcall(function() panel:windowStyle(0) end)
+                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                    pcall(function() panel:allowTextEntry(true) end)
+                    pcall(function() panel:shadow(true) end)
+                    return panel, uc, { x=x, y=y, w=w, h=h }
+                end
+
+                -- ── Console ───────────────────────────────────────────────────────────
+                local _ucCon = hs.webview.usercontent.new("msConsole")
+                _ucCon:setCallback(function(msg)
+                    local ok, data = pcall(hs.json.decode, msg.body)
+                    if not ok or type(data) ~= "table" then return end
+                    if data.action == "execute" and data.code then
+                        -- Try as expression, fall back to statement.
+                        local fn, err = load("return " .. data.code)
+                        if not fn then fn, err = load(data.code) end
+                        if not fn then
+                            _devWrite({ type = "error", msg = err or "syntax error" })
+                        else
+                            local res = table.pack(pcall(fn))
+                            local success = table.remove(res, 1)
+                            if not success then
+                                _devWrite({ type = "error", msg = tostring(res[1]) })
+                            elseif #res > 0 then
+                                local parts = {}
+                                for _, v in ipairs(res) do parts[#parts+1] = tostring(v) end
+                                _devWrite({ type = "result", msg = table.concat(parts, "\t") })
+                            end
+                        end
+                    elseif data.action == "clear" then
+                        local f = io.open(_devLogPath, "w"); if f then f:close() end
+                    elseif data.action == "close" then
+                        if ms.dev._consolePanel then ms.dev._consolePanel:hide() end
+                        ms.dev._consoleOpen = false
+                    elseif data.action == "openWatcher" then
+                        ms.dev.watcher.show()
+                    elseif data.action == "openKeys" then
+                        ms.dev.keys.show()
+                    elseif data.action == "move" and ms.dev._consolePanelPos then
+                        ms.dev._consolePanelPos.x = ms.dev._consolePanelPos.x + (data.dx or 0)
+                        ms.dev._consolePanelPos.y = ms.dev._consolePanelPos.y + (data.dy or 0)
+                        if ms.dev._consolePanel then
+                            pcall(function() ms.dev._consolePanel:frame(ms.dev._consolePanelPos) end)
+                        end
+                    end
+                end)
+
+                ms.dev.console = {}
+                ms.dev.console.show = function()
+                    if not ms.dev._consolePanel then
+                        local screen  = hs.screen.mainScreen():frame()
+                        local w, h    = 360, 640
+                        local _step   = 24
+                        local x = screen.x + screen.w - w - _step * 2 - 20
+                        local y = screen.y + 20
+                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                            { developerExtrasEnabled = true }, _ucCon)
+                        if not panel then return end
+                        pcall(function() panel:windowStyle(0) end)
+                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                        pcall(function() panel:allowTextEntry(true) end)
+                        pcall(function() panel:shadow(true) end)
+                        local html = io.open(_home .. "/.hammerspoon/ui/ms_console.html", "r")
+                        if html then
+                            panel:html(html:read("*all"), _devBase); html:close()
+                        end
+                        ms.dev._consolePanel    = panel
+                        ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
+                        panel:navigationCallback(function()
+                            _loadDevHistory(panel, nil)
+                        end)
+                    end
+                    ms.dev._consolePanel:show()
+                    pcall(function() ms.dev._consolePanel:bringToFront(true) end)
+                    ms.dev._consoleOpen = true
+                end
+                ms.dev.console.hide   = function()
+                    if ms.dev._consolePanel then ms.dev._consolePanel:hide() end
+                    ms.dev._consoleOpen = false
+                end
+                ms.dev.console.toggle = function()
+                    if ms.dev._consoleOpen then ms.dev.console.hide()
+                    else ms.dev.console.show() end
+                end
+
+                -- ── Macro Watcher ─────────────────────────────────────────────────────
+                local _ucWatcher = hs.webview.usercontent.new("msWatcher")
+                _ucWatcher:setCallback(function(msg)
+                    local ok, data = pcall(hs.json.decode, msg.body)
+                    if not ok or type(data) ~= "table" then return end
+                    if data.action == "clear" then
+                        -- Clear only macro/print/error entries from the log (keep keys).
+                        -- Simplest: just clear the whole log.
+                        local f = io.open(_devLogPath, "w"); if f then f:close() end
+                    elseif data.action == "close" then
+                        if ms.dev._watcherPanel then ms.dev._watcherPanel:hide() end
+                        ms.dev._watcherOpen = false
+                    elseif data.action == "move" and ms.dev._watcherPanelPos then
+                        ms.dev._watcherPanelPos.x = ms.dev._watcherPanelPos.x + (data.dx or 0)
+                        ms.dev._watcherPanelPos.y = ms.dev._watcherPanelPos.y + (data.dy or 0)
+                        if ms.dev._watcherPanel then
+                            pcall(function() ms.dev._watcherPanel:frame(ms.dev._watcherPanelPos) end)
+                        end
+                    end
+                end)
+
+                ms.dev.watcher = {}
+                ms.dev.watcher.show = function()
+                    if not ms.dev._watcherPanel then
+                        local screen  = hs.screen.mainScreen():frame()
+                        local w, h    = 270, 480
+                        local _step   = 24
+                        local x = screen.x + screen.w - 360 - _step * 2 - 20 + _step
+                        local y = screen.y + 20 + _step
+                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                            { developerExtrasEnabled = true }, _ucWatcher)
+                        if not panel then return end
+                        pcall(function() panel:windowStyle(0) end)
+                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                        pcall(function() panel:shadow(true) end)
+                        local html = io.open(_home .. "/.hammerspoon/ui/ms_watcher.html", "r")
+                        if html then
+                            panel:html(html:read("*all"), _devBase); html:close()
+                        end
+                        ms.dev._watcherPanel    = panel
+                        ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
+                        panel:navigationCallback(function()
+                            _loadDevHistory(panel, function(e)
+                                return e.type=="macro" or e.type=="print" or e.type=="error"
+                            end)
+                        end)
+                    end
+                    ms.dev._watcherPanel:show()
+                    pcall(function() ms.dev._watcherPanel:bringToFront(true) end)
+                    ms.dev._watcherOpen = true
+                end
+                ms.dev.watcher.hide   = function()
+                    if ms.dev._watcherPanel then ms.dev._watcherPanel:hide() end
+                    ms.dev._watcherOpen = false
+                end
+                ms.dev.watcher.toggle = function()
+                    if ms.dev._watcherOpen then ms.dev.watcher.hide()
+                    else ms.dev.watcher.show() end
+                end
+
+                -- ── Key Monitor ───────────────────────────────────────────────────────
+                local _ucKeys = hs.webview.usercontent.new("msKeys")
+                _ucKeys:setCallback(function(msg)
+                    local ok, data = pcall(hs.json.decode, msg.body)
+                    if not ok or type(data) ~= "table" then return end
+                    if data.action == "clear" then
+                        local f = io.open(_devLogPath, "w"); if f then f:close() end
+                    elseif data.action == "close" then
+                        if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
+                        ms.dev._keysOpen = false
+                    elseif data.action == "move" and ms.dev._keysPanelPos then
+                        ms.dev._keysPanelPos.x = ms.dev._keysPanelPos.x + (data.dx or 0)
+                        ms.dev._keysPanelPos.y = ms.dev._keysPanelPos.y + (data.dy or 0)
+                        if ms.dev._keysPanel then
+                            pcall(function() ms.dev._keysPanel:frame(ms.dev._keysPanelPos) end)
+                        end
+                    end
+                end)
+
+                ms.dev.keys = {}
+                ms.dev.keys.show = function()
+                    if not ms.dev._keysPanel then
+                        local screen  = hs.screen.mainScreen():frame()
+                        local w, h    = 270, 480
+                        local _step   = 24
+                        local x = screen.x + screen.w - 360 - _step * 2 - 20 + _step * 2
+                        local y = screen.y + 20 + _step * 2
+                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                            { developerExtrasEnabled = true }, _ucKeys)
+                        if not panel then return end
+                        pcall(function() panel:windowStyle(0) end)
+                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                        pcall(function() panel:shadow(true) end)
+                        local html = io.open(_home .. "/.hammerspoon/ui/ms_keys.html", "r")
+                        if html then
+                            panel:html(html:read("*all"), _devBase); html:close()
+                        end
+                        ms.dev._keysPanel    = panel
+                        ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
+                        panel:navigationCallback(function()
+                            _loadDevHistory(panel, function(e)
+                                return e.type=="key" or e.type=="mouse"
+                            end)
+                        end)
+                    end
+                    ms.dev._keysPanel:show()
+                    pcall(function() ms.dev._keysPanel:bringToFront(true) end)
+                    ms.dev._keysOpen = true
+                end
+                ms.dev.keys.hide   = function()
+                    if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
+                    ms.dev._keysOpen = false
+                end
+                ms.dev.keys.toggle = function()
+                    if ms.dev._keysOpen then ms.dev.keys.hide()
+                    else ms.dev.keys.show() end
+                end
             end
         -- END --
 

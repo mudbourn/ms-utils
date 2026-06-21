@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            :root {
+                --bg: #060402;
+                --surface: #100806;
+                --surface2: #1c100c;
+                --border: rgba(130, 50, 22, 0.55);
+                --accent: #c41a1a;
+                --text: #f0ddb0;
+                --text2: rgba(210, 165, 100, 0.75);
+                --radius: 3px;
+            }
+
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            html,
+            body {
+                width: 100%;
+                height: 100%;
+                background: var(--bg);
+                color: var(--text);
+                font-family: "Almendra", Palatino, Georgia, serif;
+                font-size: 12px;
+                line-height: 1.5;
+                overflow: hidden;
+            }
+
+            body {
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* ── Titlebar ───────────────────────────────────────────────────── */
+            #titlebar {
+                height: 32px;
+                -webkit-app-region: drag;
+                display: flex;
+                align-items: center;
+                padding: 0 10px 0 14px;
+                border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
+                gap: 6px;
+            }
+
+            #titlebar-text {
+                flex: 1;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text2);
+            }
+
+            .tb-btn {
+                -webkit-app-region: no-drag;
+                height: 20px;
+                padding: 0 8px;
+                background: transparent;
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                color: var(--text2);
+                font-family: inherit;
+                font-size: 11px;
+                cursor: pointer;
+                transition:
+                    background 0.12s,
+                    border-color 0.12s,
+                    color 0.12s;
+            }
+
+            .tb-btn:hover {
+                background: var(--surface2);
+                border-color: var(--accent);
+                color: var(--text);
+            }
+
+            /* ── Active keys section ────────────────────────────────────────── */
+            #active-section {
+                flex-shrink: 0;
+                min-height: 80px;
+                padding: 8px 14px 10px;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            .section-label {
+                font-size: 10px;
+                font-variant: small-caps;
+                letter-spacing: 1px;
+                color: var(--text2);
+                flex-shrink: 0;
+            }
+
+            #pills-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                align-content: flex-start;
+            }
+
+            .key-pill {
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                color: var(--text);
+                font-size: 11px;
+                font-family: inherit;
+                padding: 2px 7px;
+                border-radius: 3px;
+                white-space: nowrap;
+            }
+
+            /* ── Divider ────────────────────────────────────────────────────── */
+            .divider {
+                height: 1px;
+                background: var(--border);
+                flex-shrink: 0;
+            }
+
+            /* ── Recent events section ──────────────────────────────────────── */
+            #recent {
+                flex: 1;
+                overflow-y: auto;
+                padding: 4px 0;
+                min-height: 0;
+            }
+
+            #recent::-webkit-scrollbar {
+                width: 5px;
+            }
+
+            #recent::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            #recent::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 3px;
+            }
+
+            /* ── Entry rows ─────────────────────────────────────────────────── */
+            .entry {
+                display: flex;
+                align-items: baseline;
+                gap: 6px;
+                padding: 2px 14px;
+                font-size: 12px;
+                line-height: 1.55;
+            }
+
+            .entry:hover {
+                background: var(--surface);
+            }
+
+            .ts {
+                color: var(--text2);
+                font-size: 11px;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+
+            .arrow {
+                flex-shrink: 0;
+            }
+
+            .arrow-down {
+                color: var(--text);
+            }
+
+            .arrow-up {
+                color: var(--text2);
+            }
+
+            .arrow-mouse {
+                color: var(--text2);
+            }
+
+            .key-name {
+                color: var(--text);
+                word-break: break-word;
+            }
+
+            .mouse-name {
+                color: #c47820;
+                word-break: break-word;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="titlebar">
+            <span id="titlebar-text">mudscript — key monitor</span>
+            <button class="tb-btn" onclick="clearLog()">[clear]</button>
+            <button class="tb-btn" onclick="closePanel()">[×]</button>
+        </div>
+        <div id="active-section">
+            <span class="section-label">Active</span>
+            <div id="pills-row"></div>
+        </div>
+        <div class="divider"></div>
+        <div id="recent"></div>
+
+        <script>
+            "use strict";
+
+            document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+            // ── Drag ──────────────────────────────────────────────────────────
+            let _dragging = false;
+            (function () {
+                let _drag = null;
+                document
+                    .getElementById("titlebar")
+                    .addEventListener("mousedown", (e) => {
+                        if (e.target.closest(".tb-btn")) return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        _dragging = true;
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            window.webkit.messageHandlers.msKeys.postMessage(
+                                JSON.stringify({
+                                    action: "move",
+                                    dx: ev.screenX - _drag.ox,
+                                    dy: ev.screenY - _drag.oy,
+                                }),
+                            );
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            _dragging = false;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+            })();
+
+            // ── Scroll helpers ─────────────────────────────────────────────────
+            const MAX_ENTRIES = 300;
+            const NEAR_BOTTOM = 48;
+
+            function isNearBottom(el) {
+                return (
+                    el.scrollHeight - el.scrollTop - el.clientHeight <=
+                    NEAR_BOTTOM
+                );
+            }
+
+            // ── Entry builder ──────────────────────────────────────────────────
+            function buildRow(entry) {
+                const row = document.createElement("div");
+                row.className = "entry";
+
+                const ts = document.createElement("span");
+                ts.className = "ts";
+                ts.textContent = "[" + entry.ts + "]";
+                row.appendChild(ts);
+
+                const isMouse = entry.type === "mouse";
+
+                const arrow = document.createElement("span");
+                arrow.className = "arrow";
+                if (isMouse) {
+                    arrow.classList.add("arrow-mouse");
+                    arrow.textContent = "⊙";
+                } else if (entry.down) {
+                    arrow.classList.add("arrow-down");
+                    arrow.textContent = "↓";
+                } else {
+                    arrow.classList.add("arrow-up");
+                    arrow.textContent = "↑";
+                }
+                row.appendChild(arrow);
+
+                const name = document.createElement("span");
+                if (isMouse) {
+                    name.className = "mouse-name";
+                    name.textContent =
+                        "Mouse " + (entry.button != null ? entry.button : "");
+                } else {
+                    name.className = "key-name";
+                    name.textContent = entry.key || "";
+                }
+                row.appendChild(name);
+
+                return row;
+            }
+
+            // ── Public API ─────────────────────────────────────────────────────
+            function appendEntry(entry) {
+                const recent = document.getElementById("recent");
+                const atBottom = isNearBottom(recent);
+                recent.appendChild(buildRow(entry));
+                while (recent.childElementCount > MAX_ENTRIES) {
+                    recent.removeChild(recent.firstElementChild);
+                }
+                if (atBottom) recent.scrollTop = recent.scrollHeight;
+            }
+
+            function loadHistory(entries) {
+                const recent = document.getElementById("recent");
+                recent.innerHTML = "";
+                const frag = document.createDocumentFragment();
+                (entries || []).forEach((e) => frag.appendChild(buildRow(e)));
+                recent.appendChild(frag);
+                recent.scrollTop = recent.scrollHeight;
+            }
+
+            function updateActiveKeys(names) {
+                const row = document.getElementById("pills-row");
+                row.innerHTML = "";
+                (names || []).forEach((name) => {
+                    const pill = document.createElement("span");
+                    pill.className = "key-pill";
+                    pill.textContent = name;
+                    row.appendChild(pill);
+                });
+            }
+
+            // ── Button actions ─────────────────────────────────────────────────
+            function clearLog() {
+                document.getElementById("recent").innerHTML = "";
+                window.webkit.messageHandlers.msKeys.postMessage(
+                    JSON.stringify({ action: "clear" }),
+                );
+            }
+
+            function closePanel() {
+                window.webkit.messageHandlers.msKeys.postMessage(
+                    JSON.stringify({ action: "close" }),
+                );
+            }
+        </script>
+    </body>
+</html>

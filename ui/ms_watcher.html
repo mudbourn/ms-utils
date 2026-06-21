@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            :root {
+                --bg: #060402;
+                --surface: #100806;
+                --surface2: #1c100c;
+                --border: rgba(130, 50, 22, 0.55);
+                --accent: #c41a1a;
+                --text: #f0ddb0;
+                --text2: rgba(210, 165, 100, 0.75);
+                --radius: 3px;
+            }
+
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            html,
+            body {
+                width: 100%;
+                height: 100%;
+                background: var(--bg);
+                color: var(--text);
+                font-family: "Almendra", Palatino, Georgia, serif;
+                font-size: 12px;
+                line-height: 1.5;
+                overflow: hidden;
+            }
+
+            body {
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* ── Titlebar ───────────────────────────────────────────────────── */
+            #titlebar {
+                height: 32px;
+                -webkit-app-region: drag;
+                display: flex;
+                align-items: center;
+                padding: 0 10px 0 14px;
+                border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
+                gap: 6px;
+            }
+
+            #titlebar-text {
+                flex: 1;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text2);
+            }
+
+            .tb-btn {
+                -webkit-app-region: no-drag;
+                height: 20px;
+                padding: 0 8px;
+                background: transparent;
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                color: var(--text2);
+                font-family: inherit;
+                font-size: 11px;
+                cursor: pointer;
+                transition:
+                    background 0.12s,
+                    border-color 0.12s,
+                    color 0.12s;
+            }
+
+            .tb-btn:hover {
+                background: var(--surface2);
+                border-color: var(--accent);
+                color: var(--text);
+            }
+
+            /* ── Log area ───────────────────────────────────────────────────── */
+            #log {
+                flex: 1;
+                overflow-y: auto;
+                padding: 4px 0;
+                min-height: 0;
+            }
+
+            #log::-webkit-scrollbar {
+                width: 5px;
+            }
+
+            #log::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            #log::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 3px;
+            }
+
+            /* ── Entry rows ─────────────────────────────────────────────────── */
+            .entry {
+                display: flex;
+                align-items: baseline;
+                gap: 6px;
+                padding: 2px 14px;
+                font-size: 12px;
+                line-height: 1.55;
+            }
+
+            .entry:hover {
+                background: var(--surface);
+            }
+
+            .ts {
+                color: var(--text2);
+                font-size: 11px;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+
+            .badge {
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.8px;
+                text-transform: uppercase;
+                flex-shrink: 0;
+            }
+
+            .badge-macro {
+                color: #c41a1a;
+            }
+
+            .badge-print {
+                color: var(--text2);
+            }
+
+            .badge-error {
+                color: #d42020;
+            }
+
+            .entry-dot {
+                font-size: 8px;
+                color: #c41a1a;
+                flex-shrink: 0;
+                line-height: 1.9;
+            }
+
+            .msg {
+                color: var(--text);
+                word-break: break-word;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="titlebar">
+            <span id="titlebar-text">mudscript — macro monitor</span>
+            <button class="tb-btn" onclick="clearLog()">[clear]</button>
+            <button class="tb-btn" onclick="closePanel()">[×]</button>
+        </div>
+        <div id="log"></div>
+
+        <script>
+            "use strict";
+
+            document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+            // ── Drag ──────────────────────────────────────────────────────────
+            let _dragging = false;
+            (function () {
+                let _drag = null;
+                document
+                    .getElementById("titlebar")
+                    .addEventListener("mousedown", (e) => {
+                        if (e.target.closest(".tb-btn")) return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        _dragging = true;
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            window.webkit.messageHandlers.msWatcher.postMessage(
+                                JSON.stringify({
+                                    action: "move",
+                                    dx: ev.screenX - _drag.ox,
+                                    dy: ev.screenY - _drag.oy,
+                                }),
+                            );
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            _dragging = false;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+            })();
+
+            // ── Scroll helpers ─────────────────────────────────────────────────
+            const MAX_ENTRIES = 300;
+            const NEAR_BOTTOM = 48;
+
+            function isNearBottom(el) {
+                return (
+                    el.scrollHeight - el.scrollTop - el.clientHeight <=
+                    NEAR_BOTTOM
+                );
+            }
+
+            // ── Entry builder ──────────────────────────────────────────────────
+            function buildRow(entry) {
+                const row = document.createElement("div");
+                row.className = "entry";
+
+                const ts = document.createElement("span");
+                ts.className = "ts";
+                ts.textContent = "[" + entry.ts + "]";
+                row.appendChild(ts);
+
+                const badge = document.createElement("span");
+                badge.className = "badge badge-" + entry.type;
+                badge.textContent = entry.type;
+                row.appendChild(badge);
+
+                if (entry.type === "macro") {
+                    const dot = document.createElement("span");
+                    dot.className = "entry-dot";
+                    dot.textContent = "●";
+                    row.appendChild(dot);
+                }
+
+                const msg = document.createElement("span");
+                msg.className = "msg";
+                msg.textContent = entry.label || entry.msg || "";
+                row.appendChild(msg);
+
+                return row;
+            }
+
+            // ── Public API ─────────────────────────────────────────────────────
+            function appendEntry(entry) {
+                const log = document.getElementById("log");
+                const atBottom = isNearBottom(log);
+                log.appendChild(buildRow(entry));
+                while (log.childElementCount > MAX_ENTRIES) {
+                    log.removeChild(log.firstElementChild);
+                }
+                if (atBottom) log.scrollTop = log.scrollHeight;
+            }
+
+            function loadHistory(entries) {
+                const log = document.getElementById("log");
+                log.innerHTML = "";
+                const frag = document.createDocumentFragment();
+                (entries || []).forEach((e) => frag.appendChild(buildRow(e)));
+                log.appendChild(frag);
+                log.scrollTop = log.scrollHeight;
+            }
+
+            // ── Button actions ─────────────────────────────────────────────────
+            function clearLog() {
+                document.getElementById("log").innerHTML = "";
+                window.webkit.messageHandlers.msWatcher.postMessage(
+                    JSON.stringify({ action: "clear" }),
+                );
+            }
+
+            function closePanel() {
+                window.webkit.messageHandlers.msWatcher.postMessage(
+                    JSON.stringify({ action: "close" }),
+                );
+            }
+        </script>
+    </body>
+</html>

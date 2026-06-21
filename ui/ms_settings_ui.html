@@ -2246,6 +2246,16 @@
                 );
                 body.appendChild(
                     btnRow(
+                        actionBtn("Macro Monitor", "", () =>
+                            sendToHost({ action: "openWatcher" }),
+                        ),
+                        actionBtn("Key Monitor", "", () =>
+                            sendToHost({ action: "openKeys" }),
+                        ),
+                    ),
+                );
+                body.appendChild(
+                    btnRow(
                         actionBtn("Reload Theme", "", () =>
                             sendToHost({ action: "reloadTheme" }),
                         ),
