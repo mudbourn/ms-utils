@@ -20,45 +20,32 @@ jobs:
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
-          # sha256sum is the standard Linux command; produces the same output as
-          # macOS's `shasum -a 256`.
           SHA256=$(sha256sum ms_core.lua | awk '{print $1}')
-          VERSION=$(python3 -c "import json; print(json.load(open('MANIFEST.json')).get('version','1.0.0'))")
+          VERSION=$(jq -r '.version // "1.0.0"' MANIFEST.json)
           URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua"
-          SIG=""
 
-          # Sign only when the private key secret is available.
-          # If MS_SIGNING_KEY is not yet configured the workflow still succeeds
-          # and stamps the hash — the signature field is simply omitted until
-          # the secret is added and the workflow re-runs.
+          # Build base MANIFEST with jq — no Python, no heredoc, no quoting issues.
+          jq -n \
+            --arg version "$VERSION" \
+            --arg sha256  "$SHA256"  \
+            --arg url     "$URL"     \
+            '{"version":$version,"sha256":$sha256,"url":$url}' > MANIFEST.json
+
+          # Sign when the private key secret is available.
+          # Without the secret the workflow still succeeds — signature is just omitted
+          # until MS_SIGNING_KEY is added to GitHub Secrets and the workflow re-runs.
           if [ -n "$MS_SIGNING_KEY" ]; then
             printf '%s\n' "$MS_SIGNING_KEY" > /tmp/private.pem
             printf '%s'   "$SHA256"         > /tmp/msg.bin
             openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
             SIG=$(base64 -w0 /tmp/sig.bin)
             rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
-            echo "Signed — signature: ${SIG:0:32}…"
+            jq --arg sig "$SIG" '. + {"signature":$sig}' MANIFEST.json > /tmp/manifest.json
+            mv /tmp/manifest.json MANIFEST.json
+            echo "Signed."
           else
-            echo "Warning: MS_SIGNING_KEY secret not set — stamping hash only, no signature."
+            echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
           fi
-
-          # Write MANIFEST.json.
-          # Values are passed via env vars to avoid shell-quoting inside Python.
-          VERSION="$VERSION" SHA256="$SHA256" URL="$URL" SIG="$SIG" \
-          python3 -c "
-import json, os
-m = {
-    'version': os.environ['VERSION'],
-    'sha256':  os.environ['SHA256'],
-    'url':     os.environ['URL'],
-}
-sig = os.environ.get('SIG', '')
-if sig:
-    m['signature'] = sig
-with open('MANIFEST.json', 'w') as f:
-    json.dump(m, f, indent=2)
-    f.write('\\n')
-"
 
       - name: Commit MANIFEST.json
         run: |
