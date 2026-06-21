@@ -3286,11 +3286,11 @@ YQIDAQAB
                         end
                         table.insert(sub, { title = "-" })
                         table.insert(sub, {
-                            title = "Import .mspkg...",
+                            title = "Import Profile...",
                             fn    = function() importProfilePkg() end,
                         })
                         table.insert(sub, {
-                            title = "Export .mspkg",
+                            title = "Export Profile",
                             fn    = function() exportProfilePkg() end,
                         })
                         return sub
