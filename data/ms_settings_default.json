@@ -4,37 +4,37 @@
   "soundEnabled" : true,
   "importedSounds" : {
     "load" : "Launch",
-    "update" : "Update",
-    "disabled" : "MacrosOff",
     "interact" : "Interact",
-    "alert" : "Alert",
+    "update" : "Update",
+    "reset" : "Reset",
+    "settingsOpen" : "SettingsOpen",
     "enabled" : "MacrosOn",
     "settingsClose" : "SettingsClose",
     "back" : "Back",
-    "hover" : "Hover",
-    "reset" : "Reset",
-    "settingsOpen" : "SettingsOpen"
+    "alert" : "Alert",
+    "disabled" : "MacrosOff",
+    "hover" : "Hover"
   },
   "sensitivity" : 1.5,
   "soundVolume" : 100,
-  "soundAssign" : {
-    "load" : "Launch",
-    "update" : "Update",
-    "disabled" : "MacrosOff",
-    "interact" : "Interact",
-    "alert" : "Alert",
-    "enabled" : "MacrosOn",
-    "settingsClose" : "SettingsClose",
-    "back" : "Back",
-    "hover" : "Hover",
-    "reset" : "Reset",
-    "settingsOpen" : "SettingsOpen"
-  },
   "trackpadHoldKeys" : {
     "right" : "j",
     "left" : "n"
   },
   "trackpadMode" : false,
+  "soundAssign" : {
+    "load" : "Launch",
+    "interact" : "Interact",
+    "update" : "Update",
+    "reset" : "Reset",
+    "settingsOpen" : "SettingsOpen",
+    "enabled" : "MacrosOn",
+    "settingsClose" : "SettingsClose",
+    "back" : "Back",
+    "alert" : "Alert",
+    "disabled" : "MacrosOff",
+    "hover" : "Hover"
+  },
   "socdEnabled" : false,
   "independentBinds" : false,
   "macros" : {
@@ -60,10 +60,14 @@
       "enabled" : true
     },
     "spawnAlt" : {
+      "mod" : "alt",
       "enabled" : true
     },
     "sgSetup" : {
       "enabled" : true
     }
+  },
+  "user" : {
+    "clickLevel" : 4
   }
 }

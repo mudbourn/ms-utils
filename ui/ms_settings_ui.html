@@ -905,7 +905,7 @@
 
             // ── State ──────────────────────────────────────────────────────────
             let S = {};
-            let _openSections = new Set(["macros", "settings"]);
+            let _openSections = new Set();
             let _openSoundPicker = null;
             let _modalResolve = null;
             let _toastTimer = null;
@@ -988,6 +988,7 @@
             // ── Window drag ────────────────────────────────────────────────────
             // borderless windows ignore -webkit-app-region (isMovable=false by default)
             // so we implement drag manually via the Lua moveWindow action.
+            let _dragging = false; // script-level so playSlot can read it
             (function () {
                 let _drag = null;
                 document
@@ -1000,6 +1001,7 @@
                         )
                             return;
                         _drag = { ox: e.screenX, oy: e.screenY };
+                        _dragging = true;
                         const onMove = (ev) => {
                             if (!_drag) return;
                             sendToHost({
@@ -1012,6 +1014,7 @@
                         };
                         const onUp = () => {
                             _drag = null;
+                            _dragging = false;
                             window.removeEventListener("mousemove", onMove);
                             window.removeEventListener("mouseup", onUp);
                         };
@@ -1023,6 +1026,7 @@
             // ── Sound ──────────────────────────────────────────────────────────
             const _lastSlot = {};
             function playSlot(slot) {
+                if (_dragging) return; // window is being dragged; skip hover sounds
                 const now = Date.now();
                 if (now - (_lastSlot[slot] || 0) < 50) return;
                 _lastSlot[slot] = now;
@@ -1030,15 +1034,22 @@
             }
 
             // ── Toast ──────────────────────────────────────────────────────────
-            function showAlert(msg) {
+            function showAlert(msg, duration) {
                 const el = document.getElementById("toast");
                 el.textContent = msg;
                 el.classList.add("visible");
                 clearTimeout(_toastTimer);
                 _toastTimer = setTimeout(
                     () => el.classList.remove("visible"),
-                    3000,
+                    duration || 3000,
                 );
+            }
+
+            function hideToast() {
+                const el = document.getElementById("toast");
+                el.classList.remove("visible");
+                clearTimeout(_toastTimer);
+                _toastTimer = null;
             }
 
             // ── Modal ──────────────────────────────────────────────────────────
@@ -1081,6 +1092,27 @@
                     _modalResolve = null;
                 }
             }
+
+            // Called by Lua via evaluateJavaScript to show a modal and report the
+            // result back through the 'modalResult' action. Always displayed above
+            // all panel content via the existing z-index: 400 modal overlay.
+            function openLuaModal(d) {
+                openModal(
+                    d.title || "",
+                    d.msg || "",
+                    d.confirm || "OK",
+                    d.cancel || "Cancel",
+                    !!d.hasInput,
+                    d.inputDefault || "",
+                ).then((r) => {
+                    sendToHost({
+                        action: "modalResult",
+                        confirmed: r.confirmed,
+                        value: r.value || "",
+                    });
+                });
+            }
+
             document
                 .getElementById("modal-overlay")
                 .addEventListener("click", (e) => {
@@ -1352,6 +1384,72 @@
                     (m) => m.group === "optional",
                 );
 
+                function subRow(sub) {
+                    const r = h("div", {
+                        cls: "row row-sub",
+                        onmouseenter: () => playSlot("hover"),
+                    });
+                    r.appendChild(h("div", { cls: "row-label" }, sub.label));
+                    if (sub.mod)
+                        r.appendChild(h("span", { cls: "pill" }, sub.mod));
+                    if (sub.bind)
+                        r.appendChild(h("span", { cls: "pill" }, sub.bind));
+                    r.addEventListener("contextmenu", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        playSlot("interact");
+                        const items = [
+                            {
+                                icon: "⌨",
+                                label: "Change Modifier\u2026",
+                                action: () =>
+                                    sendToHost({
+                                        action: "startModRebind",
+                                        id: sub.id,
+                                    }),
+                            },
+                        ];
+                        if (sub.mod) {
+                            items.push("divider");
+                            items.push({
+                                icon: "↺",
+                                label: "Clear Modifier",
+                                danger: true,
+                                action: () =>
+                                    sendToHost({
+                                        action: "clearModifier",
+                                        id: sub.id,
+                                    }),
+                            });
+                        }
+                        if (S.independentBindsEnabled) {
+                            items.push("divider");
+                            items.push({
+                                icon: "⌨",
+                                label: "Rebind Independent\u2026",
+                                action: () =>
+                                    sendToHost({
+                                        action: "startRebind",
+                                        id: sub.id,
+                                    }),
+                            });
+                            if (sub.bind)
+                                items.push({
+                                    icon: "↺",
+                                    label: "Clear Independent Bind",
+                                    danger: true,
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetBind",
+                                            id: sub.id,
+                                        }),
+                                });
+                        }
+                        showCtxMenu(e.clientX, e.clientY, items, sub.label);
+                    });
+                    return r;
+                }
+
                 function macroRow(m) {
                     const r = h("div", {
                         cls: "row",
@@ -1378,7 +1476,7 @@
                         const items = [
                             {
                                 icon: "⌨",
-                                label: "Rebind…",
+                                label: "Rebind\u2026",
                                 action: () =>
                                     sendToHost({
                                         action: "startRebind",
@@ -1405,13 +1503,20 @@
                     return r;
                 }
 
+                function appendMacro(m) {
+                    body.appendChild(macroRow(m));
+                    (m.subs || []).forEach((sub) =>
+                        body.appendChild(subRow(sub)),
+                    );
+                }
+
                 if (main.length) {
                     body.appendChild(groupLabel("Main"));
-                    main.forEach((m) => body.appendChild(macroRow(m)));
+                    main.forEach(appendMacro);
                 }
                 if (optional.length) {
                     body.appendChild(groupLabel("Optional"));
-                    optional.forEach((m) => body.appendChild(macroRow(m)));
+                    optional.forEach(appendMacro);
                 }
             }
 
@@ -1960,23 +2065,88 @@
                             null,
                             soundPicker(slot.id, assigned, names),
                             "",
-                            assigned
-                                ? [
-                                      {
-                                          icon: "✕",
-                                          label: "Clear",
-                                          action: () =>
-                                              sendToHost({
-                                                  action: "setSoundAssign",
-                                                  slot: slot.id,
-                                                  name: "",
-                                              }),
-                                      },
-                                  ]
-                                : null,
+                            [
+                                {
+                                    icon: "↓",
+                                    label: "Import",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "importSoundForSlot",
+                                            slot: slot.id,
+                                            label: slot.label,
+                                        }),
+                                },
+                                ...(assigned
+                                    ? [
+                                          {
+                                              icon: "✕",
+                                              label: "Clear",
+                                              action: () =>
+                                                  sendToHost({
+                                                      action: "setSoundAssign",
+                                                      slot: slot.id,
+                                                      name: "",
+                                                  }),
+                                          },
+                                      ]
+                                    : []),
+                            ],
                         ),
                     );
                 }
+
+                // User-defined sound slots (from ms.settings.define({ type="soundSlot" }))
+                const userSlots = S.userSoundSlots || [];
+                if (userSlots.length > 0) {
+                    body.appendChild(divider());
+                    body.appendChild(groupLabel("Pack Slots"));
+                    for (const slot of userSlots) {
+                        const assigned = (S.soundAssign || {})[slot.key] || "";
+                        body.appendChild(
+                            row(
+                                slot.label,
+                                null,
+                                soundPicker(slot.key, assigned, names),
+                                "",
+                                [
+                                    {
+                                        icon: "↓",
+                                        label: "Import for this slot",
+                                        action: () =>
+                                            sendToHost({
+                                                action: "importSoundForSlot",
+                                                slot: slot.key,
+                                                label: slot.label,
+                                            }),
+                                    },
+                                    ...(assigned
+                                        ? [
+                                              {
+                                                  icon: "✕",
+                                                  label: "Clear",
+                                                  action: () =>
+                                                      sendToHost({
+                                                          action: "setSoundAssign",
+                                                          slot: slot.key,
+                                                          name: "",
+                                                      }),
+                                              },
+                                          ]
+                                        : []),
+                                ],
+                            ),
+                        );
+                    }
+                }
+
+                body.appendChild(divider());
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Import Sound Files\u2026", "", () =>
+                            sendToHost({ action: "importSounds" }),
+                        ),
+                    ),
+                );
             }
 
             function buildProfiles(body) {
@@ -2190,13 +2360,23 @@
 
                 const btns = [
                     actionBtn("About", "", () => {
-                        const msg =
-                            "mudscript Utility Library\nBy: mudbourn — mudbourn.info" +
-                            (meta.name
-                                ? `\n\n${meta.name}` +
-                                  (meta.author ? `\nBy: ${meta.author}` : "")
-                                : "");
-                        showAlert(msg);
+                        sendToHost({
+                            action: "alert",
+                            msg: "mudscript Utility Library\nBy: mudbourn \u2014 mudbourn.info",
+                            duration: 5,
+                        });
+                        if (meta.name) {
+                            const line2 =
+                                meta.name +
+                                (meta.author ? `\nBy: ${meta.author}` : "") +
+                                (meta.website ? `\n${meta.website}` : "");
+                            sendToHost({
+                                action: "alert",
+                                msg: line2,
+                                duration: 5,
+                                noSound: true,
+                            });
+                        }
                     }),
                     actionBtn("Documentation", "", () =>
                         sendToHost({
@@ -2271,11 +2451,11 @@
                 document.body.style.fontFamily = `"${font}", Almendra, Palatino, Georgia, serif`;
             }
 
-            function applyWraith(wraithURL) {
+            function applyUIFC(uifcURL) {
                 const panel = document.getElementById("panel");
-                if (wraithURL) {
+                if (uifcURL) {
                     // Body becomes the full expanded canvas; #panel is centred within it.
-                    document.body.style.backgroundImage = `url("${wraithURL}")`;
+                    document.body.style.backgroundImage = `url("${uifcURL}")`;
                     document.body.style.backgroundSize = "100% 100%";
                     document.body.style.backgroundRepeat = "no-repeat";
                     document.body.style.padding = "12.5%";
@@ -2313,7 +2493,7 @@
                     );
                 }
                 applyFont(t.font, t.fontURL);
-                applyWraith(t.wraithURL);
+                applyUIFC(t.uifcURL);
             }
 
             // ── receiveState ───────────────────────────────────────────────────

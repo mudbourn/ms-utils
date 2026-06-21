@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    com.mudscript.guardian.plist — mudscript OS-level Guardian Launch Agent
+    -------------------------------------------------------------------------
+    DO NOT edit this template directly.
+    Run  bin/install_guardian_agent.sh  to expand placeholders and install.
+
+    Placeholders replaced by the install script:
+        %%AGENT_PATH%%   absolute path to ms_guardian_agent.sh
+        %%CORE_PATH%%    absolute path to ms_core.lua
+        %%LOG_PATH%%     absolute path to guardian_agent.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mudscript.guardian</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>%%AGENT_PATH%%</string>
+    </array>
+
+    <!-- Fire once at login and again whenever ms_core.lua changes. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>WatchPaths</key>
+    <array>
+        <string>%%CORE_PATH%%</string>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>%%LOG_PATH%%</string>
+    <key>StandardErrorPath</key>
+    <string>%%LOG_PATH%%</string>
+</dict>
+</plist>

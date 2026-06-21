@@ -376,30 +376,25 @@
                 local d3 = getD3()
                 ms.type("z")
                 ms.wait(10)
-                for i = 1, 1 do
-                    ms.Mouse(Press, Left, WindowTL, 437, 34)
-                    ms.wait(10)
-                    ms.Mouse(Release, Left, WindowTL, 437, 34)
-                    ms.wait(10)
-                end
-                ms.Mouse(Press, Left, WindowTL, 452, d3)
-                ms.wait(10)
-                ms.Mouse(Release, Left, WindowTL, 452, d3)
-                ms.wait(10)
+                ms.Mouse(Move, Left, WindowTL, 437, 34)
+                ms.wait(100)
+                ms.Mouse(Click, Left, WindowTL, 452, d3)
+                ms.wait(50)
                 while ms.keystate("=") do
-                    ms.Mouse(Click, Left, Mouse, nil, nil)
+                    ms.Mouse(Click, Left, Mouse, 0, 0)
                     ms.wait(15)
                 end
-                ms.wait(300)
-                ms.Mouse(Release, Left, WindowTL, 840, 538)
+                ms.wait(150)
                 ms.type("z")
                 ms.wait(60)
             end)
 
-
-            ms.bind.define("frameDump", ActionSpammerFunction, {
+            ms.bind.define("frameDump", function()
+                if ms._currentFlags and ms._currentFlags.alt then SpawnAltFunction()
+                else ActionSpammerFunction() end
+            end, {
                 group   = "optional",
-                label   = "Action Spammer",
+                label   = "Lag Simulator (Micro Profiler)",
                 default = {type="key", mods={}, key="="},
             })
         -- END --
@@ -438,12 +433,7 @@
                     ms.type("return")
             end)
 
-            ms.bind.define("spawnAlt", SpawnAltFunction, {
-                group   = "optional",
-                label   = "Load Second Account",
-                default = {type="key", mods={"alt"}, key="="},
-                enabled = false,
-            })
+            ms.bind.define("spawnAlt", SpawnAltFunction, { sub="frameDump",  label="Load Second Account", mod="alt" })
         -- END --
 
         -- Mouse Position Grabber --

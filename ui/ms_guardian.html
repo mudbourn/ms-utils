@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            :root {
+                --bg: #060402;
+                --surface: #100806;
+                --surface2: #1c100c;
+                --border: rgba(130, 50, 22, 0.55);
+                --accent: #c41a1a;
+                --danger: #d42020;
+                --text: #f0ddb0;
+                --text2: rgba(210, 165, 100, 0.75);
+                --radius: 3px;
+            }
+
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            html,
+            body {
+                width: 100%;
+                height: 100%;
+                background: var(--bg);
+                color: var(--text);
+                font-family: "Almendra", Palatino, Georgia, serif;
+                font-size: 13px;
+                line-height: 1.6;
+                overflow: hidden;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            /* ── Drag region ────────────────────────────────────────────────── */
+            #titlebar {
+                height: 36px;
+                -webkit-app-region: drag;
+                display: flex;
+                align-items: center;
+                padding: 0 16px;
+                border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
+            }
+
+            #titlebar-text {
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text2);
+            }
+
+            /* ── Layout ─────────────────────────────────────────────────────── */
+            #wrap {
+                display: flex;
+                flex-direction: column;
+                height: calc(100% - 36px);
+                padding: 18px 22px 16px;
+                gap: 12px;
+                overflow: hidden;
+            }
+
+            /* ── Icon + heading ─────────────────────────────────────────────── */
+            #heading {
+                display: flex;
+                align-items: flex-start;
+                gap: 14px;
+            }
+
+            #icon {
+                font-size: 28px;
+                line-height: 1;
+                flex-shrink: 0;
+                margin-top: 2px;
+            }
+
+            #heading-text h1 {
+                font-size: 15px;
+                font-weight: 700;
+                color: var(--text);
+                margin-bottom: 4px;
+            }
+
+            #heading-text p {
+                font-size: 12px;
+                color: var(--text2);
+            }
+
+            /* ── Hash box ───────────────────────────────────────────────────── */
+            #hashes {
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 10px 14px;
+                font-size: 11px;
+                line-height: 1.8;
+                color: var(--text2);
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            #hashes span.label {
+                color: var(--text2);
+                min-width: 64px;
+                display: inline-block;
+            }
+
+            #hashes span.hash {
+                color: var(--text);
+                font-family: "SF Mono", "Menlo", monospace;
+                letter-spacing: 0.5px;
+            }
+
+            /* ── Warning text ───────────────────────────────────────────────── */
+            #warning {
+                font-size: 12px;
+                color: var(--text2);
+                flex: 1;
+                overflow-y: auto;
+                min-height: 0;
+            }
+
+            #warning strong {
+                color: var(--text);
+            }
+
+            /* ── Buttons ────────────────────────────────────────────────────── */
+            #buttons {
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end;
+            }
+
+            button {
+                height: 30px;
+                padding: 0 16px;
+                border-radius: var(--radius);
+                border: 1px solid var(--border);
+                background: var(--surface2);
+                color: var(--text);
+                font-family: inherit;
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                transition:
+                    background 0.15s,
+                    border-color 0.15s;
+                -webkit-app-region: no-drag;
+            }
+
+            button:hover {
+                background: var(--surface);
+                border-color: var(--accent);
+            }
+
+            button.danger {
+                background: rgba(196, 26, 26, 0.15);
+                border-color: var(--danger);
+                color: var(--danger);
+            }
+
+            button.danger:hover {
+                background: rgba(196, 26, 26, 0.28);
+            }
+
+            /* ── Steps ──────────────────────────────────────────────────────── */
+            .step {
+                display: none;
+                flex-direction: column;
+                height: 100%;
+                gap: 16px;
+            }
+            .step.active {
+                display: flex;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="titlebar">
+            <span id="titlebar-text">mudscript — Tamper Protection</span>
+        </div>
+        <div id="wrap">
+            <!-- Step 1: Mismatch warning -->
+            <div id="step1" class="step active">
+                <div id="heading">
+                    <div id="icon">⚠</div>
+                    <div id="heading-text">
+                        <h1>ms_core.lua has been modified</h1>
+                        <p>
+                            mudscript did not load. No macros or key bindings
+                            are active.
+                        </p>
+                    </div>
+                </div>
+
+                <div id="hashes">
+                    <div>
+                        <span class="label">Expected</span>
+                        <span class="hash" id="hash-trusted">—</span>
+                    </div>
+                    <div>
+                        <span class="label">Current</span>
+                        <span class="hash" id="hash-current">—</span>
+                    </div>
+                </div>
+
+                <div id="warning">
+                    If you did <strong>not</strong> make this change, stop —
+                    your init.lua may be tampered with.<br /><br />
+                    If you made this change yourself, click
+                    <strong>Delete Hash &amp; Reload</strong> to clear the
+                    baseline. mudscript will reload
+                    <strong>without protection</strong> until re-trusted.
+                </div>
+
+                <div id="buttons">
+                    <button onclick="keepBlocked()">Keep Blocked</button>
+                    <button class="danger" onclick="showConfirm()">
+                        Delete Hash &amp; Reload
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Confirmation -->
+            <div id="step2" class="step">
+                <div id="heading">
+                    <div id="icon">⚠</div>
+                    <div id="heading-text">
+                        <h1>Delete trusted hash?</h1>
+                        <p>This cannot be undone from this screen.</p>
+                    </div>
+                </div>
+
+                <div id="warning" style="flex: 1">
+                    From this point on mudscript will load
+                    <strong>any version</strong> of init.lua without warning —
+                    including maliciously modified ones.<br /><br />
+                    You are on your own. Proceed only if you know what you are
+                    doing.
+                </div>
+
+                <div id="buttons">
+                    <button onclick="cancelConfirm()">Cancel</button>
+                    <button class="danger" onclick="confirmDelete()">
+                        Delete — I understand the risk
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            "use strict";
+
+            // Suppress native right-click context menu.
+            document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+            // ── Drag to move window ───────────────────────────────────────────
+            let _drag = null;
+            document.addEventListener("mousedown", (e) => {
+                if (e.button !== 0 || e.target.tagName === "BUTTON") return;
+                _drag = { x: e.screenX, y: e.screenY };
+            });
+            document.addEventListener("mousemove", (e) => {
+                if (!_drag) return;
+                const dx = e.screenX - _drag.x;
+                const dy = e.screenY - _drag.y;
+                _drag.x = e.screenX;
+                _drag.y = e.screenY;
+                if (dx !== 0 || dy !== 0) {
+                    window.webkit.messageHandlers.guardian.postMessage(
+                        JSON.stringify({ action: "move", dx, dy }),
+                    );
+                }
+            });
+            document.addEventListener("mouseup", () => {
+                _drag = null;
+            });
+            document.addEventListener("mouseleave", () => {
+                _drag = null;
+            });
+
+            function setHashes(trusted, current) {
+                document.getElementById("hash-trusted").textContent = trusted;
+                document.getElementById("hash-current").textContent = current;
+            }
+
+            function keepBlocked() {
+                window.webkit.messageHandlers.guardian.postMessage(
+                    "keepBlocked",
+                );
+            }
+
+            function showConfirm() {
+                document.getElementById("step1").classList.remove("active");
+                document.getElementById("step2").classList.add("active");
+            }
+
+            function cancelConfirm() {
+                document.getElementById("step2").classList.remove("active");
+                document.getElementById("step1").classList.add("active");
+            }
+
+            function confirmDelete() {
+                window.webkit.messageHandlers.guardian.postMessage(
+                    "confirmDelete",
+                );
+            }
+        </script>
+    </body>
+</html>

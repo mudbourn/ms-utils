@@ -771,7 +771,7 @@ Internal. Applies a decoded settings table to live runtime state. You do not nee
 |------|-------|
 | `data/ms_settings.json` | Current user settings — written on every change |
 | `data/ms_settings_default.json` | The "reset to default" target |
-| `data/ms_theme.json` | UI theme — colors, font, border radius, wraith |
+| `data/ms_theme.json` | UI theme — colors, font, border radius, UI Frame Cosmetic |
 | `backups/` | Timestamped archives of previous defaults |
 
 Settings and theme files live in `~/.hammerspoon/data/`. They are gitignored — each install generates its own. Existing files at the old root location are automatically migrated to `data/` on the first reload after upgrading.
@@ -955,7 +955,7 @@ These are plain globals available from `ms_macros.lua`.
 | `ms.bind._wires` | Registered functions by id |
 
 
-## 20. Integrity & Updates
+## 20. System Integrity & Updates
 
 ### Overview
 
@@ -1237,7 +1237,10 @@ The panel UI is fully themeable via `~/.hammerspoon/data/ms_theme.json`. Edit th
     "text":     "#f0ddb0",
     "radius":   3,
     "font":     "Almendra",
-    "wraith":   ""
+    "uifc": {
+        "settings": "",
+        "guardian": ""
+    }
 }
 ```
 
@@ -1287,15 +1290,25 @@ Supported file extensions: `.ttf`, `.otf`, `.woff`, `.woff2`. If a file path is 
 
 ---
 
-### `wraith`
+### `uifc` — UI Frame Cosmetic
 
-A relative path (from `~/.hammerspoon/`) to a PNG image. When set, the settings panel window expands to **1.25× its normal size**. The PNG is rendered as a full-window background — design it as a picture frame with a transparent centre where the panel content sits.
+Each window can have its own UI Frame Cosmetic — a PNG image rendered as a full-window background behind the panel. Design it as a picture frame with a transparent centre. When a UIFC is set, the window expands to **1.25× its normal size**; the extra 12.5% padding on each side is purely decorative and the inner content is unaffected.
+
+Each key is a relative path from `~/.hammerspoon/`. Leave a value as `""` to disable that window's frame.
+
+| Key | Window |
+|-----|--------|
+| `settings` | Main settings panel |
+| `guardian` | Tamper-protection dialog |
 
 ```json
-{ "wraith": "ui/myframe.png" }
+{
+    "uifc": {
+        "settings": "ui/frames/settings.png",
+        "guardian": "ui/frames/guardian.png"
+    }
+}
 ```
-
-The extra 12.5% padding on each side is purely decorative. Panel content size and layout are unaffected. Leave `""` to disable.
 
 ---
 
@@ -1314,8 +1327,8 @@ if ms.has("theme") then
     -- user has a custom data/ms_theme.json loaded
 end
 
-if ms.has("wraith") then
-    -- wraith PNG is configured and the file exists
+if ms.has("uifc") then
+    -- UI Frame Cosmetic PNG is configured and the file exists
 end
 
 if ms.has("userSettings") then
@@ -1328,7 +1341,7 @@ end
 | Flag | Returns `true` when |
 |------|--------------------|
 | `"theme"` | `data/ms_theme.json` was loaded from disk (not just built-in defaults) |
-| `"wraith"` | theme has a `wraith` path set and the PNG file exists |
+| `"uifc"` | theme has a UI Frame Cosmetic (`uifc`) path set and the PNG file exists |
 | `"sound"` | sound is enabled (`ms.soundEnabled`) and at least one file is indexed |
 | `"socd"` | SOCD engine is currently enabled (`ms.socdEnabled`) |
 | `"trackpad"` | trackpad mode is currently active (`ms.trackpadMode`) |
