@@ -13,7 +13,7 @@ Every macro file has the same four sections as `ms_macros.lua`:
 
 ```ahk
 #Requires AutoHotkey v2.0
-#Include ms_windows.ahk
+#Include ms_core.ahk
 
 ; 1. Metadata (required)
 ms.macroMeta := {name: "My Pack", author: "me"}
@@ -60,7 +60,7 @@ The same four sections as macOS, in the same order:
 
 ```ahk
 #Requires AutoHotkey v2.0
-#Include ms_windows.ahk
+#Include ms_core.ahk
 
 ; ── Section 1: Metadata ──────────────────────────────────────────────────────
 ; Required. Used internally to identify the pack.
@@ -507,7 +507,7 @@ BindValidity := 1   ; re-enable
 
 Use this checklist when converting a Lua macro file to AHKv2:
 
-- [ ] Add `#Requires AutoHotkey v2.0` and `#Include ms_windows.ahk` at the top
+- [ ] Add `#Requires AutoHotkey v2.0` and `#Include ms_core.ahk` at the top
 - [ ] Change `ms.macroMeta = {...}` (Lua) to `ms.macroMeta := {...}` (AHKv2)
 - [ ] Change `local f = ms.fn(function() ... end)` to a plain named function `f() { ... }` — or keep `ms.fn()` as-is; it is a no-op
 - [ ] `ms.wait(...)` calls are unchanged
