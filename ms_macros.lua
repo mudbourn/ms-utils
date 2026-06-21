@@ -4,7 +4,7 @@
         author  = "mudbourn",
         website = "https://mudbourn.info",
     }
--- End Creator Credits --
+-- END Creator Credits --
 
 -- Pack Settings --
     ms.settings.define({

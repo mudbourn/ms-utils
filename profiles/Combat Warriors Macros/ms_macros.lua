@@ -229,8 +229,14 @@
 
             -- Register superJump first — it is the parent that superThrow, jumpHigh, and jumpLow
             -- all declare as sub, so it must exist in the registry before they do.
+            -- Note: ThrowTrickFunction is looked up via ms.bind._wires at call time rather than
+            -- captured as a closure upvalue. LuaJIT setfenv chunks can miscompile upvalue
+            -- references across certain distances as global lookups; the _wires table lookup
+            -- is a table access and is not subject to that issue.
             ms.bind.define("superJump", function()
-                if ms.modHeld("superThrow") then ThrowTrickFunction()
+                if ms.modHeld("superThrow") then
+                    local fn = ms.bind._wires.superThrow
+                    if fn then fn() end
                 else HighLeapAssistFunction() end
             end, {
                 group    = "main",
@@ -423,8 +429,12 @@
                     ms.type("return")
             end)
 
+            -- SpawnAltFunction is similarly looked up via _wires to avoid the LuaJIT
+            -- setfenv upvalue-as-global miscompilation issue.
             ms.bind.define("frameDump", function()
-                if ms._currentFlags and ms._currentFlags.alt then SpawnAltFunction()
+                if ms._currentFlags and ms._currentFlags.alt then
+                    local fn = ms.bind._wires.spawnAlt
+                    if fn then fn() end
                 else ActionSpammerFunction() end
             end, {
                 group   = "optional",
