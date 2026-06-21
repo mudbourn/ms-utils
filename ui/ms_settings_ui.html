@@ -67,6 +67,8 @@
                 box-sizing: border-box;
                 margin: 0;
                 padding: 0;
+                user-select: none;
+                -webkit-user-select: none;
             }
             html,
             body {
@@ -2358,47 +2360,53 @@
                     );
                 }
 
-                const btns = [
-                    actionBtn("About", "", () => {
+                const aboutBtn = actionBtn("About", "", () => {
+                    sendToHost({
+                        action: "alert",
+                        msg: "mudscript Utility Library\nBy: mudbourn \u2014 mudbourn.info",
+                        duration: 5,
+                    });
+                    if (meta.name) {
+                        const line2 =
+                            meta.name +
+                            (meta.author ? `\nBy: ${meta.author}` : "") +
+                            (meta.website ? `\n${meta.website}` : "");
                         sendToHost({
                             action: "alert",
-                            msg: "mudscript Utility Library\nBy: mudbourn \u2014 mudbourn.info",
+                            msg: line2,
                             duration: 5,
+                            noSound: true,
                         });
-                        if (meta.name) {
-                            const line2 =
-                                meta.name +
-                                (meta.author ? `\nBy: ${meta.author}` : "") +
-                                (meta.website ? `\n${meta.website}` : "");
-                            sendToHost({
-                                action: "alert",
-                                msg: line2,
-                                duration: 5,
-                                noSound: true,
-                            });
-                        }
+                    }
+                });
+
+                const docBtn = actionBtn("Documentation", "", () =>
+                    sendToHost({
+                        action: "openURL",
+                        url: (S.docsURL || "") + "?platform=mac",
                     }),
-                    actionBtn("Documentation", "", () =>
-                        sendToHost({
-                            action: "openURL",
-                            url: (S.docsURL || "") + "?platform=mac",
-                        }),
-                    ),
-                ];
+                );
+                docBtn.style.flex = "1";
+
                 if (S.updateManifestURL) {
-                    btns.push(
-                        actionBtn("Check for Update", "accent", async () => {
+                    const updateBtn = actionBtn(
+                        "Check for Update",
+                        "",
+                        async () => {
                             const r = await openModal(
                                 "Check for Update",
-                                "Download and apply the latest init.lua?\n\nCurrent file will be backed up and Hammerspoon will reload.",
+                                "Download and apply the latest ms_core.lua from GitHub?\n\nThe current file will be backed up to backups/ and Hammerspoon will reload.",
                                 "Update",
                             );
                             if (r.confirmed)
                                 sendToHost({ action: "checkForUpdate" });
-                        }),
+                        },
                     );
+                    body.appendChild(btnRow(aboutBtn, updateBtn));
+                } else {
+                    body.appendChild(btnRow(aboutBtn));
                 }
-                body.appendChild(btnRow(...btns));
+                body.appendChild(btnRow(docBtn));
             }
 
             // ── Render ─────────────────────────────────────────────────────────

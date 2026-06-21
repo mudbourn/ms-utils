@@ -137,7 +137,7 @@
             ms.soundVolume     = 100    -- 0–100
             ms.soundAssign     = {}     -- per-slot overrides: { slotId = soundName }
             ms._docsURL           = "https://docs-ms.mudbourn.info"  -- opened by Settings › Documentation
-            ms._updateManifestURL = nil  -- set to your MANIFEST.json URL (e.g. raw.githubusercontent.com/.../MANIFEST.json) to enable auto-update
+            ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
 
             -- User Settings & Menu API State ─────────────────────────────────────
             ms.settings          = {}  -- user settings API namespace
@@ -878,7 +878,6 @@
                     ms.socdApply()
                     ms.playSlot("update")
                     ms.alert("Settings reloaded.", 5, true)
-                    ms.alert("Sensitivity: " .. tostring(CUR_CAM_SENS), 5, true)
                 end
 
                 -- ── User Settings & Menu API ─────────────────────────────────────────────────────────────────────
@@ -1130,19 +1129,29 @@
                         if #clean > 0 then ms._theme.font = clean end
                     end
                     -- Validate uifc — supports table (per-window) or legacy string.
+                    local function _sanitizeUIFCPath(p)
+                        if type(p) ~= "string" or p == "" then return "" end
+                        -- Strip .. traversal sequences in all slash-context forms.
+                        -- The old pattern "%%.%%.  was wrong: in a Lua pattern, %% matches
+                        -- a literal %, so it never matched "..".  The correct escape is %.%.
+                        p = p:gsub("%.%.[/\\]", ""):gsub("[/\\]%.%.", ""):gsub("^%.%.$", "")
+                        -- Strip leading / or ~ to block absolute-path injection.
+                        p = p:gsub("^[/~]+", "")
+                        return p
+                    end
                     if type(data.uifc) == "string" and data.uifc ~= "" then
                         -- Backward compat: old single-string → settings key.
                         ms._theme.uifc = {
-                            settings = data.uifc:gsub("%%.%%.", ""),
+                            settings = _sanitizeUIFCPath(data.uifc),
                             guardian = "",
                         }
                     elseif type(data.uifc) == "table" then
                         ms._theme.uifc = { settings = "", guardian = "" }
                         if type(data.uifc.settings) == "string" then
-                            ms._theme.uifc.settings = data.uifc.settings:gsub("%%.%%.", "")
+                            ms._theme.uifc.settings = _sanitizeUIFCPath(data.uifc.settings)
                         end
                         if type(data.uifc.guardian) == "string" then
-                            ms._theme.uifc.guardian = data.uifc.guardian:gsub("%%.%%.", "")
+                            ms._theme.uifc.guardian = _sanitizeUIFCPath(data.uifc.guardian)
                         end
                     end
                 end
@@ -1736,6 +1745,12 @@
                     local manifestURL = ms._updateManifestURL
                     if not manifestURL or manifestURL == "" then
                         ms.alert("Update URL not configured.\nSet ms._updateManifestURL in ms_core.lua.", 6)
+                        return
+                    end
+                    -- Require HTTPS.  An HTTP URL would allow a network observer to serve
+                    -- a malicious manifest and file, completely bypassing hash verification.
+                    if not manifestURL:match("^https://") then
+                        ms.alert("Update URL must use HTTPS.\nHTTP URLs are not permitted.", 6)
                         return
                     end
                     ms.alert("Fetching update manifest\xe2\x80\xa6", 4, true)
@@ -5567,7 +5582,23 @@
                 end,
             }
 
-            -- Single WKScriptMessageHandler ("ms") used for every action — the page
+            -- Freeze the dispatch table so macro-sandbox code cannot inject new handlers
+            -- by writing to nested ms.* sub-tables.  The frozenMs proxy only blocks direct
+            -- writes to ms itself (e.g. ms.foo = x); it does not proxy writes to tables
+            -- that are reachable through it (e.g. ms.ui._actions.evil = fn).  Applying a
+            -- __newindex here means any such write errors immediately, regardless of where
+            -- in the call stack it originates.  Reads (action dispatch) still work via
+            -- __index on the backing table.
+            do
+                local _backing = ms.ui._actions
+                ms.ui._actions = setmetatable({}, {
+                    __index    = _backing,
+                    __newindex = function(_, k)
+                        error("ms.ui._actions is read-only (attempted write to '" .. tostring(k) .. "')", 2)
+                    end,
+                    __len      = function() return #_backing end,
+                })
+            end
             -- always posts a JSON string of the form { action = "...", ... }.
             local _ucMS = hs.webview.usercontent.new("ms")
             _ucMS:setCallback(function(message)
@@ -5783,6 +5814,12 @@
                     -- scanner-only checks (:activate, :launch, etc.): even if the
                     -- lexer pass above is somehow confused, access is still denied here.
                     roblox=true,               -- hs.application handle; :activate() risk
+                    -- _G-scoped handles that carry dangerous methods (:stop() etc.).
+                    -- Macro code must not be able to halt the integrity timer, kill the
+                    -- app watcher, or otherwise manipulate Hammerspoon's own internals.
+                    __ms_appWatcher=true,        -- hs.eventtap: :stop() kills app monitoring
+                    _integrityPollTimer=true,    -- hs.timer: :stop() disables integrity poll
+                    _initTimer=true,             -- hs.timer: deferred init timer
                 }
 
                 local sandbox = {
@@ -5844,20 +5881,23 @@
                 })
 
                 -- Security audit: scan the raw source before any code is executed.
-                -- Hard-errors on policy violations so a tampered file never reaches loadfile.
+                -- Hard-errors on policy violations so a tampered file never reaches load().
+                -- rawSrc is declared outside the do-block so the load() call below can
+                -- compile the exact same bytes the auditor read, closing the TOCTOU window.
+                local rawSrc
                 do
                     local af = io.open(macrosPath, "r")
                     if not af then
                         error("ms_macros.lua: cannot open file for security audit: " .. macrosPath)
                     end
-                    local rawSrc = af:read("*all"); af:close()
+                    rawSrc = af:read("*all"); af:close()
                     local auditErrs = auditMacros(rawSrc)
                     if #auditErrs > 0 then
                         local msg = "ms_macros.lua failed security audit ("
                             .. #auditErrs .. " violation"
                             .. (#auditErrs > 1 and "s" or "") .. "):\n"
                         for _, e in ipairs(auditErrs) do
-                            msg = msg .. "  • " .. e .. "\n"
+                            msg = msg .. "  \xe2\x80\xa2 " .. e .. "\n"
                         end
                         error(msg, 0)
                     end
@@ -5868,9 +5908,15 @@
                 -- Lua 5.1 fallback: use setfenv if available.
                 local chunk, loadErr
                 if _VERSION and _VERSION >= "Lua 5.2" or not setfenv then
-                    chunk, loadErr = loadfile(macrosPath, "bt", sandbox)
+                    -- Use load() on the already-read source bytes rather than re-opening
+                    -- the file with loadfile().  This closes the TOCTOU window: auditMacros
+                    -- ran on rawSrc; load() compiles those exact same bytes, so there is no
+                    -- opportunity for another process to swap the file between the audit
+                    -- read and the load step.
+                    chunk, loadErr = load(rawSrc, "@ms_macros.lua", "bt", sandbox)
                 else
-                    chunk, loadErr = loadfile(macrosPath)
+                    -- Lua 5.1 fallback (LuaJIT should never reach here).
+                    chunk, loadErr = loadstring(rawSrc, "@ms_macros.lua")
                     if chunk then setfenv(chunk, sandbox) end
                 end
                 if not chunk then
