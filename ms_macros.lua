@@ -2,7 +2,7 @@
     ms.macroMeta = {
         name    = "Combat Warriors Macros",
         author  = "mudbourn",
-        website = "https://mudbourn.info",
+        website = "mudbourn.info",
     }
 -- End Creator Credits --
 
