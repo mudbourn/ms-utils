@@ -227,21 +227,22 @@
                 if not ThrowLow() then ThrowDefault() end
             end)
 
-            ms.bind.define("superThrow", ThrowTrickFunction,      { sub="superJump",  label="Throw Trick", mod="alt" })
-            ms.bind.define("throwLow",   ThrowTrickFunction,      { sub="superThrow", label="Throw Low",   mod="v"   })
-
+            -- Register superJump first — it is the parent that superThrow, jumpHigh, and jumpLow
+            -- all declare as sub, so it must exist in the registry before they do.
             ms.bind.define("superJump", function()
                 if ms.modHeld("superThrow") then ThrowTrickFunction()
                 else HighLeapAssistFunction() end
             end, {
-                group   = "main",
-                label   = "High Leap Assist",
+                group    = "main",
+                label    = "High Leap Assist",
                 cooldown = 3200,
-                default = {type="mouse", button=3},
+                default  = {type="mouse", button=3},
             })
 
-            ms.bind.define("jumpHigh", HighLeapAssistFunction, { sub="superJump", label="Jump High", mod="v" })
-            ms.bind.define("jumpLow",  HighLeapAssistFunction, { sub="superJump", label="Jump Low",  mod="x" })
+            ms.bind.define("superThrow", ThrowTrickFunction,      { sub="superJump",  label="Throw Trick", mod="alt" })
+            ms.bind.define("throwLow",   ThrowTrickFunction,      { sub="superThrow", label="Throw Low",   mod="v"   })
+            ms.bind.define("jumpHigh",   HighLeapAssistFunction,  { sub="superJump",  label="Jump High",   mod="v"   })
+            ms.bind.define("jumpLow",    HighLeapAssistFunction,  { sub="superJump",  label="Jump Low",    mod="x"   })
         -- END --
 
         -- Swing Cancel --

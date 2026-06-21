@@ -3997,6 +3997,21 @@ YQIDAQAB
                 local co = coroutine.running()
                 if co then
                     local ctx = ms._coroContext[co]  -- capture context at yield time
+                    -- When the watcher is open, log significant waits (>= 50 ms) as step
+                    -- entries so users can see execution progress and where a macro stalls.
+                    if ms_time >= 50 and ms.dev and ms.dev._watcherPanel then
+                        local _label = (ctx and ctx.label) or "macro"
+                        local ok2, j2 = pcall(hs.json.encode, {
+                            type = "step",
+                            ts   = os.time(),
+                            msg  = "[" .. _label .. "] wait " .. tostring(ms_time) .. "ms",
+                        })
+                        if ok2 then
+                            pcall(function()
+                                ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j2 .. ")")
+                            end)
+                        end
+                    end
                     hs.timer.doAfter(ms_time / 1000, function()
                         -- Don't resume a coroutine whose macro has been cancelled.
                         if ctx and ctx.cancelled then return end
@@ -4401,7 +4416,10 @@ YQIDAQAB
                 if async == false then return fn end
                 return function(...)
                     local co  = coroutine.create(fn)
-                    local ctx = { cancelled = false }
+                    -- Inherit the pending label set by firedFn so ms.wait step entries
+                    -- can identify which macro is running without needing an id param.
+                    local ctx = { cancelled = false, label = ms._pendingLabel or "macro" }
+                    ms._pendingLabel = nil
                     ms._coroContext[co]    = ctx
                     ms._activeContexts[ctx] = true
                     local ok, err = coroutine.resume(co, ...)
@@ -4855,6 +4873,7 @@ YQIDAQAB
                                     end)()
                                     pcall(ms.dev._onMacroFire, id, def.label, def.sub, _pd and _pd.label, _trig)
                                 end
+                                ms._pendingLabel = def.label
                                 fn()
                             end
                             if c.type == "mouse" then
@@ -4884,6 +4903,7 @@ YQIDAQAB
                                 end)()
                                 pcall(ms.dev._onMacroFire, id, def.label, nil, nil, _trig)
                             end
+                            ms._pendingLabel = def.label
                             fn()
                         end
                         if c.type == "mouse" then
@@ -5567,7 +5587,7 @@ YQIDAQAB
                     end)
                 end,
 
-                debugRoblox = function() ms.debugRoblox() end,
+                openWindowMonitor = function() if ms.dev and ms.dev.window then ms.dev.window.toggle() end end,
 
                 openConsole = function() hs.openConsole() end,
 
@@ -5619,9 +5639,10 @@ YQIDAQAB
 
                 checkForUpdate = function() ms.integrity.update() end,
 
-                openConsole  = function() ms.dev.console.toggle() end,
-                openWatcher  = function() ms.dev.watcher.toggle() end,
-                openKeys     = function() ms.dev.keys.toggle()   end,
+                openConsole       = function() ms.dev.console.toggle()  end,
+                openWatcher       = function() ms.dev.watcher.toggle()  end,
+                openKeys          = function() ms.dev.keys.toggle()     end,
+                openWindowMonitor = function() ms.dev.window.toggle()   end,
 
                 -- Triggered by right-click › Rebind… on a macro row in the webview.
                 -- Runs the same eventtap capture used by the native menu rebind flow.
@@ -6191,6 +6212,41 @@ YQIDAQAB
                     end
                 end
 
+                -- Helper: build a JS snippet that injects the current ms._theme
+                -- colors into a dev panel's CSS variables. Called in each panel's
+                -- navigationCallback so the panel stays in sync with the theme file.
+                local function _devThemeJS()
+                    local t = ms._theme or {}
+                    local parts = {}
+                    local function sv(prop, key)
+                        local val = t[key]
+                        if type(val) == "string" then
+                            -- Sanitize: only accept valid hex colors or named values
+                            if val:match("^#[0-9a-fA-F]+$") or val:match("^rgb") then
+                                table.insert(parts, string.format("r.setProperty('%s','%s')", prop, val))
+                            end
+                        end
+                    end
+                    sv("--bg",       "bg")
+                    sv("--surface",  "surface")
+                    sv("--surface2", "surface2")
+                    sv("--accent",   "accent")
+                    sv("--text",     "text")
+                    -- text2 is derived: we use warning color for mouse/scroll highlights
+                    sv("--mouse",    "warning")
+                    if type(t.radius) == "number" then
+                        table.insert(parts, string.format("r.setProperty('--radius','%dpx')", math.max(0, t.radius)))
+                    end
+                    -- Font family
+                    local font = t.font
+                    if type(font) == "string" and font ~= "" and not font:match("%.[ot]tf$") and not font:match("\.woff") then
+                        local safe = font:gsub("'", "\'")
+                        table.insert(parts, string.format("document.body.style.fontFamily=\"'%s',Palatino,Georgia,serif\"", safe))
+                    end
+                    if #parts == 0 then return "" end
+                    return "(function(){var r=document.documentElement.style;" .. table.concat(parts, ";") .. "})()"
+                end
+
                 -- Helper: make a small floating panel.
                 local function _makeDevPanel(ucName, w, h, xOff, yOff)
                     local uc = hs.webview.usercontent.new(ucName)
@@ -6274,6 +6330,7 @@ YQIDAQAB
                                     or e.type == "result" or e.type == "error"
                                     or e.type == "input"
                             end)
+                            local tj = _devThemeJS(); if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
                     end
                     ms.dev._consolePanel:show()
@@ -6338,6 +6395,7 @@ YQIDAQAB
                             _loadDevHistory(panel, function(e)
                                 return e.type=="macro" or e.type=="print" or e.type=="error"
                             end)
+                            local tj = _devThemeJS(); if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
                     end
                     ms.dev._watcherPanel:show()
@@ -6405,6 +6463,7 @@ YQIDAQAB
                                     or e.type=="scroll" or e.type=="mousemove"
                             end)
                             pcall(function() ms.dev._pushMouseState() end)
+                            local tj = _devThemeJS(); if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
                     end
                     ms.dev._keysPanel:show()
@@ -6441,6 +6500,162 @@ YQIDAQAB
                 ms.dev.keys.toggle = function()
                     if ms.dev._keysOpen then ms.dev.keys.hide()
                     else ms.dev.keys.show() end
+                end
+
+                -- ── Mouse state pusher ────────────────────────────────────────────────
+                -- Defined here so both the nav callback and the poller can call it.
+                ms.dev._pushMouseState = function(x, y)
+                    if not ms.dev._keysPanel then return end
+                    local _x = x or (ms.dev._mousePos and ms.dev._mousePos.x) or 0
+                    local _y = y or (ms.dev._mousePos and ms.dev._mousePos.y) or 0
+                    local j = string.format('{"x":%d,"y":%d}', _x, _y)
+                    pcall(function()
+                        ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. j .. ")")
+                    end)
+                end
+
+                -- ── Dev step logger (call from macros to trace execution) ────────────────
+                ms.dev.step = function(msg)
+                    if not ms.dev._watcherPanel then return end
+                    local ok, j = pcall(hs.json.encode, {
+                        type = "step",
+                        ts   = os.time(),
+                        msg  = tostring(msg or ""),
+                    })
+                    if ok then
+                        pcall(function()
+                            ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                        end)
+                    end
+                end
+
+                -- ── Window Monitor ────────────────────────────────────────────────────
+                local _ucWindow = hs.webview.usercontent.new("msWindow")
+                _ucWindow:setCallback(function(msg)
+                    local ok, data = pcall(hs.json.decode, msg.body)
+                    if not ok or type(data) ~= "table" then return end
+                    if data.action == "clear" then
+                        ms.dev._windowHistory = {}
+                    elseif data.action == "close" then
+                        if ms.dev._windowPanel then ms.dev._windowPanel:hide() end
+                        ms.dev._windowOpen = false
+                        if ms.dev._windowPoller then
+                            ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil
+                        end
+                    elseif data.action == "move" and ms.dev._windowPanelPos then
+                        ms.dev._windowPanelPos.x = ms.dev._windowPanelPos.x + (data.dx or 0)
+                        ms.dev._windowPanelPos.y = ms.dev._windowPanelPos.y + (data.dy or 0)
+                        if ms.dev._windowPanel then
+                            pcall(function() ms.dev._windowPanel:frame(ms.dev._windowPanelPos) end)
+                        end
+                    end
+                end)
+
+                ms.dev._windowHistory = {}
+                ms.dev._windowMaxHistory = 80
+                ms.dev._windowLast = nil  -- last focused window id, for change detection
+
+                -- Push an entry into the panel and history ring buffer.
+                local function _pushWindowEvent(entry)
+                    table.insert(ms.dev._windowHistory, entry)
+                    if #ms.dev._windowHistory > ms.dev._windowMaxHistory then
+                        table.remove(ms.dev._windowHistory, 1)
+                    end
+                    if ms.dev._windowPanel then
+                        local ok, j = pcall(hs.json.encode, entry)
+                        if ok then
+                            pcall(function()
+                                ms.dev._windowPanel:evaluateJavaScript(
+                                    "appendEntry(" .. j .. ");updateCurrentWindow(" .. j .. ")"
+                                )
+                            end)
+                        end
+                    end
+                end
+
+                ms.dev.window = {}
+                ms.dev.window.show = function()
+                    if not ms.dev._windowPanel then
+                        local screen = hs.screen.mainScreen():frame()
+                        local w, h   = 360, 520
+                        local x = screen.x + screen.w - w - 20
+                        local y = screen.y + 68
+                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                            { developerExtrasEnabled = true }, _ucWindow)
+                        if not panel then return end
+                        pcall(function() panel:windowStyle(0) end)
+                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                        pcall(function() panel:shadow(true) end)
+                        local html = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
+                        if html then
+                            panel:html(html:read("*all"), _devBase); html:close()
+                        end
+                        ms.dev._windowPanel    = panel
+                        ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
+                        panel:navigationCallback(function()
+                            -- Push theme CSS.
+                            local tj = _devThemeJS()
+                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                            -- Load history.
+                            if #ms.dev._windowHistory > 0 then
+                                local ok, j = pcall(hs.json.encode, ms.dev._windowHistory)
+                                if ok then pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end) end
+                            end
+                            -- Seed the current window.
+                            local win = hs.window.focusedWindow()
+                            if win then
+                                local app   = (win:application() and win:application():name()) or "?"
+                                local title = win:title() or ""
+                                local f     = win:frame()
+                                local ok2, j2 = pcall(hs.json.encode, {
+                                    type="focus", ts=os.time(),
+                                    app=app, title=title,
+                                    w=math.floor(f.w), h=math.floor(f.h),
+                                    x=math.floor(f.x), y=math.floor(f.y),
+                                })
+                                if ok2 then pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end) end
+                            end
+                        end)
+                    end
+                    ms.dev._windowPanel:show()
+                    pcall(function() ms.dev._windowPanel:bringToFront(true) end)
+                    ms.dev._windowOpen = true
+                    ms.playSlot("settingsOpen")
+                    -- Poll every 0.4 s for focused window changes.
+                    if ms.dev._windowPoller then ms.dev._windowPoller:stop() end
+                    ms.dev._windowPoller = hs.timer.doEvery(0.4, function()
+                        if not ms.dev._windowOpen then
+                            if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
+                            return
+                        end
+                        local win = hs.window.focusedWindow()
+                        if not win then return end
+                        local winId = win:id()
+                        if winId == ms.dev._windowLast then return end
+                        ms.dev._windowLast = winId
+                        local app   = (win:application() and win:application():name()) or "?"
+                        local title = win:title() or ""
+                        local f     = win:frame()
+                        _pushWindowEvent({
+                            type="focus", ts=os.time(),
+                            app=app, title=title,
+                            w=math.floor(f.w), h=math.floor(f.h),
+                            x=math.floor(f.x), y=math.floor(f.y),
+                        })
+                    end)
+                end
+                ms.dev.window.hide = function()
+                    if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
+                    if ms.dev._windowPanel then
+                        ms.playSlot("settingsClose")
+                        ms.dev._windowPanel:hide()
+                    end
+                    ms.dev._windowOpen = false
+                end
+                ms.dev.window.toggle = function()
+                    if ms.dev._windowOpen then ms.dev.window.hide()
+                    else ms.dev.window.show() end
                 end
             end
         -- END --

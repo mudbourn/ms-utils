@@ -206,8 +206,9 @@
                         ms.wait(20)
                         if not ms.keystate("shift") then ms.release("shift") end
                         ms.scroll("down", 2000)
-                        ms.wait(3000)
                         ms.sound(ThrowTrickEndSound, true)
+                        ms.wait(3000)
+
                         return true
                     end
                     return false
@@ -238,8 +239,8 @@
                     if not MovingCheck then ms.release("w") end
                     ms.wait(20)
                     ms.scroll("down", 2000)
-                    ms.wait(3000)
                     ms.sound(ThrowTrickEndSound, true)
+                    ms.wait(3000)
                 end
                 if not ThrowLow() then ThrowDefault() end
             end)
