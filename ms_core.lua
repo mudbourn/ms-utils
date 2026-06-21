@@ -1806,7 +1806,6 @@ YQIDAQAB
                 -- Bundles ms_macros.lua + optional defaults/theme/sounds into
                 -- ~/Downloads/<name>.mspkg and reveals it in Finder.
                 local function exportProfilePkg()
-                    ms.playSlot("alert")
                     local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                     local name = sanitizeName((ms.macroMeta and ms.macroMeta.name) or "unnamed")
                     local outName = name .. ".mspkg"
@@ -1847,8 +1846,7 @@ YQIDAQAB
                     hs.execute("cd " .. sq(tmpDir) .. " && zip -r " .. sq(outPath) .. " . 2>/dev/null")
                     os.execute("rm -rf " .. sq(tmpDir))
                     if hs.fs.attributes(outPath) then
-                        ms.playSlot("update")
-                        hs.execute("open -R " .. sq(outPath))
+                        ms.playSlot("alert")
                         local msg = "Exported " .. outName .. " to ~/Downloads/"
                         if soundsCopied > 0 then
                             msg = msg .. "\n" .. soundsCopied .. " sound" .. (soundsCopied > 1 and "s" or "") .. " bundled."
@@ -1862,7 +1860,6 @@ YQIDAQAB
                 -- Imports a .mspkg zip package into profiles/.
                 -- Validates ms_macros.lua, copies optional assets, auto-adds bundled sounds.
                 local function importProfilePkg()
-                    ms.playSlot("alert")
                     hs.focus()
                     local result = hs.dialog.chooseFileOrFolder(
                         "Select a .mspkg profile package to import",
@@ -6387,16 +6384,41 @@ YQIDAQAB
                         ms.dev._keysPanel    = panel
                         ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
                         panel:navigationCallback(function()
+                            -- Seed the actual current mouse position on page load.
+                            local _p = hs.mouse.absolutePosition()
+                            ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
                             _loadDevHistory(panel, function(e)
                                 return e.type=="key" or e.type=="mouse"
+                                    or e.type=="scroll" or e.type=="mousemove"
                             end)
+                            pcall(function() ms.dev._pushMouseState() end)
                         end)
                     end
                     ms.dev._keysPanel:show()
                     pcall(function() ms.dev._keysPanel:bringToFront(true) end)
                     ms.dev._keysOpen = true
+                    -- Poll mouse position every 100 ms so display stays current
+                    -- even when the eventtap hasn't fired (e.g. no movement yet).
+                    if ms.dev._mousePoller then ms.dev._mousePoller:stop() end
+                    ms.dev._mousePoller = hs.timer.doEvery(0.1, function()
+                        if not ms.dev._keysPanel then
+                            if ms.dev._mousePoller then
+                                ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
+                            end
+                            return
+                        end
+                        local _p = hs.mouse.absolutePosition()
+                        local _x, _y = math.floor(_p.x), math.floor(_p.y)
+                        if _x ~= ms.dev._mousePos.x or _y ~= ms.dev._mousePos.y then
+                            ms.dev._mousePos = { x = _x, y = _y }
+                            ms.dev._pushMouseState(_x, _y)
+                        end
+                    end)
                 end
                 ms.dev.keys.hide   = function()
+                    if ms.dev._mousePoller then
+                        ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
+                    end
                     if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
                     ms.dev._keysOpen = false
                 end
