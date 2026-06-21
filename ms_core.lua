@@ -1910,7 +1910,7 @@ YQIDAQAB
                             local _out, _ok = hs.execute(
                                 "openssl dgst -sha256 -verify '" .. _keyPath ..
                                 "' -signature '" .. _sigPath ..
-                                "' '" .. _msgPath .. "'"
+                                "' '" .. _msgPath .. "' 2>&1"
                             )
                             os.remove(_keyPath); os.remove(_sigPath); os.remove(_msgPath)
                             if not _ok then
