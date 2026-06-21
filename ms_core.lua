@@ -3287,11 +3287,7 @@ YQIDAQAB
                         table.insert(sub, { title = "-" })
                         table.insert(sub, {
                             title = "Import Profile...",
-                            fn    = function() importProfilePkg() end,
-                        })
-                        table.insert(sub, {
-                            title = "Export Profile",
-                            fn    = function() exportProfilePkg() end,
+                            fn    = function() importProfile() end,
                         })
                         return sub
                     end
