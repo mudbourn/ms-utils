@@ -44,7 +44,7 @@
                 flex-direction: column;
             }
 
-            /* ── Titlebar ─────────────────────────────────────────────── */
+            /* ── Titlebar ─────────────────────────────────────────────────── */
             #titlebar {
                 height: 32px;
                 -webkit-app-region: drag;
@@ -88,29 +88,55 @@
                 color: var(--text);
             }
 
-            /* ── Two-column main area ─────────────────────────────────────────── */
-            #main {
-                flex: 1;
+            /* ── Tab bar ─────────────────────────────────────────────────── */
+            #tabs {
                 display: flex;
-                min-height: 0;
-            }
-
-            .col {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                min-width: 0;
-                min-height: 0;
-            }
-
-            /* 1px vertical divider between columns */
-            #col-sep {
-                width: 1px;
-                background: var(--border);
                 flex-shrink: 0;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
             }
 
-            /* ── State section (top of each column) ──────────────────────────── */
+            .tab {
+                flex: 1;
+                height: 30px;
+                background: transparent;
+                border: none;
+                border-bottom: 2px solid transparent;
+                margin-bottom: -1px;
+                color: var(--text2);
+                font-family: inherit;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.8px;
+                text-transform: uppercase;
+                cursor: pointer;
+                transition:
+                    color 0.12s,
+                    border-color 0.12s;
+            }
+
+            .tab:hover {
+                color: var(--text);
+            }
+
+            .tab.active {
+                color: var(--text);
+                border-bottom-color: var(--accent);
+            }
+
+            /* ── Tab sections ─────────────────────────────────────────────── */
+            .tab-section {
+                display: none;
+                flex: 1;
+                flex-direction: column;
+                min-height: 0;
+            }
+
+            .tab-section.active {
+                display: flex;
+            }
+
+            /* ── State section ───────────────────────────────────────────── */
             .state-section {
                 flex-shrink: 0;
                 padding: 8px 14px 10px;
@@ -127,7 +153,6 @@
                 color: var(--text2);
             }
 
-            /* ── Pills row (shared by keys and mouse buttons) ─────────────────── */
             .pills-row {
                 display: flex;
                 flex-wrap: wrap;
@@ -139,9 +164,9 @@
                 background: var(--surface2);
                 border: 1px solid var(--border);
                 color: var(--text);
-                font-size: 11px;
+                font-size: 12px;
                 font-family: inherit;
-                padding: 2px 7px;
+                padding: 2px 8px;
                 border-radius: 3px;
                 white-space: nowrap;
             }
@@ -151,9 +176,8 @@
                 color: var(--mouse);
             }
 
-            /* ── Mouse position display ───────────────────────────────────────── */
             #mouse-pos {
-                font-size: 11px;
+                font-size: 12px;
                 color: var(--text2);
                 font-variant-numeric: tabular-nums;
                 letter-spacing: 0.3px;
@@ -163,14 +187,14 @@
                 color: var(--text);
             }
 
-            /* ── Horizontal divider between state and log ─────────────────────── */
-            .col-divider {
+            /* ── Horizontal divider ──────────────────────────────────────── */
+            .divider {
                 height: 1px;
                 background: var(--border);
                 flex-shrink: 0;
             }
 
-            /* ── Scrollable event log ─────────────────────────────────────────── */
+            /* ── Event log ───────────────────────────────────────────────── */
             .event-log {
                 flex: 1;
                 overflow-y: auto;
@@ -189,11 +213,11 @@
                 border-radius: 3px;
             }
 
-            /* ── Entry rows ───────────────────────────────────────────────────── */
+            /* ── Entry rows ──────────────────────────────────────────────── */
             .entry {
                 display: flex;
                 align-items: baseline;
-                gap: 5px;
+                gap: 6px;
                 padding: 2px 14px;
                 font-size: 13px;
                 line-height: 1.6;
@@ -202,7 +226,6 @@
             .entry:hover {
                 background: var(--surface);
             }
-
             .entry.move-entry {
                 opacity: 0.5;
             }
@@ -213,7 +236,6 @@
                 white-space: nowrap;
                 flex-shrink: 0;
             }
-
             .arrow {
                 flex-shrink: 0;
             }
@@ -252,7 +274,7 @@
             }
             .pos-dim {
                 color: var(--text2);
-                font-size: 10px;
+                font-size: 11px;
             }
         </style>
     </head>
@@ -263,32 +285,41 @@
             <button class="tb-btn" onclick="closePanel()">[×]</button>
         </div>
 
-        <div id="main">
-            <!-- ── Keys column ─────────────────────────────────────────────── -->
-            <div class="col" id="keys-col">
-                <div class="state-section">
-                    <span class="section-label">Keys</span>
-                    <div class="pills-row" id="keys-pills"></div>
-                </div>
-                <div class="col-divider"></div>
-                <div class="event-log" id="keys-log"></div>
-            </div>
+        <div id="tabs">
+            <button
+                id="tab-keys"
+                class="tab active"
+                onclick="switchTab('keys')"
+            >
+                Keyboard
+            </button>
+            <button id="tab-mouse" class="tab" onclick="switchTab('mouse')">
+                Mouse
+            </button>
+        </div>
 
-            <div id="col-sep"></div>
-
-            <!-- ── Mouse column ────────────────────────────────────────────── -->
-            <div class="col" id="mouse-col">
-                <div class="state-section">
-                    <span class="section-label">Mouse</span>
-                    <div id="mouse-pos">
-                        x: <span id="mx">—</span>&nbsp;&nbsp;y:
-                        <span id="my">—</span>
-                    </div>
-                    <div class="pills-row" id="mouse-pills"></div>
-                </div>
-                <div class="col-divider"></div>
-                <div class="event-log" id="mouse-log"></div>
+        <!-- ── Keyboard tab ───────────────────────────────────────────────── -->
+        <div id="keys-section" class="tab-section active">
+            <div class="state-section">
+                <span class="section-label">Active</span>
+                <div id="keys-pills" class="pills-row"></div>
             </div>
+            <div class="divider"></div>
+            <div id="keys-log" class="event-log"></div>
+        </div>
+
+        <!-- ── Mouse tab ──────────────────────────────────────────────────── -->
+        <div id="mouse-section" class="tab-section">
+            <div class="state-section">
+                <span class="section-label">Position</span>
+                <div id="mouse-pos">
+                    x: <span id="mx">—</span>&nbsp;&nbsp;y:
+                    <span id="my">—</span>
+                </div>
+                <div id="mouse-pills" class="pills-row"></div>
+            </div>
+            <div class="divider"></div>
+            <div id="mouse-log" class="event-log"></div>
         </div>
 
         <script>
@@ -305,7 +336,7 @@
                 }
             }
 
-            // ── Drag ──────────────────────────────────────────────────────────
+            // ── Drag ──────────────────────────────────────────────────────
             (function () {
                 let _drag = null;
                 document
@@ -333,7 +364,24 @@
                     });
             })();
 
-            // ── Constants ─────────────────────────────────────────────────────
+            // ── Tab switching ──────────────────────────────────────────────
+            function switchTab(tab) {
+                document
+                    .querySelectorAll(".tab")
+                    .forEach((t) =>
+                        t.classList.toggle("active", t.id === "tab-" + tab),
+                    );
+                document
+                    .querySelectorAll(".tab-section")
+                    .forEach((s) =>
+                        s.classList.toggle("active", s.id === tab + "-section"),
+                    );
+                // Scroll the newly-visible log to the bottom.
+                const log = document.getElementById(tab + "-log");
+                if (log) log.scrollTop = log.scrollHeight;
+            }
+
+            // ── Constants ─────────────────────────────────────────────────
             const MAX_ENTRIES = 300;
             const NEAR_BOTTOM = 48;
             const BTN_NAMES = {
@@ -347,6 +395,7 @@
             function btnName(n) {
                 return BTN_NAMES[n] ?? "M" + n;
             }
+
             function isNearBottom(el) {
                 return (
                     el.scrollHeight - el.scrollTop - el.clientHeight <=
@@ -354,54 +403,55 @@
                 );
             }
 
-            // ── Entry builder ─────────────────────────────────────────────────
+            // ── Entry builder ─────────────────────────────────────────────
             function buildRow(entry) {
                 const row = document.createElement("div");
                 const t = entry.type;
 
                 if (t === "mousemove") {
                     row.className = "entry move-entry";
-                    const ts = mkSpan("ts", "[" + (entry.ts || "") + "]");
-                    const arr = mkSpan("arrow arrow-move", "→");
-                    const name = mkSpan("move-name", entry.x + ", " + entry.y);
-                    row.append(ts, arr, name);
+                    row.append(
+                        mkSpan("ts", "[" + (entry.ts || "") + "]"),
+                        mkSpan("arrow arrow-move", "→"),
+                        mkSpan("move-name", entry.x + ", " + entry.y),
+                    );
                     return row;
                 }
 
                 row.className = "entry";
-                const ts = mkSpan("ts", "[" + (entry.ts || "") + "]");
-                row.appendChild(ts);
+                row.appendChild(mkSpan("ts", "[" + (entry.ts || "") + "]"));
 
                 if (t === "key") {
-                    const arr = mkSpan(
-                        "arrow " + (entry.down ? "arrow-down" : "arrow-up"),
-                        entry.down ? "↓" : "↑",
+                    row.append(
+                        mkSpan(
+                            "arrow " + (entry.down ? "arrow-down" : "arrow-up"),
+                            entry.down ? "↓" : "↑",
+                        ),
+                        mkSpan("key-name", entry.key || ""),
                     );
-                    const name = mkSpan("key-name", entry.key || "");
-                    row.append(arr, name);
                 } else if (t === "mouse") {
-                    const arr = mkSpan(
-                        "arrow " + (entry.down ? "arrow-mouse" : "arrow-up"),
-                        entry.down ? "↓" : "↑",
+                    row.append(
+                        mkSpan(
+                            "arrow " +
+                                (entry.down ? "arrow-mouse" : "arrow-up"),
+                            entry.down ? "↓" : "↑",
+                        ),
+                        mkSpan("mouse-name", btnName(entry.button)),
+                        mkSpan("pos-dim", "  " + entry.x + ", " + entry.y),
                     );
-                    const name = mkSpan("mouse-name", btnName(entry.button));
-                    const pos = mkSpan(
-                        "pos-dim",
-                        "  " + entry.x + ", " + entry.y,
-                    );
-                    row.append(arr, name, pos);
                 } else if (t === "scroll") {
-                    const arr = mkSpan(
-                        "arrow arrow-scroll",
-                        entry.direction === "up" ? "↑" : "↓",
+                    row.append(
+                        mkSpan(
+                            "arrow arrow-scroll",
+                            entry.direction === "up" ? "↑" : "↓",
+                        ),
+                        mkSpan(
+                            "scroll-name",
+                            "scroll " +
+                                entry.direction +
+                                (entry.amount > 1 ? " ×" + entry.amount : ""),
+                        ),
                     );
-                    const name = mkSpan(
-                        "scroll-name",
-                        "scroll " +
-                            entry.direction +
-                            (entry.amount > 1 ? " ×" + entry.amount : ""),
-                    );
-                    row.append(arr, name);
                 }
 
                 return row;
@@ -414,7 +464,7 @@
                 return s;
             }
 
-            // ── Route entry to the correct log column ─────────────────────────
+            // ── Route entry to the correct log ────────────────────────────
             function appendEntry(entry) {
                 const t = entry.type;
                 const isMouseSide =
@@ -430,10 +480,9 @@
             }
 
             function loadHistory(entries) {
-                const keysLog = document.getElementById("keys-log");
-                const mouseLog = document.getElementById("mouse-log");
-                keysLog.innerHTML = "";
-                mouseLog.innerHTML = "";
+                const kl = document.getElementById("keys-log");
+                const ml = document.getElementById("mouse-log");
+                kl.innerHTML = ml.innerHTML = "";
                 const kf = document.createDocumentFragment();
                 const mf = document.createDocumentFragment();
                 (entries || []).forEach((e) => {
@@ -443,43 +492,43 @@
                         e.type === "mousemove";
                     (isMouseSide ? mf : kf).appendChild(buildRow(e));
                 });
-                keysLog.appendChild(kf);
-                mouseLog.appendChild(mf);
-                keysLog.scrollTop = keysLog.scrollHeight;
-                mouseLog.scrollTop = mouseLog.scrollHeight;
+                kl.appendChild(kf);
+                ml.appendChild(mf);
+                kl.scrollTop = kl.scrollHeight;
+                ml.scrollTop = ml.scrollHeight;
             }
 
-            // ── Active keys pills ─────────────────────────────────────────────
+            // ── Active keys pills ─────────────────────────────────────────
             function updateActiveKeys(names) {
                 const row = document.getElementById("keys-pills");
                 row.innerHTML = "";
                 (names || []).forEach((name) => {
-                    const pill = document.createElement("span");
-                    pill.className = "pill";
-                    pill.textContent = name;
-                    row.appendChild(pill);
+                    const p = document.createElement("span");
+                    p.className = "pill";
+                    p.textContent = name;
+                    row.appendChild(p);
                 });
             }
 
-            // ── Mouse state (position + active buttons) ───────────────────────
+            // ── Mouse state (position + active buttons) ───────────────────
             function updateMouseState(state) {
-                // Position
                 if (state.x != null)
                     document.getElementById("mx").textContent = state.x;
                 if (state.y != null)
                     document.getElementById("my").textContent = state.y;
-                // Active button pills
                 const row = document.getElementById("mouse-pills");
                 row.innerHTML = "";
-                (state.buttons || []).forEach((b) => {
-                    const pill = document.createElement("span");
-                    pill.className = "pill pill-mouse";
-                    pill.textContent = btnName(b);
-                    row.appendChild(pill);
+                const btns = Array.isArray(state.buttons)
+                    ? state.buttons
+                    : Object.values(state.buttons || {});
+                btns.forEach((b) => {
+                    const p = document.createElement("span");
+                    p.className = "pill pill-mouse";
+                    p.textContent = btnName(b);
+                    row.appendChild(p);
                 });
             }
 
-            // ── Position-only fast update (bypasses full state rebuild) ───────
             function updateMousePos(pos) {
                 if (pos.x != null)
                     document.getElementById("mx").textContent = pos.x;
@@ -487,7 +536,7 @@
                     document.getElementById("my").textContent = pos.y;
             }
 
-            // ── Button actions ────────────────────────────────────────────────
+            // ── Button actions ────────────────────────────────────────────
             function clearLog() {
                 document.getElementById("keys-log").innerHTML = "";
                 document.getElementById("mouse-log").innerHTML = "";

@@ -237,7 +237,7 @@ YQIDAQAB
                         if ms.dev._consolePanel and not _devKeyNoticeSent then
                             _devKeyNoticeSent = true
                             local notice = { ts = entry.ts, type = "print",
-                                             msg = "\xe2\x8c\xa8  key activity \xe2\x80\x94 see Key Monitor" }
+                                             msg = "\xe2\x8c\xa8  input activity \xe2\x80\x94 see Input Monitor" }
                             local nok, njson = pcall(hs.json.encode, notice)
                             if nok then
                                 pcall(function()
@@ -264,7 +264,8 @@ YQIDAQAB
                             ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
                         end)
                     end
-                    if ms.dev._keysPanel and (t=="key" or t=="mouse") then
+                    if ms.dev._keysPanel
+                        and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
                         pcall(function()
                             ms.dev._keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
                         end)
@@ -6250,7 +6251,7 @@ YQIDAQAB
                 ms.dev.console.show = function()
                     if not ms.dev._consolePanel then
                         local screen  = hs.screen.mainScreen():frame()
-                        local w, h    = 450, 800
+                        local w, h    = 360, 640
                         local x = screen.x + screen.w - w - 20
                         local y = screen.y + 20
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
@@ -6268,15 +6269,23 @@ YQIDAQAB
                         ms.dev._consolePanel    = panel
                         ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
                         panel:navigationCallback(function()
-                            _loadDevHistory(panel, nil)
+                            _loadDevHistory(panel, function(e)
+                                return e.type == "macro" or e.type == "print"
+                                    or e.type == "result" or e.type == "error"
+                                    or e.type == "input"
+                            end)
                         end)
                     end
                     ms.dev._consolePanel:show()
                     pcall(function() ms.dev._consolePanel:bringToFront(true) end)
                     ms.dev._consoleOpen = true
+                    ms.playSlot("settingsOpen")
                 end
                 ms.dev.console.hide   = function()
-                    if ms.dev._consolePanel then ms.dev._consolePanel:hide() end
+                    if ms.dev._consolePanel then
+                        ms.playSlot("settingsClose")
+                        ms.dev._consolePanel:hide()
+                    end
                     ms.dev._consoleOpen = false
                 end
                 ms.dev.console.toggle = function()
@@ -6334,9 +6343,13 @@ YQIDAQAB
                     ms.dev._watcherPanel:show()
                     pcall(function() ms.dev._watcherPanel:bringToFront(true) end)
                     ms.dev._watcherOpen = true
+                    ms.playSlot("settingsOpen")
                 end
                 ms.dev.watcher.hide   = function()
-                    if ms.dev._watcherPanel then ms.dev._watcherPanel:hide() end
+                    if ms.dev._watcherPanel then
+                        ms.playSlot("settingsClose")
+                        ms.dev._watcherPanel:hide()
+                    end
                     ms.dev._watcherOpen = false
                 end
                 ms.dev.watcher.toggle = function()
@@ -6367,7 +6380,7 @@ YQIDAQAB
                 ms.dev.keys.show = function()
                     if not ms.dev._keysPanel then
                         local screen  = hs.screen.mainScreen():frame()
-                        local w, h    = 640, 640
+                        local w, h    = 360, 640
                         local x = screen.x + screen.w - w - 20
                         local y = screen.y + 68
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
@@ -6397,8 +6410,8 @@ YQIDAQAB
                     ms.dev._keysPanel:show()
                     pcall(function() ms.dev._keysPanel:bringToFront(true) end)
                     ms.dev._keysOpen = true
+                    ms.playSlot("settingsOpen")
                     -- Poll mouse position every 100 ms so display stays current
-                    -- even when the eventtap hasn't fired (e.g. no movement yet).
                     if ms.dev._mousePoller then ms.dev._mousePoller:stop() end
                     ms.dev._mousePoller = hs.timer.doEvery(0.1, function()
                         if not ms.dev._keysPanel then
@@ -6419,7 +6432,10 @@ YQIDAQAB
                     if ms.dev._mousePoller then
                         ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
                     end
-                    if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
+                    if ms.dev._keysPanel then
+                        ms.playSlot("settingsClose")
+                        ms.dev._keysPanel:hide()
+                    end
                     ms.dev._keysOpen = false
                 end
                 ms.dev.keys.toggle = function()
