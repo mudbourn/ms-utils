@@ -6043,4 +6043,3 @@
         end
     -- END Startup Executions --
 -- END Core System --
-evil = 2
