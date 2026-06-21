@@ -825,7 +825,7 @@ Starts or stops the SOCD listener based on `ms.socdEnabled`. Call this after cha
 When enabled, re-routes root macro binds through `ms.trackpadBindOverrides` instead of their normal `default` bind. The default overrides move `superJump` from mouse button 3 to a keyboard key.
 
 ```lua
--- Defined at the top of init.lua; edit to change trackpad bind overrides:
+-- Defined at the top of ms_core.lua; edit to change trackpad bind overrides:
 ms.trackpadBindOverrides = {
     superJump = {type="key", mods={}, key="k"},
 }
@@ -837,20 +837,37 @@ The trackpad hold listeners (`ms._trackpadLeftListener`, `ms._trackpadRightListe
 
 ## 16. Profiles
 
-A profile is a folder in `~/.hammerspoon/profiles/<name>/` containing `ms_macros.lua` and optionally `ms_settings.json` + `ms_settings_default.json`.
+A profile is a folder in `~/.hammerspoon/profiles/<name>/` containing `ms_macros.lua` and optionally `ms_settings_default.json` and `ms_theme.json`.
 
 **Switching profiles** (Settings › Profiles):
 1. Archives the active `ms_macros.lua` + settings files into `profiles/<currentName>/`.
 2. Copies the target profile's files into the active positions.
 3. Reloads after 3 seconds.
 
-**Importing a profile** (Settings › Profiles › Import):
-- Opens a file picker. The selected `ms_macros.lua` is read for its `ms.macroMeta.name` field and placed in `profiles/<name>/`.
-- The file is read and written in binary mode. If `io.open` is blocked by macOS sandboxing, a `/bin/cp` shell fallback is used automatically. Grant Hammerspoon **Full Disk Access** in System Settings if importing from outside `~/.hammerspoon/`.
+**Importing a profile** (Settings › Profiles › Import Profile):
+- Opens a file picker for `.mspkg` files.
+- The package is extracted, `ms_macros.lua` is security-audited, and the full bundle is installed into `profiles/<name>/`.
+- Bundled sounds are copied into `~/.hammerspoon/sounds/` automatically. Files that already exist are never overwritten.
 
-`ms.macroMeta.name` is the canonical profile name. The folder is created using a sanitized version of this name.
+**Exporting a profile** (Settings › Profiles › Export Profile):
+- Packages the current active profile as a `.mspkg` file and saves it to `~/Downloads/`.
+- Reveals the file in Finder on completion.
+- Sounds referenced in `ms.soundAssign` that came from `ms.importedSounds` are bundled automatically.
 
-**Security:** both import and profile switch run `auditMacros()` on the file before any disk operations. A file that fails the static scan is rejected with an alert and never activated.
+### .mspkg format
+
+A `.mspkg` file is a standard zip archive with a defined internal layout:
+
+```
+ms_macros.lua                  (required)
+ms_settings_default.json       (optional — pack's preferred defaults)
+ms_theme.json                  (optional — pack's theme)
+sounds/                        (optional — bundled sound files)
+```
+
+Any sounds in `sounds/` are added to the user's library on import. If a sound with the same filename already exists it is skipped.
+
+**Security:** both import and profile switch run `auditMacros()` on `ms_macros.lua` before any disk operations. A file that fails the static scan is rejected with an alert and never activated.
 
 ---
 
@@ -959,15 +976,17 @@ These are plain globals available from `ms_macros.lua`.
 
 ### Overview
 
-The system integrity check detects unauthorised modifications to `ms_core.lua` by comparing its SHA-256 hash to a stored baseline. The update system fetches a new `ms_core.lua` from GitHub, verifies its signature and hash before installing, backs up the old file, and reloads automatically.
+The system integrity check detects unauthorised modifications to `ms_core.lua` by comparing its SHA-256 hash to a stored baseline. The update system fetches a new `ms_core.lua` from GitHub, verifies its RSA-2048 signature and hash before installing, backs up the old file, and reloads automatically.
 
 The trusted hash is stored in `~/.hammerspoon/data/.ms_trusted_hash` — one line, 64 hex characters. It is seeded automatically from `MANIFEST.json` on a clean install, and updated after every successful update. Normal reloads never change it.
+
+> **Note:** `ms.integrity` is read-only from `ms_macros.lua`. Macro code cannot call `deleteTrustedHash()` or `writeTrustedHash()`. Use **Settings › Developer › Trust Current Version** for all trust management.
 
 ---
 
 ### `ms.integrity.check()`
 
-Hashes the live `init.lua` and compares it to the stored baseline.
+Hashes the live `ms_core.lua` and compares it to the stored baseline.
 
 Returns three values: `status, currentHash, trustedHash`
 
@@ -980,7 +999,7 @@ Returns three values: `status, currentHash, trustedHash`
 ```lua
 local status, cur, trusted = ms.integrity.check()
 if status == "mismatch" then
-    ms.alert("init.lua has changed!", 6)
+    ms.alert("ms_core.lua has changed!", 6)
 end
 ```
 
@@ -1000,25 +1019,22 @@ Read or write the baseline hash file at `~/.hammerspoon/data/.ms_trusted_hash`.
 
 ### `ms.integrity.trustCurrent()`
 
-Seals the running `init.lua` as the new trusted baseline. Writes its hash to `.ms_trusted_hash` and shows a confirmation alert.
+Seals the running `ms_core.lua` as the new trusted baseline. Writes its hash to `.ms_trusted_hash` and shows a confirmation alert.
 
-Available via **Settings › Developer › Trust Current Version**. The item is greyed out (disabled) when the file already matches the stored hash — it becomes clickable again as soon as a mismatch or uninitialized state is detected when the menu opens.
-
-Call this once after every intentional edit to `init.lua` so future tamper-detection alerts are meaningful.
+Available via **Settings › Developer › Trust Current Version**. The item is greyed out when the file already matches the stored hash.
 
 ---
 
 ### `ms.integrity.update()`
 
-Full async update flow. Requires `ms._updateManifestURL` to be set.
+Full async update flow. Triggered via **Settings › Help › Check for Update**.
 
-1. Fetches `MANIFEST.json` from `ms._updateManifestURL` over HTTPS
-2. Downloads `init.lua` from the `url` field in the manifest
-3. Verifies the downloaded file's SHA-256 matches the `sha256` field — aborts if not
-4. Backs up the current `init.lua` to `backups/init_<timestamp>.lua.bak`
-5. Installs the new file, updates `.ms_trusted_hash`, reloads after 3 seconds
-
-Available via **Settings › Help › Check for Update**.
+1. Fetches `MANIFEST.json` from `ms._updateManifestURL` over HTTPS (HTTP is rejected)
+2. Verifies the RSA-2048 signature in the manifest against the built-in public key — aborts on invalid signature
+3. Downloads `ms_core.lua` from the `url` field in the manifest
+4. Compares the downloaded file's SHA-256 to the `sha256` field — installs regardless (logs a warning if stale)
+5. Backs up the current `ms_core.lua` to `backups/ms_core_<timestamp>.lua.bak`
+6. Installs the new file, updates `.ms_trusted_hash`, re-stamps the local `MANIFEST.json`, reloads after 3 seconds
 
 ---
 
@@ -1027,28 +1043,40 @@ Available via **Settings › Help › Check for Update**.
 ```json
 {
   "version": "1.2.3",
-  "sha256": "<64-char lowercase hex of the raw init.lua as served>",
-  "url": "https://raw.githubusercontent.com/you/repo/main/init.lua"
+  "sha256": "<64-char lowercase hex of ms_core.lua>",
+  "url":    "https://raw.githubusercontent.com/you/repo/main/ms_core.lua",
+  "signature": "<RSA-2048 SHA-256 signature of the sha256 field, base64-encoded>"
 }
 ```
 
-> **Important:** compute `sha256` from the file as GitHub serves it, not your local copy. Use:
-> ```sh
-> curl -s <raw URL> | shasum -a 256
-> ```
-> Always push `init.lua` before updating `MANIFEST.json`.
+**The `signature` field is generated automatically** by the GitHub Actions workflow (`.github/workflows/release.yml`) whenever `ms_core.lua` is pushed to `main`. You do not sign manually.
+
+To stamp the hash and bump the version locally before pushing:
+
+```sh
+bash bin/make_release.sh [version]
+```
 
 ---
 
 ### `ms._updateManifestURL`
 
-Global string. Set this in `init.lua` to enable the auto-update feature:
+Pre-configured to point to the GitHub repository's `MANIFEST.json`. Override in `ms_core.lua` if self-hosting:
 
 ```lua
 ms._updateManifestURL = "https://raw.githubusercontent.com/you/repo/main/MANIFEST.json"
 ```
 
-`nil` by default. When not set, **Check for Update** shows an error instead of attempting a download.
+---
+
+### Release workflow
+
+Pushing `ms_core.lua` to `main` automatically:
+1. Computes the SHA-256
+2. Signs it with the RSA private key stored in GitHub Secrets (`MS_SIGNING_KEY`)
+3. Commits an updated `MANIFEST.json` with the new hash and signature
+
+The public key is embedded in `ms_core.lua` (`ms._updatePublicKey`). The private key never leaves GitHub Secrets.
 
 ---
 
@@ -1354,3 +1382,65 @@ end
 > **Note:** `"integrity"` runs a `shasum` check and is slightly heavier than the others. Avoid calling it inside a hot macro loop.
 
 ---
+
+## 24. Developer Tools — `ms.dev`
+
+Three floating panels for live monitoring and interactive debugging. Open them from **Settings › Developer** or call the API directly. All panels are 9:16 portrait, cascade from the right side of the screen.
+
+> `ms.dev` is not accessible from `ms_macros.lua`. These tools are for the developer only.
+
+---
+
+### Console — `ms.dev.console`
+
+A 360×640 REPL panel. Captures all `print()` output, errors, macro fires, and execution results as they happen.
+
+- **Input field** — type any Lua expression or statement, press Enter or Run. Return values appear in green; errors in red.
+- **Key activity** — key events show a single `⌨ key activity` notice per burst, suppressed until the next non-key event resets it. Full key detail is in the Key Monitor.
+- **Toolbar buttons** — open Macro Monitor and Key Monitor without leaving the console.
+
+```lua
+ms.dev.console.show()
+ms.dev.console.hide()
+ms.dev.console.toggle()
+```
+
+---
+
+### Macro Monitor — `ms.dev.watcher`
+
+A 270×480 floating panel. Shows every macro execution with timestamp and label as it fires. Also surfaces `print()` output and errors.
+
+```lua
+ms.dev.watcher.show()
+ms.dev.watcher.toggle()
+```
+
+---
+
+### Key Monitor — `ms.dev.keys`
+
+A 270×480 floating panel with two sections:
+
+- **Active** — live pills for every currently held key or mouse button, updated in real time.
+- **Recent** — scrolling log of key down/up and mouse events with timestamps.
+
+```lua
+ms.dev.keys.show()
+ms.dev.keys.toggle()
+```
+
+---
+
+### Log file
+
+All events are appended to `~/Documents/ms_dev.log` as newline-delimited JSON:
+
+```json
+{"ts":"14:23:45","type":"print","msg":"Hello world"}
+{"ts":"14:23:46","type":"macro","id":"superJump","label":"High Leap Assist"}
+{"ts":"14:23:47","type":"key","key":"space","down":true}
+{"ts":"14:23:48","type":"mouse","button":1,"down":false}
+```
+
+History is loaded from this file whenever a panel is reopened. The **Clear** button in any panel truncates the file. The file lives outside the repository and is never committed.

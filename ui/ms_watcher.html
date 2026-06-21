@@ -109,9 +109,9 @@
             /* ── Entry rows ─────────────────────────────────────────────────── */
             .entry {
                 display: flex;
-                align-items: baseline;
+                align-items: center;
                 gap: 6px;
-                padding: 2px 14px;
+                padding: 3px 14px;
                 font-size: 12px;
                 line-height: 1.55;
             }
@@ -135,28 +135,44 @@
                 flex-shrink: 0;
             }
 
-            .badge-macro {
-                color: #c41a1a;
-            }
-
             .badge-print {
                 color: var(--text2);
             }
-
             .badge-error {
                 color: #d42020;
             }
 
-            .entry-dot {
-                font-size: 8px;
-                color: #c41a1a;
+            .dot {
+                font-size: 7px;
+                color: var(--accent);
                 flex-shrink: 0;
-                line-height: 1.9;
             }
 
             .msg {
                 color: var(--text);
                 word-break: break-word;
+                flex: 1;
+                min-width: 0;
+            }
+
+            .msg .sub-sep {
+                color: var(--text2);
+                margin: 0 3px;
+            }
+
+            .msg .sub-name {
+                color: var(--text);
+            }
+
+            .trigger {
+                font-size: 10px;
+                color: var(--text2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 1px 5px;
+                white-space: nowrap;
+                flex-shrink: 0;
+                font-family: "SF Mono", Menlo, monospace;
             }
         </style>
     </head>
@@ -227,22 +243,51 @@
                 ts.textContent = "[" + entry.ts + "]";
                 row.appendChild(ts);
 
-                const badge = document.createElement("span");
-                badge.className = "badge badge-" + entry.type;
-                badge.textContent = entry.type;
-                row.appendChild(badge);
-
                 if (entry.type === "macro") {
+                    // ● dot instead of text badge for macros
                     const dot = document.createElement("span");
-                    dot.className = "entry-dot";
+                    dot.className = "dot";
                     dot.textContent = "●";
                     row.appendChild(dot);
-                }
 
-                const msg = document.createElement("span");
-                msg.className = "msg";
-                msg.textContent = entry.label || entry.msg || "";
-                row.appendChild(msg);
+                    // Label: "Parent › Child" or just "Label"
+                    const msg = document.createElement("span");
+                    msg.className = "msg";
+                    if (entry.parentLabel) {
+                        msg.appendChild(
+                            document.createTextNode(entry.parentLabel),
+                        );
+                        const sep = document.createElement("span");
+                        sep.className = "sub-sep";
+                        sep.textContent = "›";
+                        msg.appendChild(sep);
+                        const sub = document.createElement("span");
+                        sub.className = "sub-name";
+                        sub.textContent = entry.label || entry.id || "";
+                        msg.appendChild(sub);
+                    } else {
+                        msg.textContent = entry.label || entry.id || "";
+                    }
+                    row.appendChild(msg);
+
+                    // Trigger pill
+                    if (entry.trigger) {
+                        const trig = document.createElement("span");
+                        trig.className = "trigger";
+                        trig.textContent = entry.trigger;
+                        row.appendChild(trig);
+                    }
+                } else {
+                    const badge = document.createElement("span");
+                    badge.className = "badge badge-" + entry.type;
+                    badge.textContent = entry.type;
+                    row.appendChild(badge);
+
+                    const msg = document.createElement("span");
+                    msg.className = "msg";
+                    msg.textContent = entry.msg || "";
+                    row.appendChild(msg);
+                }
 
                 return row;
             }

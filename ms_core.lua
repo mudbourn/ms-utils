@@ -247,7 +247,12 @@ YQIDAQAB
                             end
                         end
                     else
-                        _devKeyNoticeSent = false  -- reset: next key burst gets a fresh notice
+                        -- Only a macro (or REPL result) resets the key-notice gate.
+                        -- Plain print/error output does not — keys and macros strictly
+                        -- take turns: one key notice per macro execution, no more.
+                        if t == "macro" or t == "result" or t == "input" then
+                            _devKeyNoticeSent = false
+                        end
                         if ms.dev._consolePanel then
                             pcall(function()
                                 ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
@@ -276,8 +281,14 @@ YQIDAQAB
                 _devWrite({ type = "print", msg = table.concat(parts, "\t") })
             end
 
-            ms.dev._onMacroFire = function(id, label)
-                _devWrite({ type = "macro", id = id, label = label or id })
+            ms.dev._onMacroFire = function(id, label, parentId, parentLabel, trigger)
+                _devWrite({
+                    type        = "macro",
+                    id          = id,
+                    label       = label or id,
+                    parentLabel = parentLabel,
+                    trigger     = trigger,
+                })
             end
 
             ms.dev._onKeyEvent = function(keyCode, keyName, isDown)
@@ -4837,7 +4848,15 @@ YQIDAQAB
                                     ms.running[group] = nil
                                 end)
                                 ms._activeSub = id
-                                if ms.dev then pcall(ms.dev._onMacroFire, id, def.label) end
+                                if ms.dev then
+                                    local _pd = ms.registry._defs[def.sub]
+                                    local _trig = c.type=="mouse" and ("M"..c.button) or (function()
+                                        local _p = {}
+                                        for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
+                                        _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
+                                    end)()
+                                    pcall(ms.dev._onMacroFire, id, def.label, def.sub, _pd and _pd.label, _trig)
+                                end
                                 fn()
                             end
                             if c.type == "mouse" then
@@ -4859,7 +4878,14 @@ YQIDAQAB
                                 ms.running[group] = nil
                             end)
                             ms._activeSub = nil  -- clear sub-item state before root bind fires
-                            if ms.dev then pcall(ms.dev._onMacroFire, id, def.label) end
+                            if ms.dev then
+                                local _trig = c.type=="mouse" and ("M"..c.button) or (function()
+                                    local _p = {}
+                                    for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
+                                    _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
+                                end)()
+                                pcall(ms.dev._onMacroFire, id, def.label, nil, nil, _trig)
+                            end
                             fn()
                         end
                         if c.type == "mouse" then
@@ -5018,6 +5044,17 @@ YQIDAQAB
             ms.isSub = function(id)
                 if ms._activeSub == id or (not ms._activeSub and ms.modHeld(id)) then
                     ms._activeSub = nil
+                    -- Log modifier-triggered sub-items to the dev monitor.
+                    -- Independent-bind subs are already logged from firedFn;
+                    -- this branch catches the modifier-hold path.
+                    if ms.dev then
+                        local def = ms.registry._defs[id]
+                        if def and def.sub then
+                            local pd  = ms.registry._defs[def.sub]
+                            pcall(ms.dev._onMacroFire, id, def.label,
+                                def.sub, pd and pd.label, ms.getMod(id) or "")
+                        end
+                    end
                     return true
                 end
                 return false
