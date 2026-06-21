@@ -2252,7 +2252,7 @@
 
                 body.appendChild(divider());
 
-                // Integrity
+                // System Integrity
                 const status = S.integrityStatus || "uninitialized";
                 const hash = S.integrityHash
                     ? S.integrityHash.slice(0, 16) + "…"
@@ -2273,7 +2273,7 @@
                         "⚠ Mismatch",
                     );
                 else statusPill = h("span", { cls: "pill" }, "Not set");
-                body.appendChild(row("init.lua Integrity", hash, statusPill));
+                body.appendChild(row("System Integrity", hash, statusPill));
 
                 // Trust row — greyed when trusted
                 const trustRow = h("div", {

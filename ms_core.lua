@@ -1165,7 +1165,7 @@
                 --   "profiles"     at least one valid profile exists in profiles/
                 --   "userSettings" ms.settings.define API is present (version compat)
                 --   "userMenu"     ms.menu.define API is present (version compat)
-                --   "integrity"    ms_core.lua matches its trusted hash
+                --   "integrity"    ms_core.lua matches its trusted hash (system integrity check)
                 --   "hidinject"    hidinject binary is present in bin/
                 --
                 ms.has = function(feature)
@@ -1668,7 +1668,7 @@
 
                 -- ── End Profile Management ───────────────────────────────────────────
 
-                -- ── Integrity / Update System ─────────────────────────────────────────
+                -- ── System Integrity / Update System ─────────────────────────────────
 
                 ms.integrity = {}
 
@@ -1718,14 +1718,14 @@
                 ms.integrity.trustCurrent = function()
                     local hash = ms.integrity.hashFile(corePath)
                     if not hash then
-                        ms.alert("Integrity: could not hash ms_core.lua.", 4)
+                        ms.alert("System integrity: could not hash ms_core.lua.", 4)
                         return false
                     end
                     if ms.integrity.writeTrustedHash(hash) then
                         ms.alert("Trusted hash saved.\n" .. hash:sub(1, 16) .. "\xe2\x80\xa6", 4, true)
                         return true
                     end
-                    ms.alert("Integrity: could not write trusted hash file.", 4)
+                    ms.alert("System integrity: could not write trusted hash file.", 4)
                     return false
                 end
 
@@ -1797,7 +1797,7 @@
                     end)
                 end
 
-                -- ── End Integrity / Update System ─────────────────────────────────────────
+                -- ── End System Integrity / Update System ─────────────────────────────────
 
                 -- Returns the effective bind config for an id, accounting for trackpad mode overrides
                 ms.effectiveBind = function(id)
@@ -3076,7 +3076,7 @@
                     -- Developer submenu --
 
                     local function buildDeveloperSubmenu()
-                        -- Check integrity once at menu-build time so the Trust item
+                        -- Check system integrity once at menu-build time so the Trust item
                         -- can be greyed out immediately if the file is already trusted.
                         local _trusted = (ms.integrity.check() == "trusted")
                         return {
@@ -3133,7 +3133,7 @@
                                 hs.urlevent.openURL(ms._docsURL .. "?platform=mac")
                             end },
                             { title = "-" },
-                            { title = "Check Integrity", fn = function()
+                            { title = "Check System Integrity", fn = function()
                                 ms.playSlot("interact")
                                 local status, cur, trusted = ms.integrity.check()
                                 if status == "trusted" then
@@ -5923,7 +5923,7 @@
         ms.cam.updateMultiplier()
         ms.bind.rebind()
         ms.socdApply()
-        -- Integrity: mismatch is impossible here — the guardian blocked it at
+        -- System integrity: mismatch is impossible here — the guardian blocked it at
         -- load time before any ms code ran. Only surface the first-run reminder.
         hs.timer.doAfter(3, function()
             if ms.integrity.check() == "uninitialized" then
@@ -5944,7 +5944,7 @@
             loadfinish = 1
         end)
 
-        -- Periodic integrity check — runs every 60 s once macros are fully loaded.
+        -- Periodic system integrity check — runs every 60 s once macros are fully loaded.
         -- If ms_core.lua has been tampered with since it was trusted, the guardian seizes
         -- control immediately without requiring a manual check.
         _G._integrityPollTimer = hs.timer.doEvery(5, function()

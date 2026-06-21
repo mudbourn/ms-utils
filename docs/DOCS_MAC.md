@@ -959,7 +959,7 @@ These are plain globals available from `ms_macros.lua`.
 
 ### Overview
 
-The integrity system detects unauthorised modifications to `init.lua` by comparing its SHA-256 hash to a stored baseline. The update system fetches a new `init.lua` from a URL you provide, verifies its hash before installing, backs up the old file, and reloads automatically.
+The system integrity check detects unauthorised modifications to `init.lua` by comparing its SHA-256 hash to a stored baseline. The update system fetches a new `init.lua` from a URL you provide, verifies its hash before installing, backs up the old file, and reloads automatically.
 
 The trusted hash is stored in `~/.hammerspoon/.ms_trusted_hash` — one line, 64 hex characters. It is only written when you explicitly trust a version; normal reloads never change it.
 
@@ -1348,7 +1348,7 @@ end
 | `"profiles"` | at least one valid profile exists in `profiles/` |
 | `"userSettings"` | `ms.settings.define` API is present — use for version compatibility |
 | `"userMenu"` | `ms.menu.define` API is present — use for version compatibility |
-| `"integrity"` | `init.lua` matches its trusted hash (`ms.integrity.check() == "trusted"`) |
+| `"integrity"` | `ms_core.lua` matches its trusted hash (system integrity) (`ms.integrity.check() == "trusted"`) |
 | `"hidinject"` | hidinject binary is present in `bin/` |
 
 > **Note:** `"integrity"` runs a `shasum` check and is slightly heavier than the others. Avoid calling it inside a hot macro loop.
