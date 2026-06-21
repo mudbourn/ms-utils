@@ -232,6 +232,34 @@
                 flex-shrink: 0;
             }
 
+            /* ── Event type badges (mirrors console badge style) ────────── */
+            .badge {
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.4px;
+                text-transform: uppercase;
+                padding: 0 5px;
+                border-radius: var(--radius);
+                border: 1px solid;
+                flex-shrink: 0;
+                line-height: 1.55;
+            }
+            .badge-key {
+                color: var(--text2);
+                border-color: rgba(210, 165, 100, 0.28);
+                background: rgba(210, 165, 100, 0.06);
+            }
+            .badge-mouse {
+                color: var(--mouse);
+                border-color: rgba(196, 120, 32, 0.4);
+                background: rgba(196, 120, 32, 0.08);
+            }
+            .badge-scroll {
+                color: var(--scroll);
+                border-color: rgba(74, 144, 120, 0.4);
+                background: rgba(74, 144, 120, 0.08);
+            }
+
             /* ── Horizontal divider ──────────────────────────────────────── */
             .divider {
                 height: 1px;
@@ -512,6 +540,7 @@
 
                 if (t === "key") {
                     row.append(
+                        mkSpan("badge badge-key", "key"),
                         mkSpan(
                             "arrow " + (entry.down ? "arrow-down" : "arrow-up"),
                             entry.down ? "↓" : "↑",
@@ -520,6 +549,7 @@
                     );
                 } else if (t === "mouse") {
                     row.append(
+                        mkSpan("badge badge-mouse", "mouse"),
                         mkSpan(
                             "arrow " +
                                 (entry.down ? "arrow-mouse" : "arrow-up"),
@@ -530,14 +560,14 @@
                     );
                 } else if (t === "scroll") {
                     row.append(
+                        mkSpan("badge badge-scroll", "scroll"),
                         mkSpan(
                             "arrow arrow-scroll",
                             entry.direction === "up" ? "↑" : "↓",
                         ),
                         mkSpan(
                             "scroll-name",
-                            "scroll " +
-                                entry.direction +
+                            entry.direction +
                                 (entry.amount > 1 ? " ×" + entry.amount : ""),
                         ),
                     );
