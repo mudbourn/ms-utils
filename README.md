@@ -39,6 +39,10 @@ Mudscript Macro Utilities — macOS
 ├── ui/
 │   ├── ms_settings_ui.html   Settings panel (webview).
 │   ├── ms_guardian.html      Tamper-detection dialog (webview).
+│   ├── ms_console.html       Developer Console panel (webview).
+│   ├── ms_watcher.html       Macro Monitor panel (webview).
+│   ├── ms_keys.html          Input Monitor panel (webview).
+│   ├── ms_window.html        Window Monitor panel (webview).
 │   ├── fonts/                Bundled fonts — copied to ~/Library/Fonts/ at startup.
 │   └── icons/                Menu bar icons.
 │

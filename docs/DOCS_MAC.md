@@ -104,17 +104,30 @@ Sub-items let a single root bind dispatch to different variants depending on whi
 
 ### Defining sub-items
 
+> **Registration order matters.** `ms.bind.define` asserts that a sub-item's parent already exists in the registry. Always define the root bind before any sub-items. Sub-items of sub-items (two levels deep) work the same way.
+>
+> **LuaJIT upvalue note.** When a closure references a local function that is declared *after* the closure in the same chunk loaded via `setfenv`, LuaJIT can miscompile the reference as a global lookup instead of an upvalue. If a function `F` is defined on line 155 and a closure on line 140 tries to call `F()`, `F` will be `nil` at call time. The robust workaround is to look up `F` through `ms.bind._wires["id"]` at call time — a table field access is never affected by this issue.
+
 ```lua
--- Root bind (must be defined first)
+-- Root bind must be defined before any sub-items that reference it.
+-- For cross-references to functions defined later in the file, look them up
+-- via ms.bind._wires at call time rather than capturing them as closure upvalues.
+-- LuaJIT setfenv chunks can miscompile upvalue references across certain distances
+-- as globals; _wires is a table access and is not subject to that issue.
 ms.bind.define("superJump", function()
-    if ms.modHeld("superThrow") then ThrowTrickFunction()
+    if ms.modHeld("superThrow") then
+        local fn = ms.bind._wires.superThrow   -- safe late-binding lookup
+        if fn then fn() end
     else HighLeapAssistFunction() end
 end, { group="main", label="High Leap Assist", default={type="mouse", button=3} })
 
--- Sub-items — fire when parent fires and their mod key is held
-ms.bind.define("superThrow", ThrowTrickFunction, { sub="superJump", label="Throw Trick", mod="alt" })
-ms.bind.define("jumpHigh",   HighLeapAssistFunction, { sub="superJump", label="Jump High", mod="v" })
-ms.bind.define("jumpLow",    HighLeapAssistFunction, { sub="superJump", label="Jump Low",  mod="x" })
+-- Sub-items — fire when parent fires and their mod key is held.
+-- These must be registered AFTER the parent ("superJump") because ms.bind.define
+-- asserts that the parent id already exists in the registry.
+ms.bind.define("superThrow", ThrowTrickFunction,     { sub="superJump",  label="Throw Trick", mod="alt" })
+ms.bind.define("throwLow",   ThrowTrickFunction,     { sub="superThrow", label="Throw Low",   mod="v"   })
+ms.bind.define("jumpHigh",   HighLeapAssistFunction, { sub="superJump",  label="Jump High",   mod="v"   })
+ms.bind.define("jumpLow",    HighLeapAssistFunction, { sub="superJump",  label="Jump Low",    mod="x"   })
 ```
 
 ### Checking which sub-item should run — inside a function
@@ -897,7 +910,7 @@ Instantly clears all active toasts without animation. Used internally by the mac
 
 ### `ms.debugRoblox()`
 
-Prints Roblox window info (resolution, position, aspect ratio, sensitivity) to the Hammerspoon console and shows alerts. Also warns if the aspect ratio is too narrow for macros to work correctly. Available via Settings › Developer › Debug Roblox.
+Prints Roblox window info (resolution, position, aspect ratio, sensitivity) to the Hammerspoon console and shows alerts. Also warns if the aspect ratio is too narrow for macros to work correctly. Available as a Lua call; the **Settings › Developer** button now opens the **Window Monitor** instead.
 
 ---
 
@@ -1385,7 +1398,7 @@ end
 
 ## 24. Developer Tools — `ms.dev`
 
-Three floating panels for live monitoring and interactive debugging. Open them from **Settings › Developer** or call the API directly. All panels are 9:16 portrait, cascade from the right side of the screen.
+Four floating panels for live monitoring and interactive debugging. Open them from **Settings › Developer** or call the API directly. All panels share the active `data/ms_theme.json` theme — colors, font, and radius update automatically when the panel first loads.
 
 > `ms.dev` is not accessible from `ms_macros.lua`. These tools are for the developer only.
 
@@ -1396,8 +1409,8 @@ Three floating panels for live monitoring and interactive debugging. Open them f
 A 360×640 REPL panel. Captures all `print()` output, errors, macro fires, and execution results as they happen.
 
 - **Input field** — type any Lua expression or statement, press Enter or Run. Return values appear in green; errors in red.
-- **Key activity** — key events show a single `⌨ key activity` notice per burst, suppressed until the next non-key event resets it. Full key detail is in the Key Monitor.
-- **Toolbar buttons** — open Macro Monitor and Key Monitor without leaving the console.
+- **Key activity** — key events show a single `⌨ key activity` notice per burst, suppressed until the next non-key event resets it. Full key detail is in the Input Monitor.
+- **Toolbar buttons** — open Macro Monitor and Input Monitor without leaving the console.
 
 ```lua
 ms.dev.console.show()
@@ -1409,7 +1422,21 @@ ms.dev.console.toggle()
 
 ### Macro Monitor — `ms.dev.watcher`
 
-A 270×480 floating panel. Shows every macro execution with timestamp and label as it fires. Also surfaces `print()` output and errors.
+A floating panel. Shows every macro execution with timestamp and label as it fires. Also surfaces `print()` output and errors.
+
+**Step traces** — when the Macro Monitor is open, `ms.wait()` calls of **50 ms or longer** automatically append a dim step trace row showing the macro name and wait duration. This makes it easy to spot where a stalled macro is pausing:
+
+```
+[High Leap Assist] wait 600ms
+```
+
+Call `ms.dev.step(msg)` from any macro to log a named checkpoint manually:
+
+```lua
+ms.dev.step("before camera sweep")
+ms.cam.move(0, -3145)
+ms.dev.step("done")
+```
 
 ```lua
 ms.dev.watcher.show()
@@ -1418,17 +1445,59 @@ ms.dev.watcher.toggle()
 
 ---
 
-### Key Monitor — `ms.dev.keys`
+### Input Monitor — `ms.dev.keys`
 
-A 270×480 floating panel with two sections:
+A 360×640 floating panel with three sections:
 
-- **Active** — live pills for every currently held key or mouse button, updated in real time.
-- **Recent** — scrolling log of key down/up and mouse events with timestamps.
+- **Flag row** — two competing pills at the top showing the most recently pressed key and the most recently pressed mouse button. Whichever fired last is highlighted in the accent color; the other dims. Updates in real time on every input event.
+- **Keyboard tab** — active key pills (currently held keys) plus a scrolling log of all key down/up events with timestamps.
+- **Mouse tab** — current cursor position (screen pixels) and a scrolling log of all mouse button down/up events.
+
+Mouse button events are logged regardless of whether macros are enabled (`BindValidity`), so the monitor works even when macros are off.
 
 ```lua
 ms.dev.keys.show()
 ms.dev.keys.toggle()
 ```
+
+---
+
+### Window Monitor — `ms.dev.window`
+
+A 360×520 floating panel. Tracks the focused window in real time by polling every 400 ms.
+
+- **Current window** — shows the active app name, window title, and dimensions (width × height px) at the top.
+- **Log** — appends an entry each time the focused window changes: `● App › Title [W×H]` with a Unix timestamp.
+- **History** — up to 80 entries are kept in memory and restored when the panel is reopened.
+
+```lua
+ms.dev.window.show()
+ms.dev.window.toggle()
+```
+
+---
+
+### `ms.dev.step(msg)`
+
+Manually append a named step trace to the Macro Monitor. No-op when the Macro Monitor is not open. Safe to call from inside any `ms.fn()`-wrapped function.
+
+```lua
+local MyMacro = ms.fn(function()
+    ms.dev.step("phase 1 — setup")
+    ms.press("w")
+    ms.wait(50)
+    ms.dev.step("phase 2 — jump")
+    ms.type("space")
+    ms.wait(600)
+    ms.dev.step("done")
+end)
+```
+
+---
+
+### UI sounds
+
+The developer panels use the same `settingsOpen` and `settingsClose` sound slots as the main Settings panel. Assign sounds to those slots via **Settings › Sound › Settings Open / Settings Close** to hear audio feedback when panels open and close.
 
 ---
 
@@ -1441,6 +1510,7 @@ All events are appended to `~/Documents/ms_dev.log` as newline-delimited JSON:
 {"ts":"14:23:46","type":"macro","id":"superJump","label":"High Leap Assist"}
 {"ts":"14:23:47","type":"key","key":"space","down":true}
 {"ts":"14:23:48","type":"mouse","button":1,"down":false}
+{"ts":"14:23:49","type":"step","msg":"[High Leap Assist] wait 600ms"}
 ```
 
 History is loaded from this file whenever a panel is reopened. The **Clear** button in any panel truncates the file. The file lives outside the repository and is never committed.

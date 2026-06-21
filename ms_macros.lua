@@ -138,7 +138,12 @@
             end)
 
             ms.bind.define("superJump", function()
-                if ms.modHeld("superThrow") then ThrowTrickFunction()
+                -- ThrowTrickFunction is looked up via _wires at call time; LuaJIT setfenv
+                -- chunks can miscompile upvalue references as globals when the local is
+                -- declared after the closure. Table field access bypasses that entirely.
+                if ms.modHeld("superThrow") then
+                    local fn = ms.bind._wires.superThrow
+                    if fn then fn() end
                 else HighLeapAssistFunction() end
             end, {
                 group   = "main",
@@ -394,7 +399,10 @@
             end)
 
             ms.bind.define("frameDump", function()
-                if ms._currentFlags and ms._currentFlags.alt then SpawnAltFunction()
+                -- Same workaround: SpawnAltFunction is defined after this closure.
+                if ms._currentFlags and ms._currentFlags.alt then
+                    local fn = ms.bind._wires.spawnAlt
+                    if fn then fn() end
                 else ActionSpammerFunction() end
             end, {
                 group   = "optional",

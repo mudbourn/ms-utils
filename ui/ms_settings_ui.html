@@ -448,6 +448,20 @@
                 color: var(--text2);
                 flex-shrink: 0;
             }
+            .row-subsubs {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 3px;
+                width: 100%;
+                padding: 3px 0 1px 0;
+            }
+            .pill-subsub {
+                font-size: 10px;
+                padding: 1px 6px;
+                opacity: 0.65;
+                border: 1px solid var(--border);
+                background: transparent;
+            }
             .pill.accent {
                 background: var(--accent);
                 color: #fff;
@@ -1397,6 +1411,20 @@
                         r.appendChild(h("span", { cls: "pill" }, sub.mod));
                     if (sub.bind)
                         r.appendChild(h("span", { cls: "pill" }, sub.bind));
+                    // If this sub-item itself has sub-items, show them as nested pills.
+                    if (sub.subsubs && sub.subsubs.length) {
+                        const nest = h("div", { cls: "row-subsubs" });
+                        sub.subsubs.forEach((ss) => {
+                            const chip = h(
+                                "span",
+                                { cls: "pill pill-subsub" },
+                                ss.label,
+                            );
+                            if (ss.mod) chip.title = "mod: " + ss.mod;
+                            nest.appendChild(chip);
+                        });
+                        r.appendChild(nest);
+                    }
                     r.addEventListener("contextmenu", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -2312,7 +2340,7 @@
                         playSlot("interact");
                         const prompt =
                             status === "uninitialized"
-                                ? `Seal this init.lua as the trusted baseline?\nHash: ${hash}`
+                                ? `Seal this ms_core.lua as the trusted baseline?\nHash: ${hash}`
                                 : `Hash mismatch — trust the CURRENT (possibly modified) version?\nHash: ${hash}`;
                         const r = await openModal(
                             "Trust Current Version",
@@ -2345,7 +2373,7 @@
                                     const r = await openModal(
                                         "Delete Trusted Hash",
                                         "This removes tamper protection entirely.\n\n" +
-                                            "From this point on mudscript will load ANY version of init.lua " +
+                                            "From this point on mudscript will load ANY version of ms_core.lua " +
                                             "without warning — including maliciously modified ones.\n\n" +
                                             "You are on your own. Proceed only if you know what you are doing.",
                                         "Delete — I understand the risk",

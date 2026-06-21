@@ -3827,27 +3827,44 @@ YQIDAQAB
                     ms._mouseCallbacks = {}
                     local types = {
                         hs.eventtap.event.types.leftMouseDown,
+                        hs.eventtap.event.types.leftMouseUp,
                         hs.eventtap.event.types.rightMouseDown,
+                        hs.eventtap.event.types.rightMouseUp,
                         hs.eventtap.event.types.otherMouseDown,
-                        hs.eventtap.event.types.rightMouseUp
+                        hs.eventtap.event.types.otherMouseUp,
                     }
                     ms._mouseListener = hs.eventtap.new(types, function(event)
-                        if BindValidity ~= 1 then return false end
-
                         local type = event:getType()
                         local b
+                        local isDown
 
-                        if type == hs.eventtap.event.types.rightMouseDown then
-                            b = 1
+                        if type == hs.eventtap.event.types.leftMouseDown then
+                            b = 0; isDown = true
+                        elseif type == hs.eventtap.event.types.leftMouseUp then
+                            b = 0; isDown = false
+                        elseif type == hs.eventtap.event.types.rightMouseDown then
+                            b = 1; isDown = true
                             ms.keytrack[999] = true
                         elseif type == hs.eventtap.event.types.rightMouseUp then
+                            b = 1; isDown = false
                             ms.keytrack[999] = false
-                            return false
-                        elseif type == hs.eventtap.event.types.leftMouseDown then
-                            b = 0
-                        else
+                        elseif type == hs.eventtap.event.types.otherMouseDown then
                             b = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
+                            isDown = true
+                        else -- otherMouseUp
+                            b = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
+                            isDown = false
                         end
+
+                        -- Always log to the input monitor regardless of BindValidity.
+                        if ms.dev and ms.dev._onMouseEvent then
+                            pcall(ms.dev._onMouseEvent, b, isDown)
+                        end
+
+                        if BindValidity ~= 1 then return false end
+
+                        -- Only fire macro callbacks on down events.
+                        if not isDown then return false end
 
                         local callbackData = ms._mouseCallbacks[b]
                         if callbackData then
@@ -5127,16 +5144,31 @@ YQIDAQAB
                     if def and not def.sub and (def.group == "main" or def.group == "optional") then
                         local enabled = ms.binds[id]
                         if enabled == nil then enabled = def.enabled end
-                        -- Collect direct sub-items for this root bind.
+                        -- Collect direct sub-items for this root bind,
+                        -- and for each sub also collect its own sub-items (one more level).
                         local subs = {}
                         for _, subId in ipairs(ms.registry._defList or {}) do
                             local subDef = ms.registry._defs[subId]
                             if subDef and subDef.sub == id then
+                                -- Collect sub-of-sub entries.
+                                local subsubs = {}
+                                for _, ss in ipairs(ms.registry._defList or {}) do
+                                    local ssDef = ms.registry._defs[ss]
+                                    if ssDef and ssDef.sub == subId then
+                                        table.insert(subsubs, {
+                                            id    = ss,
+                                            label = ssDef.label or ss,
+                                            mod   = ms.modConfig[ss] or ssDef.mod or "",
+                                            bind  = _bindDisplay(ms.subBinds[ss]),
+                                        })
+                                    end
+                                end
                                 table.insert(subs, {
-                                    id    = subId,
-                                    label = subDef.label or subId,
-                                    mod   = ms.modConfig[subId] or subDef.mod or "",
-                                    bind  = _bindDisplay(ms.subBinds[subId]),
+                                    id      = subId,
+                                    label   = subDef.label or subId,
+                                    mod     = ms.modConfig[subId] or subDef.mod or "",
+                                    bind    = _bindDisplay(ms.subBinds[subId]),
+                                    subsubs = #subsubs > 0 and subsubs or nil,
                                 })
                             end
                         end
