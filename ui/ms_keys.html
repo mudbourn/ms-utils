@@ -148,8 +148,7 @@
 
             .section-label {
                 font-size: 10px;
-                font-variant: small-caps;
-                letter-spacing: 1px;
+                text-transform: uppercase;
                 color: var(--text2);
             }
 
@@ -185,6 +184,52 @@
 
             #mouse-pos span {
                 color: var(--text);
+            }
+
+            /* ── Flag row ──────────────────────────────────────────── */
+            #flag-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 5px 14px;
+                border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
+                background: var(--surface);
+            }
+            .flag {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                flex: 1;
+                min-width: 0;
+            }
+            .flag-label {
+                font-size: 10px;
+                color: var(--text2);
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+                flex-shrink: 0;
+            }
+            .flag-pill {
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: 3px;
+                padding: 2px 8px;
+                font-size: 12px;
+                color: var(--text2);
+                white-space: nowrap;
+                min-width: 32px;
+                text-align: center;
+            }
+            .flag-pill.flag-recent {
+                border-color: var(--accent);
+                color: var(--text);
+            }
+            .flag-sep {
+                width: 1px;
+                height: 16px;
+                background: var(--border);
+                flex-shrink: 0;
             }
 
             /* ── Horizontal divider ──────────────────────────────────────── */
@@ -285,6 +330,18 @@
             <button class="tb-btn" onclick="closePanel()">[×]</button>
         </div>
 
+        <div id="flag-row">
+            <div class="flag">
+                <span class="flag-label">Key</span>
+                <span class="flag-pill" id="flag-key">—</span>
+            </div>
+            <div class="flag-sep"></div>
+            <div class="flag" style="justify-content: flex-end">
+                <span class="flag-pill" id="flag-mouse">—</span>
+                <span class="flag-label">Mouse</span>
+            </div>
+        </div>
+
         <div id="tabs">
             <button
                 id="tab-keys"
@@ -381,7 +438,39 @@
                 if (log) log.scrollTop = log.scrollHeight;
             }
 
-            // ── Constants ─────────────────────────────────────────────────
+            // ── Flag row ────────────────────────────────────────────────
+            let _lastKeyTime = 0,
+                _lastMouseTime = 0;
+
+            function flagKey(name) {
+                _lastKeyTime = Date.now();
+                document.getElementById("flag-key").textContent = name || "—";
+                _updateFlagStyles();
+            }
+
+            function flagMouse(name) {
+                _lastMouseTime = Date.now();
+                document.getElementById("flag-mouse").textContent = name || "—";
+                _updateFlagStyles();
+            }
+
+            function _updateFlagStyles() {
+                const kRecent = _lastKeyTime >= _lastMouseTime;
+                document
+                    .getElementById("flag-key")
+                    .classList.toggle(
+                        "flag-recent",
+                        kRecent && _lastKeyTime > 0,
+                    );
+                document
+                    .getElementById("flag-mouse")
+                    .classList.toggle(
+                        "flag-recent",
+                        !kRecent && _lastMouseTime > 0,
+                    );
+            }
+
+            // ── Constants ─────────────────────────────────────────────────────
             const MAX_ENTRIES = 300;
             const NEAR_BOTTOM = 48;
             const BTN_NAMES = {
@@ -464,8 +553,14 @@
                 return s;
             }
 
-            // ── Route entry to the correct log ────────────────────────────
+            // ── Route entry to the correct log ────────────────────────
             function appendEntry(entry) {
+                // Update flags for down events
+                if (entry.type === "key" && entry.down)
+                    flagKey(entry.key || "?");
+                if (entry.type === "mouse" && entry.down)
+                    flagMouse(btnName(entry.button));
+
                 const t = entry.type;
                 const isMouseSide =
                     t === "mouse" || t === "scroll" || t === "mousemove";

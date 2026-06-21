@@ -2230,8 +2230,8 @@
             function buildDeveloper(body) {
                 body.appendChild(
                     btnRow(
-                        actionBtn("Debug Roblox", "", () =>
-                            sendToHost({ action: "debugRoblox" }),
+                        actionBtn("Window Monitor", "", () =>
+                            sendToHost({ action: "openWindowMonitor" }),
                         ),
                         actionBtn("Edit Macros", "", () =>
                             sendToHost({ action: "editMacros" }),

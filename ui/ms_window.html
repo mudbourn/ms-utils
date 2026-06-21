@@ -41,7 +41,7 @@
                 flex-direction: column;
             }
 
-            /* ── Titlebar ─────────────────────────────────────────────── */
+            /* ── Titlebar ─────────────────────────────────────────────────── */
             #titlebar {
                 height: 32px;
                 -webkit-app-region: drag;
@@ -83,6 +83,48 @@
                 background: var(--surface2);
                 border-color: var(--accent);
                 color: var(--text);
+            }
+
+            /* ── Current window section ───────────────────────────────────── */
+            #current-section {
+                flex-shrink: 0;
+                height: 80px;
+                padding: 10px 14px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                gap: 3px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+            }
+
+            #current-empty {
+                font-size: 12px;
+                color: var(--text2);
+                font-style: italic;
+            }
+
+            #current-app {
+                font-size: 14px;
+                font-weight: 700;
+                color: var(--accent);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            #current-title {
+                font-size: 12px;
+                color: var(--text);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            #current-dim {
+                font-size: 11px;
+                color: var(--text2);
+                font-variant-numeric: tabular-nums;
             }
 
             /* ── Log area ───────────────────────────────────────────────────── */
@@ -127,44 +169,34 @@
                 flex-shrink: 0;
             }
 
-            .badge {
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 0.8px;
-                text-transform: uppercase;
-                flex-shrink: 0;
-            }
-
-            .badge-print {
-                color: var(--text2);
-            }
-            .badge-error {
-                color: #d42020;
-            }
-
             .dot {
                 font-size: 7px;
                 color: var(--accent);
                 flex-shrink: 0;
             }
 
-            .msg {
+            .entry-app {
+                color: var(--accent);
+                font-weight: 600;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+
+            .entry-sep {
+                color: var(--text2);
+                flex-shrink: 0;
+            }
+
+            .entry-title {
                 color: var(--text);
-                word-break: break-word;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
                 flex: 1;
                 min-width: 0;
             }
 
-            .msg .sub-sep {
-                color: var(--text2);
-                margin: 0 3px;
-            }
-
-            .msg .sub-name {
-                color: var(--text);
-            }
-
-            .trigger {
+            .dim-pill {
                 font-size: 10px;
                 color: var(--text2);
                 border: 1px solid var(--border);
@@ -174,31 +206,22 @@
                 flex-shrink: 0;
                 font-family: "SF Mono", Menlo, monospace;
             }
-
-            .step {
-                opacity: 0.45;
-                font-size: 11px;
-                padding: 1px 16px 1px 36px;
-                display: flex;
-                align-items: baseline;
-                gap: 6px;
-                line-height: 1.4;
-            }
-            .step:hover {
-                opacity: 0.75;
-            }
-            .step-msg {
-                color: var(--text2);
-                word-break: break-word;
-            }
         </style>
     </head>
     <body>
         <div id="titlebar">
-            <span id="titlebar-text">mudscript — macro monitor</span>
+            <span id="titlebar-text">mudscript — window monitor</span>
             <button class="tb-btn" onclick="clearLog()">[clear]</button>
             <button class="tb-btn" onclick="closePanel()">[×]</button>
         </div>
+
+        <div id="current-section">
+            <span id="current-empty">No focused window</span>
+            <span id="current-app" style="display:none"></span>
+            <span id="current-title" style="display:none"></span>
+            <span id="current-dim" style="display:none"></span>
+        </div>
+
         <div id="log"></div>
 
         <script>
@@ -211,12 +234,11 @@
                 if (window.chrome?.webview) {
                     window.chrome.webview.postMessage(s);
                 } else {
-                    window.webkit.messageHandlers.msWatcher.postMessage(s);
+                    window.webkit.messageHandlers.msWindow.postMessage(s);
                 }
             }
 
             // ── Drag ──────────────────────────────────────────────────────────
-            let _dragging = false;
             (function () {
                 let _drag = null;
                 document
@@ -224,7 +246,6 @@
                     .addEventListener("mousedown", (e) => {
                         if (e.target.closest(".tb-btn")) return;
                         _drag = { ox: e.screenX, oy: e.screenY };
-                        _dragging = true;
                         const onMove = (ev) => {
                             if (!_drag) return;
                             sendToHost({
@@ -237,7 +258,6 @@
                         };
                         const onUp = () => {
                             _drag = null;
-                            _dragging = false;
                             window.removeEventListener("mousemove", onMove);
                             window.removeEventListener("mouseup", onUp);
                         };
@@ -257,73 +277,69 @@
                 );
             }
 
-            // ── Entry builder ──────────────────────────────────────────────
-            function buildRow(entry) {
-                if (entry.type === "step") {
-                    const row = document.createElement("div");
-                    row.className = "step";
-                    const ts = document.createElement("span");
-                    ts.className = "ts";
-                    ts.textContent = "[" + (entry.ts || "") + "]";
-                    const msg = document.createElement("span");
-                    msg.className = "step-msg";
-                    msg.textContent = entry.msg || "";
-                    row.append(ts, msg);
-                    return row;
+            // ── Current window display ─────────────────────────────────────────
+            function updateCurrentWindow(entry) {
+                const empty = document.getElementById("current-empty");
+                const appEl = document.getElementById("current-app");
+                const titleEl = document.getElementById("current-title");
+                const dimEl = document.getElementById("current-dim");
+
+                if (!entry || (!entry.app && !entry.title)) {
+                    empty.style.display = "";
+                    appEl.style.display = "none";
+                    titleEl.style.display = "none";
+                    dimEl.style.display = "none";
+                    return;
                 }
 
+                empty.style.display = "none";
+                appEl.style.display = "";
+                titleEl.style.display = "";
+                dimEl.style.display = "";
+
+                appEl.textContent = entry.app || "";
+                titleEl.textContent = entry.title || "";
+                dimEl.textContent =
+                    entry.w != null && entry.h != null
+                        ? entry.w + "×" + entry.h + " px"
+                        : "";
+            }
+
+            // ── Entry builder ──────────────────────────────────────────────────
+            function buildRow(entry) {
                 const row = document.createElement("div");
                 row.className = "entry";
 
                 const ts = document.createElement("span");
                 ts.className = "ts";
-                ts.textContent = "[" + entry.ts + "]";
+                ts.textContent = "[" + (entry.ts || "") + "]";
                 row.appendChild(ts);
 
-                if (entry.type === "macro") {
-                    // ● dot instead of text badge for macros
-                    const dot = document.createElement("span");
-                    dot.className = "dot";
-                    dot.textContent = "●";
-                    row.appendChild(dot);
+                const dot = document.createElement("span");
+                dot.className = "dot";
+                dot.textContent = "●";
+                row.appendChild(dot);
 
-                    // Label: "Parent › Child" or just "Label"
-                    const msg = document.createElement("span");
-                    msg.className = "msg";
-                    if (entry.parentLabel) {
-                        msg.appendChild(
-                            document.createTextNode(entry.parentLabel),
-                        );
-                        const sep = document.createElement("span");
-                        sep.className = "sub-sep";
-                        sep.textContent = "›";
-                        msg.appendChild(sep);
-                        const sub = document.createElement("span");
-                        sub.className = "sub-name";
-                        sub.textContent = entry.label || entry.id || "";
-                        msg.appendChild(sub);
-                    } else {
-                        msg.textContent = entry.label || entry.id || "";
-                    }
-                    row.appendChild(msg);
+                const app = document.createElement("span");
+                app.className = "entry-app";
+                app.textContent = entry.app || "";
+                row.appendChild(app);
 
-                    // Trigger pill
-                    if (entry.trigger) {
-                        const trig = document.createElement("span");
-                        trig.className = "trigger";
-                        trig.textContent = entry.trigger;
-                        row.appendChild(trig);
-                    }
-                } else {
-                    const badge = document.createElement("span");
-                    badge.className = "badge badge-" + entry.type;
-                    badge.textContent = entry.type;
-                    row.appendChild(badge);
+                const sep = document.createElement("span");
+                sep.className = "entry-sep";
+                sep.textContent = "›";
+                row.appendChild(sep);
 
-                    const msg = document.createElement("span");
-                    msg.className = "msg";
-                    msg.textContent = entry.msg || "";
-                    row.appendChild(msg);
+                const title = document.createElement("span");
+                title.className = "entry-title";
+                title.textContent = entry.title || "";
+                row.appendChild(title);
+
+                if (entry.w != null && entry.h != null) {
+                    const pill = document.createElement("span");
+                    pill.className = "dim-pill";
+                    pill.textContent = entry.w + "×" + entry.h;
+                    row.appendChild(pill);
                 }
 
                 return row;
@@ -338,6 +354,7 @@
                     log.removeChild(log.firstElementChild);
                 }
                 if (atBottom) log.scrollTop = log.scrollHeight;
+                updateCurrentWindow(entry);
             }
 
             function loadHistory(entries) {
@@ -347,6 +364,9 @@
                 (entries || []).forEach((e) => frag.appendChild(buildRow(e)));
                 log.appendChild(frag);
                 log.scrollTop = log.scrollHeight;
+                if (entries && entries.length > 0) {
+                    updateCurrentWindow(entries[entries.length - 1]);
+                }
             }
 
             // ── Button actions ─────────────────────────────────────────────────

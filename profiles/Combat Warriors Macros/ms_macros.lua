@@ -136,20 +136,6 @@
                     ms.wait(600)
             end)
 
-            ms.bind.define("superJump", function()
-                if ms.modHeld("superThrow") then ThrowTrickFunction()
-                else HighLeapAssistFunction() end
-            end, {
-                group   = "main",
-                label   = "High Leap Assist",
-                cooldown = 3200,
-                default = {type="mouse", button=3},
-            })
-
-            ms.bind.define("jumpHigh",   HighLeapAssistFunction,  { sub="superJump",  label="Jump High",   mod="v"   })
-            ms.bind.define("jumpLow",    HighLeapAssistFunction,  { sub="superJump",  label="Jump Low",    mod="x"   })
-        -- END --
-
         -- Throw Trick --
             local ThrowTrickFunction = ms.fn(function()
                 ms.sound(ThrowTrickSound, true)
