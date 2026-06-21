@@ -6239,7 +6239,7 @@ YQIDAQAB
                     end
                     -- Font family
                     local font = t.font
-                    if type(font) == "string" and font ~= "" and not font:match("%.[ot]tf$") and not font:match("\.woff") then
+                    if type(font) == "string" and font ~= "" and not font:match("%.[ot]tf$") and not font:match("%.woff") then
                         local safe = font:gsub("'", "\'")
                         table.insert(parts, string.format("document.body.style.fontFamily=\"'%s',Palatino,Georgia,serif\"", safe))
                     end
