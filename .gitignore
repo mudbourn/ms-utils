@@ -5,6 +5,10 @@ data/.ms_trusted_hash
 data/ms_settings.json
 data/ms_theme.json
 
+# Developer tool logs
+data/ms_dev.log
+data/guardian_agent.log
+
 # Backup archives
 backups/
 
@@ -13,6 +17,9 @@ Spoons/
 
 # macOS
 .DS_Store
+
+# Key files — never commit
+*.pem
 private.pem
 *.pem
 *.pem
