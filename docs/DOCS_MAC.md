@@ -862,7 +862,7 @@ The trackpad hold listeners (`ms._trackpadLeftListener`, `ms._trackpadRightListe
 
 ## 16. Profiles
 
-A profile is a folder in `~/.hammerspoon/profiles/<name>/` containing `ms_macros.lua` and optionally `ms_settings_default.json` and `ms_theme.json`.
+A profile is a folder in `~/.hammerspoon/profiles/<name>/` containing `ms_macros.lua` and optionally `ms_settings.json`, `ms_settings_default.json`, and `ms_theme.json`.
 
 **Switching profiles** (Settings › Profiles):
 1. Archives the active `ms_macros.lua` + settings files into `profiles/<currentName>/`.
@@ -885,6 +885,7 @@ A `.mspkg` file is a standard zip archive with a defined internal layout:
 
 ```
 ms_macros.lua                  (required)
+ms_settings.json               (optional — current keybinds, mods, sensitivity, sound slots)
 ms_settings_default.json       (optional — pack's preferred defaults)
 ms_theme.json                  (optional — pack's theme)
 sounds/                        (optional — bundled sound files)

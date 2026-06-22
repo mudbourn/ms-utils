@@ -1846,10 +1846,10 @@ YQIDAQAB
                 end
 
                 -- Exports the current active profile as a .mspkg zip package.
-                -- Bundles ms_macros.lua + optional defaults/theme/sounds into
-                -- ~/Downloads/<name>.mspkg and reveals it in Finder.
+                -- Bundles ms_macros.lua + ms_settings.json + optional defaults/theme/sounds
+                -- into ~/Downloads/<name>.mspkg and reveals it in Finder.
                 local function exportProfilePkg()
-                    local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                    local sq = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
                     local name = sanitizeName((ms.macroMeta and ms.macroMeta.name) or "unnamed")
                     local outName = name .. ".mspkg"
                     local outPath = os.getenv("HOME") .. "/Downloads/" .. outName
@@ -1863,6 +1863,10 @@ YQIDAQAB
                         ms.alert("Export failed: could not read ms_macros.lua.", 4)
                         os.execute("rm -rf " .. sq(tmpDir)); return
                     end
+                    -- ms_settings.json (current user settings — keybinds, mods, sensitivity, etc.)
+                    if hs.fs.attributes(jsonPath) then
+                        hs.execute("/bin/cp " .. sq(jsonPath) .. " " .. sq(tmpDir .. "ms_settings.json"))
+                    end
                     -- ms_settings_default.json (optional)
                     if hs.fs.attributes(defaultPath) then
                         hs.execute("/bin/cp " .. sq(defaultPath) .. " " .. sq(tmpDir .. "ms_settings_default.json"))
@@ -1871,17 +1875,22 @@ YQIDAQAB
                     if hs.fs.attributes(themePath) then
                         hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(tmpDir .. "ms_theme.json"))
                     end
-                    -- Sounds referenced in ms.soundAssign that are user-imported (optional)
+                    -- All sounds referenced in ms.soundAssign that exist on disk.
+                    -- Includes manually-dropped files, not just UI-imported ones.
                     local soundsDir = tmpDir .. "sounds/"
                     local soundsCopied = 0
+                    local bundledFiles = {}  -- deduplicate by filename
                     for _, soundName in pairs(ms.soundAssign or {}) do
-                        local filename = soundName and ms.importedSounds and ms.importedSounds[soundName]
-                        if filename then
-                            local srcSnd = SoundLib .. filename
-                            if hs.fs.attributes(srcSnd) then
-                                os.execute("mkdir -p " .. sq(soundsDir))
-                                hs.execute("/bin/cp " .. sq(srcSnd) .. " " .. sq(soundsDir .. filename))
-                                soundsCopied = soundsCopied + 1
+                        if type(soundName) == "string" and ms.sounds then
+                            local soundPath = ms.sounds[soundName]
+                            if soundPath and hs.fs.attributes(soundPath) then
+                                local filename = soundPath:match("([^/\\]+)$")
+                                if filename and not bundledFiles[filename] then
+                                    os.execute("mkdir -p " .. sq(soundsDir))
+                                    hs.execute("/bin/cp " .. sq(soundPath) .. " " .. sq(soundsDir .. filename))
+                                    bundledFiles[filename] = true
+                                    soundsCopied = soundsCopied + 1
+                                end
                             end
                         end
                     end
@@ -1964,6 +1973,11 @@ YQIDAQAB
                         if roblox then pcall(function() roblox:activate() end) end
                         ms.alert("Import failed: could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if needed.", 5)
                         os.execute("rm -rf " .. sq(tmpDir)); return
+                    end
+                    -- ms_settings.json (optional — user keybinds, sensitivity, mods, etc.)
+                    local settingsSrc = tmpDir .. "ms_settings.json"
+                    if hs.fs.attributes(settingsSrc) then
+                        hs.execute("/bin/cp " .. sq(settingsSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
                     end
                     -- ms_settings_default.json (optional)
                     local defSrc = tmpDir .. "ms_settings_default.json"
