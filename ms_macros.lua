@@ -472,7 +472,7 @@ ms.menu.define({
                 ms.release("space")
                 ms.wait(5)
                 ms.press("c")
-                ms.Mouse(Move, Left, WindowTL, 0, 0)
+                ms.Mouse(Move, Left, WindowTL, nil, nil)
                 ms.type("z")
                 ms.wait(200)
                 local sgMX = ms.settings.get("sgMenuX")
