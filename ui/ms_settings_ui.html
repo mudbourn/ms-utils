@@ -2296,7 +2296,7 @@
                             e.clientY,
                             [
                                 {
-                                    icon: "↗",
+                                    icon: "\u2197",
                                     label: "Switch to this profile",
                                     action: async () => {
                                         const res = await openModal(
@@ -2311,6 +2311,24 @@
                                             });
                                     },
                                 },
+                                "divider",
+                                {
+                                    icon: "\u{1F5D1}",
+                                    label: "Delete profile",
+                                    danger: true,
+                                    action: async () => {
+                                        const res = await openModal(
+                                            "Delete Profile",
+                                            `Delete "${name}"?\n\nThis cannot be undone.`,
+                                            "Delete",
+                                        );
+                                        if (res.confirmed)
+                                            sendToHost({
+                                                action: "deleteProfile",
+                                                name,
+                                            });
+                                    },
+                                },
                             ],
                             name,
                         );
@@ -2319,6 +2337,7 @@
                 }
 
                 body.appendChild(divider());
+                const hasOthers = profiles.some((n) => n !== current);
                 body.appendChild(
                     btnRow(
                         actionBtn("Import Profile", "", () =>
@@ -2329,6 +2348,24 @@
                         ),
                     ),
                 );
+                if (hasOthers)
+                    body.appendChild(
+                        btnRow(
+                            actionBtn(
+                                "Clear Saved Profiles",
+                                "danger",
+                                async () => {
+                                    const res = await openModal(
+                                        "Clear Saved Profiles",
+                                        "Delete all saved profiles except the active one?\n\nThis cannot be undone.",
+                                        "Delete All",
+                                    );
+                                    if (res.confirmed)
+                                        sendToHost({ action: "clearProfiles" });
+                                },
+                            ),
+                        ),
+                    );
             }
 
             function buildDeveloper(body) {

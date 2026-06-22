@@ -5726,6 +5726,52 @@ YQIDAQAB
                 -- Management above), so no explicit refresh is needed on success.
                 switchProfile = function(data) if data.name then switchProfile(data.name) end end,
 
+                -- Deletes a single non-active saved profile.
+                deleteProfile = function(data)
+                    if not data.name then return end
+                    local targetName = sanitizeName(data.name)
+                    local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                    -- Hard guard: never delete the active profile.
+                    if targetName == "" or targetName == activeName then return end
+                    local dir = profilesPath .. targetName
+                    if not hs.fs.attributes(dir) then return end
+                    local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                    os.execute("rm -rf " .. sq(dir))
+                    ms._profilesDirty = true
+                    ms.playSlot("reset")
+                    hs.timer.doAfter(0.05, function()
+                        ms.alert("Profile \"" .. data.name .. "\" deleted.", 2, true)
+                        ms.ui.refresh()
+                    end)
+                end,
+
+                -- Deletes all saved profiles except the active one.
+                clearProfiles = function()
+                    local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                    if not hs.fs.attributes(profilesPath) then return end
+                    local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                    local deleted = 0
+                    for entry in hs.fs.dir(profilesPath) do
+                        if entry ~= "." and entry ~= ".." then
+                            local safe = sanitizeName(entry)
+                            if safe ~= "" and safe ~= activeName then
+                                local dir = profilesPath .. entry
+                                local attr = hs.fs.attributes(dir)
+                                if attr and attr.mode == "directory" then
+                                    os.execute("rm -rf " .. sq(dir))
+                                    deleted = deleted + 1
+                                end
+                            end
+                        end
+                    end
+                    ms._profilesDirty = true
+                    ms.playSlot("reset")
+                    hs.timer.doAfter(0.05, function()
+                        ms.alert(deleted .. " profile" .. (deleted == 1 and "" or "s") .. " deleted.", 3, true)
+                        ms.ui.refresh()
+                    end)
+                end,
+
                 -- importProfile() drives its own native file picker / alerts.
                 importProfile    = function() importProfile() end,
                 importProfilePkg = function() importProfilePkg() end,
