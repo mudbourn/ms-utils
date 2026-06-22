@@ -666,8 +666,12 @@
             function loadHistory(entries) {
                 const log = document.getElementById("log");
                 log.innerHTML = "";
+                const capped =
+                    entries && entries.length > MAX_ENTRIES
+                        ? entries.slice(-MAX_ENTRIES)
+                        : entries || [];
                 const frag = document.createDocumentFragment();
-                (entries || []).forEach((e) => frag.appendChild(buildRow(e)));
+                capped.forEach((e) => frag.appendChild(buildRow(e)));
                 log.appendChild(frag);
                 log.scrollTop = log.scrollHeight;
             }

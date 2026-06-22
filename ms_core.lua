@@ -6607,14 +6607,21 @@ YQIDAQAB
                 local _home    = os.getenv("HOME")
 
                 -- Helper: read the dev log and push history to a panel.
+                local _HIST_MAX = 300  -- mirrors MAX_ENTRIES in the panel JS
                 local function _loadDevHistory(panel, filter)
                     local f = io.open(_devLogPath, "r")
                     if not f then return end
+                    -- Ring-buffer: read the whole file but only keep the last
+                    -- _HIST_MAX matching entries so the JSON payload stays small
+                    -- and the evaluateJavaScript call doesn't block the run loop.
                     local entries = {}
                     for line in f:lines() do
                         local ok, entry = pcall(hs.json.decode, line)
                         if ok and entry and (not filter or filter(entry)) then
-                            table.insert(entries, entry)
+                            entries[#entries + 1] = entry
+                            if #entries > _HIST_MAX then
+                                table.remove(entries, 1)
+                            end
                         end
                     end
                     f:close()
@@ -6738,7 +6745,8 @@ YQIDAQAB
                     local f = io.open(_home .. "/.hammerspoon/ui/ms_console.html", "r")
                     if f then panel:html(f:read("*all"), _devBase); f:close() end
                     ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
-                    panel:navigationCallback(function()
+                    panel:navigationCallback(function(_, action)
+                        if action ~= "didNavigate" then return end
                         _loadDevHistory(panel, function(e)
                             return e.type == "macro" or e.type == "print"
                                 or e.type == "result" or e.type == "error"
@@ -6812,7 +6820,8 @@ YQIDAQAB
                     local f = io.open(_home .. "/.hammerspoon/ui/ms_watcher.html", "r")
                     if f then panel:html(f:read("*all"), _devBase); f:close() end
                     ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
-                    panel:navigationCallback(function()
+                    panel:navigationCallback(function(_, action)
+                        if action ~= "didNavigate" then return end
                         _loadDevHistory(panel, function(e)
                             return e.type=="macro" or e.type=="print" or e.type=="error"
                         end)
@@ -6892,17 +6901,25 @@ YQIDAQAB
                     panel:html(f:read("*all"), _devBase); f:close()
                     ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
                     ms.dev._keysReady    = false
-                    panel:navigationCallback(function()
-                        ms.dev._keysReady = true
-                        local _p = hs.mouse.absolutePosition()
-                        ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
-                        _loadDevHistory(panel, function(e)
-                            return e.type=="key" or e.type=="mouse"
-                                or e.type=="scroll" or e.type=="mousemove"
+                    panel:navigationCallback(function(_, action)
+                        if action ~= "didNavigate" then return end
+                        -- Defer all evaluateJavaScript calls to the next run-loop tick.
+                        -- Running them synchronously inside the nav callback blocks
+                        -- WebKit's internal navigation completion path and is the
+                        -- primary cause of the indefinite stall during preloading.
+                        hs.timer.doAfter(0, function()
+                            if not ms.dev._keysPanel then return end
+                            ms.dev._keysReady = true
+                            local _p = hs.mouse.absolutePosition()
+                            ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
+                            _loadDevHistory(panel, function(e)
+                                return e.type=="key" or e.type=="mouse"
+                                    or e.type=="scroll" or e.type=="mousemove"
+                            end)
+                            pcall(function() ms.dev._pushMouseState() end)
+                            local tj = _devThemeJS()
+                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
-                        pcall(function() ms.dev._pushMouseState() end)
-                        local tj = _devThemeJS()
-                        if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                     end)
                     return panel
                 end
@@ -7060,7 +7077,8 @@ YQIDAQAB
                     local f = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
                     if f then panel:html(f:read("*all"), _devBase); f:close() end
                     ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
-                    panel:navigationCallback(function()
+                    panel:navigationCallback(function(_, action)
+                        if action ~= "didNavigate" then return end
                         local tj = _devThemeJS()
                         if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         if #ms.dev._windowHistory > 0 then

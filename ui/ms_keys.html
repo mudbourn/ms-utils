@@ -753,9 +753,13 @@
                 const kl = document.getElementById("keys-log");
                 const ml = document.getElementById("mouse-log");
                 kl.innerHTML = ml.innerHTML = "";
+                const capped =
+                    entries && entries.length > MAX_ENTRIES
+                        ? entries.slice(-MAX_ENTRIES)
+                        : entries || [];
                 const kf = document.createDocumentFragment();
                 const mf = document.createDocumentFragment();
-                (entries || []).forEach((e) => {
+                capped.forEach((e) => {
                     const isMouseSide =
                         e.type === "mouse" ||
                         e.type === "scroll" ||
