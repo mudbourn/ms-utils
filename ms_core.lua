@@ -5169,22 +5169,31 @@ YQIDAQAB
             -- receiveState(state) expects. See ms_settings_ui.html for the shape.
             local function _buildUIState()
                 local macros = {}
+
+                -- Pre-build a children map: parentId → list of child ids.
+                -- This turns the O(n³) nested scan into a single O(n) pass.
+                local childrenOf = {}
+                for _, id in ipairs(ms.registry._defList or {}) do
+                    local def = ms.registry._defs[id]
+                    if def and def.sub then
+                        childrenOf[def.sub] = childrenOf[def.sub] or {}
+                        table.insert(childrenOf[def.sub], id)
+                    end
+                end
+
                 for _, id in ipairs(ms.registry._defList or {}) do
                     local def = ms.registry._defs[id]
                     if def and not def.sub and (def.group == "main" or def.group == "optional") then
                         local enabled = ms.binds[id]
                         if enabled == nil then enabled = def.enabled end
-                        -- Collect direct sub-items for this root bind,
-                        -- and for each sub also collect its own sub-items (one more level).
                         local subs = {}
-                        for _, subId in ipairs(ms.registry._defList or {}) do
+                        for _, subId in ipairs(childrenOf[id] or {}) do
                             local subDef = ms.registry._defs[subId]
-                            if subDef and subDef.sub == id then
-                                -- Collect sub-of-sub entries.
+                            if subDef then
                                 local subsubs = {}
-                                for _, ss in ipairs(ms.registry._defList or {}) do
+                                for _, ss in ipairs(childrenOf[subId] or {}) do
                                     local ssDef = ms.registry._defs[ss]
-                                    if ssDef and ssDef.sub == subId then
+                                    if ssDef then
                                         table.insert(subsubs, {
                                             id    = ss,
                                             label = ssDef.label or ss,
