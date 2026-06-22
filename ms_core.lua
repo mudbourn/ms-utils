@@ -2107,7 +2107,7 @@ daa                -- Compare the current ms_core.lua hash to the stored trusted
                     -- main thread never blocks. If a task is already running, skip.
                     if not _intHashInProgress then
                         _intHashInProgress = true
-                        hs.task.new("/usr/bin/shasum", function(_, out, _)
+                        local _t = hs.task.new("/usr/bin/shasum", function(_, out, _)
                             _intHashInProgress = false
                             local cur     = (out and #out >= 64) and out:sub(1, 64):lower() or nil
                             local trusted = ms.integrity.readTrustedHash()
@@ -2116,9 +2116,9 @@ daa                -- Compare the current ms_core.lua hash to the stored trusted
                             elseif cur == trusted then status = "trusted"
                             else                       status = "mismatch" end
                             _intCache = { status = status, cur = cur, trusted = trusted, t = os.time() }
-                            -- Mismatch: reload so the startup guardian can block and alert.
                             if status == "mismatch" then hs.reload() end
-                        end, {"-a", "256", corePath}):start()
+                        end, {"-a", "256", corePath})
+                        if _t then _t:start() else _intHashInProgress = false end
                     end
                     -- Return stale value (or "uninitialized" if cache is completely cold)
                     -- while the background task runs.
@@ -7137,6 +7137,7 @@ daa                -- Compare the current ms_core.lua hash to the stored trusted
                         ms.dev._windowPanel = _buildWindowPanel()
                     end
                 end
+            end
         -- END --
 
         -- 12. Safety Nets --
@@ -7350,6 +7351,10 @@ daa                -- Compare the current ms_core.lua hash to the stored trusted
             ms.ui.prebuild()  -- encode state JSON (integrity check fires async in background)
             ms.ui.prewarm()   -- create hidden WebView; push state at +2 s once WebKit is ready
         end)
+        -- Pre-warm the four developer panels 8 s after startup so WebKit is already
+        -- running (settings panel prewarm started it) and the dev panel WebViews load
+        -- without cold-start delay when the user first opens them.
+        hs.timer.doAfter(8, function() ms.dev.prewarm() end)
         -- System integrity: mismatch is impossible here — the guardian blocked it at
         -- load time before any ms code ran.  If no trusted hash exists yet, try to
         -- auto-seed from MANIFEST.json before showing the manual-trust reminder.
