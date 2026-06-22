@@ -703,6 +703,7 @@ YQIDAQAB
                     end
                     if data.soundAssign      then ms.soundAssign     = data.soundAssign      end
                     if data.importedSounds   then ms.importedSounds  = data.importedSounds   end
+                    if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
                     if data.macros then
                         for id, entry in pairs(data.macros) do
                             if entry.enabled ~= nil then
@@ -824,6 +825,7 @@ YQIDAQAB
                         soundVolume      = ms.soundVolume,
                         soundAssign      = ms.soundAssign,
                         importedSounds   = ms.importedSounds or {},
+                        skipDevPrewarm   = ms._skipDevPrewarm or false,
                         user             = ms._userSettingVals or {},
                         macros = {},
                     }
@@ -5543,6 +5545,7 @@ YQIDAQAB
                     userSoundSlots          = userSoundSlots,
                     userMenus               = userMenus,
                     hiddenFeatures          = ms._hiddenFeatures,
+                    preloadDevTools         = not (ms._skipDevPrewarm or false),
                     theme                   = themeOut,
                 }
             end
@@ -5633,6 +5636,13 @@ YQIDAQAB
 
                 reloadSettings = function()
                     ms.reloadSettings()
+                    ms.ui.refresh()
+                end,
+
+                setPreloadDevTools = function(data)
+                    ms._skipDevPrewarm = not (data.value and true or false)
+                    ms.saveSettings()
+                    ms.playSlot("update")
                     ms.ui.refresh()
                 end,
 
@@ -7137,6 +7147,21 @@ YQIDAQAB
                         ms.dev._windowPanel = _buildWindowPanel()
                     end
                 end
+
+                -- Builds a single named dev panel. Used by the startup loading sequence
+                -- to spread WebView creation across separate timer ticks so the main
+                -- thread is never blocked for longer than ~300 ms at a time.
+                ms.dev.prewarmStep = function(which)
+                    if     which == "console" and not ms.dev._consolePanel then
+                        ms.dev._consolePanel = _buildConsolePanel()
+                    elseif which == "watcher" and not ms.dev._watcherPanel then
+                        ms.dev._watcherPanel = _buildWatcherPanel()
+                    elseif which == "keys"    and not ms.dev._keysPanel    then
+                        ms.dev._keysPanel    = _buildKeysPanel()
+                    elseif which == "window"  and not ms.dev._windowPanel  then
+                        ms.dev._windowPanel  = _buildWindowPanel()
+                    end
+                end
             end
         -- END --
 
@@ -7338,23 +7363,164 @@ YQIDAQAB
                 ms.binds[id] = def.enabled
             end
         end
+        ms._skipDevPrewarm = false  -- overridden by loadSettings() if previously saved
         ms._discoverSounds()
         ms.loadSettings()
         ms.loadTheme()
         ms.cam.updateMultiplier()
         ms.bind.rebind()
         ms.socdApply()
-        -- Pre-build the Settings panel state now so the first panel open is instant.
-        -- All three caches (sounds, integrity, profiles) were populated above;
-        -- this just encodes the result to JSON and stores it.
+        -- ── Startup Loading Indicator ─────────────────────────────────────────────
+        -- Lightweight hs.canvas panel that shows progress while WebViews initialise
+        -- in the background.  Each WebView creation is pushed into its own timer tick
+        -- so the main thread never blocks for more than ~300 ms at a stretch.
+        local _lCanvas, _lBarMax, _lBarY, _lFadingOut
+        local _lUpdate, _lFadeOut  -- forward-declared so the mouseCallback inside do{} can close over them
+        do
+            local sf  = hs.screen.mainScreen():frame()
+            local lw, lh = 300, 104
+            local lx  = sf.x + math.floor((sf.w - lw) / 2)
+            local ly  = sf.y + math.floor((sf.h - lh) / 2) - 40
+            _lBarMax  = lw - 32
+            _lBarY    = 62
+            local clrBg     = { red=0.024, green=0.016, blue=0.008, alpha=0.95 }
+            local clrAccent = { red=0.769, green=0.102, blue=0.102, alpha=1.0  }
+            local clrText   = { red=0.941, green=0.867, blue=0.690, alpha=1.0  }
+            local clrText2  = { red=0.824, green=0.647, blue=0.392, alpha=0.72 }
+            local clrTrack  = { red=0.063, green=0.039, blue=0.024, alpha=1.0  }
+            local clrBorder = { red=0.510, green=0.196, blue=0.086, alpha=0.55 }
+            _lCanvas = hs.canvas.new({ x=lx, y=ly, w=lw, h=lh })
+            _lCanvas:level(hs.canvas.windowLevels.popUpMenu or 25)
+            _lCanvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
+            _lCanvas:alpha(0)
+            _lCanvas:appendElements(
+                -- 1: background
+                { type="rectangle", action="strokeAndFill",
+                  fillColor=clrBg, strokeColor=clrBorder, strokeWidth=1,
+                  roundedRectRadii={ xRadius=5, yRadius=5 } },
+                -- 2: top accent strip
+                { type="rectangle", action="fill", fillColor=clrAccent,
+                  frame={ x=0, y=0, w=lw, h=2 },
+                  roundedRectRadii={ xRadius=5, yRadius=5 } },
+                -- 3: title (static)
+                { type="text", text="mudscript",
+                  frame={ x=16, y=13, w=lw-32, h=22 },
+                  textFont="Almendra", textSize=15,
+                  textColor=clrText, textAlignment="left" },
+                -- 4: status line (updated by _lUpdate)
+                { type="text", text="Starting up\xe2\x80\xa6",
+                  frame={ x=16, y=37, w=lw-32, h=16 },
+                  textFont="Helvetica Neue", textSize=11,
+                  textColor=clrText2, textAlignment="left" },
+                -- 5: progress track
+                { type="rectangle", action="fill", fillColor=clrTrack,
+                  frame={ x=16, y=_lBarY, w=_lBarMax, h=3 },
+                  roundedRectRadii={ xRadius=1.5, yRadius=1.5 } },
+                -- 6: progress fill (frame.w updated by _lUpdate)
+                { type="rectangle", action="fill", fillColor=clrAccent,
+                  frame={ x=16, y=_lBarY, w=0, h=3 },
+                  roundedRectRadii={ xRadius=1.5, yRadius=1.5 } },
+                -- 7: separator above checkbox row
+                { type="rectangle", action="fill", fillColor=clrBorder,
+                  frame={ x=16, y=75, w=_lBarMax, h=1 } },
+                -- 8: hit area — transparent full-width row, trackMouseDown for click detection
+                { type="rectangle", action="fill",
+                  fillColor={ red=0, green=0, blue=0, alpha=0 },
+                  frame={ x=16, y=80, w=_lBarMax, h=18 },
+                  trackMouseDown=true },
+                -- 9: checkbox glyph (☐ / ☑) — updated on toggle
+                { type="text",
+                  text=(ms._skipDevPrewarm and "\xe2\x98\x91" or "\xe2\x98\x90"),
+                  frame={ x=17, y=80, w=18, h=18 },
+                  textFont="Helvetica Neue", textSize=13,
+                  textColor=clrText2, textAlignment="left" },
+                -- 10: label
+                { type="text", text="Skip dev tool preloading",
+                  frame={ x=36, y=83, w=_lBarMax-22, h=14 },
+                  textFont="Helvetica Neue", textSize=11,
+                  textColor=(ms._skipDevPrewarm and clrText or clrText2),
+                  textAlignment="left" }
+            )
+            _lCanvas:show()
+            hs.timer.doAfter(0.05, function()
+                if _lCanvas then _lCanvas:alpha(1) end
+            end)
+            _lCanvas:mouseCallback(function(canvas, event, id, x, y)
+                if event ~= "mouseDown" or id ~= 8 then return end
+                ms._skipDevPrewarm = not ms._skipDevPrewarm
+                pcall(ms.saveSettings)
+                canvas[9].text       = ms._skipDevPrewarm and "\xe2\x98\x91" or "\xe2\x98\x90"
+                canvas[10].textColor = ms._skipDevPrewarm and clrText or clrText2
+                if ms._skipDevPrewarm and not _lFadingOut then
+                    _lUpdate(100, "Developer tools skipped.")
+                    hs.timer.doAfter(0.8, _lFadeOut)
+                end
+            end)
+        end
+
+        _lUpdate = function(pct, msg)
+            if not _lCanvas then return end
+            _lCanvas[4].text  = msg
+            _lCanvas[6].frame = {
+                x=16, y=_lBarY,
+                w=math.max(4, math.floor(_lBarMax * pct / 100)), h=3,
+            }
+        end
+
+        _lFadeOut = function()
+            if not _lCanvas or _lFadingOut then return end
+            _lFadingOut = true
+            for i = 9, 0, -1 do
+                local a, d = i / 10, (9 - i) * 0.04
+                hs.timer.doAfter(d, function()
+                    if _lCanvas then _lCanvas:alpha(a) end
+                end)
+            end
+            hs.timer.doAfter(10 * 0.04 + 0.05, function()
+                if _lCanvas then _lCanvas:delete(); _lCanvas = nil end
+            end)
+        end
+
+        -- Stagger each WebView creation into its own timer tick so startup
+        -- never freezes for more than one build at a time.
         hs.timer.doAfter(0, function()
-            ms.ui.prebuild()  -- encode state JSON (integrity check fires async in background)
-            ms.ui.prewarm()   -- create hidden WebView; push state at +2 s once WebKit is ready
+            ms.ui.prebuild()
+            _lUpdate(18, "Building UI state cache\xe2\x80\xa6")
         end)
-        -- Pre-warm the four developer panels 8 s after startup so WebKit is already
-        -- running (settings panel prewarm started it) and the dev panel WebViews load
-        -- without cold-start delay when the user first opens them.
-        hs.timer.doAfter(8, function() ms.dev.prewarm() end)
+        hs.timer.doAfter(0.3, function()
+            ms.ui.prewarm()
+            _lUpdate(32, "Loading settings panel\xe2\x80\xa6")
+        end)
+        hs.timer.doAfter(2.0, function()
+            if not ms._skipDevPrewarm then
+                ms.dev.prewarmStep("console")
+                _lUpdate(50, "Loading console\xe2\x80\xa6")
+            end
+        end)
+        hs.timer.doAfter(3.5, function()
+            if not ms._skipDevPrewarm then
+                ms.dev.prewarmStep("watcher")
+                _lUpdate(65, "Loading macro monitor\xe2\x80\xa6")
+            end
+        end)
+        hs.timer.doAfter(5.0, function()
+            if not ms._skipDevPrewarm then
+                ms.dev.prewarmStep("keys")
+                _lUpdate(80, "Loading input monitor\xe2\x80\xa6")
+            end
+        end)
+        hs.timer.doAfter(6.5, function()
+            if not ms._skipDevPrewarm then
+                ms.dev.prewarmStep("window")
+                _lUpdate(93, "Loading window monitor\xe2\x80\xa6")
+            end
+        end)
+        hs.timer.doAfter(7.5, function()
+            if not _lFadingOut then
+                _lUpdate(100, "Ready.")
+                hs.timer.doAfter(0.8, _lFadeOut)
+            end
+        end)
         -- System integrity: mismatch is impossible here — the guardian blocked it at
         -- load time before any ms code ran.  If no trusted hash exists yet, try to
         -- auto-seed from MANIFEST.json before showing the manual-trust reminder.
@@ -7409,7 +7575,7 @@ YQIDAQAB
         end)
 
         if notice ~= 1 then
-            hs.timer.doAfter(0.5, function()
+            hs.timer.doAfter(9.0, function()
                 pcall(function()
                     ms.playSlot("load")
                     ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn — https://mudbourn.info", 6)

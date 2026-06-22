@@ -2409,6 +2409,34 @@
 
                 body.appendChild(divider());
 
+                // Preload dev tools on startup toggle
+                const preload = S.preloadDevTools !== false;
+                body.appendChild(
+                    row(
+                        "Preload dev tools",
+                        "Build panels at startup for instant opens",
+                        h(
+                            "button",
+                            {
+                                cls:
+                                    "btn-macro " +
+                                    (preload ? "btn-enable" : "btn-disable"),
+                                onmouseenter: () => playSlot("hover"),
+                                onclick: () => {
+                                    playSlot("interact");
+                                    sendToHost({
+                                        action: "setPreloadDevTools",
+                                        value: !preload,
+                                    });
+                                },
+                            },
+                            preload ? "ON" : "OFF",
+                        ),
+                    ),
+                );
+
+                body.appendChild(divider());
+
                 // System Integrity
                 const status = S.integrityStatus || "uninitialized";
                 const hash = S.integrityHash
