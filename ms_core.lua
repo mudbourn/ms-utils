@@ -808,6 +808,7 @@ YQIDAQAB
                 end
 
                 ms.saveSettings = function()
+                    if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                     local data = {
                         sensitivity      = CUR_CAM_SENS,
                         frameLevel       = clickLevel,
@@ -875,6 +876,7 @@ YQIDAQAB
                 end
 
                 ms.loadSettings = function()
+                    if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                     -- JSON file takes priority
                     local f = io.open(jsonPath, "r")
                     if f then
@@ -1224,6 +1226,7 @@ YQIDAQAB
                 -- "Reload Theme" panel action.
                 --
                 ms.loadTheme = function()
+                    if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                     for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
                     local f = io.open(themePath, "r")
                     if not f then return end
@@ -4462,6 +4465,7 @@ YQIDAQAB
             end
 
             ms.setMacros = function(state, silent)
+                if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                 if state == 1 and BindValidity ~= 1 then
                     BindValidity = 1
                     pcall(function() ms.cam.enable() end)
@@ -7148,6 +7152,10 @@ YQIDAQAB
         ms.cam.updateMultiplier()
         ms.bind.rebind()
         ms.socdApply()
+        -- Pre-build the Settings panel state now so the first panel open is instant.
+        -- All three caches (sounds, integrity, profiles) were populated above;
+        -- this just encodes the result to JSON and stores it.
+        hs.timer.doAfter(0, function() ms.ui.prebuild() end)
         -- System integrity: mismatch is impossible here — the guardian blocked it at
         -- load time before any ms code ran.  If no trusted hash exists yet, try to
         -- auto-seed from MANIFEST.json before showing the manual-trust reminder.
