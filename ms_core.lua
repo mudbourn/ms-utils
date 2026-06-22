@@ -6663,6 +6663,7 @@ YQIDAQAB
 
                 ms.dev.keys = {}
                 ms.dev.keys.show = function()
+                    print("[keys] show() called, _keysPanel=", ms.dev._keysPanel ~= nil)
                     if not ms.dev._keysPanel then
                         local screen  = hs.screen.mainScreen():frame()
                         local w, h    = 360, 640
@@ -6670,21 +6671,22 @@ YQIDAQAB
                         local y = screen.y + 68
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
                             { developerExtrasEnabled = true }, _ucKeys)
-                        if not panel then return end
+                        if not panel then print("[keys] webview.new returned nil"); return end
                         pcall(function() panel:windowStyle(0) end)
                         pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
                         pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
                         pcall(function() panel:shadow(true) end)
                         local html = io.open(_home .. "/.hammerspoon/ui/ms_keys.html", "r")
-                        if html then
-                            panel:html(html:read("*all"), _devBase); html:close()
-                        end
+                        if not html then print("[keys] FAILED to open ms_keys.html"); return end
+                        local content = html:read("*all"); html:close()
+                        print("[keys] HTML loaded, " .. #content .. " bytes")
+                        panel:html(content, _devBase)
                         ms.dev._keysPanel    = panel
                         ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
-                        ms.dev._keysReady    = false  -- set true in nav callback once page is loaded
+                        ms.dev._keysReady    = false
                         panel:navigationCallback(function()
+                            print("[keys] navigationCallback fired — page ready")
                             ms.dev._keysReady = true
-                            -- Seed the actual current mouse position on page load.
                             local _p = hs.mouse.absolutePosition()
                             ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
                             _loadDevHistory(panel, function(e)
@@ -6695,6 +6697,7 @@ YQIDAQAB
                             local tj = _devThemeJS(); if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
                     end
+                    print("[keys] calling :show()")
                     ms.dev._keysPanel:show()
                     pcall(function() ms.dev._keysPanel:bringToFront(true) end)
                     ms.dev._keysOpen = true
