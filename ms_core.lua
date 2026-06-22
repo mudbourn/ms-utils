@@ -215,8 +215,7 @@ YQIDAQAB
                 _activeKeys      = {},
             }
             local _devLogPath = os.getenv("HOME") .. "/Documents/ms_dev.log"
-            local _devBusy          = false
-            local _devKeyNoticeSent = false  -- true after first key notice; reset on any non-key event
+            local _devBusy = false
 
             local function _devWrite(entry)
                 if _devBusy then return end
@@ -229,41 +228,19 @@ YQIDAQAB
                 local ok, json = pcall(hs.json.encode, entry)
                 if ok then
                     local t = entry.type
-                    -- Key/mouse events go to the Key Monitor only.
-                    -- The console gets one dim notice per burst of key activity;
-                    -- the notice resets whenever any non-key event fires so the
-                    -- next burst of keys shows a fresh line.
-                    if t == "key" or t == "mouse" then
-                        if ms.dev._consolePanel and not _devKeyNoticeSent then
-                            _devKeyNoticeSent = true
-                            local notice = { ts = entry.ts, type = "print",
-                                             msg = "\xe2\x8c\xa8  input activity \xe2\x80\x94 see Input Monitor" }
-                            local nok, njson = pcall(hs.json.encode, notice)
-                            if nok then
-                                pcall(function()
-                                    ms.dev._consolePanel:evaluateJavaScript(
-                                        "appendEntry(" .. njson .. ")")
-                                end)
-                            end
-                        end
-                    else
-                        -- Only a macro (or REPL result) resets the key-notice gate.
-                        -- Plain print/error output does not — keys and macros strictly
-                        -- take turns: one key notice per macro execution, no more.
-                        if t == "macro" or t == "result" or t == "input" then
-                            _devKeyNoticeSent = false
-                        end
-                        if ms.dev._consolePanel then
-                            pcall(function()
-                                ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                            end)
-                        end
+                    -- Console: everything except mousemove. key/mouse show KEY/MOUSE badges.
+                    if ms.dev._consolePanel and t ~= "mousemove" then
+                        pcall(function()
+                            ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                        end)
                     end
+                    -- Watcher: macro, print, error (step entries pushed directly)
                     if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error") then
                         pcall(function()
                             ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
                         end)
                     end
+                    -- Input Monitor: key, mouse, scroll, mousemove
                     if ms.dev._keysPanel
                         and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
                         pcall(function()
