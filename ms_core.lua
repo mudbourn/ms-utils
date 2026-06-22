@@ -7491,31 +7491,41 @@ YQIDAQAB
             ms.ui.prewarm()
             _lUpdate(32, "Loading settings panel\xe2\x80\xa6")
         end)
+        -- Each dev-panel step is split across two ticks:
+        --   tick 1 (doAfter N): update the progress label and bar, then return so
+        --                       Core Animation can flush the redraw to the screen.
+        --   tick 2 (doAfter 0): create the WebView (potentially slow) in the next
+        --                       run-loop iteration so the user sees the label update
+        --                       before any brief block.
         hs.timer.doAfter(2.0, function()
-            if not ms._skipDevPrewarm then
-                ms.dev.prewarmStep("console")
-                _lUpdate(50, "Loading console\xe2\x80\xa6")
-            end
+            if ms._skipDevPrewarm then return end
+            _lUpdate(50, "Loading console\xe2\x80\xa6")
+            hs.timer.doAfter(0, function()
+                if not ms._skipDevPrewarm then ms.dev.prewarmStep("console") end
+            end)
         end)
-        hs.timer.doAfter(2.75, function()
-            if not ms._skipDevPrewarm then
-                ms.dev.prewarmStep("watcher")
-                _lUpdate(64, "Loading macro monitor\xe2\x80\xa6")
-            end
+        hs.timer.doAfter(2.6, function()
+            if ms._skipDevPrewarm then return end
+            _lUpdate(62, "Loading macro monitor\xe2\x80\xa6")
+            hs.timer.doAfter(0, function()
+                if not ms._skipDevPrewarm then ms.dev.prewarmStep("watcher") end
+            end)
         end)
-        hs.timer.doAfter(3.5, function()
-            if not ms._skipDevPrewarm then
-                ms.dev.prewarmStep("keys")
-                _lUpdate(78, "Loading input monitor\xe2\x80\xa6")
-            end
+        hs.timer.doAfter(3.2, function()
+            if ms._skipDevPrewarm then return end
+            _lUpdate(75, "Loading input monitor\xe2\x80\xa6")
+            hs.timer.doAfter(0, function()
+                if not ms._skipDevPrewarm then ms.dev.prewarmStep("keys") end
+            end)
         end)
-        hs.timer.doAfter(4.25, function()
-            if not ms._skipDevPrewarm then
-                ms.dev.prewarmStep("window")
-                _lUpdate(92, "Loading window monitor\xe2\x80\xa6")
-            end
+        hs.timer.doAfter(3.8, function()
+            if ms._skipDevPrewarm then return end
+            _lUpdate(88, "Loading window monitor\xe2\x80\xa6")
+            hs.timer.doAfter(0, function()
+                if not ms._skipDevPrewarm then ms.dev.prewarmStep("window") end
+            end)
         end)
-        hs.timer.doAfter(5.25, function()
+        hs.timer.doAfter(4.6, function()
             if not _lFadingOut then
                 _lUpdate(100, "Ready.")
                 hs.timer.doAfter(0.8, _lFadeOut)
