@@ -388,16 +388,16 @@
                     mouse: "mouse",
                 };
 
-                // Build display message from structured fields for key/mouse;
-                // fall back to entry.msg for all other types.
+                // KEY and MOUSE are badge-only; details live in the Input Monitor.
+                // MACRO keeps its label. PRINT/ERROR show their full text.
                 let msg;
-                if (type === "key") {
-                    msg = (entry.down ? "↓" : "↑") + "  " + (entry.key || "?");
-                } else if (type === "mouse") {
-                    const btn = BTN[entry.button] ?? "M" + entry.button;
-                    const pos =
-                        entry.x != null ? "  " + entry.x + ", " + entry.y : "";
-                    msg = (entry.down ? "↓" : "↑") + "  " + btn + pos;
+                if (type === "key" || type === "mouse") {
+                    msg = "";
+                } else if (type === "macro") {
+                    const label = entry.parentLabel
+                        ? entry.parentLabel + " \u203a " + (entry.label || "")
+                        : entry.label || entry.id || "";
+                    msg = entry.trigger ? label + "  " + entry.trigger : label;
                 } else {
                     msg =
                         type === "input"

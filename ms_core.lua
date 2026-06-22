@@ -216,6 +216,7 @@ YQIDAQAB
             }
             local _devLogPath = os.getenv("HOME") .. "/Documents/ms_dev.log"
             local _devBusy = false
+            local _devLastConsoleType = nil  -- last key/mouse/macro type sent; gates repeat suppression
 
             local function _devWrite(entry)
                 if _devBusy then return end
@@ -228,11 +229,27 @@ YQIDAQAB
                 local ok, json = pcall(hs.json.encode, entry)
                 if ok then
                     local t = entry.type
-                    -- Console: everything except mousemove. key/mouse show KEY/MOUSE badges.
+                    -- Console routing with consecutive-repeat suppression.
+                    -- key/mouse/macro: only send when the type changes from the last sent.
+                    -- print/error/result/input: always send and reset the gate.
                     if ms.dev._consolePanel and t ~= "mousemove" then
-                        pcall(function()
-                            ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                        end)
+                        local send = false
+                        if t == "key" or t == "mouse" or t == "macro" then
+                            if _devLastConsoleType ~= t then
+                                _devLastConsoleType = t
+                                send = true
+                            end
+                        else
+                            -- Non-indicator type: always show and reset gate so the
+                            -- next key/mouse/macro press shows a fresh badge.
+                            _devLastConsoleType = nil
+                            send = true
+                        end
+                        if send then
+                            pcall(function()
+                                ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                            end)
+                        end
                     end
                     -- Watcher: macro, print, error (step entries pushed directly)
                     if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error") then
