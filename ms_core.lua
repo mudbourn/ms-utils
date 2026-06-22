@@ -3785,7 +3785,42 @@ YQIDAQAB
                 return false
             end):start()
 
+            -- ── Macro Watcher tracing helpers ─────────────────────────────────────────
+            -- Fires only when the Macro Monitor panel is open; no-op otherwise.
+            local _camMoveAccum  = 0   -- consecutive cam.move calls awaiting flush
+            local _traceSuppress = false  -- true while ms.type is dispatching internally
+
+            local function _watcherStep(msg)
+                if not ms.dev._watcherPanel then return end
+                local co  = coroutine.running()
+                local ctx = co and ms._coroContext[co]
+                if ctx and ctx.cancelled then return end
+                local label = (ctx and ctx.label) or "macro"
+                local ok, j = pcall(hs.json.encode, {
+                    type = "step", ts = os.time(),
+                    msg  = "[" .. label .. "] " .. msg,
+                })
+                if ok then
+                    pcall(function()
+                        ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                    end)
+                end
+            end
+
+            -- Flush accumulated cam.move calls before logging a different action.
+            local function _flushCam()
+                if _camMoveAccum > 0 then
+                    _watcherStep("cam.move \xc3\x97" .. _camMoveAccum)
+                    _camMoveAccum = 0
+                end
+            end
+
             ms.press = function(key, mods, hidinject)
+                if ms.dev._watcherPanel and not _traceSuppress then
+                    _flushCam()
+                    local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
+                    _watcherStep("↓ " .. tostring(key) .. modsStr)
+                end
                 local keyCode = getCode(key)
                 if not keyCode then
                     print("Error: Could not find keyCode for " .. tostring(key))
@@ -3802,6 +3837,10 @@ YQIDAQAB
             end
 
             ms.release = function(key, mods, hidinject)
+                if ms.dev._watcherPanel and not _traceSuppress then
+                    _flushCam()
+                    _watcherStep("↑ " .. tostring(key))
+                end
                 local keyCode = getCode(key)
                 if not keyCode then return end
                 ms._macroHeldKeys[keyCode] = nil
@@ -3815,9 +3854,16 @@ YQIDAQAB
             end
 
             ms.type = function(key, mods, hidinject)
+                if ms.dev._watcherPanel then
+                    _flushCam()
+                    local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
+                    _watcherStep("type " .. tostring(key) .. modsStr)
+                end
+                _traceSuppress = true
                 ms.press(key, mods, hidinject)
                 ms.wait(15)
                 ms.release(key, mods, hidinject)
+                _traceSuppress = false
             end
 
             ms.key = function(mods, key, swallow, pressFn, releaseFn)
@@ -3855,6 +3901,11 @@ YQIDAQAB
 
 
             ms.scroll = function(direction, clicks)
+                if ms.dev._watcherPanel then
+                    _flushCam()
+                    _watcherStep("scroll " .. tostring(direction)
+                        .. (clicks and clicks > 1 and " \xc3\x97" .. clicks or ""))
+                end
                 clicks = clicks or 1
                 local dx, dy = 0, 0
                 if direction == "up" then dy = clicks
@@ -3957,6 +4008,10 @@ YQIDAQAB
                     ScreenTL=true,   ScreenTR=true,  ScreenBL=true,
                     ScreenBR=true,   ScreenCenter=true,
                 }
+                if ms.dev._watcherPanel then
+                    _flushCam()
+                    _watcherStep("Mouse " .. tostring(operation) .. " " .. tostring(button))
+                end
                 assert(OPS[operation],     "ms.Mouse: unknown operation '"  .. tostring(operation)  .. "'")
                 assert(BTNS[button] ~= nil, "ms.Mouse: unknown button '"      .. tostring(button)     .. "'")
                 assert(REFS[reference],    "ms.Mouse: unknown reference '"   .. tostring(reference)  .. "'")
@@ -4061,9 +4116,10 @@ YQIDAQAB
                 local co = coroutine.running()
                 if co then
                     local ctx = ms._coroContext[co]  -- capture context at yield time
-                    -- When the watcher is open, log significant waits (>= 50 ms) as step
-                    -- entries so users can see execution progress and where a macro stalls.
-                    if ms_time >= 50 and ms.dev and ms.dev._watcherPanel then
+                    -- When the watcher is open, log waits as step entries.
+                    -- Flush any accumulated cam.move calls first so ordering is correct.
+                    if ms.dev and ms.dev._watcherPanel then
+                        _flushCam()
                         local _label = (ctx and ctx.label) or "macro"
                         local ok2, j2 = pcall(hs.json.encode, {
                             type = "step",
@@ -4314,6 +4370,9 @@ YQIDAQAB
                 end,
 
                 move = function(dy, dx)
+                    if ms.dev._watcherPanel then
+                        _camMoveAccum = _camMoveAccum + 1
+                    end
                     if not ms.cam.anchor then
                         ms.wait(2)
                         return
@@ -4499,7 +4558,13 @@ YQIDAQAB
                 end
             end
 
-            ms.copy = function(text) hs.pasteboard.setContents(text) end
+            ms.copy = function(text)
+                if ms.dev._watcherPanel then
+                    _flushCam()
+                    _watcherStep("copy")
+                end
+                hs.pasteboard.setContents(text)
+            end
 
             -- Cancels all active ms.fn macro coroutines and releases any keys or mouse
             -- buttons that were left held by macro presses. Called automatically on every
@@ -4576,6 +4641,11 @@ YQIDAQAB
             -- async: true (default) = fire-and-forget; false = yield until complete.
             -- device: output device name string; nil = system default.
             ms.sound = function(path, async, device)
+                if ms.dev._watcherPanel and path then
+                    _flushCam()
+                    local fname = tostring(path):match("([^/\\]+)$") or tostring(path)
+                    _watcherStep("sound " .. fname)
+                end
                 if not ms.soundEnabled then return end
                 if not path then return end
                 local s = hs.sound.getByFile(path) or hs.sound.getByName(path)
