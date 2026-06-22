@@ -31,7 +31,6 @@
     ms.menu.define({
         id    = "calibration",
         title = "Coordinate Calibration",
-        icon  = "*",
         items = {
             {
                 type  = "groupLabel",
@@ -193,7 +192,7 @@
                 end
                 for i = 1, 5 do
                     ms.type("e")
-                    ms.wait(3)
+                    ms.wait(1)
                 end
                 ms.wait(30)
                 for i = 1, 2 do
@@ -304,7 +303,7 @@
                 end
                 for i = 1, 5 do
                     ms.type("e")
-                    ms.wait(3)
+                    ms.wait(1)
                 end
                 ms.wait(30)
                 for i = 1, 2 do

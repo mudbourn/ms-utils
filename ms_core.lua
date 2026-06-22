@@ -5561,10 +5561,34 @@ YQIDAQAB
                 end
             end
 
-            -- Pre-builds the state cache without requiring the panel to be open.
-            -- Called at startup so the first panel open is instant.
+            -- Pre-builds the state cache *and* the hidden WebView panel so the
+            -- first panel open is instant. Called once at startup via doAfter(0),
+            -- which gives ms_macros.lua and _applySettings a full event-loop tick
+            -- to finish before the snapshot is taken.
+            --
+            -- Flow:
+            --   1. Encode the current state to JSON (fast, synchronous).
+            --   2. Create the WebView now — hidden — so WebKit loads the HTML,
+            --      CSS, four TTF fonts, and all JS in the background.
+            --   3. Two seconds later push the pre-built JSON into the JS context
+            --      so receiveState() has been called before the user ever opens
+            --      the panel.  refresh() is pcall-wrapped, so this is a silent
+            --      no-op on the rare case WebKit isn't ready yet; show() always
+            --      calls refresh() too, so state is guaranteed to land on open.
             ms.ui.prebuild = function()
                 if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
+                -- Build the WebView now (hidden) so WebKit warms up in the background.
+                if not ms.ui._panel then
+                    ms.ui._panel = _buildPanel()
+                end
+                -- Push the pre-built state once WebKit has parsed and registered
+                -- receiveState().  Only fires when the panel is not yet open so we
+                -- don't clobber an in-progress user session.
+                hs.timer.doAfter(2, function()
+                    if ms.ui._panel and not ms.ui._open then
+                        ms.ui.refresh()
+                    end
+                end)
             end
 
             local function _emptyToNil(s) if s == nil or s == "" then return nil end; return s end
