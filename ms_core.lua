@@ -213,6 +213,7 @@ YQIDAQAB
                 _watcherPanelPos = nil,
                 _keysPanelPos    = nil,
                 _activeKeys      = {},
+                _coordMode       = "screen",  -- screen | window | ref | screenCenter
             }
             local _devLogPath = os.getenv("HOME") .. "/Documents/ms_dev.log"
             local _devBusy = false
@@ -258,7 +259,7 @@ YQIDAQAB
                         end)
                     end
                     -- Input Monitor: key, mouse, scroll, mousemove
-                    if ms.dev._keysPanel
+                    if ms.dev._keysPanel and ms.dev._keysReady
                         and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
                         pcall(function()
                             ms.dev._keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
@@ -1959,6 +1960,7 @@ YQIDAQAB
                         end
                         if #soundsAdded > 0 then
                             ms.saveSettings()
+                            ms._soundsDirty = true
                             ms._discoverSounds()
                         end
                     end
@@ -2015,12 +2017,23 @@ YQIDAQAB
 
                 -- Compare the current ms_core.lua hash to the stored trusted baseline.
                 -- Returns: status ("trusted"|"mismatch"|"uninitialized"), currentHash, trustedHash
+                -- Caches the result for 60 s so rapid UI refreshes don't each spawn shasum.
+                -- Call ms.integrity.invalidateCache() after trust operations to force a recheck.
+                local _intCache = { status = nil, cur = nil, trusted = nil, t = 0 }
+                ms.integrity.invalidateCache = function() _intCache.t = 0 end
                 ms.integrity.check = function()
+                    local now = os.time()
+                    if _intCache.status ~= nil and (now - _intCache.t) < 60 then
+                        return _intCache.status, _intCache.cur, _intCache.trusted
+                    end
                     local cur     = ms.integrity.hashFile(corePath)
                     local trusted = ms.integrity.readTrustedHash()
-                    if not trusted            then return "uninitialized", cur, nil     end
-                    if cur == trusted         then return "trusted",       cur, trusted end
-                    return "mismatch", cur, trusted
+                    local status
+                    if not trusted        then status = "uninitialized"
+                    elseif cur == trusted then status = "trusted"
+                    else                       status = "mismatch" end
+                    _intCache = { status = status, cur = cur, trusted = trusted, t = now }
+                    return status, cur, trusted
                 end
 
                 -- Seal the current ms_core.lua as the trusted baseline.
@@ -2031,6 +2044,7 @@ YQIDAQAB
                         return false
                     end
                     if ms.integrity.writeTrustedHash(hash) then
+                        ms.integrity.invalidateCache()  -- force fresh check on next open
                         ms.alert("Trusted hash saved.\n" .. hash:sub(1, 16) .. "\xe2\x80\xa6", 4, true)
                         return true
                     end
@@ -2150,6 +2164,7 @@ YQIDAQAB
                                 return
                             end
                             ms.integrity.writeTrustedHash(actualHash)
+                            ms.integrity.invalidateCache()
                             ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
                             hs.timer.doAfter(3, function() hs.reload() end)
                         end)
@@ -3052,6 +3067,7 @@ YQIDAQAB
 
                                 if #added > 0 then
                                     ms.saveSettings()
+                                    ms._soundsDirty = true
                                     ms._discoverSounds()
                                     ms._pendingReopenToSound = true
                                 end
@@ -3859,11 +3875,12 @@ YQIDAQAB
                     local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                     _watcherStep("type " .. tostring(key) .. modsStr)
                 end
+                local _saved = _traceSuppress
                 _traceSuppress = true
                 ms.press(key, mods, hidinject)
                 ms.wait(15)
                 ms.release(key, mods, hidinject)
-                _traceSuppress = false
+                _traceSuppress = _saved  -- restore rather than reset; safe across cancellation
             end
 
             ms.key = function(mods, key, swallow, pressFn, releaseFn)
@@ -4613,8 +4630,12 @@ YQIDAQAB
             -- Scans SoundLib for audio files and indexes them by name (without extension).
             -- Also folds in ms.importedSounds (settings-persisted list) so sounds imported
             -- through the menu are always available even if SoundLib is temporarily missing.
-            -- Safe to call multiple times; re-indexes from scratch each time.
+            -- Only rescans when ms._soundsDirty is true; callers that add/remove sound files
+            -- must set ms._soundsDirty = true before calling.
+            ms._soundsDirty = true  -- force the first scan at startup
             ms._discoverSounds = function()
+                if not ms._soundsDirty then return end
+                ms._soundsDirty = false
                 ms.sounds = {}
                 if hs.fs.attributes(SoundLib) then
                     for file in hs.fs.dir(SoundLib) do
@@ -5696,6 +5717,7 @@ YQIDAQAB
                     end
                     if #added > 0 then
                         ms.saveSettings()
+                        ms._soundsDirty = true
                         ms._discoverSounds()
                     end
                     ms.ui.show()
@@ -5768,6 +5790,7 @@ YQIDAQAB
                     ms.soundAssign = ms.soundAssign or {}
                     ms.soundAssign[slot] = importName
                     ms.saveSettings()
+                    ms._soundsDirty = true
                     ms._discoverSounds()
                     ms.playSlot("update")
                     hs.timer.doAfter(0.15, function()
@@ -6621,6 +6644,14 @@ YQIDAQAB
                     elseif data.action == "close" then
                         if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
                         ms.dev._keysOpen = false
+                    elseif data.action == "setCoordMode" then
+                        ms.dev._coordMode = data.mode or "screen"
+                        -- Re-push current position immediately in the new coordinate system.
+                        hs.timer.doAfter(0.01, function()
+                            if ms.dev._keysPanel then
+                                pcall(function() ms.dev._pushMouseState() end)
+                            end
+                        end)
                     elseif data.action == "move" and ms.dev._keysPanelPos then
                         ms.dev._keysPanelPos.x = ms.dev._keysPanelPos.x + (data.dx or 0)
                         ms.dev._keysPanelPos.y = ms.dev._keysPanelPos.y + (data.dy or 0)
@@ -6650,7 +6681,9 @@ YQIDAQAB
                         end
                         ms.dev._keysPanel    = panel
                         ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
+                        ms.dev._keysReady    = false  -- set true in nav callback once page is loaded
                         panel:navigationCallback(function()
+                            ms.dev._keysReady = true
                             -- Seed the actual current mouse position on page load.
                             local _p = hs.mouse.absolutePosition()
                             ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
@@ -6677,7 +6710,8 @@ YQIDAQAB
                         end
                         local _p = hs.mouse.absolutePosition()
                         local _x, _y = math.floor(_p.x), math.floor(_p.y)
-                        if _x ~= ms.dev._mousePos.x or _y ~= ms.dev._mousePos.y then
+                        local prev = ms.dev._mousePos
+                        if not prev or _x ~= prev.x or _y ~= prev.y then
                             ms.dev._mousePos = { x = _x, y = _y }
                             ms.dev._pushMouseState(_x, _y)
                         end
@@ -6687,6 +6721,7 @@ YQIDAQAB
                     if ms.dev._mousePoller then
                         ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
                     end
+                    ms.dev._keysReady = false
                     if ms.dev._keysPanel then
                         ms.playSlot("settingsClose")
                         ms.dev._keysPanel:hide()
@@ -6700,11 +6735,31 @@ YQIDAQAB
 
                 -- ── Mouse state pusher ────────────────────────────────────────────────
                 -- Defined here so both the nav callback and the poller can call it.
+                -- Applies the coordinate transform selected by the user's dropdown.
                 ms.dev._pushMouseState = function(x, y)
                     if not ms.dev._keysPanel then return end
                     local _x = x or (ms.dev._mousePos and ms.dev._mousePos.x) or 0
                     local _y = y or (ms.dev._mousePos and ms.dev._mousePos.y) or 0
-                    local j = string.format('{"x":%d,"y":%d}', _x, _y)
+                    -- Transform raw screen coordinates to the selected reference frame.
+                    local mode = ms.dev._coordMode or "screen"
+                    local tx, ty = _x, _y
+                    if mode == "window" or mode == "ref" then
+                        local win = ms.getRobloxWin()
+                        if win then
+                            local f = win:frame()
+                            tx = _x - f.x
+                            ty = _y - f.y
+                            if mode == "ref" then
+                                tx = math.floor(tx * (1680 / f.w) + 0.5)
+                                ty = math.floor(ty * (1044 / f.h) + 0.5)
+                            end
+                        end
+                    elseif mode == "screenCenter" then
+                        local sf = hs.screen.mainScreen():frame()
+                        tx = _x - math.floor(sf.w / 2)
+                        ty = _y - math.floor(sf.h / 2)
+                    end
+                    local j = string.format('{"x":%d,"y":%d}', math.floor(tx), math.floor(ty))
                     pcall(function()
                         ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. j .. ")")
                     end)

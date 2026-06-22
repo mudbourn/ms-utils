@@ -267,7 +267,39 @@
                 flex-shrink: 0;
             }
 
-            /* ── Event log ───────────────────────────────────────────────── */
+            /* ── Coordinate mode select ────────────────────────────────── */
+            .section-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            #coord-select {
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                color: var(--text2);
+                font-family: inherit;
+                font-size: 10px;
+                letter-spacing: 0.4px;
+                text-transform: uppercase;
+                padding: 1px 5px;
+                border-radius: var(--radius);
+                cursor: pointer;
+                outline: none;
+                -webkit-appearance: none;
+                flex-shrink: 0;
+            }
+            #coord-select:hover {
+                border-color: var(--accent);
+                color: var(--text);
+            }
+            #coord-select option {
+                background: var(--surface2);
+                color: var(--text);
+                text-transform: none;
+                letter-spacing: 0;
+            }
+
+            /* ── Event log ──────────────────────────────────────────────── */
             .event-log {
                 flex: 1;
                 overflow-y: auto;
@@ -393,10 +425,21 @@
             <div id="keys-log" class="event-log"></div>
         </div>
 
-        <!-- ── Mouse tab ──────────────────────────────────────────────────── -->
+        <!-- ── Mouse tab ──────────────────────────────────────────────────────── -->
         <div id="mouse-section" class="tab-section">
             <div class="state-section">
-                <span class="section-label">Position</span>
+                <div class="section-header">
+                    <span class="section-label">Position</span>
+                    <select
+                        id="coord-select"
+                        onchange="onCoordModeChange(this.value)"
+                    >
+                        <option value="screen">Screen</option>
+                        <option value="window">Window</option>
+                        <option value="ref">REF 1680×1044</option>
+                        <option value="screenCenter">Screen center</option>
+                    </select>
+                </div>
                 <div id="mouse-pos">
                     x: <span id="mx">—</span>&nbsp;&nbsp;y:
                     <span id="my">—</span>
@@ -670,6 +713,10 @@
 
             function closePanel() {
                 sendToHost({ action: "close" });
+            }
+
+            function onCoordModeChange(mode) {
+                sendToHost({ action: "setCoordMode", mode: mode });
             }
         </script>
     </body>
