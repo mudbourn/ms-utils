@@ -487,6 +487,12 @@
                     const row = document.getElementById("frow-" + c.id);
                     if (row) row.classList.toggle("muted", _muted.has(c.id));
                 });
+                // Toggle the bottom action between "show all" and "hide all"
+                const action = document.getElementById("filter-action");
+                if (action) {
+                    const allMuted = _muted.size === CATS.length;
+                    action.textContent = allMuted ? "show all" : "hide all";
+                }
             }
 
             // ── Filter panel ───────────────────────────────────────────────────
@@ -518,9 +524,16 @@
 
                 const clear = document.createElement("div");
                 clear.className = "filter-clear";
-                clear.textContent = "show all";
+                clear.id = "filter-action";
+                clear.textContent = "hide all"; // default: nothing muted yet
                 clear.addEventListener("click", () => {
-                    _muted.forEach((id) => setMute(id, false));
+                    if (_muted.size === CATS.length) {
+                        // all muted → show all
+                        _muted.forEach((id) => setMute(id, false));
+                    } else {
+                        // some or none muted → hide all
+                        CATS.forEach((c) => setMute(c.id, true));
+                    }
                 });
                 panel.appendChild(clear);
             })();
