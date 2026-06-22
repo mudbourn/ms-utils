@@ -2090,23 +2090,42 @@ YQIDAQAB
 
                 -- Compare the current ms_core.lua hash to the stored trusted baseline.
                 -- Returns: status ("trusted"|"mismatch"|"uninitialized"), currentHash, trustedHash
-                -- Caches the result for 60 s so rapid UI refreshes don't each spawn shasum.
-                -- Call ms.integrity.invalidateCache() after trust operations to force a recheck.
-                local _intCache = { status = nil, cur = nil, trusted = nil, t = 0 }
+                -- Non-blocking: always returns the last-known cached value immediately and
+                -- kicks off a background hs.task hash when the 60-second window expires.
+                -- The task callback handles mismatch reloads and UI badge refreshes so the
+                -- Hammerspoon main thread is never stalled by shasum.
+                local _intCache         = { status = nil, cur = nil, trusted = nil, t = 0 }
+                local _intHashInProgress = false  -- guard against concurrent hs.task runs
                 ms.integrity.invalidateCache = function() _intCache.t = 0 end
                 ms.integrity.check = function()
                     local now = os.time()
+                    -- Fast path: cache is fresh.
                     if _intCache.status ~= nil and (now - _intCache.t) < 60 then
                         return _intCache.status, _intCache.cur, _intCache.trusted
                     end
-                    local cur     = ms.integrity.hashFile(corePath)
-                    local trusted = ms.integrity.readTrustedHash()
-                    local status
-                    if not trusted        then status = "uninitialized"
-                    elseif cur == trusted then status = "trusted"
-                    else                       status = "mismatch" end
-                    _intCache = { status = status, cur = cur, trusted = trusted, t = now }
-                    return status, cur, trusted
+                    -- Slow path: cache cold or stale. Launch an async hash task so the
+                    -- main thread never blocks. If a task is already running, skip.
+                    if not _intHashInProgress then
+                        _intHashInProgress = true
+                        hs.task.new("/usr/bin/shasum", function(_, out, _)
+                            _intHashInProgress = false
+                            local cur     = (out and #out >= 64) and out:sub(1, 64):lower() or nil
+                            local trusted = ms.integrity.readTrustedHash()
+                            local status
+                            if not trusted        then status = "uninitialized"
+                            elseif cur == trusted then status = "trusted"
+                            else                       status = "mismatch" end
+                            _intCache = { status = status, cur = cur, trusted = trusted, t = os.time() }
+                            -- Mismatch: reload so the startup guardian can block and alert.
+                            if status == "mismatch" then hs.reload() end
+                            -- Refresh the Developer badge in the settings panel if open.
+                            if ms.ui and ms.ui._panel then ms.ui.markDirty() end
+                            if ms.ui and ms.ui._open  then ms.ui.refresh()   end
+                        end, {"-a", "256", corePath}):start()
+                    end
+                    -- Return stale value (or "uninitialized" if cache is completely cold)
+                    -- while the background task runs.
+                    return _intCache.status or "uninitialized", _intCache.cur, _intCache.trusted
                 end
 
                 -- Seal the current ms_core.lua as the trusted baseline.
@@ -7351,10 +7370,10 @@ YQIDAQAB
         -- control immediately without requiring a manual check.
         _G._integrityPollTimer = hs.timer.doEvery(5, function()
             if loadfinish ~= 1 then return end  -- skip startup grace period
-            local status = ms.integrity.check()
-            if status == "mismatch" then
-                hs.reload()  -- startup guardian will halt ms_core.lua and show the dialog
-            end
+            -- Non-blocking: returns the cached value immediately and kicks off a
+            -- background hs.task hash when the 60-second window expires.
+            -- hs.reload() on mismatch is called inside the task callback.
+            ms.integrity.check()
         end)
 
         if notice ~= 1 then
