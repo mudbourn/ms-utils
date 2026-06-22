@@ -156,6 +156,16 @@ end
 
 When **Settings › Keybinds › Independent Binds** is enabled, sub-items can also have their own dedicated keybind configured from the menu. They then fire that sub-item directly, bypassing the parent's modifier check.
 
+**UI in independent bind mode.** When this mode is active, sub-item rows in the Settings panel switch presentation: the independent bind becomes the primary pill (shown in accent colour), or an **"unbound"** warning pill appears if no independent bind has been set yet.
+
+**Auto-clear on enable.** When independent binds is toggled on, any sub bind that conflicts with an existing root bind is automatically cleared so `rebind()` starts from a clean state.
+
+**Auto-disable on clear.** If you clear a sub-item's independent bind while independent bind mode is active, that macro is automatically disabled — it has no way to fire.
+
+### Two-level sub-items in the Settings panel
+
+Sub-items that have their own sub-items (e.g. `throwLow` is a sub of `superThrow` which is itself a sub of `superJump`) appear as small dim chips below their parent sub-item row. Right-clicking a chip opens the same context menu as a regular sub-item row: **Change Modifier**, **Clear Modifier**, and (when independent binds is enabled) **Rebind Independent** / **Clear Independent Bind**.
+
 ### `ms.getMod(id)`
 
 Returns the active modifier key for a sub-item — the user-configured value from `ms.modConfig`, or the code default from `opts.mod`, or `nil`.
@@ -444,6 +454,8 @@ ms.wait(2000)  -- 2 seconds
 ```
 
 Must be called from a coroutine context (i.e. inside an `ms.fn`-wrapped function). Outside a coroutine it falls back to a blocking `usleep`.
+
+> **Macro Monitor integration.** When the Macro Monitor panel is open, every `ms.wait` call produces a dim step trace entry in the log regardless of duration — there is no minimum threshold. See **Section 24** for the full list of functions that generate step traces.
 
 ---
 
@@ -1333,7 +1345,9 @@ Supported file extensions: `.ttf`, `.otf`, `.woff`, `.woff2`. If a file path is 
 
 ### `uifc` — UI Frame Cosmetic
 
-Each window can have its own UI Frame Cosmetic — a PNG image rendered as a full-window background behind the panel. Design it as a picture frame with a transparent centre. When a UIFC is set, the window expands to **1.25× its normal size**; the extra 12.5% padding on each side is purely decorative and the inner content is unaffected.
+Each window can have its own UI Frame Cosmetic — a PNG image rendered as a full-window background behind the panel. Design it as a picture frame with a transparent centre. When a UIFC is set, the window expands to match the **PNG's actual pixel dimensions** as declared in its IHDR chunk — the system reads the image dimensions directly, so no fixed scale factor applies. Any aspect ratio works: **9:16, 16:9, 1:1, 3:4, 4:3** (and anything else). The inner content area is always **360 × 640 px** and is unaffected by the frame.
+
+**Authoring constraint.** Design your UIFC PNG so that the 360 × 640 content area sits centred inside it. The area outside that rectangle is the decorative frame; it can be any size in any direction. For example, a 16:9 UIFC would be roughly 1138 × 640 px with the 360 × 640 content centred horizontally.
 
 Each key is a relative path from `~/.hammerspoon/`. Leave a value as `""` to disable that window's frame.
 
@@ -1409,7 +1423,7 @@ Four floating panels for live monitoring and interactive debugging. Open them fr
 A 360×640 REPL panel. Captures all `print()` output, errors, macro fires, and execution results as they happen.
 
 - **Input field** — type any Lua expression or statement, press Enter or Run. Return values appear in green; errors in red.
-- **Key activity** — key events show a single `⌨ key activity` notice per burst, suppressed until the next non-key event resets it. Full key detail is in the Input Monitor.
+- **KEY and MOUSE badges** — key and mouse events appear inline as styled type badges: amber **KEY** and orange **MOUSE**. Consecutive same-type entries are collapsed — only the first KEY badge appears until a MOUSE or MACRO entry interrupts, after which the next KEY badge is shown again. Full event detail (key names, button, position) is in the Input Monitor.
 - **Toolbar buttons** — open Macro Monitor and Input Monitor without leaving the console.
 
 ```lua
@@ -1424,11 +1438,19 @@ ms.dev.console.toggle()
 
 A floating panel. Shows every macro execution with timestamp and label as it fires. Also surfaces `print()` output and errors.
 
-**Step traces** — when the Macro Monitor is open, `ms.wait()` calls of **50 ms or longer** automatically append a dim step trace row showing the macro name and wait duration. This makes it easy to spot where a stalled macro is pausing:
+**Step traces** — when the Macro Monitor is open, every action call automatically appends a dim step trace row. The following calls all produce traces:
 
-```
-[High Leap Assist] wait 600ms
-```
+| Call | Trace format |
+|------|-------------|
+| `ms.wait(n)` | `wait Nms` (all durations, no threshold) |
+| `ms.press(key)` | `↓ key` |
+| `ms.release(key)` | `↑ key` |
+| `ms.type(key)` | `type key` |
+| `ms.Mouse(op, btn, ...)` | `Mouse Op Button` |
+| `ms.scroll(dir, n)` | `scroll dir` |
+| `ms.sound(path)` | `sound filename` |
+| `ms.copy(text)` | `copy` |
+| `ms.cam.move(dy, dx)` | accumulated as `cam.move ×N` — individual calls are batched and flushed as a single entry when the next different action fires |
 
 Call `ms.dev.step(msg)` from any macro to log a named checkpoint manually:
 
@@ -1445,13 +1467,41 @@ ms.dev.watcher.toggle()
 
 ---
 
+### Filter button
+
+A **filter** button sits in the bottom-right corner of the panel. Clicking it opens a popup with per-category toggles:
+
+| Category | Hides entries matching |
+|----------|----------------------|
+| Waits | `wait Nms` |
+| Sound calls | `sound …` |
+| Camera moves | `cam.move ×N` |
+| Key presses | `↓ key`, `↑ key`, `type key` |
+| Mouse actions | `Mouse …` |
+| Scrolls | `scroll …` |
+| Clipboard | `copy` |
+
+Each toggle is independent. The bottom of the popup shows **"hide all"** when nothing is muted (clicking mutes every category) or **"show all"** when every category is muted (clicking unmutes all). The button label updates to `filter (N)` with an accent highlight when N categories are active.
+
+Filtered entries remain in the DOM — they reappear instantly when the filter is cleared, without re-running the macro.
+
+---
+
 ### Input Monitor — `ms.dev.keys`
 
 A 360×640 floating panel with three sections:
 
 - **Flag row** — two competing pills at the top showing the most recently pressed key and the most recently pressed mouse button. Whichever fired last is highlighted in the accent color; the other dims. Updates in real time on every input event.
-- **Keyboard tab** — active key pills (currently held keys) plus a scrolling log of all key down/up events with timestamps.
-- **Mouse tab** — current cursor position (screen pixels) and a scrolling log of all mouse button down/up events.
+- **Keyboard tab** — active key pills (currently held keys) plus a scrolling log of all key events with timestamps. Each entry carries an amber **KEY** badge.
+- **Mouse tab** — current cursor position plus a scrolling log of all mouse button down/up events. Each entry carries an orange **MOUSE** badge. A **SCROLL** (teal) badge appears for scroll events.
+- **Coordinate reference dropdown** — in the mouse tab's Position header, a dropdown controls what coordinate system the cursor position is shown in:
+
+  | Option | Origin |
+  |--------|--------|
+  | Screen | Absolute screen pixels |
+  | Window | Pixels from the Roblox window's top-left corner |
+  | REF 1680×1044 | Scaled into the 1680×1044 reference space used by `ms.Mouse(WindowTL, …)` |
+  | Screen center | Offset from the screen centre (negative = left/up) |
 
 Mouse button events are logged regardless of whether macros are enabled (`BindValidity`), so the monitor works even when macros are off.
 
@@ -1497,7 +1547,16 @@ end)
 
 ### UI sounds
 
-The developer panels use the same `settingsOpen` and `settingsClose` sound slots as the main Settings panel. Assign sounds to those slots via **Settings › Sound › Settings Open / Settings Close** to hear audio feedback when panels open and close.
+The developer panels use the same sound slots as the main Settings panel:
+
+| Action | Slot |
+|--------|------|
+| Panel opens | `settingsOpen` |
+| Panel closes | `settingsClose` |
+| Button hover | `hover` |
+| Button click | `interact` |
+
+Assign sounds to these slots via **Settings › Sound**. The `hover` and `interact` slots are shared with the native menu bar; any sound assigned there is also used for developer panel buttons.
 
 ---
 
