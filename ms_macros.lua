@@ -28,119 +28,119 @@
     -- All coordinates are REF-space pixels relative to the Roblox window
     -- top-left (WindowTL). Use the Get Mouse Position bind (F8) while
     -- hovering over the target UI element to read the correct value.
-ms.menu.define({
-    id    = "calibration",
-    title = "Coordinate Calibration",
-    icon  = "*",
-    items = {
-        {
-            type  = "groupLabel",
-            label = "Slide Setup",
+    ms.menu.define({
+        id    = "calibration",
+        title = "Coordinate Calibration",
+        icon  = "*",
+        items = {
+            {
+                type  = "groupLabel",
+                label = "Slide Setup",
+            },
+            {
+                type    = "slider",
+                key     = "sgMenuX",
+                label   = "Menu Button X",
+                hint    = "X coord of the Z-menu button in the top bar",
+                min     = 350,
+                max     = 560,
+                step    = 1,
+                default = 445,
+                save    = true,
+            },
+            {
+                type    = "slider",
+                key     = "sgMenuY",
+                label   = "Menu Button Y",
+                hint    = "Y coord of the Z-menu button in the top bar",
+                min     = 20,
+                max     = 80,
+                step    = 1,
+                default = 37,
+                save    = true,
+            },
+            {
+                type    = "slider",
+                key     = "sgItemX",
+                label   = "Item Column X",
+                hint    = "X coord of the emote / action item column",
+                min     = 400,
+                max     = 560,
+                step    = 1,
+                default = 467,
+                save    = true,
+            },
+            {
+                type = "divider",
+            },
+            {
+                type  = "groupLabel",
+                label = "Lag Simulator",
+            },
+            {
+                type    = "slider",
+                key     = "spamMoveX",
+                label   = "Profiler Icon X",
+                hint    = "X coord of the Micro Profiler icon in the top bar",
+                min     = 380,
+                max     = 510,
+                step    = 1,
+                default = 437,
+                save    = true,
+            },
+            {
+                type    = "slider",
+                key     = "spamMoveY",
+                label   = "Profiler Icon Y",
+                hint    = "Y coord of the Micro Profiler icon in the top bar",
+                min     = 20,
+                max     = 70,
+                step    = 1,
+                default = 34,
+                save    = true,
+            },
+            {
+                type    = "slider",
+                key     = "spamClickX",
+                label   = "Profiler Action X",
+                hint    = "X coord for the profiler action click",
+                min     = 390,
+                max     = 530,
+                step    = 1,
+                default = 452,
+                save    = true,
+            },
+            {
+                type = "divider",
+            },
+            {
+                type  = "groupLabel",
+                label = "Quick Slide",
+            },
+            {
+                type    = "slider",
+                key     = "qsClickX",
+                label   = "Click Target X",
+                hint    = "X coord of the Quick Slide click target",
+                min     = 600,
+                max     = 1300,
+                step    = 1,
+                default = 920,
+                save    = true,
+            },
+            {
+                type    = "slider",
+                key     = "qsClickY",
+                label   = "Click Target Y",
+                hint    = "Y coord of the Quick Slide click target",
+                min     = 400,
+                max     = 900,
+                step    = 1,
+                default = 680,
+                save    = true,
+            },
         },
-        {
-            type    = "slider",
-            key     = "sgMenuX",
-            label   = "Menu Button X",
-            hint    = "X coord of the Z-menu button in the top bar",
-            min     = 350,
-            max     = 560,
-            step    = 1,
-            default = 445,
-            save    = true,
-        },
-        {
-            type    = "slider",
-            key     = "sgMenuY",
-            label   = "Menu Button Y",
-            hint    = "Y coord of the Z-menu button in the top bar",
-            min     = 20,
-            max     = 80,
-            step    = 1,
-            default = 37,
-            save    = true,
-        },
-        {
-            type    = "slider",
-            key     = "sgItemX",
-            label   = "Item Column X",
-            hint    = "X coord of the emote / action item column",
-            min     = 400,
-            max     = 560,
-            step    = 1,
-            default = 467,
-            save    = true,
-        },
-        {
-            type = "divider",
-        },
-        {
-            type  = "groupLabel",
-            label = "Lag Simulator",
-        },
-        {
-            type    = "slider",
-            key     = "spamMoveX",
-            label   = "Profiler Icon X",
-            hint    = "X coord of the Micro Profiler icon in the top bar",
-            min     = 380,
-            max     = 510,
-            step    = 1,
-            default = 437,
-            save    = true,
-        },
-        {
-            type    = "slider",
-            key     = "spamMoveY",
-            label   = "Profiler Icon Y",
-            hint    = "Y coord of the Micro Profiler icon in the top bar",
-            min     = 20,
-            max     = 70,
-            step    = 1,
-            default = 34,
-            save    = true,
-        },
-        {
-            type    = "slider",
-            key     = "spamClickX",
-            label   = "Profiler Action X",
-            hint    = "X coord for the profiler action click",
-            min     = 390,
-            max     = 530,
-            step    = 1,
-            default = 452,
-            save    = true,
-        },
-        {
-            type = "divider",
-        },
-        {
-            type  = "groupLabel",
-            label = "Quick Slide",
-        },
-        {
-            type    = "slider",
-            key     = "qsClickX",
-            label   = "Click Target X",
-            hint    = "X coord of the Quick Slide click target",
-            min     = 600,
-            max     = 1300,
-            step    = 1,
-            default = 920,
-            save    = true,
-        },
-        {
-            type    = "slider",
-            key     = "qsClickY",
-            label   = "Click Target Y",
-            hint    = "Y coord of the Quick Slide click target",
-            min     = 400,
-            max     = 900,
-            step    = 1,
-            default = 680,
-            save    = true,
-        },
-    },
-})
+    })
 -- END --
 
 -- Combat Warriors Macros --
@@ -191,9 +191,9 @@ ms.menu.define({
                     ms.press("w")
                     ms.wait(10)
                 end
-                for i = 1, 3 do
+                for i = 1, 5 do
                     ms.type("e")
-                    ms.wait(2)
+                    ms.wait(3)
                 end
                 ms.wait(30)
                 for i = 1, 2 do
@@ -257,22 +257,30 @@ ms.menu.define({
             end)
 
             ms.bind.define("superJump", function()
-                -- ThrowTrickFunction is looked up via _wires at call time; LuaJIT setfenv
-                -- chunks can miscompile upvalue references as globals when the local is
-                -- declared after the closure. Table field access bypasses that entirely.
                 if ms.modHeld("superThrow") then
                     local fn = ms.bind._wires.superThrow
                     if fn then fn() end
                 else HighLeapAssistFunction() end
             end, {
-                group   = "main",
-                label   = "High Leap Assist",
+                group    = "main",
+                label    = "High Leap Assist",
                 cooldown = 3200,
-                default = {type="mouse", button=3},
+                default  = {
+                    type   = "mouse",
+                    button = 3,
+                },
             })
 
-            ms.bind.define("jumpHigh",   HighLeapAssistFunction,  { sub="superJump",  label="Jump High",   mod="v"   })
-            ms.bind.define("jumpLow",    HighLeapAssistFunction,  { sub="superJump",  label="Jump Low",    mod="x"   })
+            ms.bind.define("jumpHigh", HighLeapAssistFunction, {
+                sub   = "superJump",
+                label = "Jump High",
+                mod   = "v",
+            })
+            ms.bind.define("jumpLow",  HighLeapAssistFunction, {
+                sub   = "superJump",
+                label = "Jump Low",
+                mod   = "x",
+            })
         -- END --
 
         -- Throw Trick --
@@ -294,8 +302,9 @@ ms.menu.define({
                     ms.press("w")
                     ms.wait(10)
                 end
-                for i = 1, 4 do
+                for i = 1, 5 do
                     ms.type("e")
+                    ms.wait(3)
                 end
                 ms.wait(30)
                 for i = 1, 2 do
@@ -369,8 +378,16 @@ ms.menu.define({
                 if not ThrowLow() then ThrowDefault() end
             end)
 
-            ms.bind.define("superThrow", ThrowTrickFunction,      { sub="superJump",  label="Throw Trick", mod="alt" })
-            ms.bind.define("throwLow",   ThrowTrickFunction,      { sub="superThrow", label="Throw Low",   mod="v"   })
+            ms.bind.define("superThrow", ThrowTrickFunction, {
+                sub   = "superJump",
+                label = "Throw Trick",
+                mod   = "alt",
+            })
+            ms.bind.define("throwLow",   ThrowTrickFunction, {
+                sub   = "superThrow",
+                label = "Throw Low",
+                mod   = "v",
+            })
         -- END --
 
         -- Swing Cancel --
@@ -386,10 +403,13 @@ ms.menu.define({
             ms.bind.define("fakeSwing", function()
                 if string.find(ms.app(), "Roblox") then FakeSwingFunction() end
             end, {
-                group   = "main",
-                label   = "Swing Cancel",
+                group    = "main",
+                label    = "Swing Cancel",
                 cooldown = 780,
-                default = {type="mouse", button=4},
+                default  = {
+                    type   = "mouse",
+                    button = 4,
+                },
             })
         -- END --
 
@@ -420,7 +440,11 @@ ms.menu.define({
             ms.bind.define("quickReset", QuickResetFunction, {
                 group   = "optional",
                 label   = "Quick Reset",
-                default = {type="key", mods={"alt"}, key="escape"},
+                default = {
+                    type = "key",
+                    mods = {"alt"},
+                    key  = "escape",
+                },
             })
         -- END --
 
@@ -443,7 +467,11 @@ ms.menu.define({
             ms.bind.define("quickSG", QuickSlideFunction, {
                 group   = "optional",
                 label   = "Quick Slide",
-                default = {type="key", mods={"alt"}, key="z"},
+                default = {
+                    type = "key",
+                    mods = {"alt"},
+                    key  = "z",
+                },
             })
         -- END --
 
@@ -456,9 +484,10 @@ ms.menu.define({
                 ms.press("w")
                 ms.press("space")
                 ms.wait(15)
-                ms.type("e")
-                ms.wait(2)
-                ms.type("e")
+                for i = 1, 5 do
+                    ms.type("e")
+                    ms.wait(3)
+                end
                 ms.wait(15)
                 for i = 2, 15 do
                     ms.cam.move(1, -245)
@@ -500,7 +529,11 @@ ms.menu.define({
             ms.bind.define("sgSetup", SlideSetupFunction, {
                 group   = "optional",
                 label   = "Slide Setup",
-                default = {type="key", mods={"alt"}, key="\\"},
+                default = {
+                    type = "key",
+                    mods = {"alt"},
+                    key  = "\\",
+                },
             })
         -- END --
 
@@ -534,7 +567,11 @@ ms.menu.define({
             end, {
                 group   = "optional",
                 label   = "Lag Simulator (Micro Profiler)",
-                default = {type="key", mods={}, key="="},
+                default = {
+                    type = "key",
+                    mods = {},
+                    key  = "=",
+                },
             })
         -- END --
 
@@ -572,7 +609,11 @@ ms.menu.define({
                     ms.type("return")
             end)
 
-            ms.bind.define("spawnAlt", SpawnAltFunction, { sub="frameDump",  label="Load Second Account", mod="alt" })
+            ms.bind.define("spawnAlt", SpawnAltFunction, {
+                sub   = "frameDump",
+                label = "Load Second Account",
+                mod   = "alt",
+            })
         -- END --
 
         -- Mouse Position Grabber --
@@ -583,7 +624,11 @@ ms.menu.define({
             end, {
                 group   = "optional",
                 label   = "Get Mouse Position",
-                default = {type="key", mods={}, key="f8"},
+                default = {
+                    type = "key",
+                    mods = {},
+                    key  = "f8",
+                },
             })
         -- END --
     -- END Macro Functions --
