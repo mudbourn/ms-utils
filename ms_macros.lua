@@ -24,6 +24,125 @@
     })
 -- END --
 
+-- Coordinate Calibration --
+    -- All coordinates are REF-space pixels relative to the Roblox window
+    -- top-left (WindowTL). Use the Get Mouse Position bind (F8) while
+    -- hovering over the target UI element to read the correct value.
+ms.menu.define({
+    id    = "calibration",
+    title = "Coordinate Calibration",
+    icon  = "*",
+    items = {
+        {
+            type  = "groupLabel",
+            label = "Slide Setup",
+        },
+        {
+            type    = "slider",
+            key     = "sgMenuX",
+            label   = "Menu Button X",
+            hint    = "X coord of the Z-menu button in the top bar",
+            min     = 350,
+            max     = 560,
+            step    = 1,
+            default = 445,
+            save    = true,
+        },
+        {
+            type    = "slider",
+            key     = "sgMenuY",
+            label   = "Menu Button Y",
+            hint    = "Y coord of the Z-menu button in the top bar",
+            min     = 20,
+            max     = 80,
+            step    = 1,
+            default = 37,
+            save    = true,
+        },
+        {
+            type    = "slider",
+            key     = "sgItemX",
+            label   = "Item Column X",
+            hint    = "X coord of the emote / action item column",
+            min     = 400,
+            max     = 560,
+            step    = 1,
+            default = 467,
+            save    = true,
+        },
+        {
+            type = "divider",
+        },
+        {
+            type  = "groupLabel",
+            label = "Lag Simulator",
+        },
+        {
+            type    = "slider",
+            key     = "spamMoveX",
+            label   = "Profiler Icon X",
+            hint    = "X coord of the Micro Profiler icon in the top bar",
+            min     = 380,
+            max     = 510,
+            step    = 1,
+            default = 437,
+            save    = true,
+        },
+        {
+            type    = "slider",
+            key     = "spamMoveY",
+            label   = "Profiler Icon Y",
+            hint    = "Y coord of the Micro Profiler icon in the top bar",
+            min     = 20,
+            max     = 70,
+            step    = 1,
+            default = 34,
+            save    = true,
+        },
+        {
+            type    = "slider",
+            key     = "spamClickX",
+            label   = "Profiler Action X",
+            hint    = "X coord for the profiler action click",
+            min     = 390,
+            max     = 530,
+            step    = 1,
+            default = 452,
+            save    = true,
+        },
+        {
+            type = "divider",
+        },
+        {
+            type  = "groupLabel",
+            label = "Quick Slide",
+        },
+        {
+            type    = "slider",
+            key     = "qsClickX",
+            label   = "Click Target X",
+            hint    = "X coord of the Quick Slide click target",
+            min     = 600,
+            max     = 1300,
+            step    = 1,
+            default = 920,
+            save    = true,
+        },
+        {
+            type    = "slider",
+            key     = "qsClickY",
+            label   = "Click Target Y",
+            hint    = "Y coord of the Quick Slide click target",
+            min     = 400,
+            max     = 900,
+            step    = 1,
+            default = 680,
+            save    = true,
+        },
+    },
+})
+-- END --
+
 -- Combat Warriors Macros --
     -- Macro Functions --
         -- Helper Variables & Functions --
@@ -314,7 +433,9 @@
                 ms.wait(8)
                 ms.release("w")
                 ms.wait(12)
-                ms.Mouse(Click, Left, WindowTL, 920, 680)
+                ms.Mouse(Click, Left, WindowTL,
+                    ms.settings.get("qsClickX"),
+                    ms.settings.get("qsClickY"))
                 ms.sound(QuickSlideSound, true)
                 ms.wait(200)
             end)
@@ -351,21 +472,24 @@
                 ms.release("space")
                 ms.wait(5)
                 ms.press("c")
-                ms.mouse(Move, Left, WindowTL, 0, 0)
+                ms.Mouse(Move, Left, WindowTL, 0, 0)
                 ms.type("z")
                 ms.wait(200)
+                local sgMX = ms.settings.get("sgMenuX")
+                local sgMY = ms.settings.get("sgMenuY")
+                local sgIX = ms.settings.get("sgItemX")
                 for i = 1, 2 do
-                    ms.mouse(Click, Left, WindowTL, 445, 37)
+                    ms.Mouse(Click, Left, WindowTL, sgMX, sgMY)
                     ms.wait(10)
                 end
                 ms.wait(20)
                 for i = 1, 3 do
-                    ms.mouse(Click, Left, WindowTL, 467, d1)
+                    ms.Mouse(Click, Left, WindowTL, sgIX, d1)
                     ms.wait(30)
                     ms.release("c")
                 end
                 for i = 1, 15 do
-                    ms.mouse(Click, Left, WindowTL, 467, d2)
+                    ms.Mouse(Click, Left, WindowTL, sgIX, d2)
                     ms.wait(30)
                 end
                 ms.wait(400)
@@ -385,9 +509,12 @@
                 local d3 = getD3()
                 ms.type("z")
                 ms.wait(10)
-                ms.Mouse(Move, Left, WindowTL, 437, 34)
+                ms.Mouse(Move, Left, WindowTL,
+                    ms.settings.get("spamMoveX"),
+                    ms.settings.get("spamMoveY"))
                 ms.wait(100)
-                ms.Mouse(Click, Left, WindowTL, 452, d3)
+                ms.Mouse(Click, Left, WindowTL,
+                    ms.settings.get("spamClickX"), d3)
                 ms.wait(50)
                 while ms.keystate("=") do
                     ms.Mouse(Click, Left, Mouse, 0, 0)
