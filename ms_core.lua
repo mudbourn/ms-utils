@@ -2088,7 +2088,7 @@ YQIDAQAB
                     return os.remove(trustedHashPath) ~= nil
                 end
 
-                -- Compare the current ms_core.lua hash to the stored trusted baseline.
+daa                -- Compare the current ms_core.lua hash to the stored trusted baseline.
                 -- Returns: status ("trusted"|"mismatch"|"uninitialized"), currentHash, trustedHash
                 -- Non-blocking: always returns the last-known cached value immediately and
                 -- kicks off a background hs.task hash when the 60-second window expires.
@@ -6709,35 +6709,41 @@ YQIDAQAB
                     end
                 end)
 
+                -- Builds the console WebView (hidden). Called at startup by
+                -- ms.dev.prewarm() so the panel is ready before the user opens it.
+                local function _buildConsolePanel()
+                    local screen = hs.screen.mainScreen():frame()
+                    local w, h   = 360, 640
+                    local x = screen.x + screen.w - w - 20
+                    local y = screen.y + 20
+                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                        { developerExtrasEnabled = true }, _ucCon)
+                    if not panel then return nil end
+                    pcall(function() panel:windowStyle(0) end)
+                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                    pcall(function() panel:allowTextEntry(true) end)
+                    pcall(function() panel:shadow(true) end)
+                    local f = io.open(_home .. "/.hammerspoon/ui/ms_console.html", "r")
+                    if f then panel:html(f:read("*all"), _devBase); f:close() end
+                    ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
+                    panel:navigationCallback(function()
+                        _loadDevHistory(panel, function(e)
+                            return e.type == "macro" or e.type == "print"
+                                or e.type == "result" or e.type == "error"
+                                or e.type == "input"
+                        end)
+                        local tj = _devThemeJS()
+                        if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                    end)
+                    return panel
+                end
+
                 ms.dev.console = {}
                 ms.dev.console.show = function()
                     if not ms.dev._consolePanel then
-                        local screen  = hs.screen.mainScreen():frame()
-                        local w, h    = 360, 640
-                        local x = screen.x + screen.w - w - 20
-                        local y = screen.y + 20
-                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                            { developerExtrasEnabled = true }, _ucCon)
-                        if not panel then return end
-                        pcall(function() panel:windowStyle(0) end)
-                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                        pcall(function() panel:allowTextEntry(true) end)
-                        pcall(function() panel:shadow(true) end)
-                        local html = io.open(_home .. "/.hammerspoon/ui/ms_console.html", "r")
-                        if html then
-                            panel:html(html:read("*all"), _devBase); html:close()
-                        end
-                        ms.dev._consolePanel    = panel
-                        ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
-                        panel:navigationCallback(function()
-                            _loadDevHistory(panel, function(e)
-                                return e.type == "macro" or e.type == "print"
-                                    or e.type == "result" or e.type == "error"
-                                    or e.type == "input"
-                            end)
-                            local tj = _devThemeJS(); if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                        end)
+                        ms.dev._consolePanel = _buildConsolePanel()
+                        if not ms.dev._consolePanel then return end
                     end
                     ms.dev._consolePanel:show()
                     pcall(function() ms.dev._consolePanel:bringToFront(true) end)
@@ -6779,32 +6785,37 @@ YQIDAQAB
                     end
                 end)
 
+                -- Builds the macro watcher WebView (hidden). Pre-warmed at startup.
+                local function _buildWatcherPanel()
+                    local screen = hs.screen.mainScreen():frame()
+                    local w, h   = 360, 640
+                    local x = screen.x + screen.w - w - 20
+                    local y = screen.y + 44
+                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                        { developerExtrasEnabled = true }, _ucWatcher)
+                    if not panel then return nil end
+                    pcall(function() panel:windowStyle(0) end)
+                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                    pcall(function() panel:shadow(true) end)
+                    local f = io.open(_home .. "/.hammerspoon/ui/ms_watcher.html", "r")
+                    if f then panel:html(f:read("*all"), _devBase); f:close() end
+                    ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
+                    panel:navigationCallback(function()
+                        _loadDevHistory(panel, function(e)
+                            return e.type=="macro" or e.type=="print" or e.type=="error"
+                        end)
+                        local tj = _devThemeJS()
+                        if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                    end)
+                    return panel
+                end
+
                 ms.dev.watcher = {}
                 ms.dev.watcher.show = function()
                     if not ms.dev._watcherPanel then
-                        local screen  = hs.screen.mainScreen():frame()
-                        local w, h    = 360, 640
-                        local x = screen.x + screen.w - w - 20
-                        local y = screen.y + 44
-                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                            { developerExtrasEnabled = true }, _ucWatcher)
-                        if not panel then return end
-                        pcall(function() panel:windowStyle(0) end)
-                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                        pcall(function() panel:shadow(true) end)
-                        local html = io.open(_home .. "/.hammerspoon/ui/ms_watcher.html", "r")
-                        if html then
-                            panel:html(html:read("*all"), _devBase); html:close()
-                        end
-                        ms.dev._watcherPanel    = panel
-                        ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
-                        panel:navigationCallback(function()
-                            _loadDevHistory(panel, function(e)
-                                return e.type=="macro" or e.type=="print" or e.type=="error"
-                            end)
-                            local tj = _devThemeJS(); if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                        end)
+                        ms.dev._watcherPanel = _buildWatcherPanel()
+                        if not ms.dev._watcherPanel then return end
                     end
                     ms.dev._watcherPanel:show()
                     pcall(function() ms.dev._watcherPanel:bringToFront(true) end)
@@ -6852,48 +6863,50 @@ YQIDAQAB
                     end
                 end)
 
+                -- Builds the input monitor WebView (hidden). Pre-warmed at startup.
+                local function _buildKeysPanel()
+                    local screen = hs.screen.mainScreen():frame()
+                    local w, h   = 360, 640
+                    local x = screen.x + screen.w - w - 20
+                    local y = screen.y + 68
+                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                        { developerExtrasEnabled = true }, _ucKeys)
+                    if not panel then return nil end
+                    pcall(function() panel:windowStyle(0) end)
+                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                    pcall(function() panel:shadow(true) end)
+                    local f = io.open(_home .. "/.hammerspoon/ui/ms_keys.html", "r")
+                    if not f then return nil end
+                    panel:html(f:read("*all"), _devBase); f:close()
+                    ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
+                    ms.dev._keysReady    = false
+                    panel:navigationCallback(function()
+                        ms.dev._keysReady = true
+                        local _p = hs.mouse.absolutePosition()
+                        ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
+                        _loadDevHistory(panel, function(e)
+                            return e.type=="key" or e.type=="mouse"
+                                or e.type=="scroll" or e.type=="mousemove"
+                        end)
+                        pcall(function() ms.dev._pushMouseState() end)
+                        local tj = _devThemeJS()
+                        if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                    end)
+                    return panel
+                end
+
                 ms.dev.keys = {}
                 ms.dev.keys.show = function()
-                    print("[keys] show() called, _keysPanel=", ms.dev._keysPanel ~= nil)
                     if not ms.dev._keysPanel then
-                        local screen  = hs.screen.mainScreen():frame()
-                        local w, h    = 360, 640
-                        local x = screen.x + screen.w - w - 20
-                        local y = screen.y + 68
-                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                            { developerExtrasEnabled = true }, _ucKeys)
-                        if not panel then print("[keys] webview.new returned nil"); return end
-                        pcall(function() panel:windowStyle(0) end)
-                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                        pcall(function() panel:shadow(true) end)
-                        local html = io.open(_home .. "/.hammerspoon/ui/ms_keys.html", "r")
-                        if not html then print("[keys] FAILED to open ms_keys.html"); return end
-                        local content = html:read("*all"); html:close()
-                        print("[keys] HTML loaded, " .. #content .. " bytes")
-                        panel:html(content, _devBase)
-                        ms.dev._keysPanel    = panel
-                        ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
-                        ms.dev._keysReady    = false
-                        panel:navigationCallback(function()
-                            print("[keys] navigationCallback fired — page ready")
-                            ms.dev._keysReady = true
-                            local _p = hs.mouse.absolutePosition()
-                            ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
-                            _loadDevHistory(panel, function(e)
-                                return e.type=="key" or e.type=="mouse"
-                                    or e.type=="scroll" or e.type=="mousemove"
-                            end)
-                            pcall(function() ms.dev._pushMouseState() end)
-                            local tj = _devThemeJS(); if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                        end)
+                        ms.dev._keysPanel = _buildKeysPanel()
+                        if not ms.dev._keysPanel then return end
                     end
-                    print("[keys] calling :show()")
                     ms.dev._keysPanel:show()
                     pcall(function() ms.dev._keysPanel:bringToFront(true) end)
                     ms.dev._keysOpen = true
                     ms.playSlot("settingsOpen")
-                    -- Poll mouse position every 100 ms so display stays current
+                    -- Poll mouse position every 100 ms so display stays current.
                     if ms.dev._mousePoller then ms.dev._mousePoller:stop() end
                     ms.dev._mousePoller = hs.timer.doEvery(0.1, function()
                         if not ms.dev._keysPanel then
@@ -7020,50 +7033,51 @@ YQIDAQAB
                     end
                 end
 
+                -- Builds the window monitor WebView (hidden). Pre-warmed at startup.
+                local function _buildWindowPanel()
+                    local screen = hs.screen.mainScreen():frame()
+                    local w, h   = 360, 480
+                    local x = screen.x + screen.w - w - 20
+                    local y = screen.y + 68
+                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                        { developerExtrasEnabled = true }, _ucWindow)
+                    if not panel then return nil end
+                    pcall(function() panel:windowStyle(0) end)
+                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                    pcall(function() panel:shadow(true) end)
+                    local f = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
+                    if f then panel:html(f:read("*all"), _devBase); f:close() end
+                    ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
+                    panel:navigationCallback(function()
+                        local tj = _devThemeJS()
+                        if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                        if #ms.dev._windowHistory > 0 then
+                            local ok, j = pcall(hs.json.encode, ms.dev._windowHistory)
+                            if ok then pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end) end
+                        end
+                        local win = hs.window.focusedWindow()
+                        if win then
+                            local app   = (win:application() and win:application():name()) or "?"
+                            local title = win:title() or ""
+                            local wf    = win:frame()
+                            local ok2, j2 = pcall(hs.json.encode, {
+                                type="focus", ts=os.time(),
+                                app=app, title=title,
+                                w=math.floor(wf.w), h=math.floor(wf.h),
+                                x=math.floor(wf.x), y=math.floor(wf.y),
+                            })
+                            if ok2 then pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end) end
+                        end
+                    end)
+                    return panel
+                end
+
                 ms.dev.window = {}
                 ms.dev.window.show = function()
                     if not ms.dev._windowPanel then
-                        local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 480
-                        local x = screen.x + screen.w - w - 20
-                        local y = screen.y + 68
-                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                            { developerExtrasEnabled = true }, _ucWindow)
-                        if not panel then return end
-                        pcall(function() panel:windowStyle(0) end)
-                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                        pcall(function() panel:shadow(true) end)
-                        local html = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
-                        if html then
-                            panel:html(html:read("*all"), _devBase); html:close()
-                        end
-                        ms.dev._windowPanel    = panel
-                        ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
-                        panel:navigationCallback(function()
-                            -- Push theme CSS.
-                            local tj = _devThemeJS()
-                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                            -- Load history.
-                            if #ms.dev._windowHistory > 0 then
-                                local ok, j = pcall(hs.json.encode, ms.dev._windowHistory)
-                                if ok then pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end) end
-                            end
-                            -- Seed the current window.
-                            local win = hs.window.focusedWindow()
-                            if win then
-                                local app   = (win:application() and win:application():name()) or "?"
-                                local title = win:title() or ""
-                                local f     = win:frame()
-                                local ok2, j2 = pcall(hs.json.encode, {
-                                    type="focus", ts=os.time(),
-                                    app=app, title=title,
-                                    w=math.floor(f.w), h=math.floor(f.h),
-                                    x=math.floor(f.x), y=math.floor(f.y),
-                                })
-                                if ok2 then pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end) end
-                            end
-                        end)
+                        ms.dev._windowPanel = _buildWindowPanel()
+                        if not ms.dev._windowPanel then return end
                     end
                     ms.dev._windowPanel:show()
                     pcall(function() ms.dev._windowPanel:bringToFront(true) end)
@@ -7104,7 +7118,25 @@ YQIDAQAB
                     if ms.dev._windowOpen then ms.dev.window.hide()
                     else ms.dev.window.show() end
                 end
-            end
+
+                -- Pre-warm all four developer panels (hidden) so they load instantly
+                -- when the user first opens them.  Called from startup after a delay
+                -- so it doesn't compete with the main settings panel prewarm.
+                -- Each builder is a local in this scope, so upvalues resolve correctly.
+                ms.dev.prewarm = function()
+                    if not ms.dev._consolePanel then
+                        ms.dev._consolePanel = _buildConsolePanel()
+                    end
+                    if not ms.dev._watcherPanel then
+                        ms.dev._watcherPanel = _buildWatcherPanel()
+                    end
+                    if not ms.dev._keysPanel then
+                        ms.dev._keysPanel = _buildKeysPanel()
+                    end
+                    if not ms.dev._windowPanel then
+                        ms.dev._windowPanel = _buildWindowPanel()
+                    end
+                end
         -- END --
 
         -- 12. Safety Nets --
