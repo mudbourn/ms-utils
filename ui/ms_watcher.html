@@ -85,28 +85,26 @@
                 color: var(--text);
             }
 
-            /* ── Log area ───────────────────────────────────────────────────── */
+            /* ── Log area ───────────────────────────────────────────────── */
             #log {
                 flex: 1;
                 overflow-y: auto;
-                padding: 4px 0;
+                padding: 4px 0 36px;
                 min-height: 0;
             }
 
             #log::-webkit-scrollbar {
                 width: 5px;
             }
-
             #log::-webkit-scrollbar-track {
                 background: transparent;
             }
-
             #log::-webkit-scrollbar-thumb {
                 background: var(--border);
                 border-radius: 3px;
             }
 
-            /* ── Entry rows ─────────────────────────────────────────────────── */
+            /* ── Entry rows ─────────────────────────────────────────────── */
             .entry {
                 display: flex;
                 align-items: center;
@@ -159,7 +157,6 @@
                 color: var(--text2);
                 margin: 0 3px;
             }
-
             .msg .sub-name {
                 color: var(--text);
             }
@@ -191,6 +188,143 @@
                 color: var(--text2);
                 word-break: break-word;
             }
+
+            /* ── Mute rules: toggled by classes on #log ─────────────────── */
+            #log.mute-wait .step[data-cat="wait"] {
+                display: none;
+            }
+            #log.mute-sound .step[data-cat="sound"] {
+                display: none;
+            }
+            #log.mute-cam .step[data-cat="cam"] {
+                display: none;
+            }
+            #log.mute-keys .step[data-cat="keys"] {
+                display: none;
+            }
+            #log.mute-mouse .step[data-cat="mouse"] {
+                display: none;
+            }
+            #log.mute-scroll .step[data-cat="scroll"] {
+                display: none;
+            }
+            #log.mute-copy .step[data-cat="copy"] {
+                display: none;
+            }
+
+            /* ── Filter button + popup ───────────────────────────────────── */
+            #filter-wrap {
+                position: fixed;
+                bottom: 8px;
+                right: 8px;
+                z-index: 100;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 5px;
+            }
+
+            #filter-btn {
+                height: 22px;
+                padding: 0 9px;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                color: var(--text2);
+                font-family: inherit;
+                font-size: 11px;
+                cursor: pointer;
+                transition:
+                    border-color 0.12s,
+                    color 0.12s,
+                    background 0.12s;
+                letter-spacing: 0.3px;
+            }
+            #filter-btn:hover {
+                border-color: var(--accent);
+                color: var(--text);
+            }
+            #filter-btn.has-mutes {
+                border-color: var(--accent);
+                color: var(--accent);
+                background: rgba(196, 26, 26, 0.08);
+            }
+
+            #filter-panel {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 7px 10px;
+                display: none;
+                flex-direction: column;
+                gap: 2px;
+                min-width: 148px;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+            }
+            #filter-panel.open {
+                display: flex;
+            }
+
+            .filter-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 3px 0;
+                cursor: pointer;
+                border-radius: 2px;
+            }
+            .filter-row:hover {
+                background: var(--surface2);
+                padding-left: 4px;
+                padding-right: 4px;
+            }
+
+            .filter-label {
+                font-size: 11px;
+                color: var(--text);
+                flex: 1;
+            }
+            .filter-row.muted .filter-label {
+                color: var(--text2);
+                text-decoration: line-through;
+                text-decoration-color: rgba(210, 165, 100, 0.35);
+            }
+
+            .filter-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--accent);
+                flex-shrink: 0;
+                transition:
+                    background 0.1s,
+                    opacity 0.1s;
+            }
+            .filter-row.muted .filter-dot {
+                background: var(--border);
+                opacity: 0.6;
+            }
+
+            .filter-sep {
+                height: 1px;
+                background: var(--border);
+                margin: 3px 0;
+                opacity: 0.5;
+            }
+
+            .filter-clear {
+                font-size: 10px;
+                color: var(--text2);
+                text-align: center;
+                cursor: pointer;
+                padding: 2px 0;
+                letter-spacing: 0.3px;
+                text-transform: uppercase;
+            }
+            .filter-clear:hover {
+                color: var(--text);
+            }
         </style>
     </head>
     <body>
@@ -200,6 +334,16 @@
             <button class="tb-btn" onclick="closePanel()">[×]</button>
         </div>
         <div id="log"></div>
+
+        <!-- Filter button + popup, fixed bottom-right -->
+        <div id="filter-wrap">
+            <div id="filter-panel">
+                <!-- rows injected by JS -->
+            </div>
+            <button id="filter-btn" onclick="toggleFilterPanel()">
+                filter
+            </button>
+        </div>
 
         <script>
             "use strict";
@@ -246,6 +390,12 @@
                     });
             })();
 
+            // Close filter panel when clicking outside it
+            document.addEventListener("mousedown", (e) => {
+                const wrap = document.getElementById("filter-wrap");
+                if (!wrap.contains(e.target)) closeFilterPanel();
+            });
+
             // ── Scroll helpers ─────────────────────────────────────────────────
             const MAX_ENTRIES = 300;
             const NEAR_BOTTOM = 48;
@@ -257,17 +407,122 @@
                 );
             }
 
-            // ── Entry builder ──────────────────────────────────────────────
+            // ── Step categories ────────────────────────────────────────────────
+            // Each category maps to a CSS class on #log (mute-X) and a data-cat
+            // attribute on step rows.  Order matters: first match wins.
+            const CATS = [
+                { id: "wait", label: "Waits", re: /\] wait / },
+                { id: "sound", label: "Sound calls", re: /\] sound / },
+                { id: "cam", label: "Camera moves", re: /\] cam\.move/ },
+                { id: "keys", label: "Key presses", re: /\] [↓↑] |\] type / },
+                { id: "mouse", label: "Mouse actions", re: /\] Mouse / },
+                { id: "scroll", label: "Scrolls", re: /\] scroll / },
+                { id: "copy", label: "Clipboard", re: /\] copy/ },
+            ];
+
+            function stepCat(msg) {
+                for (const c of CATS) {
+                    if (c.re.test(msg)) return c.id;
+                }
+                return "other";
+            }
+
+            // ── Mute state ─────────────────────────────────────────────────────
+            const _muted = new Set(); // set of muted category ids
+
+            function isMuted(cat) {
+                return _muted.has(cat);
+            }
+
+            function setMute(cat, on) {
+                const log = document.getElementById("log");
+                if (on) {
+                    _muted.add(cat);
+                    log.classList.add("mute-" + cat);
+                } else {
+                    _muted.delete(cat);
+                    log.classList.remove("mute-" + cat);
+                }
+                _updateFilterUI();
+            }
+
+            function _updateFilterUI() {
+                const btn = document.getElementById("filter-btn");
+                btn.classList.toggle("has-mutes", _muted.size > 0);
+                if (_muted.size > 0) {
+                    btn.textContent = "filter (" + _muted.size + ")";
+                } else {
+                    btn.textContent = "filter";
+                }
+                CATS.forEach((c) => {
+                    const row = document.getElementById("frow-" + c.id);
+                    if (row) row.classList.toggle("muted", _muted.has(c.id));
+                });
+            }
+
+            // ── Filter panel ───────────────────────────────────────────────────
+            (function buildFilterPanel() {
+                const panel = document.getElementById("filter-panel");
+                CATS.forEach((c) => {
+                    const row = document.createElement("div");
+                    row.className = "filter-row";
+                    row.id = "frow-" + c.id;
+                    row.title = "Click to toggle";
+
+                    const dot = document.createElement("span");
+                    dot.className = "filter-dot";
+
+                    const lbl = document.createElement("span");
+                    lbl.className = "filter-label";
+                    lbl.textContent = c.label;
+
+                    row.append(lbl, dot);
+                    row.addEventListener("click", () =>
+                        setMute(c.id, !isMuted(c.id)),
+                    );
+                    panel.appendChild(row);
+                });
+
+                const sep = document.createElement("div");
+                sep.className = "filter-sep";
+                panel.appendChild(sep);
+
+                const clear = document.createElement("div");
+                clear.className = "filter-clear";
+                clear.textContent = "show all";
+                clear.addEventListener("click", () => {
+                    _muted.forEach((id) => setMute(id, false));
+                });
+                panel.appendChild(clear);
+            })();
+
+            function toggleFilterPanel() {
+                document
+                    .getElementById("filter-panel")
+                    .classList.toggle("open");
+            }
+            function closeFilterPanel() {
+                document
+                    .getElementById("filter-panel")
+                    .classList.remove("open");
+            }
+
+            // ── Entry builder ──────────────────────────────────────────────────
             function buildRow(entry) {
                 if (entry.type === "step") {
                     const row = document.createElement("div");
+                    const cat = stepCat(entry.msg || "");
                     row.className = "step";
+                    row.dataset.cat = cat;
+
                     const ts = document.createElement("span");
                     ts.className = "ts";
                     ts.textContent = "[" + (entry.ts || "") + "]";
+
                     const msg = document.createElement("span");
                     msg.className = "step-msg";
                     msg.textContent = entry.msg || "";
+
                     row.append(ts, msg);
                     return row;
                 }
@@ -281,13 +536,11 @@
                 row.appendChild(ts);
 
                 if (entry.type === "macro") {
-                    // ● dot instead of text badge for macros
                     const dot = document.createElement("span");
                     dot.className = "dot";
                     dot.textContent = "●";
                     row.appendChild(dot);
 
-                    // Label: "Parent › Child" or just "Label"
                     const msg = document.createElement("span");
                     msg.className = "msg";
                     if (entry.parentLabel) {
@@ -307,7 +560,6 @@
                     }
                     row.appendChild(msg);
 
-                    // Trigger pill
                     if (entry.trigger) {
                         const trig = document.createElement("span");
                         trig.className = "trigger";
