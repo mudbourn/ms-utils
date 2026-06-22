@@ -4807,6 +4807,9 @@ YQIDAQAB
             -- Returns true if a sound was found and played; false if disabled or no file.
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
+                -- Suppress all non-load sounds during startup so only launch.wav plays
+                -- while the loading screen is visible.  Gate opens in _announceLoad.
+                if not ms._startupSoundDone and slotId ~= "load" then return false end
                 -- Suppress if the same slot played within 50 ms.
                 local now = hs.timer.absoluteTime()
                 ms._playSlotTimes = ms._playSlotTimes or {}
@@ -6864,6 +6867,26 @@ YQIDAQAB
                     elseif data.action == "close" then
                         if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
                         ms.dev._keysOpen = false
+                    elseif data.action == "ready" then
+                        -- DOMContentLoaded fired — page JS is guaranteed ready.
+                        -- This is the primary initialization path; the nav callback
+                        -- acts only as a belt-and-suspenders fallback.
+                        hs.timer.doAfter(0, function()
+                            if not ms.dev._keysPanel then return end
+                            if ms.dev._keysReady then return end  -- already initialized
+                            ms.dev._keysReady = true
+                            local _p = hs.mouse.absolutePosition()
+                            ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
+                            _loadDevHistory(ms.dev._keysPanel, function(e)
+                                return e.type=="key" or e.type=="mouse"
+                                    or e.type=="scroll" or e.type=="mousemove"
+                            end)
+                            pcall(function() ms.dev._pushMouseState() end)
+                            local tj = _devThemeJS()
+                            if tj ~= "" then
+                                pcall(function() ms.dev._keysPanel:evaluateJavaScript(tj) end)
+                            end
+                        end)
                     elseif data.action == "setCoordMode" then
                         ms.dev._coordMode = data.mode or "screen"
                         -- Re-push current position immediately in the new coordinate system.
@@ -6903,12 +6926,12 @@ YQIDAQAB
                     ms.dev._keysReady    = false
                     panel:navigationCallback(function(_, action)
                         if action ~= "didNavigate" then return end
-                        -- Defer all evaluateJavaScript calls to the next run-loop tick.
-                        -- Running them synchronously inside the nav callback blocks
-                        -- WebKit's internal navigation completion path and is the
-                        -- primary cause of the indefinite stall during preloading.
+                        -- Belt-and-suspenders: the "ready" usercontent message
+                        -- (sent by DOMContentLoaded in ms_keys.html) is the primary
+                        -- init trigger.  This path fires only if "ready" was missed.
                         hs.timer.doAfter(0, function()
                             if not ms.dev._keysPanel then return end
+                            if ms.dev._keysReady then return end  -- "ready" already ran
                             ms.dev._keysReady = true
                             local _p = hs.mouse.absolutePosition()
                             ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
@@ -6933,6 +6956,9 @@ YQIDAQAB
                     ms.dev._keysPanel:show()
                     pcall(function() ms.dev._keysPanel:bringToFront(true) end)
                     ms.dev._keysOpen = true
+                    -- Re-enable event routing in case the panel was previously hidden
+                    -- (keys.hide sets _keysReady = false to avoid updating a hidden view).
+                    ms.dev._keysReady = true
                     ms.playSlot("settingsOpen")
                     -- Poll mouse position every 100 ms so display stays current.
                     if ms.dev._mousePoller then ms.dev._mousePoller:stop() end
@@ -7391,6 +7417,7 @@ YQIDAQAB
         ms.bind.rebind()
         ms.socdApply()
         BindValidity = 0  -- block macros during loading; _announceLoad re-enables when toasts fire
+        ms._startupSoundDone = false  -- suppresses all non-load sounds until _announceLoad runs
         -- ── Startup Loading Indicator ─────────────────────────────────────────────
         -- Lightweight hs.canvas panel that shows progress while WebViews initialise
         -- in the background.  Each WebView creation is pushed into its own timer tick
@@ -7497,6 +7524,8 @@ YQIDAQAB
             _loadAnnounced = true
             pcall(function()
                 ms.playSlot("load")
+                -- Suppress alert chimes while the toasts post so startup plays only
+                -- the single load sound.  Gate opens below after all alerts are queued.
                 ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 6)
                 if ms.macroMeta then
                     local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
@@ -7506,6 +7535,9 @@ YQIDAQAB
                 end
                 ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 6)
             end)
+            -- Open the sound gate now that the startup sequence is fully done.
+            -- All subsequent ms.alert() and ms.playSlot() calls play normally.
+            ms._startupSoundDone = true
             -- Loading complete: allow macros to run and activate them if Roblox is already focused.
             ms._loadComplete = true
             if ms._robloxActive then ms.setMacros(1, true) end
@@ -7582,6 +7614,8 @@ YQIDAQAB
         -- force-dismiss the loading screen after 8 s so startup always completes.
         hs.timer.doAfter(8, function()
             if _lCanvas and not _lFadingOut then _lFadeOut() end
+            -- Also open the sound gate so sounds are never permanently suppressed.
+            ms._startupSoundDone = true
         end)
         -- System integrity: mismatch is impossible here — the guardian blocked it at
         -- load time before any ms code ran.  If no trusted hash exists yet, try to
