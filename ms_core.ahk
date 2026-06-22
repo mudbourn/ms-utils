@@ -27,6 +27,7 @@ global REF_SENS  := 1.5
 global SoundLib  := A_ScriptDir "\sounds\"
 global BindValidity := 0
 global loadfinish   := 0
+global _ms_loadDone := false  ; set to true by _ms_loadAnnounce; gates automatic macro activation
 global clickLevel   := 3
 global CUR_CAM_SENS := 1.5
 
@@ -2257,11 +2258,13 @@ _ms_captureModRebind(id) {
 
 ; ── App watcher (poll every 100 ms) ──────────────────────────────────────────
 _ms_AppPoll() {
-    global _ms_roblox_active, _ms_ui_open_flag
+    global _ms_roblox_active, _ms_ui_open_flag, _ms_loadDone
     local active := WinActive("ahk_exe RobloxPlayerBeta.exe") != 0
     if active && !_ms_roblox_active {
         _ms_roblox_active := true
         ms.cam.updateMultiplier()
+        if !_ms_loadDone  ; don't enable macros while loading toasts haven't fired yet
+            return
         if _ms_ui_open_flag   ; returning from panel — re-enable silently
             BindValidity := 1
         else
@@ -2336,7 +2339,7 @@ _ms_integrityPoll() {
 ; Load complete announcement
 SetTimer _ms_loadAnnounce, -500
 _ms_loadAnnounce() {
-    global BindValidity
+    global BindValidity, _ms_loadDone
     ms.playSlot("load")
     ms.alert("mudscript Windows Runtime`nBy: mudbourn — https://mudbourn.info", 6)
     if ms.macroMeta.HasProp("name") {
@@ -2347,6 +2350,7 @@ _ms_loadAnnounce() {
     }
     ms.alert("Macros loaded. Press Alt+P to open settings.", 6)
     ; Unlock macros now that loading toasts have fired.
+    _ms_loadDone := true
     BindValidity := 1
 }
 
