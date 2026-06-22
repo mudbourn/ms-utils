@@ -7380,7 +7380,7 @@ YQIDAQAB
             local sf  = hs.screen.mainScreen():frame()
             local lw, lh = 300, 104
             local lx  = sf.x + math.floor((sf.w - lw) / 2)
-            local ly  = sf.y + math.floor((sf.h - lh) / 2) - 40
+            local ly  = sf.y + sf.h - 150 - lh  -- bottom edge aligns with toast baseline
             _lBarMax  = lw - 32
             _lBarY    = 62
             local clrBg     = { red=0.024, green=0.016, blue=0.008, alpha=0.95 }
@@ -7497,25 +7497,25 @@ YQIDAQAB
                 _lUpdate(50, "Loading console\xe2\x80\xa6")
             end
         end)
-        hs.timer.doAfter(3.5, function()
+        hs.timer.doAfter(2.75, function()
             if not ms._skipDevPrewarm then
                 ms.dev.prewarmStep("watcher")
-                _lUpdate(65, "Loading macro monitor\xe2\x80\xa6")
+                _lUpdate(64, "Loading macro monitor\xe2\x80\xa6")
             end
         end)
-        hs.timer.doAfter(5.0, function()
+        hs.timer.doAfter(3.5, function()
             if not ms._skipDevPrewarm then
                 ms.dev.prewarmStep("keys")
-                _lUpdate(80, "Loading input monitor\xe2\x80\xa6")
+                _lUpdate(78, "Loading input monitor\xe2\x80\xa6")
             end
         end)
-        hs.timer.doAfter(6.5, function()
+        hs.timer.doAfter(4.25, function()
             if not ms._skipDevPrewarm then
                 ms.dev.prewarmStep("window")
-                _lUpdate(93, "Loading window monitor\xe2\x80\xa6")
+                _lUpdate(92, "Loading window monitor\xe2\x80\xa6")
             end
         end)
-        hs.timer.doAfter(7.5, function()
+        hs.timer.doAfter(5.25, function()
             if not _lFadingOut then
                 _lUpdate(100, "Ready.")
                 hs.timer.doAfter(0.8, _lFadeOut)
@@ -7575,7 +7575,7 @@ YQIDAQAB
         end)
 
         if notice ~= 1 then
-            hs.timer.doAfter(9.0, function()
+            hs.timer.doAfter(7.0, function()
                 pcall(function()
                     ms.playSlot("load")
                     ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn — https://mudbourn.info", 6)
