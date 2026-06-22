@@ -11,6 +11,7 @@
                 --accent: #c41a1a;
                 --text: #f0ddb0;
                 --text2: rgba(210, 165, 100, 0.75);
+                --mouse: #c47820;
                 --radius: 3px;
                 --col-result: #4a7820;
                 --col-error: #d42020;
@@ -191,6 +192,18 @@
                 background: rgba(196, 26, 26, 0.1);
             }
 
+            .badge-key {
+                color: var(--text2);
+                border-color: rgba(210, 165, 100, 0.28);
+                background: rgba(210, 165, 100, 0.06);
+            }
+
+            .badge-mouse {
+                color: var(--mouse);
+                border-color: rgba(196, 120, 32, 0.4);
+                background: rgba(196, 120, 32, 0.08);
+            }
+
             .badge-input {
                 color: var(--text2);
                 border-color: rgba(210, 165, 100, 0.18);
@@ -360,7 +373,14 @@
 
                 const type = entry.type || "print";
                 const ts = entry.ts || nowTs();
-                const msg = String(entry.msg ?? "");
+
+                const BTN = {
+                    0: "Left",
+                    1: "Right",
+                    2: "Middle",
+                    3: "Btn4",
+                    4: "Btn5",
+                };
 
                 const LABELS = {
                     print: "print",
@@ -368,7 +388,26 @@
                     error: "error",
                     macro: "macro",
                     input: "input",
+                    key: "key",
+                    mouse: "mouse",
                 };
+
+                // Build display message from structured fields for key/mouse;
+                // fall back to entry.msg for all other types.
+                let msg;
+                if (type === "key") {
+                    msg = (entry.down ? "↓" : "↑") + "  " + (entry.key || "?");
+                } else if (type === "mouse") {
+                    const btn = BTN[entry.button] ?? "M" + entry.button;
+                    const pos =
+                        entry.x != null ? "  " + entry.x + ", " + entry.y : "";
+                    msg = (entry.down ? "↓" : "↑") + "  " + btn + pos;
+                } else {
+                    msg =
+                        type === "input"
+                            ? "> " + String(entry.msg ?? "")
+                            : String(entry.msg ?? "");
+                }
 
                 const row = document.createElement("div");
                 row.className = "entry entry-" + type;
@@ -383,7 +422,7 @@
 
                 const msgEl = document.createElement("span");
                 msgEl.className = "msg";
-                msgEl.textContent = type === "input" ? "> " + msg : msg;
+                msgEl.textContent = msg;
 
                 row.appendChild(tsEl);
                 row.appendChild(badge);
