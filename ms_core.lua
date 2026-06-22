@@ -6873,7 +6873,7 @@ YQIDAQAB
                 ms.dev.window.show = function()
                     if not ms.dev._windowPanel then
                         local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 520
+                        local w, h   = 360, 480
                         local x = screen.x + screen.w - w - 20
                         local y = screen.y + 68
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
