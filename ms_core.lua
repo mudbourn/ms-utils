@@ -1465,9 +1465,14 @@ YQIDAQAB
                 end
 
                 -- Returns a sorted list of profile names that have a saved ms_macros.lua.
+                -- Cached with a dirty flag; set ms._profilesDirty = true when profiles change.
+                ms._profilesDirty = true
+                local _profilesCache = nil
                 local function getProfiles()
+                    if not ms._profilesDirty and _profilesCache then return _profilesCache end
+                    ms._profilesDirty = false
                     local list = {}
-                    if not hs.fs.attributes(profilesPath) then return list end
+                    if not hs.fs.attributes(profilesPath) then _profilesCache = list; return list end
                     for entry in hs.fs.dir(profilesPath) do
                         if entry ~= "." and entry ~= ".." then
                             local attr = hs.fs.attributes(profilesPath .. entry)
@@ -1479,6 +1484,7 @@ YQIDAQAB
                         end
                     end
                     table.sort(list)
+                    _profilesCache = list
                     return list
                 end
 
@@ -1794,6 +1800,7 @@ YQIDAQAB
                         return
                     end
                     ms.playSlot("update")
+                    ms._profilesDirty = true
                     if roblox then pcall(function() roblox:activate() end) end
                     hs.timer.doAfter(0.2, function()
                         ms.alert("Profile \"" .. meta.name .. "\" imported.\nSwitch to it from Settings > Profiles.", 5, true)
@@ -1973,6 +1980,7 @@ YQIDAQAB
                             msg = msg .. "\n" .. #soundsAdded .. " sound" .. (#soundsAdded > 1 and "s" or "") .. " added to library."
                         end
                         ms.alert(msg, 6, true)
+                        ms._profilesDirty = true
                         ms.ui.refresh()
                     end)
                 end
