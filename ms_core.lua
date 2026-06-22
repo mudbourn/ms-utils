@@ -1284,7 +1284,42 @@ YQIDAQAB
                     end
                 end
 
-                -- ── END Theme System ─────────────────────────────────────────────────
+                -- ── END Theme System ────────────────────────────────────────
+
+                -- Reads width and height from a PNG file's IHDR chunk (bytes 16–23).
+                -- Returns w, h as integers, or nil, nil on failure.
+                -- Supported aspect ratios for UIFC: 9:16, 16:9, 1:1, 3:4, 4:3.
+                local function _readPNGDims(path)
+                    local f = io.open(path, "rb")
+                    if not f then return nil, nil end
+                    f:seek("set", 16)        -- skip 8-byte sig + 4-byte length + 4-byte "IHDR"
+                    local wb = f:read(4)     -- width  (big-endian uint32)
+                    local hb = f:read(4)     -- height (big-endian uint32)
+                    f:close()
+                    if not wb or #wb < 4 or not hb or #hb < 4 then return nil, nil end
+                    local w = wb:byte(1)*16777216 + wb:byte(2)*65536 + wb:byte(3)*256 + wb:byte(4)
+                    local h = hb:byte(1)*16777216 + hb:byte(2)*65536 + hb:byte(3)*256 + hb:byte(4)
+                    return (w > 0 and w or nil), (h > 0 and h or nil)
+                end
+
+                -- Cache the settings-panel UIFC dimensions so _panelFrame() doesn't
+                -- re-read the PNG on every show/resize.
+                ms._theme._uifcW = nil
+                ms._theme._uifcH = nil
+                -- Refresh the cache whenever the theme reloads.
+                local _origLoadTheme = ms.loadTheme
+                ms.loadTheme = function()
+                    _origLoadTheme()
+                    ms._theme._uifcW = nil
+                    ms._theme._uifcH = nil
+                    local uifc = type(ms._theme.uifc) == "table" and ms._theme.uifc.settings or ""
+                    if uifc ~= "" then
+                        local wp = os.getenv("HOME") .. "/.hammerspoon/" .. uifc
+                        if hs.fs.attributes(wp) then
+                            ms._theme._uifcW, ms._theme._uifcH = _readPNGDims(wp)
+                        end
+                    end
+                end
 
                 -- ── Capability Detection — ms.has(feature) ───────────────────────────────────
                 --
@@ -6288,14 +6323,22 @@ YQIDAQAB
             local function _panelFrame()
                 local screen = hs.screen.mainScreen():frame()
                 local w, h = panelW, panelH
-                -- Expand 1.25× when a UI Frame Cosmetic is set for the settings panel.
-                -- The extra space is pure padding for the frame; inner content unchanged.
+                -- If a UIFC is configured, size the window to the PNG's exact dimensions.
+                -- This allows any aspect ratio (9:16, 16:9, 1:1, 3:4, 4:3) as long as
+                -- the PNG is designed with the 360×640 content area centered.
+                -- Falls back to 1.25× expansion when PNG dimensions can't be read.
                 if type(ms._theme and ms._theme.uifc) == "table"
                     and ms._theme.uifc.settings ~= "" then
                     local wp = os.getenv("HOME") .. "/.hammerspoon/" .. ms._theme.uifc.settings
                     if hs.fs.attributes(wp) then
-                        w = math.floor(w * 1.25)
-                        h = math.floor(h * 1.25)
+                        local pw = ms._theme._uifcW
+                        local ph = ms._theme._uifcH
+                        if pw and ph then
+                            w, h = pw, ph
+                        else
+                            w = math.floor(w * 1.25)
+                            h = math.floor(h * 1.25)
+                        end
                     end
                 end
                 -- X: centred between the left screen edge and the screen midpoint.
