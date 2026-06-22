@@ -5465,18 +5465,40 @@ YQIDAQAB
                 }
             end
 
+            -- ── UI State Cache ───────────────────────────────────────────────────────────
+            -- Pre-encodes the full state JSON so ms.ui.refresh() is instant.
+            -- Built once at startup, then rebuilt only when state actually changes.
+            local _uiStateDirty = true   -- true = cache needs rebuilding
+            local _uiStateJSON  = nil    -- "receiveState(...)" ready to eval
+
+            -- Rebuilds the cache synchronously. Safe to call before the panel exists.
+            local function _rebuildUICache()
+                local ok, json = pcall(hs.json.encode, _buildUIState())
+                if ok then
+                    _uiStateJSON  = "receiveState(" .. json .. ");"
+                    _uiStateDirty = false
+                end
+            end
+
+            -- Mark the cache stale. Refresh will rebuild on next call.
+            ms.ui.markDirty = function() _uiStateDirty = true end
+
             -- Pushes a fresh state snapshot into the open panel. Safe to call even
             -- when the panel hasn't been built yet (no-op) or isn't visible.
             ms.ui.refresh = function()
                 if not ms.ui._panel then return end
-                local ok, json = pcall(hs.json.encode, _buildUIState())
-                if not ok then
-                    print("ms.ui.refresh: state encode error: " .. tostring(json))
-                    return
+                if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
+                if _uiStateJSON then
+                    pcall(function()
+                        ms.ui._panel:evaluateJavaScript(_uiStateJSON)
+                    end)
                 end
-                pcall(function()
-                    ms.ui._panel:evaluateJavaScript("receiveState(" .. json .. ");")
-                end)
+            end
+
+            -- Pre-builds the state cache without requiring the panel to be open.
+            -- Called at startup so the first panel open is instant.
+            ms.ui.prebuild = function()
+                if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
             end
 
             local function _emptyToNil(s) if s == nil or s == "" then return nil end; return s end
