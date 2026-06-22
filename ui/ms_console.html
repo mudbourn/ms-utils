@@ -293,8 +293,23 @@
         <div id="titlebar">
             <span id="titlebar-title">mudscript — console</span>
             <div id="titlebar-btns">
-                <button onclick="doClear()">[clear]</button>
-                <button class="btn-close" onclick="send({ action: 'close' })">
+                <button
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        doClear();
+                    "
+                >
+                    [clear]
+                </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        send({ action: 'close' });
+                    "
+                >
                     [&times;]
                 </button>
             </div>
@@ -332,6 +347,10 @@
                 } else {
                     window.webkit.messageHandlers.msConsole.postMessage(s);
                 }
+            }
+
+            function playSlot(slot) {
+                sendToHost({ action: "playSlot", slot });
             }
 
             function send(obj) {

@@ -6553,6 +6553,8 @@ YQIDAQAB
                         if ms.dev._consolePanel then
                             pcall(function() ms.dev._consolePanel:frame(ms.dev._consolePanelPos) end)
                         end
+                    elseif data.action == "playSlot" and data.slot then
+                        ms.playSlot(data.slot)
                     end
                 end)
 
@@ -6621,6 +6623,8 @@ YQIDAQAB
                         if ms.dev._watcherPanel then
                             pcall(function() ms.dev._watcherPanel:frame(ms.dev._watcherPanelPos) end)
                         end
+                    elseif data.action == "playSlot" and data.slot then
+                        ms.playSlot(data.slot)
                     end
                 end)
 
@@ -6692,6 +6696,8 @@ YQIDAQAB
                         if ms.dev._keysPanel then
                             pcall(function() ms.dev._keysPanel:frame(ms.dev._keysPanelPos) end)
                         end
+                    elseif data.action == "playSlot" and data.slot then
+                        ms.playSlot(data.slot)
                     end
                 end)
 
@@ -6836,6 +6842,8 @@ YQIDAQAB
                         if ms.dev._windowPanel then
                             pcall(function() ms.dev._windowPanel:frame(ms.dev._windowPanelPos) end)
                         end
+                    elseif data.action == "playSlot" and data.slot then
+                        ms.playSlot(data.slot)
                     end
                 end)
 
