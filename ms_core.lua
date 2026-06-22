@@ -4570,6 +4570,8 @@ YQIDAQAB
                         ms._inputOpen = false
                         ms._robloxActive = true
                         ms.cam._setupWatcher()
+                        -- Don't enable macros while the loading screen is still up.
+                        if not ms._loadComplete then return end
                         if fromDialog then
                             -- Returning from a Hammerspoon dialog/panel: re-enable silently.
                             BindValidity = 1
@@ -4602,9 +4604,8 @@ YQIDAQAB
                     ms._robloxActive = true
                     ms.cam._setupWatcher()
                     ms.cam.enable()
-                    -- Use silent=true: seeds BindValidity and _notifyLastPosted through
-                    -- the canonical path without firing a startup toast.
-                    ms.setMacros(1, true)
+                    -- Macro activation is deferred to _announceLoad, which fires
+                    -- after the loading screen fully dismisses and toasts play.
                 end
             end)
 
@@ -7364,18 +7365,20 @@ YQIDAQAB
             end
         end
         ms._skipDevPrewarm = false  -- overridden by loadSettings() if previously saved
+        ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
         ms._discoverSounds()
         ms.loadSettings()
         ms.loadTheme()
         ms.cam.updateMultiplier()
         ms.bind.rebind()
         ms.socdApply()
+        BindValidity = 0  -- block macros during loading; _announceLoad re-enables when toasts fire
         -- ── Startup Loading Indicator ─────────────────────────────────────────────
         -- Lightweight hs.canvas panel that shows progress while WebViews initialise
         -- in the background.  Each WebView creation is pushed into its own timer tick
         -- so the main thread never blocks for more than ~300 ms at a stretch.
         local _lCanvas, _lBarMax, _lBarY, _lFadingOut
-        local _lUpdate, _lFadeOut  -- forward-declared so the mouseCallback inside do{} can close over them
+        local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad  -- forward-declared so callbacks inside do{} can close over them
         do
             local sf  = hs.screen.mainScreen():frame()
             local lw, lh = 300, 104
@@ -7467,6 +7470,29 @@ YQIDAQAB
             }
         end
 
+        -- Plays the load-complete sound and shows the startup toasts.  Fires once
+        -- (guarded by _loadAnnounced) — triggered from the canvas delete callback
+        -- so toasts appear immediately after the loading screen is gone.
+        -- doAfter(7.0) below acts as a fallback in case the canvas never fades.
+        _announceLoad = function()
+            if _loadAnnounced then return end
+            _loadAnnounced = true
+            pcall(function()
+                ms.playSlot("load")
+                ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 6)
+                if ms.macroMeta then
+                    local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
+                    if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
+                    if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
+                    ms.alert(msg, 6)
+                end
+                ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 6)
+            end)
+            -- Loading complete: allow macros to run and activate them if Roblox is already focused.
+            ms._loadComplete = true
+            if ms._robloxActive then ms.setMacros(1, true) end
+        end
+
         _lFadeOut = function()
             if not _lCanvas or _lFadingOut then return end
             _lFadingOut = true
@@ -7478,6 +7504,9 @@ YQIDAQAB
             end
             hs.timer.doAfter(10 * 0.04 + 0.05, function()
                 if _lCanvas then _lCanvas:delete(); _lCanvas = nil end
+                -- Fire the load announcement immediately after the canvas disappears
+                -- so there is no visible gap between the loading screen and the toasts.
+                hs.timer.doAfter(0.1, _announceLoad)
             end)
         end
 
@@ -7501,28 +7530,28 @@ YQIDAQAB
             if ms._skipDevPrewarm then return end
             _lUpdate(50, "Loading console\xe2\x80\xa6")
             hs.timer.doAfter(0, function()
-                if not ms._skipDevPrewarm then ms.dev.prewarmStep("console") end
+                if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("console") end) end
             end)
         end)
         hs.timer.doAfter(2.6, function()
             if ms._skipDevPrewarm then return end
             _lUpdate(62, "Loading macro monitor\xe2\x80\xa6")
             hs.timer.doAfter(0, function()
-                if not ms._skipDevPrewarm then ms.dev.prewarmStep("watcher") end
+                if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("watcher") end) end
             end)
         end)
         hs.timer.doAfter(3.2, function()
             if ms._skipDevPrewarm then return end
             _lUpdate(75, "Loading input monitor\xe2\x80\xa6")
             hs.timer.doAfter(0, function()
-                if not ms._skipDevPrewarm then ms.dev.prewarmStep("keys") end
+                if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("keys") end) end
             end)
         end)
         hs.timer.doAfter(3.8, function()
             if ms._skipDevPrewarm then return end
             _lUpdate(88, "Loading window monitor\xe2\x80\xa6")
             hs.timer.doAfter(0, function()
-                if not ms._skipDevPrewarm then ms.dev.prewarmStep("window") end
+                if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("window") end) end
             end)
         end)
         hs.timer.doAfter(4.6, function()
@@ -7530,6 +7559,11 @@ YQIDAQAB
                 _lUpdate(100, "Ready.")
                 hs.timer.doAfter(0.8, _lFadeOut)
             end
+        end)
+        -- Failsafe: if any prewarm step stalls and the normal fade never fires,
+        -- force-dismiss the loading screen after 8 s so startup always completes.
+        hs.timer.doAfter(8, function()
+            if _lCanvas and not _lFadingOut then _lFadeOut() end
         end)
         -- System integrity: mismatch is impossible here — the guardian blocked it at
         -- load time before any ms code ran.  If no trusted hash exists yet, try to
@@ -7559,9 +7593,8 @@ YQIDAQAB
             -- MANIFEST missing, stale, or hash mismatch — ask the user to trust manually.
             ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
         end)
-        -- Play the load-complete sound right after startup finishes.
-        -- loadfinish is still 0 here (toast suppression), but playSlot
-        -- doesn't need it — it just plays whichever file is assigned.
+        -- Activate Roblox so the app watcher can seed _robloxActive correctly
+        -- on first launch.
 
         roblox:activate()
 
@@ -7585,19 +7618,11 @@ YQIDAQAB
         end)
 
         if notice ~= 1 then
-            hs.timer.doAfter(7.0, function()
-                pcall(function()
-                    ms.playSlot("load")
-                    ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn — https://mudbourn.info", 6)
-                    if ms.macroMeta then
-                        local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
-                        if ms.macroMeta.author then msg = msg .. "By: " .. ms.macroMeta.author end
-                        if ms.macroMeta.website then msg = msg .. " — " .. ms.macroMeta.website end
-                        ms.alert(msg, 6)
-                    end
-                    ms.alert("Macros loaded. Press ⌥ and P to open settings.", 6)
-                end)
-            end)
+            -- Primary path: _announceLoad fires from the canvas delete callback (see _lFadeOut)
+            -- so toasts appear immediately after the loading screen is gone.
+            -- This doAfter(7.0) is a belt-and-suspenders fallback for edge cases where
+            -- the canvas never fades (e.g., Hammerspoon is killed mid-load and relaunched).
+            hs.timer.doAfter(7.0, _announceLoad)
             notice = 1
         end
     -- END Startup Executions --

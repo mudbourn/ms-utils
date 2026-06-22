@@ -25,7 +25,7 @@ global REF_W     := 1680
 global REF_H     := 1044
 global REF_SENS  := 1.5
 global SoundLib  := A_ScriptDir "\sounds\"
-global BindValidity := 1
+global BindValidity := 0
 global loadfinish   := 0
 global clickLevel   := 3
 global CUR_CAM_SENS := 1.5
@@ -2336,6 +2336,7 @@ _ms_integrityPoll() {
 ; Load complete announcement
 SetTimer _ms_loadAnnounce, -500
 _ms_loadAnnounce() {
+    global BindValidity
     ms.playSlot("load")
     ms.alert("mudscript Windows Runtime`nBy: mudbourn — https://mudbourn.info", 6)
     if ms.macroMeta.HasProp("name") {
@@ -2345,6 +2346,8 @@ _ms_loadAnnounce() {
         ms.alert(msg, 6)
     }
     ms.alert("Macros loaded. Press Alt+P to open settings.", 6)
+    ; Unlock macros now that loading toasts have fired.
+    BindValidity := 1
 }
 
 ; ── Global system hotkeys ─────────────────────────────────────────────────────
