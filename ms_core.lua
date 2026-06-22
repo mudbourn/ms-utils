@@ -1107,6 +1107,10 @@ YQIDAQAB
                     assert(type(key) == "string", "ms.settings.get: key must be a string")
                     local def = ms._userSettingIndex[key]
                     if not def then return nil end
+                    -- soundSlot values live in ms.soundAssign, not _userSettingVals.
+                    if def.type == "soundSlot" then
+                        return (ms.soundAssign and ms.soundAssign[key]) or def.default
+                    end
                     local v = ms._userSettingVals[key]
                     return v ~= nil and v or def.default
                 end
@@ -1124,6 +1128,12 @@ YQIDAQAB
                     end
                     if def.type == "action" then
                         print("ms.settings.set: action items have no value (key='" .. key .. "')")
+                        return
+                    end
+                    if def.type == "soundSlot" then
+                        -- soundSlot assignments are managed by the Sound panel, not _userSettingVals.
+                        -- Calling set() on a soundSlot key is not supported; use the Sound section UI.
+                        print("ms.settings.set: '" .. key .. "' is a soundSlot — assign sounds via Settings \xc2\xbb Sound.")
                         return
                     end
                     local validated = _validateUserValue(def, value)
@@ -1168,6 +1178,10 @@ YQIDAQAB
                                 assert(type(item.onChange) == "function",
                                     "ms.menu.define: item onChange must be a function")
                             end
+                            if item.onAction then
+                                assert(type(item.onAction) == "function",
+                                    "ms.menu.define: item onAction must be a function")
+                            end
                             ms._userSettingIndex[item.key] = item
                             if item.type ~= "action" then
                                 ms._userSettingVals[item.key] = item.default
@@ -1203,11 +1217,10 @@ YQIDAQAB
                     ms._hiddenFeatures[name] = true
                 end
 
-                -- ── ms.setClickLevel(n) ─────────────────────────────────────────────────────────────────────────
-                -- Bridge function: updates the system clickLevel variable from a
-                -- ms.settings.define onChange callback in ms_macros.lua.
-                -- This is the correct way to sync click level when it is declared as a
-                -- user setting. Valid values: 1, 2, 3, 4.
+                -- ── ms.setClickLevel(n) ────────────────────────────────────────────────────────
+                -- Plain setter for the system clickLevel variable. Valid values: 1, 2, 3, 4.
+                -- Typically called from a ms.settings.define onChange callback but can be
+                -- called from anywhere (ms.fn() macro bodies, timers, etc.).
                 --
                 ms.setClickLevel = function(n)
                     n = tonumber(n)

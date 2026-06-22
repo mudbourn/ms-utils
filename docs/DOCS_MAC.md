@@ -1120,13 +1120,13 @@ Registers a setting or visual item in the **Settings** section of the panel. Ite
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `type` | yes | `"toggle"` \| `"slider"` \| `"seg"` \| `"action"` \| `"divider"` \| `"groupLabel"` |
-| `key` | yes (except divider/groupLabel) | Unique identifier. Used for storage and `ms.settings.get`. |
+| `type` | yes | `"toggle"` \| `"slider"` \| `"seg"` \| `"action"` \| `"soundSlot"` \| `"divider"` \| `"groupLabel"` |
+| `key` | yes (except divider/groupLabel) | Unique identifier. Used for storage and `ms.settings.get`. For `soundSlot` items the key names the sound slot; `ms.settings.get` returns the currently assigned sound name rather than a value from settings storage. |
 | `label` | — | Row label shown in the panel. |
 | `hint` | — | Optional subtitle shown below the label. |
 | `save` | — | `false` to skip persisting to `ms_settings.json`. Default: `true`. |
 | `default` | — | Initial value used when no saved value exists. |
-| `onChange(value)` | — | Called when the user changes the value, and once at startup with the loaded/default value. |
+| `onChange(value)` | — | Called when the user changes the value. Also called once at startup with `default` — **only if `default` is not `nil`**. If a saved value exists, a second call follows with the saved value. |
 
 **Type-specific fields:**
 
@@ -1136,6 +1136,28 @@ Registers a setting or visual item in the **Settings** section of the panel. Ite
 | `seg` | `options = { {label, value}, ... }` |
 | `action` | `btnLabel`, `danger` (bool), `onAction()` |
 | `groupLabel` | `label` (the heading text) |
+
+#### `type = "soundSlot"`
+
+Registers a user-defined sound event slot that appears in **Settings › Sound** alongside the built-in slots (`hover`, `update`, `settingsOpen`, etc.). The user assigns an audio file to the slot from the sound picker.
+
+```lua
+ms.settings.define({
+    key   = "myHitSound",
+    type  = "soundSlot",
+    label = "Hit Sound",
+})
+```
+
+Play the assigned sound at runtime:
+
+```lua
+ms.playSlot("myHitSound")   -- plays whatever the user assigned
+```
+
+`ms.settings.get("myHitSound")` returns the currently assigned sound name (from `ms.soundAssign`), or `default` if nothing has been assigned. `ms.settings.set` is not supported for `soundSlot` keys — use the Sound section UI to assign sounds.
+
+`soundSlot` items can also be declared inside `ms.menu.define` item lists; they appear in the custom section **and** are extracted into the Sound section automatically.
 
 **Examples:**
 
@@ -1219,6 +1241,8 @@ Registers a custom panel section that appears **below the Tools section** in dec
 
 Items inside `items` with a `key` are automatically reachable via `ms.settings.get` / `ms.settings.set`.
 
+`onAction` on `action` items inside `ms.menu.define` is validated and must be a function (same as in `ms.settings.define`). All other item fields behave identically to `ms.settings.define` entries.
+
 ```lua
 ms.menu.define({
     id = "combatOptions", title = "Combat Options", icon = "⚔",
@@ -1252,7 +1276,7 @@ ms.features.hide("independentBinds")  -- Independent Binds row in Tools
 
 ### `ms.setClickLevel(n)`
 
-Bridge function. Updates the system `clickLevel` variable from an `onChange` callback. Valid values: `1`, `2`, `3`, `4`. Use this when declaring Click Level as a user setting:
+Updates the system `clickLevel` variable. Valid values: `1`, `2`, `3`, `4`. Typically called from a `ms.settings.define` `onChange` callback but can be called from anywhere — macro bodies, timers, etc.:
 
 ```lua
 ms.settings.define({
