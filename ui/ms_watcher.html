@@ -3,17 +3,58 @@
     <head>
         <meta charset="UTF-8" />
         <style>
+            /* ── Fonts ──────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
+
+            /* ── Tokens ─────────────────────────────────────────────────────── */
             :root {
                 --bg: #060402;
                 --surface: #100806;
                 --surface2: #1c100c;
-                --border: rgba(130, 50, 22, 0.55);
+                --hover: #301610;
                 --accent: #c41a1a;
+                --accent-hi: #e52424;
+                --success: #4a7820;
+                --danger: #d42020;
+                --warning: #c47820;
                 --text: #f0ddb0;
-                --text2: rgba(210, 165, 100, 0.75);
+                --text2: rgba(210, 165, 100, 0.85);
+                --text3: rgba(160, 105, 60, 0.55);
+                --border: rgba(130, 50, 22, 0.55);
                 --radius: 3px;
+                --radius-s: 2px;
+                /* panel extras */
+                --mouse: #c47820;
+                --scroll: #4a9078;
+                --border-dim: rgba(130, 50, 22, 0.18);
+                --border-faint: rgba(130, 50, 22, 0.08);
+                --shadow-panel: rgba(0, 0, 0, 0.4);
             }
 
+            /* ── Reset ──────────────────────────────────────────────────────── */
             *,
             *::before,
             *::after {
@@ -23,76 +64,91 @@
                 user-select: none;
                 -webkit-user-select: none;
             }
-
             html,
             body {
-                width: 100%;
                 height: 100%;
+                overflow: hidden;
                 background: var(--bg);
-                color: var(--text);
+            }
+            body {
                 font-family: "Almendra", Palatino, Georgia, serif;
                 font-size: 13px;
-                line-height: 1.5;
-                overflow: hidden;
-            }
-
-            body {
+                color: var(--text);
+                -webkit-font-smoothing: antialiased;
                 display: flex;
                 flex-direction: column;
+                position: relative;
+            }
+            button {
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: inherit;
+                font: inherit;
             }
 
-            /* ── Titlebar ─────────────────────────────────────────────── */
-            #titlebar {
-                height: 32px;
-                -webkit-app-region: drag;
+            /* ── Header ─────────────────────────────────────────────────────── */
+            #header {
                 display: flex;
                 align-items: center;
-                padding: 0 10px 0 14px;
+                gap: 8px;
+                padding: 10px 12px 8px;
+                background: var(--surface);
                 border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px
+                    color-mix(in srgb, var(--accent) 12%, transparent);
                 flex-shrink: 0;
-                gap: 6px;
+                -webkit-app-region: drag;
             }
-
-            #titlebar-text {
+            #panel-title {
                 flex: 1;
-                font-size: 11px;
-                font-weight: 700;
-                letter-spacing: 1.5px;
-                text-transform: uppercase;
-                color: var(--text2);
+                font-weight: 600;
+                font-size: 13px;
             }
-
-            .tb-btn {
+            .header-btns {
+                display: flex;
+                gap: 4px;
                 -webkit-app-region: no-drag;
-                height: 20px;
-                padding: 0 8px;
-                background: transparent;
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                color: var(--text2);
-                font-family: inherit;
-                font-size: 11px;
-                cursor: pointer;
-                transition:
-                    background 0.12s,
-                    border-color 0.12s,
-                    color 0.12s;
             }
-
-            .tb-btn:hover {
+            .btn-ghost {
+                padding: 3px 10px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
                 background: var(--surface2);
-                border-color: var(--accent);
+                color: var(--text2);
+                transition: opacity 0.15s;
+            }
+            .btn-ghost:hover {
+                opacity: 0.8;
+            }
+            .btn-close {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+            }
+            .btn-close:hover {
+                background: var(--hover);
                 color: var(--text);
             }
+            #filter-btn.has-mutes {
+                color: var(--accent);
+            }
 
-            /* ── Log area ───────────────────────────────────────────────── */
+            /* ── Log area ───────────────────────────────────────────────────── */
             #log {
                 flex: 1;
                 overflow-y: auto;
-                padding: 4px 0 36px;
+                padding: 4px 0 8px;
                 min-height: 0;
             }
-
             #log::-webkit-scrollbar {
                 width: 5px;
             }
@@ -104,92 +160,101 @@
                 border-radius: 3px;
             }
 
-            /* ── Entry rows ─────────────────────────────────────────────── */
+            /* ── Entry rows ─────────────────────────────────────────────────── */
             .entry {
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 gap: 6px;
-                padding: 3px 16px;
-                font-size: 13px;
-                line-height: 1.55;
+                padding: 5px 12px;
+                font-size: 12px;
+                border-bottom: 1px solid var(--border-dim);
             }
-
             .entry:hover {
                 background: var(--surface);
             }
-
             .ts {
-                color: var(--text2);
-                font-size: 11px;
-                white-space: nowrap;
+                color: var(--text3);
+                font:
+                    10px "SF Mono",
+                    Menlo,
+                    monospace;
                 flex-shrink: 0;
+                padding-top: 1px;
+                min-width: 52px;
             }
-
             .badge {
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 0.8px;
-                text-transform: uppercase;
                 flex-shrink: 0;
+                padding: 1px 5px;
+                border-radius: var(--radius-s);
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
             }
-
             .badge-print {
+                background: color-mix(in srgb, var(--text2) 8%, transparent);
                 color: var(--text2);
             }
             .badge-error {
-                color: #d42020;
+                background: color-mix(in srgb, var(--danger) 12%, transparent);
+                color: var(--danger);
             }
-
             .dot {
                 font-size: 7px;
                 color: var(--accent);
                 flex-shrink: 0;
+                padding-top: 2px;
             }
-
             .msg {
                 color: var(--text);
                 word-break: break-word;
                 flex: 1;
                 min-width: 0;
             }
-
             .msg .sub-sep {
-                color: var(--text2);
+                color: var(--text3);
                 margin: 0 3px;
             }
             .msg .sub-name {
                 color: var(--text);
             }
-
-            .trigger {
-                font-size: 10px;
-                color: var(--text2);
+            .pill {
+                display: inline-flex;
+                align-items: center;
+                padding: 1px 7px;
+                border-radius: 20px;
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                background: var(--surface2);
                 border: 1px solid var(--border);
-                border-radius: var(--radius);
-                padding: 1px 5px;
-                white-space: nowrap;
+                color: var(--text2);
                 flex-shrink: 0;
-                font-family: "SF Mono", Menlo, monospace;
             }
 
+            /* ── Step rows ──────────────────────────────────────────────────── */
             .step {
-                opacity: 0.45;
-                font-size: 11px;
-                padding: 1px 16px 1px 36px;
                 display: flex;
-                align-items: baseline;
+                align-items: flex-start;
                 gap: 6px;
-                line-height: 1.4;
+                padding: 3px 12px 3px 36px;
+                font-size: 11px;
+                opacity: 0.45;
+                border-bottom: 1px solid var(--border-faint);
             }
             .step:hover {
-                opacity: 0.75;
+                opacity: 0.7;
             }
             .step-msg {
                 color: var(--text2);
                 word-break: break-word;
+                flex: 1;
             }
 
-            /* ── Mute rules: toggled by classes on #log ─────────────────── */
+            /* ── Mute rules — toggled by classes on #log ────────────────────── */
             #log.mute-wait .step[data-cat="wait"] {
                 display: none;
             }
@@ -212,115 +277,70 @@
                 display: none;
             }
 
-            /* ── Filter button + popup ───────────────────────────────────── */
-            #filter-wrap {
-                position: fixed;
-                bottom: 8px;
-                right: 8px;
-                z-index: 100;
-                display: flex;
-                flex-direction: column;
-                align-items: flex-end;
-                gap: 5px;
-            }
-
-            #filter-btn {
-                height: 22px;
-                padding: 0 9px;
-                background: var(--surface);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                color: var(--text2);
-                font-family: inherit;
-                font-size: 11px;
-                cursor: pointer;
-                transition:
-                    border-color 0.12s,
-                    color 0.12s,
-                    background 0.12s;
-                letter-spacing: 0.3px;
-            }
-            #filter-btn:hover {
-                border-color: var(--accent);
-                color: var(--text);
-            }
-            #filter-btn.has-mutes {
-                border-color: var(--accent);
-                color: var(--accent);
-                background: rgba(196, 26, 26, 0.08);
-            }
-
+            /* ── Filter panel ───────────────────────────────────────────────── */
             #filter-panel {
+                position: absolute;
+                bottom: 0;
+                right: 0;
+                width: 200px;
                 background: var(--surface);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                padding: 7px 10px;
+                border-top: 1px solid var(--border);
+                border-left: 1px solid var(--border);
+                border-radius: var(--radius) 0 0 0;
+                padding: 8px 0;
                 display: none;
-                flex-direction: column;
-                gap: 2px;
-                min-width: 148px;
-                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+                box-shadow: -2px -2px 12px var(--shadow-panel);
+                z-index: 10;
             }
             #filter-panel.open {
-                display: flex;
+                display: block;
             }
-
             .filter-row {
                 display: flex;
                 align-items: center;
-                justify-content: space-between;
                 gap: 8px;
-                padding: 3px 0;
+                padding: 5px 12px;
                 cursor: pointer;
-                border-radius: 2px;
             }
             .filter-row:hover {
-                background: var(--surface2);
-                padding-left: 4px;
-                padding-right: 4px;
-            }
-
-            .filter-label {
-                font-size: 11px;
-                color: var(--text);
-                flex: 1;
+                background: var(--hover);
             }
             .filter-row.muted .filter-label {
-                color: var(--text2);
+                opacity: 0.4;
                 text-decoration: line-through;
-                text-decoration-color: rgba(210, 165, 100, 0.35);
             }
-
             .filter-dot {
                 width: 8px;
                 height: 8px;
                 border-radius: 50%;
-                background: var(--accent);
                 flex-shrink: 0;
+                /* --dot-clr is set per-row via JS (inherits into this child) */
+                background: var(--dot-clr, var(--text3));
                 transition:
                     background 0.1s,
                     opacity 0.1s;
             }
+            /* Higher specificity wins — grays out the dot when muted */
             .filter-row.muted .filter-dot {
                 background: var(--border);
                 opacity: 0.6;
             }
-
+            .filter-label {
+                font-size: 12px;
+                flex: 1;
+                color: var(--text);
+            }
             .filter-sep {
                 height: 1px;
                 background: var(--border);
-                margin: 3px 0;
-                opacity: 0.5;
+                margin: 4px 12px;
             }
-
             .filter-clear {
-                font-size: 10px;
+                padding: 5px 12px;
+                font-size: 11px;
                 color: var(--text2);
-                text-align: center;
                 cursor: pointer;
-                padding: 2px 0;
-                letter-spacing: 0.3px;
-                text-transform: uppercase;
+                text-align: center;
             }
             .filter-clear:hover {
                 color: var(--text);
@@ -328,76 +348,72 @@
         </style>
     </head>
     <body>
-        <div id="titlebar">
-            <span id="titlebar-text">mudscript — macro monitor</span>
-            <button
-                class="tb-btn"
-                onmouseenter="playSlot('hover')"
-                onclick="
-                    playSlot('interact');
-                    clearLog();
-                "
-            >
-                [clear]
-            </button>
-            <button
-                class="tb-btn"
-                onmouseenter="playSlot('hover')"
-                onclick="
-                    playSlot('interact');
-                    closePanel();
-                "
-            >
-                [×]
-            </button>
+        <div id="header">
+            <span id="panel-title">mudscript — macro monitor</span>
+            <div class="header-btns">
+                <button
+                    class="btn-ghost"
+                    id="filter-btn"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        toggleFilterPanel();
+                    "
+                >
+                    filter
+                </button>
+                <button
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        clearLog();
+                    "
+                >
+                    Clear
+                </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        closePanel();
+                    "
+                >
+                    ✕
+                </button>
+            </div>
         </div>
+
         <div id="log"></div>
 
-        <!-- Filter button + popup, fixed bottom-right -->
-        <div id="filter-wrap">
-            <div id="filter-panel">
-                <!-- rows injected by JS -->
-            </div>
-            <button
-                id="filter-btn"
-                onmouseenter="playSlot('hover')"
-                onclick="
-                    playSlot('interact');
-                    toggleFilterPanel();
-                "
-            >
-                filter
-            </button>
-        </div>
+        <!-- Filter panel — absolute bottom-right, injected by JS -->
+        <div id="filter-panel"></div>
 
         <script>
             "use strict";
 
             document.addEventListener("contextmenu", (e) => e.preventDefault());
 
+            // ── Host communication ─────────────────────────────────────────────
             function sendToHost(msg) {
                 const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-                if (window.chrome?.webview) {
-                    window.chrome.webview.postMessage(s);
-                } else {
+                try {
                     window.webkit.messageHandlers.msWatcher.postMessage(s);
-                }
+                } catch (e) {}
             }
-
             function playSlot(slot) {
                 sendToHost({ action: "playSlot", slot });
             }
 
-            // ── Drag ──────────────────────────────────────────────────────────
-            let _dragging = false;
+            // ── Header drag ────────────────────────────────────────────────────
             (function () {
                 let _drag = null;
                 document
-                    .getElementById("titlebar")
+                    .getElementById("header")
                     .addEventListener("mousedown", (e) => {
-                        if (e.target.closest(".tb-btn")) return;
+                        if (e.target.closest(".header-btns")) return;
                         _drag = { ox: e.screenX, oy: e.screenY };
-                        _dragging = true;
                         const onMove = (ev) => {
                             if (!_drag) return;
                             sendToHost({
@@ -410,7 +426,6 @@
                         };
                         const onUp = () => {
                             _drag = null;
-                            _dragging = false;
                             window.removeEventListener("mousemove", onMove);
                             window.removeEventListener("mouseup", onUp);
                         };
@@ -421,43 +436,48 @@
 
             // Close filter panel when clicking outside it
             document.addEventListener("mousedown", (e) => {
-                const wrap = document.getElementById("filter-wrap");
-                if (!wrap.contains(e.target)) closeFilterPanel();
+                const panel = document.getElementById("filter-panel");
+                const btn = document.getElementById("filter-btn");
+                if (!panel.contains(e.target) && !btn.contains(e.target)) {
+                    closeFilterPanel();
+                }
             });
 
             // ── Scroll helpers ─────────────────────────────────────────────────
             const MAX_ENTRIES = 300;
-            const NEAR_BOTTOM = 48;
+            const SCROLL_THRESH = 48;
 
             function isNearBottom(el) {
                 return (
                     el.scrollHeight - el.scrollTop - el.clientHeight <=
-                    NEAR_BOTTOM
+                    SCROLL_THRESH
                 );
             }
 
             // ── Step categories ────────────────────────────────────────────────
-            // Each category maps to a CSS class on #log (mute-X) and a data-cat
-            // attribute on step rows.  Order matters: first match wins.
             const CATS = [
-                { id: "wait", label: "Waits", re: /\] wait / },
-                { id: "sound", label: "Sound calls", re: /\] sound / },
-                { id: "cam", label: "Camera moves", re: /\] cam\.move/ },
-                { id: "keys", label: "Key presses", re: /\] [↓↑] |\] type / },
-                { id: "mouse", label: "Mouse actions", re: /\] Mouse / },
-                { id: "scroll", label: "Scrolls", re: /\] scroll / },
-                { id: "copy", label: "Clipboard", re: /\] copy/ },
+                { id: "wait", label: "Waits", regex: /\] wait / },
+                { id: "sound", label: "Sound calls", regex: /\] sound / },
+                { id: "cam", label: "Camera moves", regex: /\] cam\.move/ },
+                {
+                    id: "keys",
+                    label: "Key presses",
+                    regex: /\] [↓↑] |\] type /,
+                },
+                { id: "mouse", label: "Mouse actions", regex: /\] Mouse / },
+                { id: "scroll", label: "Scrolls", regex: /\] scroll / },
+                { id: "copy", label: "Clipboard", regex: /\] copy/ },
             ];
 
             function stepCat(msg) {
                 for (const c of CATS) {
-                    if (c.re.test(msg)) return c.id;
+                    if (c.regex.test(msg)) return c.id;
                 }
                 return "other";
             }
 
             // ── Mute state ─────────────────────────────────────────────────────
-            const _muted = new Set(); // set of muted category ids
+            const _muted = new Set();
 
             function isMuted(cat) {
                 return _muted.has(cat);
@@ -478,31 +498,42 @@
             function _updateFilterUI() {
                 const btn = document.getElementById("filter-btn");
                 btn.classList.toggle("has-mutes", _muted.size > 0);
-                if (_muted.size > 0) {
-                    btn.textContent = "filter (" + _muted.size + ")";
-                } else {
-                    btn.textContent = "filter";
-                }
+                btn.textContent =
+                    _muted.size > 0 ? "filter (" + _muted.size + ")" : "filter";
                 CATS.forEach((c) => {
                     const row = document.getElementById("frow-" + c.id);
                     if (row) row.classList.toggle("muted", _muted.has(c.id));
                 });
-                // Toggle the bottom action between "show all" and "hide all"
                 const action = document.getElementById("filter-action");
                 if (action) {
-                    const allMuted = _muted.size === CATS.length;
-                    action.textContent = allMuted ? "show all" : "hide all";
+                    action.textContent =
+                        _muted.size === CATS.length ? "show all" : "hide all";
                 }
             }
 
-            // ── Filter panel ───────────────────────────────────────────────────
+            // ── Build filter panel ─────────────────────────────────────────────
             (function buildFilterPanel() {
+                const CAT_DOT_COLORS = {
+                    wait: "var(--text3)",
+                    sound: "var(--warning)",
+                    cam: "var(--success)",
+                    keys: "var(--text2)",
+                    mouse: "var(--mouse)",
+                    scroll: "var(--scroll)",
+                    copy: "var(--accent)",
+                };
+
                 const panel = document.getElementById("filter-panel");
+
                 CATS.forEach((c) => {
                     const row = document.createElement("div");
                     row.className = "filter-row";
                     row.id = "frow-" + c.id;
-                    row.title = "Click to toggle";
+                    // --dot-clr is inherited by the .filter-dot child
+                    row.style.setProperty(
+                        "--dot-clr",
+                        CAT_DOT_COLORS[c.id] || "var(--text3)",
+                    );
 
                     const dot = document.createElement("span");
                     dot.className = "filter-dot";
@@ -511,7 +542,7 @@
                     lbl.className = "filter-label";
                     lbl.textContent = c.label;
 
-                    row.append(lbl, dot);
+                    row.append(dot, lbl);
                     row.addEventListener("click", () =>
                         setMute(c.id, !isMuted(c.id)),
                     );
@@ -525,13 +556,11 @@
                 const clear = document.createElement("div");
                 clear.className = "filter-clear";
                 clear.id = "filter-action";
-                clear.textContent = "hide all"; // default: nothing muted yet
+                clear.textContent = "hide all";
                 clear.addEventListener("click", () => {
                     if (_muted.size === CATS.length) {
-                        // all muted → show all
-                        _muted.forEach((id) => setMute(id, false));
+                        [..._muted].forEach((id) => setMute(id, false));
                     } else {
-                        // some or none muted → hide all
                         CATS.forEach((c) => setMute(c.id, true));
                     }
                 });
@@ -553,9 +582,8 @@
             function buildRow(entry) {
                 if (entry.type === "step") {
                     const row = document.createElement("div");
-                    const cat = stepCat(entry.msg || "");
                     row.className = "step";
-                    row.dataset.cat = cat;
+                    row.dataset.cat = stepCat(entry.msg || "");
 
                     const ts = document.createElement("span");
                     ts.className = "ts";
@@ -574,10 +602,12 @@
 
                 const ts = document.createElement("span");
                 ts.className = "ts";
-                ts.textContent = "[" + entry.ts + "]";
+                ts.textContent = "[" + (entry.ts || "") + "]";
                 row.appendChild(ts);
 
                 if (entry.type === "macro") {
+                    row.classList.add("entry-macro");
+
                     const dot = document.createElement("span");
                     dot.className = "dot";
                     dot.textContent = "●";
@@ -592,11 +622,10 @@
                         const sep = document.createElement("span");
                         sep.className = "sub-sep";
                         sep.textContent = "›";
-                        msg.appendChild(sep);
                         const sub = document.createElement("span");
                         sub.className = "sub-name";
                         sub.textContent = entry.label || entry.id || "";
-                        msg.appendChild(sub);
+                        msg.append(sep, sub);
                     } else {
                         msg.textContent = entry.label || entry.id || "";
                     }
@@ -604,7 +633,7 @@
 
                     if (entry.trigger) {
                         const trig = document.createElement("span");
-                        trig.className = "trigger";
+                        trig.className = "pill";
                         trig.textContent = entry.trigger;
                         row.appendChild(trig);
                     }
@@ -643,7 +672,6 @@
                 log.scrollTop = log.scrollHeight;
             }
 
-            // ── Button actions ─────────────────────────────────────────────────
             function clearLog() {
                 document.getElementById("log").innerHTML = "";
                 sendToHost({ action: "clear" });
@@ -652,6 +680,46 @@
             function closePanel() {
                 sendToHost({ action: "close" });
             }
+
+            // ── Theme ──────────────────────────────────────────────────────────
+            function applyTheme(t) {
+                if (!t) return;
+                const r = document.documentElement.style;
+                if (t.bg) r.setProperty("--bg", t.bg);
+                if (t.surface) r.setProperty("--surface", t.surface);
+                if (t.surface2) r.setProperty("--surface2", t.surface2);
+                if (t.hover) r.setProperty("--hover", t.hover);
+                if (t.accent) r.setProperty("--accent", t.accent);
+                if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
+                if (t.success) r.setProperty("--success", t.success);
+                if (t.danger) r.setProperty("--danger", t.danger);
+                if (t.warning) r.setProperty("--warning", t.warning);
+                if (t.text) r.setProperty("--text", t.text);
+                if (t.radius !== undefined) {
+                    r.setProperty("--radius", t.radius + "px");
+                    r.setProperty(
+                        "--radius-s",
+                        Math.max(0, t.radius - 1) + "px",
+                    );
+                }
+                if (t.font) {
+                    if (t.fontURL) {
+                        let el = document.getElementById("_ms-custom-font");
+                        if (!el) {
+                            el = document.createElement("style");
+                            el.id = "_ms-custom-font";
+                            document.head.appendChild(el);
+                        }
+                        el.textContent = `@font-face { font-family: "${t.font}"; src: url("${t.fontURL}"); }`;
+                    }
+                    document.body.style.fontFamily = `"${t.font}", Almendra, Palatino, Georgia, serif`;
+                }
+            }
+
+            // ── Init ───────────────────────────────────────────────────────────
+            document.addEventListener("DOMContentLoaded", () => {
+                sendToHost({ action: "ready" });
+            });
         </script>
     </body>
 </html>

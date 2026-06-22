@@ -3,20 +3,54 @@
     <head>
         <meta charset="UTF-8" />
         <style>
+            /* ── Fonts ─────────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
+
+            /* ── Tokens ─────────────────────────────────────────────────────────── */
             :root {
                 --bg: #060402;
                 --surface: #100806;
                 --surface2: #1c100c;
-                --border: rgba(130, 50, 22, 0.55);
+                --hover: #301610;
                 --accent: #c41a1a;
+                --accent-hi: #e52424;
+                --success: #4a7820;
+                --danger-bg: #1e0608;
+                --danger: #d42020;
+                --warning: #c47820;
                 --text: #f0ddb0;
-                --text2: rgba(210, 165, 100, 0.75);
-                --mouse: #c47820;
+                --text2: rgba(210, 165, 100, 0.85);
+                --text3: rgba(160, 105, 60, 0.55);
+                --border: rgba(130, 50, 22, 0.55);
+                --border-dim: rgba(130, 50, 22, 0.18);
                 --radius: 3px;
-                --col-result: #4a7820;
-                --col-error: #d42020;
+                --radius-s: 2px;
             }
 
+            /* ── Reset ──────────────────────────────────────────────────────────── */
             *,
             *::before,
             *::after {
@@ -31,203 +65,235 @@
             body {
                 width: 100%;
                 height: 100%;
+                overflow: hidden;
                 background: var(--bg);
                 color: var(--text);
                 font-family: "Almendra", Palatino, Georgia, serif;
                 font-size: 13px;
-                line-height: 1.6;
-                overflow: hidden;
+                line-height: 1.5;
+                -webkit-font-smoothing: antialiased;
             }
 
-            /* ── Titlebar ───────────────────────────────────────────────── */
-            #titlebar {
-                height: 32px;
-                -webkit-app-region: drag;
+            body {
+                display: flex;
+                flex-direction: column;
+            }
+
+            button {
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: inherit;
+                font: inherit;
+            }
+
+            input {
+                font: inherit;
+                color: inherit;
+                background: none;
+                border: none;
+                outline: none;
+            }
+
+            /* ── Header ─────────────────────────────────────────────────────────── */
+            #header {
                 display: flex;
                 align-items: center;
-                padding: 0 10px 0 16px;
-                border-bottom: 1px solid var(--border);
-                flex-shrink: 0;
+                gap: 8px;
+                padding: 10px 12px 8px;
                 background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px
+                    color-mix(in srgb, var(--accent) 12%, transparent);
+                flex-shrink: 0;
+                -webkit-app-region: drag;
             }
 
-            #titlebar-title {
-                font-size: 11px;
-                font-weight: 700;
-                letter-spacing: 1.5px;
-                text-transform: uppercase;
-                color: var(--text2);
+            #panel-title {
                 flex: 1;
+                font-weight: 600;
+                font-size: 13px;
             }
 
-            #titlebar-btns {
+            .header-btns {
                 display: flex;
-                align-items: center;
-                gap: 5px;
+                gap: 4px;
                 -webkit-app-region: no-drag;
             }
 
-            /* ── Buttons (shared) ───────────────────────────────────────── */
-            button {
-                height: 20px;
-                padding: 0 9px;
-                border-radius: var(--radius);
-                border: 1px solid var(--border);
+            /* ── Ghost button ────────────────────────────────────────────────────── */
+            .btn-ghost {
+                flex: 1;
+                padding: 5px 8px;
+                border-radius: var(--radius-s);
                 background: var(--surface2);
                 color: var(--text2);
-                font-family: inherit;
                 font-size: 11px;
                 font-weight: 500;
-                cursor: pointer;
-                transition:
-                    background 0.15s,
-                    border-color 0.15s,
-                    color 0.15s;
-                -webkit-app-region: no-drag;
+                transition: opacity 0.15s;
+            }
+            .btn-ghost:hover {
+                opacity: 0.8;
             }
 
-            button:hover {
-                background: var(--surface);
-                border-color: var(--accent);
+            /* In the header bar, ghost buttons should not stretch */
+            .header-btns .btn-ghost {
+                flex: 0 0 auto;
+            }
+
+            /* ── Close button ────────────────────────────────────────────────────── */
+            .btn-close {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+            }
+            .btn-close:hover {
+                background: var(--hover);
                 color: var(--text);
             }
 
-            button.btn-close {
-                color: var(--col-error);
-                border-color: rgba(212, 32, 32, 0.45);
-            }
-
-            button.btn-close:hover {
-                background: rgba(212, 32, 32, 0.15);
-                border-color: var(--col-error);
-                color: var(--col-error);
-            }
-
-            /* ── Shell (everything below titlebar) ──────────────────────── */
-            #shell {
-                display: flex;
-                flex-direction: column;
-                height: calc(100% - 32px);
-            }
-
-            /* ── Log area ───────────────────────────────────────────────── */
+            /* ── Log area ────────────────────────────────────────────────────────── */
             #log {
                 flex: 1;
                 overflow-y: auto;
                 overflow-x: hidden;
-                padding: 6px 12px 4px;
+                padding: 4px 0;
                 min-height: 0;
                 scrollbar-width: thin;
                 scrollbar-color: var(--border) transparent;
             }
-
             #log::-webkit-scrollbar {
                 width: 5px;
             }
-
             #log::-webkit-scrollbar-track {
                 background: transparent;
             }
-
             #log::-webkit-scrollbar-thumb {
                 background: var(--border);
                 border-radius: var(--radius);
             }
 
-            /* ── Log entry ──────────────────────────────────────────────── */
+            /* ── Entry rows ──────────────────────────────────────────────────────── */
             .entry {
                 display: flex;
-                align-items: baseline;
-                gap: 7px;
-                padding: 2px 0;
-                line-height: 1.5;
-                flex-wrap: wrap;
+                align-items: flex-start;
+                gap: 6px;
+                padding: 5px 12px;
+                font-size: 12px;
+                border-bottom: 1px solid var(--border-dim);
             }
-
-            .entry + .entry {
-                border-top: 1px solid rgba(130, 50, 22, 0.15);
+            .entry:hover {
+                background: var(--surface);
             }
 
             .ts {
-                font-size: 11px;
-                color: var(--text2);
+                color: var(--text3);
+                font:
+                    10px "SF Mono",
+                    Menlo,
+                    monospace;
                 flex-shrink: 0;
-                font-family: "SF Mono", Menlo, monospace;
-                letter-spacing: 0.2px;
+                padding-top: 1px;
+                min-width: 52px;
             }
 
+            /* ── Badges ──────────────────────────────────────────────────────────── */
             .badge {
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 0.4px;
-                text-transform: uppercase;
-                padding: 0 5px;
-                border-radius: var(--radius);
-                border: 1px solid;
                 flex-shrink: 0;
-                line-height: 1.55;
+                padding: 1px 5px;
+                border-radius: var(--radius-s);
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                border: 1px solid transparent;
             }
 
             .badge-print {
+                background: var(--surface2);
                 color: var(--text2);
-                border-color: rgba(210, 165, 100, 0.28);
-                background: rgba(210, 165, 100, 0.06);
+                border-color: var(--border);
             }
 
             .badge-result {
-                color: var(--col-result);
-                border-color: rgba(74, 120, 32, 0.5);
-                background: rgba(74, 120, 32, 0.1);
+                background: color-mix(in srgb, var(--success) 20%, transparent);
+                color: var(--success);
+                border-color: color-mix(
+                    in srgb,
+                    var(--success) 45%,
+                    transparent
+                );
             }
 
             .badge-error {
-                color: var(--col-error);
-                border-color: rgba(212, 32, 32, 0.5);
-                background: rgba(212, 32, 32, 0.1);
+                background: color-mix(in srgb, var(--danger) 20%, transparent);
+                color: var(--danger);
+                border-color: color-mix(
+                    in srgb,
+                    var(--danger) 45%,
+                    transparent
+                );
             }
 
             .badge-macro {
+                background: color-mix(in srgb, var(--accent) 20%, transparent);
                 color: var(--accent);
-                border-color: rgba(196, 26, 26, 0.5);
-                background: rgba(196, 26, 26, 0.1);
+                border-color: color-mix(
+                    in srgb,
+                    var(--accent) 45%,
+                    transparent
+                );
             }
 
             .badge-key {
+                background: var(--surface2);
                 color: var(--text2);
-                border-color: rgba(210, 165, 100, 0.28);
-                background: rgba(210, 165, 100, 0.06);
+                border-color: var(--border);
             }
 
             .badge-mouse {
-                color: var(--mouse);
-                border-color: rgba(196, 120, 32, 0.4);
-                background: rgba(196, 120, 32, 0.08);
+                background: color-mix(in srgb, var(--warning) 20%, transparent);
+                color: var(--warning);
+                border-color: color-mix(
+                    in srgb,
+                    var(--warning) 45%,
+                    transparent
+                );
             }
 
             .badge-input {
-                color: var(--text2);
-                border-color: rgba(210, 165, 100, 0.18);
                 background: transparent;
-                opacity: 0.65;
+                color: var(--text2);
+                font-style: italic;
+                border-color: transparent;
             }
 
+            /* ── Message text ────────────────────────────────────────────────────── */
             .msg {
-                color: var(--text);
                 flex: 1;
-                min-width: 0;
-                word-break: break-all;
+                word-break: break-word;
             }
 
-            /* monospace for result / error / input */
             .entry-result .msg,
             .entry-error .msg,
             .entry-input .msg {
-                font-family: "SF Mono", Menlo, monospace;
-                font-size: 12px;
+                font:
+                    12px "SF Mono",
+                    Menlo,
+                    monospace;
             }
 
             .entry-error .msg {
-                color: var(--col-error);
+                color: var(--danger);
             }
 
             .entry-input .msg {
@@ -235,128 +301,145 @@
                 font-style: italic;
             }
 
-            /* ── Input bar ──────────────────────────────────────────────── */
+            /* ── Pill ────────────────────────────────────────────────────────────── */
+            .pill {
+                display: inline-flex;
+                align-items: center;
+                padding: 1px 7px;
+                border-radius: 20px;
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                color: var(--text2);
+            }
+
+            /* ── Input bar ───────────────────────────────────────────────────────── */
             #inputbar {
-                height: 40px;
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                padding: 0 10px 0 12px;
-                border-top: 1px solid var(--border);
+                padding: 8px 12px;
                 background: var(--surface);
+                border-top: 1px solid var(--border);
                 flex-shrink: 0;
             }
 
             #code-input {
                 flex: 1;
-                height: 26px;
                 background: var(--surface2);
                 border: 1px solid var(--border);
                 border-radius: var(--radius);
+                padding: 5px 8px;
                 color: var(--text);
-                font-family: "SF Mono", Menlo, monospace;
-                font-size: 12px;
-                padding: 0 10px;
+                font:
+                    12px "SF Mono",
+                    Menlo,
+                    monospace;
                 outline: none;
+                transition: border-color 0.15s;
                 user-select: text;
                 -webkit-user-select: text;
-                transition: border-color 0.15s;
             }
-
             #code-input::placeholder {
                 color: var(--text2);
                 opacity: 0.55;
             }
-
             #code-input:focus {
                 border-color: var(--accent);
             }
 
             #run-btn {
-                height: 26px;
-                padding: 0 12px;
+                padding: 5px 12px;
+                border-radius: var(--radius);
                 font-size: 11px;
-                background: rgba(196, 26, 26, 0.14);
-                border-color: var(--accent);
-                color: var(--accent);
+                font-weight: 700;
+                background: var(--accent);
+                color: var(--bg);
+                transition: opacity 0.15s;
+                -webkit-app-region: no-drag;
             }
-
             #run-btn:hover {
-                background: rgba(196, 26, 26, 0.28);
-                border-color: var(--accent);
-                color: var(--text);
+                opacity: 0.85;
             }
         </style>
     </head>
     <body>
-        <!-- Titlebar -->
-        <div id="titlebar">
-            <span id="titlebar-title">mudscript — console</span>
-            <div id="titlebar-btns">
+        <!-- Header -->
+        <div id="header">
+            <span id="panel-title">mudscript — console</span>
+            <div class="header-btns">
                 <button
+                    class="btn-ghost"
                     onmouseenter="playSlot('hover')"
                     onclick="
                         playSlot('interact');
                         doClear();
                     "
                 >
-                    [clear]
+                    Clear
                 </button>
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
                     onclick="
-                        playSlot('interact');
-                        send({ action: 'close' });
+                        playSlot('back');
+                        closePanel();
                     "
                 >
-                    [&times;]
+                    ✕
                 </button>
             </div>
         </div>
 
-        <!-- Shell -->
-        <div id="shell">
-            <div id="log"></div>
-            <div id="inputbar">
-                <input
-                    id="code-input"
-                    type="text"
-                    placeholder="> enter lua…"
-                    autocomplete="off"
-                    spellcheck="false"
-                />
-                <button id="run-btn" onclick="doRun()">[run]</button>
-            </div>
+        <!-- Log -->
+        <div id="log"></div>
+
+        <!-- Input bar -->
+        <div id="inputbar">
+            <input
+                id="code-input"
+                type="text"
+                placeholder="> enter lua…"
+                autocomplete="off"
+                spellcheck="false"
+            />
+            <button
+                id="run-btn"
+                onmouseenter="playSlot('hover')"
+                onclick="
+                    playSlot('interact');
+                    doRun();
+                "
+            >
+                Run
+            </button>
         </div>
 
         <script>
             "use strict";
 
+            document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+            // ── Constants ─────────────────────────────────────────────────────────
             const MAX_ENTRIES = 500;
             const SCROLL_THRESH = 60;
-            let _dragging = false;
-            let _dragX = 0;
-            let _dragY = 0;
 
-            // ── Utilities ─────────────────────────────────────────────────
+            // ── Host bridge ───────────────────────────────────────────────────────
             function sendToHost(msg) {
                 const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-                if (window.chrome?.webview) {
-                    window.chrome.webview.postMessage(s);
-                } else {
+                try {
                     window.webkit.messageHandlers.msConsole.postMessage(s);
-                }
+                } catch (e) {}
             }
 
             function playSlot(slot) {
                 sendToHost({ action: "playSlot", slot });
             }
 
-            function send(obj) {
-                sendToHost(obj);
-            }
-
+            // ── Time helpers ──────────────────────────────────────────────────────
             function pad2(n) {
                 return String(n).padStart(2, "0");
             }
@@ -372,16 +455,29 @@
                 );
             }
 
+            // ── Scroll helper ─────────────────────────────────────────────────────
             function isNearBottom() {
                 const log = document.getElementById("log");
                 return (
-                    log.scrollHeight - log.scrollTop - log.clientHeight <=
+                    log.scrollHeight - log.scrollTop - log.clientHeight <
                     SCROLL_THRESH
                 );
             }
 
-            // ── appendEntry ───────────────────────────────────────────────
-            // entry = { ts?: string, type?: string, msg: string }
+            // ── Badge labels ──────────────────────────────────────────────────────
+            const LABELS = {
+                print: "print",
+                result: "result",
+                error: "error",
+                macro: "macro",
+                input: "input",
+                key: "key",
+                mouse: "mouse",
+            };
+
+            // ── appendEntry ───────────────────────────────────────────────────────
+            // entry = { ts?, type, msg?, label?, parentLabel?, trigger? }
+            // types: "print" | "result" | "error" | "macro" | "input" | "key" | "mouse"
             function appendEntry(entry) {
                 const log = document.getElementById("log");
                 const near = isNearBottom();
@@ -389,59 +485,48 @@
                 const type = entry.type || "print";
                 const ts = entry.ts || nowTs();
 
-                const BTN = {
-                    0: "Left",
-                    1: "Right",
-                    2: "Middle",
-                    3: "Btn4",
-                    4: "Btn5",
-                };
-
-                const LABELS = {
-                    print: "print",
-                    result: "result",
-                    error: "error",
-                    macro: "macro",
-                    input: "input",
-                    key: "key",
-                    mouse: "mouse",
-                };
-
-                // KEY and MOUSE are badge-only; details live in the Input Monitor.
-                // MACRO keeps its label. PRINT/ERROR show their full text.
-                let msg;
-                if (type === "key" || type === "mouse") {
-                    msg = "";
-                } else if (type === "macro") {
-                    const label = entry.parentLabel
-                        ? entry.parentLabel + " \u203a " + (entry.label || "")
-                        : entry.label || entry.id || "";
-                    msg = entry.trigger ? label + "  " + entry.trigger : label;
-                } else {
-                    msg =
-                        type === "input"
-                            ? "> " + String(entry.msg ?? "")
-                            : String(entry.msg ?? "");
-                }
-
+                // Build row
                 const row = document.createElement("div");
                 row.className = "entry entry-" + type;
 
+                // Timestamp
                 const tsEl = document.createElement("span");
                 tsEl.className = "ts";
-                tsEl.textContent = "[" + ts + "]";
+                tsEl.textContent = ts;
+                row.appendChild(tsEl);
 
+                // Badge
                 const badge = document.createElement("span");
                 badge.className = "badge badge-" + type;
                 badge.textContent = LABELS[type] ?? type;
+                row.appendChild(badge);
 
+                // Message
                 const msgEl = document.createElement("span");
                 msgEl.className = "msg";
-                msgEl.textContent = msg;
 
-                row.appendChild(tsEl);
-                row.appendChild(badge);
+                if (type === "key" || type === "mouse") {
+                    msgEl.textContent = "";
+                } else if (type === "macro") {
+                    msgEl.textContent = entry.parentLabel
+                        ? entry.parentLabel + " \u203a " + (entry.label || "")
+                        : entry.label || entry.id || "";
+                } else if (type === "input") {
+                    msgEl.textContent = "> " + String(entry.msg ?? "");
+                } else {
+                    msgEl.textContent = String(entry.msg ?? "");
+                }
+
                 row.appendChild(msgEl);
+
+                // Trigger pill (macro type only)
+                if (type === "macro" && entry.trigger) {
+                    const pill = document.createElement("span");
+                    pill.className = "pill";
+                    pill.textContent = entry.trigger;
+                    row.appendChild(pill);
+                }
+
                 log.appendChild(row);
 
                 // Trim oldest entries beyond the cap
@@ -449,41 +534,42 @@
                     log.removeChild(log.firstChild);
                 }
 
-                if (near) {
-                    log.scrollTop = log.scrollHeight;
-                }
+                if (near) log.scrollTop = log.scrollHeight;
             }
 
-            // ── loadHistory ───────────────────────────────────────────────
-            // entries = array of entry objects — bulk-loads on panel open
+            // ── loadHistory ───────────────────────────────────────────────────────
+            // Clears log, appends last MAX_ENTRIES entries, scrolls to bottom
             function loadHistory(entries) {
                 const log = document.getElementById("log");
                 log.innerHTML = "";
                 if (Array.isArray(entries)) {
-                    const slice = entries.slice(-MAX_ENTRIES);
-                    for (const e of slice) {
+                    for (const e of entries.slice(-MAX_ENTRIES)) {
                         appendEntry(e);
                     }
                 }
                 log.scrollTop = log.scrollHeight;
             }
 
-            // ── Actions ───────────────────────────────────────────────────
+            // ── Actions ───────────────────────────────────────────────────────────
             function doRun() {
                 const input = document.getElementById("code-input");
                 const code = input.value.trim();
                 if (!code) return;
                 appendEntry({ ts: nowTs(), type: "input", msg: code });
-                send({ action: "execute", code });
+                sendToHost({ action: "execute", code });
                 input.value = "";
             }
 
             function doClear() {
                 document.getElementById("log").innerHTML = "";
-                send({ action: "clear" });
+                sendToHost({ action: "clear" });
             }
 
-            // ── Input bar key handling ─────────────────────────────────────
+            function closePanel() {
+                sendToHost({ action: "close" });
+            }
+
+            // ── Input bar: Enter to run ────────────────────────────────────────────
             document
                 .getElementById("code-input")
                 .addEventListener("keydown", (e) => {
@@ -493,37 +579,64 @@
                     }
                 });
 
-            // ── Drag to move window ───────────────────────────────────────
-            document
-                .getElementById("titlebar")
-                .addEventListener("mousedown", (e) => {
-                    if (e.button !== 0) return;
-                    if (e.target.closest("#titlebar-btns")) return;
-                    _dragging = true;
-                    _dragX = e.screenX;
-                    _dragY = e.screenY;
-                });
+            // ── Drag to move ──────────────────────────────────────────────────────
+            (function () {
+                let _drag = null;
+                document
+                    .getElementById("header")
+                    .addEventListener("mousedown", (e) => {
+                        if (e.button !== 0) return;
+                        if (e.target.closest(".header-btns")) return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            sendToHost({
+                                action: "move",
+                                dx: ev.screenX - _drag.ox,
+                                dy: ev.screenY - _drag.oy,
+                            });
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+            })();
 
-            document.addEventListener("mousemove", (e) => {
-                if (!_dragging) return;
-                const dx = e.screenX - _dragX;
-                const dy = e.screenY - _dragY;
-                _dragX = e.screenX;
-                _dragY = e.screenY;
-                if (dx !== 0 || dy !== 0) {
-                    send({ action: "move", dx, dy });
+            // ── Theme injection ───────────────────────────────────────────────────
+            function applyTheme(t) {
+                if (!t) return;
+                const r = document.documentElement.style;
+                if (t.bg) r.setProperty("--bg", t.bg);
+                if (t.surface) r.setProperty("--surface", t.surface);
+                if (t.surface2) r.setProperty("--surface2", t.surface2);
+                if (t.hover) r.setProperty("--hover", t.hover);
+                if (t.accent) r.setProperty("--accent", t.accent);
+                if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
+                if (t.success) r.setProperty("--success", t.success);
+                if (t.dangerBg) r.setProperty("--danger-bg", t.dangerBg);
+                if (t.danger) r.setProperty("--danger", t.danger);
+                if (t.warning) r.setProperty("--warning", t.warning);
+                if (t.text) r.setProperty("--text", t.text);
+                if (t.radius !== undefined) {
+                    r.setProperty("--radius", t.radius + "px");
+                    r.setProperty(
+                        "--radius-s",
+                        Math.max(0, t.radius - 1) + "px",
+                    );
                 }
-            });
+            }
 
-            document.addEventListener("mouseup", () => {
-                _dragging = false;
+            // ── Init ──────────────────────────────────────────────────────────────
+            document.addEventListener("DOMContentLoaded", () => {
+                sendToHost({ action: "ready" });
+                document.getElementById("code-input").focus();
             });
-            document.addEventListener("mouseleave", () => {
-                _dragging = false;
-            });
-
-            // ── Suppress native context menu ──────────────────────────────
-            document.addEventListener("contextmenu", (e) => e.preventDefault());
         </script>
     </body>
 </html>

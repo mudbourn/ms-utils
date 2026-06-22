@@ -3,20 +3,55 @@
     <head>
         <meta charset="UTF-8" />
         <style>
+            /* ── Fonts ──────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
+
+            /* ── Tokens ─────────────────────────────────────────────────────── */
             :root {
                 --bg: #060402;
                 --surface: #100806;
                 --surface2: #1c100c;
-                --border: rgba(130, 50, 22, 0.55);
+                --hover: #301610;
                 --accent: #c41a1a;
+                --accent-hi: #e52424;
+                --success: #4a7820;
+                --danger: #d42020;
+                --warning: #c47820;
                 --text: #f0ddb0;
-                --text2: rgba(210, 165, 100, 0.75);
+                --text2: rgba(210, 165, 100, 0.85);
+                --text3: rgba(160, 105, 60, 0.55);
+                --border: rgba(130, 50, 22, 0.55);
+                --radius: 3px;
+                --radius-s: 2px;
+                /* panel extras */
                 --mouse: #c47820;
                 --scroll: #4a9078;
-                --move: rgba(210, 165, 100, 0.38);
-                --radius: 3px;
             }
 
+            /* ── Reset ──────────────────────────────────────────────────────── */
             *,
             *::before,
             *::after {
@@ -26,265 +61,251 @@
                 user-select: none;
                 -webkit-user-select: none;
             }
-
             html,
             body {
-                width: 100%;
                 height: 100%;
+                overflow: hidden;
                 background: var(--bg);
-                color: var(--text);
+            }
+            body {
                 font-family: "Almendra", Palatino, Georgia, serif;
                 font-size: 13px;
-                line-height: 1.5;
-                overflow: hidden;
-            }
-
-            body {
+                color: var(--text);
+                -webkit-font-smoothing: antialiased;
                 display: flex;
                 flex-direction: column;
             }
+            button {
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: inherit;
+                font: inherit;
+            }
+            select {
+                font: inherit;
+                color: inherit;
+            }
 
-            /* ── Titlebar ─────────────────────────────────────────────────── */
-            #titlebar {
-                height: 32px;
-                -webkit-app-region: drag;
+            /* ── Header ─────────────────────────────────────────────────────── */
+            #header {
                 display: flex;
                 align-items: center;
-                padding: 0 10px 0 14px;
-                border-bottom: 1px solid var(--border);
-                flex-shrink: 0;
-                gap: 6px;
-            }
-
-            #titlebar-text {
-                flex: 1;
-                font-size: 11px;
-                font-weight: 700;
-                letter-spacing: 1.5px;
-                text-transform: uppercase;
-                color: var(--text2);
-            }
-
-            .tb-btn {
-                -webkit-app-region: no-drag;
-                height: 20px;
-                padding: 0 8px;
-                background: transparent;
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                color: var(--text2);
-                font-family: inherit;
-                font-size: 11px;
-                cursor: pointer;
-                transition:
-                    background 0.12s,
-                    border-color 0.12s,
-                    color 0.12s;
-            }
-
-            .tb-btn:hover {
-                background: var(--surface2);
-                border-color: var(--accent);
-                color: var(--text);
-            }
-
-            /* ── Tab bar ─────────────────────────────────────────────────── */
-            #tabs {
-                display: flex;
-                flex-shrink: 0;
+                gap: 8px;
+                padding: 10px 12px 8px;
                 background: var(--surface);
                 border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px
+                    color-mix(in srgb, var(--accent) 12%, transparent);
+                flex-shrink: 0;
+                -webkit-app-region: drag;
             }
-
-            .tab {
+            #panel-title {
                 flex: 1;
-                height: 30px;
-                background: transparent;
-                border: none;
-                border-bottom: 2px solid transparent;
-                margin-bottom: -1px;
-                color: var(--text2);
-                font-family: inherit;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            .header-btns {
+                display: flex;
+                gap: 4px;
+                -webkit-app-region: no-drag;
+            }
+            .btn-ghost {
+                padding: 3px 10px;
+                border-radius: 20px;
                 font-size: 11px;
                 font-weight: 600;
-                letter-spacing: 0.8px;
-                text-transform: uppercase;
-                cursor: pointer;
-                transition:
-                    color 0.12s,
-                    border-color 0.12s;
-            }
-
-            .tab:hover {
-                color: var(--text);
-            }
-
-            .tab.active {
-                color: var(--text);
-                border-bottom-color: var(--accent);
-            }
-
-            /* ── Tab sections ─────────────────────────────────────────────── */
-            .tab-section {
-                display: none;
-                flex: 1;
-                flex-direction: column;
-                min-height: 0;
-            }
-
-            .tab-section.active {
-                display: flex;
-            }
-
-            /* ── State section ───────────────────────────────────────────── */
-            .state-section {
-                flex-shrink: 0;
-                padding: 8px 14px 10px;
-                display: flex;
-                flex-direction: column;
-                gap: 5px;
-                min-height: 80px;
-            }
-
-            .section-label {
-                font-size: 10px;
-                text-transform: uppercase;
-                color: var(--text2);
-            }
-
-            .pills-row {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 4px;
-                align-content: flex-start;
-            }
-
-            .pill {
                 background: var(--surface2);
-                border: 1px solid var(--border);
-                color: var(--text);
-                font-size: 12px;
-                font-family: inherit;
-                padding: 2px 8px;
-                border-radius: 3px;
-                white-space: nowrap;
-            }
-
-            .pill-mouse {
-                border-color: rgba(196, 120, 32, 0.5);
-                color: var(--mouse);
-            }
-
-            #mouse-pos {
-                font-size: 12px;
                 color: var(--text2);
-                font-variant-numeric: tabular-nums;
-                letter-spacing: 0.3px;
+                transition: opacity 0.15s;
             }
-
-            #mouse-pos span {
+            .btn-ghost:hover {
+                opacity: 0.8;
+            }
+            .btn-close {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+            }
+            .btn-close:hover {
+                background: var(--hover);
                 color: var(--text);
             }
 
-            /* ── Flag row ──────────────────────────────────────────── */
+            /* ── Flag row ───────────────────────────────────────────────────── */
             #flag-row {
                 display: flex;
                 align-items: center;
-                gap: 6px;
-                padding: 5px 14px;
-                border-bottom: 1px solid var(--border);
-                flex-shrink: 0;
+                padding: 7px 12px;
+                gap: 8px;
                 background: var(--surface);
-            }
-            .flag {
-                display: flex;
-                align-items: center;
-                gap: 5px;
-                flex: 1;
-                min-width: 0;
-            }
-            .flag-label {
-                font-size: 10px;
-                color: var(--text2);
-                text-transform: uppercase;
-                letter-spacing: 0.8px;
+                border-bottom: 1px solid var(--border);
                 flex-shrink: 0;
             }
             .flag-pill {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                padding: 3px 8px;
+                border-radius: 20px;
                 background: var(--surface2);
                 border: 1px solid var(--border);
-                border-radius: 3px;
-                padding: 2px 8px;
-                font-size: 12px;
+                font-size: 11px;
                 color: var(--text2);
-                white-space: nowrap;
-                min-width: 32px;
-                text-align: center;
+                transition:
+                    border-color 0.2s,
+                    color 0.2s;
+                flex: 1;
             }
             .flag-pill.flag-recent {
                 border-color: var(--accent);
                 color: var(--text);
             }
-            .flag-sep {
-                width: 1px;
-                height: 16px;
-                background: var(--border);
-                flex-shrink: 0;
-            }
-
-            /* ── Event type badges (mirrors console badge style) ────────── */
-            .badge {
+            .flag-label {
                 font-size: 10px;
                 font-weight: 700;
-                letter-spacing: 0.4px;
+                color: var(--text3);
                 text-transform: uppercase;
-                padding: 0 5px;
-                border-radius: var(--radius);
-                border: 1px solid;
-                flex-shrink: 0;
-                line-height: 1.55;
+                letter-spacing: 0.05em;
             }
-            .badge-key {
+            #flag-key-name,
+            #flag-mouse-name {
+                font:
+                    12px "SF Mono",
+                    Menlo,
+                    monospace;
+            }
+            .flag-sep {
+                color: var(--border);
+                font-size: 16px;
+                flex-shrink: 0;
+            }
+
+            /* ── Tabs ───────────────────────────────────────────────────────── */
+            #tabs {
+                display: flex;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
+            }
+            .tab {
+                flex: 1;
+                padding: 7px 12px;
+                font-size: 12px;
+                font-weight: 600;
                 color: var(--text2);
-                border-color: rgba(210, 165, 100, 0.28);
-                background: rgba(210, 165, 100, 0.06);
+                text-align: center;
+                cursor: pointer;
+                border-bottom: 2px solid transparent;
+                border-top: none;
+                border-left: none;
+                border-right: none;
+                background: none;
+                transition:
+                    color 0.15s,
+                    border-color 0.15s;
+                -webkit-app-region: no-drag;
             }
-            .badge-mouse {
-                color: var(--mouse);
-                border-color: rgba(196, 120, 32, 0.4);
-                background: rgba(196, 120, 32, 0.08);
+            .tab:hover {
+                color: var(--text);
             }
-            .badge-scroll {
-                color: var(--scroll);
-                border-color: rgba(74, 144, 120, 0.4);
-                background: rgba(74, 144, 120, 0.08);
+            .tab.active {
+                color: var(--accent);
+                border-bottom-color: var(--accent);
             }
 
-            /* ── Horizontal divider ──────────────────────────────────────── */
-            .divider {
-                height: 1px;
-                background: var(--border);
+            /* ── Tab sections ───────────────────────────────────────────────── */
+            .tab-section {
+                display: none;
+                flex-direction: column;
+                flex: 1;
+                overflow: hidden;
+            }
+            .tab-section.active {
+                display: flex;
+            }
+
+            /* ── State section ──────────────────────────────────────────────── */
+            .state-section {
+                padding: 8px 12px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
                 flex-shrink: 0;
             }
+            .section-label {
+                font:
+                    700 9px "SF Mono",
+                    Menlo,
+                    monospace;
+                letter-spacing: 0.1em;
+                color: var(--text3);
+                text-transform: uppercase;
+                margin-bottom: 5px;
+            }
+            #keys-pills,
+            #mouse-pills {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                min-height: 22px;
+            }
+            .pill {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 8px;
+                border-radius: 3px;
+                font-size: 12px;
+                font-family: inherit;
+                white-space: nowrap;
+            }
+            .pill-key {
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                color: var(--text2);
+            }
+            .pill-mouse {
+                background: color-mix(in srgb, var(--warning) 15%, transparent);
+                border: 1px solid var(--warning);
+                color: var(--warning);
+            }
+            .pill-empty {
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                color: var(--text2);
+                opacity: 0.4;
+            }
 
-            /* ── Coordinate mode select ────────────────────────────────── */
-            .section-header {
+            /* ── Coord row ──────────────────────────────────────────────────── */
+            #coord-row {
                 display: flex;
                 align-items: center;
-                justify-content: space-between;
+                gap: 8px;
+                margin-bottom: 6px;
+            }
+            #pos-display {
+                font:
+                    12px "SF Mono",
+                    Menlo,
+                    monospace;
+                color: var(--text2);
+                flex: 1;
             }
             #coord-select {
                 background: var(--surface2);
                 border: 1px solid var(--border);
                 color: var(--text2);
-                font-family: inherit;
-                font-size: 10px;
-                letter-spacing: 0.4px;
-                text-transform: uppercase;
-                padding: 1px 5px;
-                border-radius: var(--radius);
-                cursor: pointer;
+                border-radius: var(--radius-s);
+                padding: 2px 6px;
+                font-size: 11px;
                 outline: none;
+                cursor: pointer;
                 -webkit-appearance: none;
                 flex-shrink: 0;
             }
@@ -295,30 +316,34 @@
             #coord-select option {
                 background: var(--surface2);
                 color: var(--text);
-                text-transform: none;
-                letter-spacing: 0;
             }
 
-            /* ── Event log ──────────────────────────────────────────────── */
-            .event-log {
+            /* ── Section divider ────────────────────────────────────────────── */
+            .section-divider {
+                height: 1px;
+                background: var(--border);
+                flex-shrink: 0;
+            }
+
+            /* ── Event log ──────────────────────────────────────────────────── */
+            .log {
                 flex: 1;
                 overflow-y: auto;
                 padding: 4px 0;
                 min-height: 0;
             }
-
-            .event-log::-webkit-scrollbar {
+            .log::-webkit-scrollbar {
                 width: 4px;
             }
-            .event-log::-webkit-scrollbar-track {
+            .log::-webkit-scrollbar-track {
                 background: transparent;
             }
-            .event-log::-webkit-scrollbar-thumb {
+            .log::-webkit-scrollbar-thumb {
                 background: var(--border);
                 border-radius: 3px;
             }
 
-            /* ── Entry rows ──────────────────────────────────────────────── */
+            /* ── Entry rows ─────────────────────────────────────────────────── */
             .entry {
                 display: flex;
                 align-items: baseline;
@@ -327,25 +352,54 @@
                 font-size: 13px;
                 line-height: 1.6;
             }
-
             .entry:hover {
                 background: var(--surface);
             }
             .entry.move-entry {
                 opacity: 0.5;
             }
-
             .ts {
-                color: var(--text2);
-                font-size: 11px;
-                white-space: nowrap;
+                color: var(--text3);
+                font:
+                    10px "SF Mono",
+                    Menlo,
+                    monospace;
+                flex-shrink: 0;
+                padding-top: 1px;
+                min-width: 52px;
+            }
+
+            /* ── Badges ─────────────────────────────────────────────────────── */
+            .badge {
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                padding: 1px 5px;
+                border-radius: var(--radius-s);
                 flex-shrink: 0;
             }
+            .badge-key {
+                background: color-mix(in srgb, var(--accent) 20%, transparent);
+                color: var(--accent);
+            }
+            .badge-mouse {
+                background: color-mix(in srgb, var(--mouse) 20%, transparent);
+                color: var(--mouse);
+            }
+            .badge-scroll {
+                background: color-mix(in srgb, var(--scroll) 20%, transparent);
+                color: var(--scroll);
+            }
+
+            /* ── Arrows ─────────────────────────────────────────────────────── */
             .arrow {
                 flex-shrink: 0;
             }
             .arrow-down {
-                color: var(--text);
+                color: var(--accent);
             }
             .arrow-up {
                 color: var(--text2);
@@ -357,9 +411,10 @@
                 color: var(--scroll);
             }
             .arrow-move {
-                color: var(--move);
+                color: var(--text3);
             }
 
+            /* ── Name spans ─────────────────────────────────────────────────── */
             .key-name {
                 color: var(--text);
                 word-break: break-word;
@@ -373,53 +428,60 @@
                 word-break: break-word;
             }
             .move-name {
-                color: var(--move);
+                color: var(--text3);
                 font-variant-numeric: tabular-nums;
-                word-break: break-word;
+                font-family: "SF Mono", Menlo, monospace;
             }
-            .pos-dim {
-                color: var(--text2);
-                font-size: 11px;
+            .dim {
+                color: var(--text3);
+                font:
+                    10px "SF Mono",
+                    Menlo,
+                    monospace;
             }
         </style>
     </head>
     <body>
-        <div id="titlebar">
-            <span id="titlebar-text">mudscript — input monitor</span>
-            <button
-                class="tb-btn"
-                onmouseenter="playSlot('hover')"
-                onclick="
-                    playSlot('interact');
-                    clearLog();
-                "
-            >
-                [clear]
-            </button>
-            <button
-                class="tb-btn"
-                onmouseenter="playSlot('hover')"
-                onclick="
-                    playSlot('interact');
-                    closePanel();
-                "
-            >
-                [×]
-            </button>
+        <div id="header">
+            <span id="panel-title">mudscript — input monitor</span>
+            <div class="header-btns">
+                <button
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        clearLog();
+                    "
+                >
+                    Clear
+                </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        closePanel();
+                    "
+                >
+                    ✕
+                </button>
+            </div>
         </div>
 
+        <!-- Flag row: most-recent key / mouse-button indicator -->
         <div id="flag-row">
-            <div class="flag">
+            <div class="flag-pill" id="flag-key-pill">
                 <span class="flag-label">Key</span>
-                <span class="flag-pill" id="flag-key">—</span>
+                <span id="flag-key-name">—</span>
             </div>
-            <div class="flag-sep"></div>
-            <div class="flag" style="justify-content: flex-end">
-                <span class="flag-pill" id="flag-mouse">—</span>
+            <span class="flag-sep">│</span>
+            <div class="flag-pill" id="flag-mouse-pill">
+                <span id="flag-mouse-name">—</span>
                 <span class="flag-label">Mouse</span>
             </div>
         </div>
 
+        <!-- Tab bar -->
         <div id="tabs">
             <button
                 id="tab-keys"
@@ -439,21 +501,25 @@
             </button>
         </div>
 
-        <!-- ── Keyboard tab ───────────────────────────────────────────────── -->
+        <!-- ── Keyboard tab ──────────────────────────────────────────────── -->
         <div id="keys-section" class="tab-section active">
             <div class="state-section">
-                <span class="section-label">Active</span>
-                <div id="keys-pills" class="pills-row"></div>
+                <div class="section-label">Active</div>
+                <div id="keys-pills"></div>
             </div>
-            <div class="divider"></div>
-            <div id="keys-log" class="event-log"></div>
+            <div class="section-divider"></div>
+            <div id="keys-log" class="log"></div>
         </div>
 
-        <!-- ── Mouse tab ──────────────────────────────────────────────────────── -->
+        <!-- ── Mouse tab ─────────────────────────────────────────────────── -->
         <div id="mouse-section" class="tab-section">
             <div class="state-section">
-                <div class="section-header">
-                    <span class="section-label">Position</span>
+                <div class="section-label">Position</div>
+                <div id="coord-row">
+                    <div id="pos-display">
+                        x:&nbsp;<span id="mx-display">—</span
+                        >&nbsp;&nbsp;y:&nbsp;<span id="my-display">—</span>
+                    </div>
                     <select
                         id="coord-select"
                         onchange="onCoordModeChange(this.value)"
@@ -464,14 +530,10 @@
                         <option value="screenCenter">Screen center</option>
                     </select>
                 </div>
-                <div id="mouse-pos">
-                    x: <span id="mx">—</span>&nbsp;&nbsp;y:
-                    <span id="my">—</span>
-                </div>
-                <div id="mouse-pills" class="pills-row"></div>
+                <div id="mouse-pills"></div>
             </div>
-            <div class="divider"></div>
-            <div id="mouse-log" class="event-log"></div>
+            <div class="section-divider"></div>
+            <div id="mouse-log" class="log"></div>
         </div>
 
         <script>
@@ -479,26 +541,24 @@
 
             document.addEventListener("contextmenu", (e) => e.preventDefault());
 
+            // ── Host communication ─────────────────────────────────────────────
             function sendToHost(msg) {
                 const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-                if (window.chrome?.webview) {
-                    window.chrome.webview.postMessage(s);
-                } else {
+                try {
                     window.webkit.messageHandlers.msKeys.postMessage(s);
-                }
+                } catch (e) {}
             }
-
             function playSlot(slot) {
                 sendToHost({ action: "playSlot", slot });
             }
 
-            // ── Drag ──────────────────────────────────────────────────────
+            // ── Header drag ────────────────────────────────────────────────────
             (function () {
                 let _drag = null;
                 document
-                    .getElementById("titlebar")
+                    .getElementById("header")
                     .addEventListener("mousedown", (e) => {
-                        if (e.target.closest(".tb-btn")) return;
+                        if (e.target.closest(".header-btns")) return;
                         _drag = { ox: e.screenX, oy: e.screenY };
                         const onMove = (ev) => {
                             if (!_drag) return;
@@ -520,7 +580,7 @@
                     });
             })();
 
-            // ── Tab switching ──────────────────────────────────────────────
+            // ── Tab switching ──────────────────────────────────────────────────
             function switchTab(tab) {
                 document
                     .querySelectorAll(".tab")
@@ -532,37 +592,39 @@
                     .forEach((s) =>
                         s.classList.toggle("active", s.id === tab + "-section"),
                     );
-                // Scroll the newly-visible log to the bottom.
+                // Scroll the newly-visible log to the bottom
                 const log = document.getElementById(tab + "-log");
                 if (log) log.scrollTop = log.scrollHeight;
             }
 
-            // ── Flag row ────────────────────────────────────────────────
+            // ── Flag row ───────────────────────────────────────────────────────
             let _lastKeyTime = 0,
                 _lastMouseTime = 0;
 
             function flagKey(name) {
                 _lastKeyTime = Date.now();
-                document.getElementById("flag-key").textContent = name || "—";
+                document.getElementById("flag-key-name").textContent =
+                    name || "—";
                 _updateFlagStyles();
             }
 
             function flagMouse(name) {
                 _lastMouseTime = Date.now();
-                document.getElementById("flag-mouse").textContent = name || "—";
+                document.getElementById("flag-mouse-name").textContent =
+                    name || "—";
                 _updateFlagStyles();
             }
 
             function _updateFlagStyles() {
                 const kRecent = _lastKeyTime >= _lastMouseTime;
                 document
-                    .getElementById("flag-key")
+                    .getElementById("flag-key-pill")
                     .classList.toggle(
                         "flag-recent",
                         kRecent && _lastKeyTime > 0,
                     );
                 document
-                    .getElementById("flag-mouse")
+                    .getElementById("flag-mouse-pill")
                     .classList.toggle(
                         "flag-recent",
                         !kRecent && _lastMouseTime > 0,
@@ -571,7 +633,7 @@
 
             // ── Constants ─────────────────────────────────────────────────────
             const MAX_ENTRIES = 300;
-            const NEAR_BOTTOM = 48;
+            const SCROLL_THRESH = 48;
             const BTN_NAMES = {
                 0: "Left",
                 1: "Right",
@@ -583,15 +645,34 @@
             function btnName(n) {
                 return BTN_NAMES[n] ?? "M" + n;
             }
-
             function isNearBottom(el) {
                 return (
                     el.scrollHeight - el.scrollTop - el.clientHeight <=
-                    NEAR_BOTTOM
+                    SCROLL_THRESH
+                );
+            }
+            function pad2(n) {
+                return String(n).padStart(2, "0");
+            }
+            function nowTs() {
+                const d = new Date();
+                return (
+                    pad2(d.getHours()) +
+                    ":" +
+                    pad2(d.getMinutes()) +
+                    ":" +
+                    pad2(d.getSeconds())
                 );
             }
 
-            // ── Entry builder ─────────────────────────────────────────────
+            // ── Entry builder ──────────────────────────────────────────────────
+            function mkSpan(cls, text) {
+                const s = document.createElement("span");
+                s.className = cls;
+                s.textContent = text;
+                return s;
+            }
+
             function buildRow(entry) {
                 const row = document.createElement("div");
                 const t = entry.type;
@@ -627,7 +708,7 @@
                             entry.down ? "↓" : "↑",
                         ),
                         mkSpan("mouse-name", btnName(entry.button)),
-                        mkSpan("pos-dim", "  " + entry.x + ", " + entry.y),
+                        mkSpan("dim", "  " + entry.x + ", " + entry.y),
                     );
                 } else if (t === "scroll") {
                     row.append(
@@ -647,16 +728,8 @@
                 return row;
             }
 
-            function mkSpan(cls, text) {
-                const s = document.createElement("span");
-                s.className = cls;
-                s.textContent = text;
-                return s;
-            }
-
-            // ── Route entry to the correct log ────────────────────────
+            // ── Route entries to the correct log ──────────────────────────────
             function appendEntry(entry) {
-                // Update flags for down events
                 if (entry.type === "key" && entry.down)
                     flagKey(entry.key || "?");
                 if (entry.type === "mouse" && entry.down)
@@ -670,8 +743,9 @@
                 );
                 const atBottom = isNearBottom(log);
                 log.appendChild(buildRow(entry));
-                while (log.childElementCount > MAX_ENTRIES)
+                while (log.childElementCount > MAX_ENTRIES) {
                     log.removeChild(log.firstElementChild);
+                }
                 if (atBottom) log.scrollTop = log.scrollHeight;
             }
 
@@ -694,29 +768,48 @@
                 ml.scrollTop = ml.scrollHeight;
             }
 
-            // ── Active keys pills ─────────────────────────────────────────
+            // ── Active keys pills ──────────────────────────────────────────────
             function updateActiveKeys(names) {
                 const row = document.getElementById("keys-pills");
                 row.innerHTML = "";
-                (names || []).forEach((name) => {
+                if (!names || names.length === 0) {
                     const p = document.createElement("span");
-                    p.className = "pill";
+                    p.className = "pill pill-empty";
+                    p.textContent = "—";
+                    row.appendChild(p);
+                    return;
+                }
+                names.forEach((name) => {
+                    const p = document.createElement("span");
+                    p.className = "pill pill-key";
                     p.textContent = name;
                     row.appendChild(p);
                 });
             }
 
-            // ── Mouse state (position + active buttons) ───────────────────
+            // ── Mouse state (position + active buttons) ───────────────────────
             function updateMouseState(state) {
                 if (state.x != null)
-                    document.getElementById("mx").textContent = state.x;
+                    document.getElementById("mx-display").textContent = state.x;
                 if (state.y != null)
-                    document.getElementById("my").textContent = state.y;
+                    document.getElementById("my-display").textContent = state.y;
                 const row = document.getElementById("mouse-pills");
                 row.innerHTML = "";
                 const btns = Array.isArray(state.buttons)
                     ? state.buttons
                     : Object.values(state.buttons || {});
+                if (
+                    !btns ||
+                    (Array.isArray(btns)
+                        ? btns.length === 0
+                        : Object.keys(btns).length === 0)
+                ) {
+                    const emp = document.createElement("span");
+                    emp.className = "pill pill-key pill-empty";
+                    emp.textContent = "\u2014";
+                    row.appendChild(emp);
+                    return;
+                }
                 btns.forEach((b) => {
                     const p = document.createElement("span");
                     p.className = "pill pill-mouse";
@@ -727,12 +820,12 @@
 
             function updateMousePos(pos) {
                 if (pos.x != null)
-                    document.getElementById("mx").textContent = pos.x;
+                    document.getElementById("mx-display").textContent = pos.x;
                 if (pos.y != null)
-                    document.getElementById("my").textContent = pos.y;
+                    document.getElementById("my-display").textContent = pos.y;
             }
 
-            // ── Button actions ────────────────────────────────────────────
+            // ── Button actions ─────────────────────────────────────────────────
             function clearLog() {
                 document.getElementById("keys-log").innerHTML = "";
                 document.getElementById("mouse-log").innerHTML = "";
@@ -746,6 +839,46 @@
             function onCoordModeChange(mode) {
                 sendToHost({ action: "setCoordMode", mode: mode });
             }
+
+            // ── Theme ──────────────────────────────────────────────────────────
+            function applyTheme(t) {
+                if (!t) return;
+                const r = document.documentElement.style;
+                if (t.bg) r.setProperty("--bg", t.bg);
+                if (t.surface) r.setProperty("--surface", t.surface);
+                if (t.surface2) r.setProperty("--surface2", t.surface2);
+                if (t.hover) r.setProperty("--hover", t.hover);
+                if (t.accent) r.setProperty("--accent", t.accent);
+                if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
+                if (t.success) r.setProperty("--success", t.success);
+                if (t.danger) r.setProperty("--danger", t.danger);
+                if (t.warning) r.setProperty("--warning", t.warning);
+                if (t.text) r.setProperty("--text", t.text);
+                if (t.radius !== undefined) {
+                    r.setProperty("--radius", t.radius + "px");
+                    r.setProperty(
+                        "--radius-s",
+                        Math.max(0, t.radius - 1) + "px",
+                    );
+                }
+                if (t.font) {
+                    if (t.fontURL) {
+                        let el = document.getElementById("_ms-custom-font");
+                        if (!el) {
+                            el = document.createElement("style");
+                            el.id = "_ms-custom-font";
+                            document.head.appendChild(el);
+                        }
+                        el.textContent = `@font-face { font-family: "${t.font}"; src: url("${t.fontURL}"); }`;
+                    }
+                    document.body.style.fontFamily = `"${t.font}", Almendra, Palatino, Georgia, serif`;
+                }
+            }
+
+            // ── Init ───────────────────────────────────────────────────────────
+            document.addEventListener("DOMContentLoaded", () => {
+                sendToHost({ action: "ready" });
+            });
         </script>
     </body>
 </html>

@@ -3,17 +3,54 @@
     <head>
         <meta charset="UTF-8" />
         <style>
+            /* ── Fonts ─────────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
+
+            /* ── Tokens ─────────────────────────────────────────────────────────── */
             :root {
                 --bg: #060402;
                 --surface: #100806;
                 --surface2: #1c100c;
-                --border: rgba(130, 50, 22, 0.55);
+                --hover: #301610;
                 --accent: #c41a1a;
+                --accent-hi: #e52424;
+                --success: #4a7820;
+                --danger-bg: #1e0608;
+                --danger: #d42020;
+                --warning: #c47820;
                 --text: #f0ddb0;
-                --text2: rgba(210, 165, 100, 0.75);
+                --text2: rgba(210, 165, 100, 0.85);
+                --text3: rgba(160, 105, 60, 0.55);
+                --border: rgba(130, 50, 22, 0.55);
+                --border-dim: rgba(130, 50, 22, 0.18);
                 --radius: 3px;
+                --radius-s: 2px;
             }
 
+            /* ── Reset ──────────────────────────────────────────────────────────── */
             *,
             *::before,
             *::after {
@@ -28,12 +65,13 @@
             body {
                 width: 100%;
                 height: 100%;
+                overflow: hidden;
                 background: var(--bg);
                 color: var(--text);
                 font-family: "Almendra", Palatino, Georgia, serif;
                 font-size: 13px;
                 line-height: 1.5;
-                overflow: hidden;
+                -webkit-font-smoothing: antialiased;
             }
 
             body {
@@ -41,136 +79,167 @@
                 flex-direction: column;
             }
 
-            /* ── Titlebar ─────────────────────────────────────────────────── */
-            #titlebar {
-                height: 32px;
-                -webkit-app-region: drag;
+            button {
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: inherit;
+                font: inherit;
+            }
+
+            /* ── Header ─────────────────────────────────────────────────────────── */
+            #header {
                 display: flex;
                 align-items: center;
-                padding: 0 10px 0 14px;
+                gap: 8px;
+                padding: 10px 12px 8px;
+                background: var(--surface);
                 border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px
+                    color-mix(in srgb, var(--accent) 12%, transparent);
                 flex-shrink: 0;
-                gap: 6px;
+                -webkit-app-region: drag;
             }
 
-            #titlebar-text {
+            #panel-title {
                 flex: 1;
-                font-size: 11px;
-                font-weight: 700;
-                letter-spacing: 1.5px;
-                text-transform: uppercase;
-                color: var(--text2);
+                font-weight: 600;
+                font-size: 13px;
             }
 
-            .tb-btn {
+            .header-btns {
+                display: flex;
+                gap: 4px;
                 -webkit-app-region: no-drag;
-                height: 20px;
-                padding: 0 8px;
-                background: transparent;
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                color: var(--text2);
-                font-family: inherit;
-                font-size: 11px;
-                cursor: pointer;
-                transition:
-                    background 0.12s,
-                    border-color 0.12s,
-                    color 0.12s;
             }
 
-            .tb-btn:hover {
+            /* ── Ghost button ────────────────────────────────────────────────────── */
+            .btn-ghost {
+                flex: 1;
+                padding: 5px 8px;
+                border-radius: var(--radius-s);
                 background: var(--surface2);
-                border-color: var(--accent);
+                color: var(--text2);
+                font-size: 11px;
+                font-weight: 500;
+                transition: opacity 0.15s;
+            }
+            .btn-ghost:hover {
+                opacity: 0.8;
+            }
+
+            /* In the header bar, ghost buttons should not stretch */
+            .header-btns .btn-ghost {
+                flex: 0 0 auto;
+            }
+
+            /* ── Close button ────────────────────────────────────────────────────── */
+            .btn-close {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+            }
+            .btn-close:hover {
+                background: var(--hover);
                 color: var(--text);
             }
 
-            /* ── Current window section ───────────────────────────────────── */
-            #current-section {
+            /* ── Current window section ──────────────────────────────────────────── */
+            #current {
+                padding: 10px 12px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
                 flex-shrink: 0;
-                height: 80px;
-                padding: 10px 14px;
+                min-height: 68px;
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
                 gap: 3px;
-                background: var(--surface);
-                border-bottom: 1px solid var(--border);
             }
 
             #current-empty {
-                font-size: 12px;
-                color: var(--text2);
+                color: var(--text3);
                 font-style: italic;
+                font-size: 12px;
             }
 
             #current-app {
-                font-size: 14px;
-                font-weight: 700;
                 color: var(--accent);
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
+                font-weight: 700;
+                font-size: 14px;
+                display: none;
             }
 
             #current-title {
-                font-size: 12px;
                 color: var(--text);
-                white-space: nowrap;
+                font-size: 12px;
+                display: none;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
             #current-dim {
-                font-size: 11px;
                 color: var(--text2);
-                font-variant-numeric: tabular-nums;
+                font:
+                    11px "SF Mono",
+                    Menlo,
+                    monospace;
+                display: none;
             }
 
-            /* ── Log area ───────────────────────────────────────────────────── */
+            /* ── Log area ────────────────────────────────────────────────────────── */
             #log {
                 flex: 1;
                 overflow-y: auto;
+                overflow-x: hidden;
                 padding: 4px 0;
                 min-height: 0;
+                scrollbar-width: thin;
+                scrollbar-color: var(--border) transparent;
             }
-
             #log::-webkit-scrollbar {
                 width: 5px;
             }
-
             #log::-webkit-scrollbar-track {
                 background: transparent;
             }
-
             #log::-webkit-scrollbar-thumb {
                 background: var(--border);
-                border-radius: 3px;
+                border-radius: var(--radius);
             }
 
-            /* ── Entry rows ─────────────────────────────────────────────────── */
+            /* ── Entry rows ──────────────────────────────────────────────────────── */
             .entry {
                 display: flex;
                 align-items: center;
                 gap: 6px;
-                padding: 3px 16px;
-                font-size: 13px;
-                line-height: 1.55;
+                padding: 5px 12px;
+                font-size: 12px;
+                border-bottom: 1px solid var(--border-dim);
             }
-
             .entry:hover {
                 background: var(--surface);
             }
 
             .ts {
-                color: var(--text2);
-                font-size: 11px;
-                white-space: nowrap;
+                color: var(--text3);
+                font:
+                    10px "SF Mono",
+                    Menlo,
+                    monospace;
                 flex-shrink: 0;
+                min-width: 52px;
             }
 
-            .dot {
-                font-size: 7px;
+            .entry-dot {
                 color: var(--accent);
                 flex-shrink: 0;
             }
@@ -178,68 +247,74 @@
             .entry-app {
                 color: var(--accent);
                 font-weight: 600;
-                white-space: nowrap;
                 flex-shrink: 0;
             }
 
             .entry-sep {
-                color: var(--text2);
+                color: var(--text3);
                 flex-shrink: 0;
+                padding: 0 2px;
             }
 
             .entry-title {
-                color: var(--text);
-                white-space: nowrap;
+                flex: 1;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                flex: 1;
+                white-space: nowrap;
                 min-width: 0;
             }
 
             .dim-pill {
-                font-size: 10px;
-                color: var(--text2);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
+                font:
+                    10px "SF Mono",
+                    Menlo,
+                    monospace;
                 padding: 1px 5px;
-                white-space: nowrap;
+                border-radius: var(--radius-s);
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                color: var(--text2);
                 flex-shrink: 0;
-                font-family: "SF Mono", Menlo, monospace;
             }
         </style>
     </head>
     <body>
-        <div id="titlebar">
-            <span id="titlebar-text">mudscript — window monitor</span>
-            <button
-                class="tb-btn"
-                onmouseenter="playSlot('hover')"
-                onclick="
-                    playSlot('interact');
-                    clearLog();
-                "
-            >
-                [clear]
-            </button>
-            <button
-                class="tb-btn"
-                onmouseenter="playSlot('hover')"
-                onclick="
-                    playSlot('interact');
-                    closePanel();
-                "
-            >
-                [×]
-            </button>
+        <!-- Header -->
+        <div id="header">
+            <span id="panel-title">mudscript — window monitor</span>
+            <div class="header-btns">
+                <button
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        clearLog();
+                    "
+                >
+                    Clear
+                </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('back');
+                        closePanel();
+                    "
+                >
+                    ✕
+                </button>
+            </div>
         </div>
 
-        <div id="current-section">
+        <!-- Current window -->
+        <div id="current">
             <span id="current-empty">No focused window</span>
-            <span id="current-app" style="display: none"></span>
-            <span id="current-title" style="display: none"></span>
-            <span id="current-dim" style="display: none"></span>
+            <span id="current-app"></span>
+            <span id="current-title"></span>
+            <span id="current-dim"></span>
         </div>
 
+        <!-- Log -->
         <div id="log"></div>
 
         <script>
@@ -247,59 +322,33 @@
 
             document.addEventListener("contextmenu", (e) => e.preventDefault());
 
+            // ── Constants ─────────────────────────────────────────────────────────
+            const MAX_ENTRIES = 300;
+            const SCROLL_THRESH = 48;
+
+            // ── Host bridge ───────────────────────────────────────────────────────
             function sendToHost(msg) {
                 const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-                if (window.chrome?.webview) {
-                    window.chrome.webview.postMessage(s);
-                } else {
+                try {
                     window.webkit.messageHandlers.msWindow.postMessage(s);
-                }
+                } catch (e) {}
             }
 
             function playSlot(slot) {
                 sendToHost({ action: "playSlot", slot });
             }
 
-            // ── Drag ──────────────────────────────────────────────────────────
-            (function () {
-                let _drag = null;
-                document
-                    .getElementById("titlebar")
-                    .addEventListener("mousedown", (e) => {
-                        if (e.target.closest(".tb-btn")) return;
-                        _drag = { ox: e.screenX, oy: e.screenY };
-                        const onMove = (ev) => {
-                            if (!_drag) return;
-                            sendToHost({
-                                action: "move",
-                                dx: ev.screenX - _drag.ox,
-                                dy: ev.screenY - _drag.oy,
-                            });
-                            _drag.ox = ev.screenX;
-                            _drag.oy = ev.screenY;
-                        };
-                        const onUp = () => {
-                            _drag = null;
-                            window.removeEventListener("mousemove", onMove);
-                            window.removeEventListener("mouseup", onUp);
-                        };
-                        window.addEventListener("mousemove", onMove);
-                        window.addEventListener("mouseup", onUp);
-                    });
-            })();
-
-            // ── Scroll helpers ─────────────────────────────────────────────────
-            const MAX_ENTRIES = 300;
-            const NEAR_BOTTOM = 48;
-
-            function isNearBottom(el) {
+            // ── Scroll helper ─────────────────────────────────────────────────────
+            function isNearBottom() {
+                const log = document.getElementById("log");
                 return (
-                    el.scrollHeight - el.scrollTop - el.clientHeight <=
-                    NEAR_BOTTOM
+                    log.scrollHeight - log.scrollTop - log.clientHeight <=
+                    SCROLL_THRESH
                 );
             }
 
-            // ── Current window display ─────────────────────────────────────────
+            // ── Current window display ────────────────────────────────────────────
+            // entry: { app, title, w?, h? }
             function updateCurrentWindow(entry) {
                 const empty = document.getElementById("current-empty");
                 const appEl = document.getElementById("current-app");
@@ -323,22 +372,23 @@
                 titleEl.textContent = entry.title || "";
                 dimEl.textContent =
                     entry.w != null && entry.h != null
-                        ? entry.w + "×" + entry.h + " px"
+                        ? entry.w + "\u00d7" + entry.h + " px"
                         : "";
             }
 
-            // ── Entry builder ──────────────────────────────────────────────────
+            // ── Entry builder ─────────────────────────────────────────────────────
+            // Creates .entry with [ts] ● app-span › title-span dim-pill
             function buildRow(entry) {
                 const row = document.createElement("div");
                 row.className = "entry";
 
                 const ts = document.createElement("span");
                 ts.className = "ts";
-                ts.textContent = "[" + (entry.ts || "") + "]";
+                ts.textContent = entry.ts || "";
                 row.appendChild(ts);
 
                 const dot = document.createElement("span");
-                dot.className = "dot";
+                dot.className = "entry-dot";
                 dot.textContent = "●";
                 row.appendChild(dot);
 
@@ -360,17 +410,18 @@
                 if (entry.w != null && entry.h != null) {
                     const pill = document.createElement("span");
                     pill.className = "dim-pill";
-                    pill.textContent = entry.w + "×" + entry.h;
+                    pill.textContent = entry.w + "\u00d7" + entry.h;
                     row.appendChild(pill);
                 }
 
                 return row;
             }
 
-            // ── Public API ─────────────────────────────────────────────────────
+            // ── Public API ────────────────────────────────────────────────────────
+            // Appends a row, trims to MAX_ENTRIES, auto-scrolls, updates current
             function appendEntry(entry) {
                 const log = document.getElementById("log");
-                const atBottom = isNearBottom(log);
+                const atBottom = isNearBottom();
                 log.appendChild(buildRow(entry));
                 while (log.childElementCount > MAX_ENTRIES) {
                     log.removeChild(log.firstElementChild);
@@ -379,11 +430,14 @@
                 updateCurrentWindow(entry);
             }
 
+            // Clears log, bulk appends (up to MAX_ENTRIES), scrolls, updates current
             function loadHistory(entries) {
                 const log = document.getElementById("log");
                 log.innerHTML = "";
                 const frag = document.createDocumentFragment();
-                (entries || []).forEach((e) => frag.appendChild(buildRow(e)));
+                (entries || [])
+                    .slice(-MAX_ENTRIES)
+                    .forEach((e) => frag.appendChild(buildRow(e)));
                 log.appendChild(frag);
                 log.scrollTop = log.scrollHeight;
                 if (entries && entries.length > 0) {
@@ -391,7 +445,6 @@
                 }
             }
 
-            // ── Button actions ─────────────────────────────────────────────────
             function clearLog() {
                 document.getElementById("log").innerHTML = "";
                 sendToHost({ action: "clear" });
@@ -400,6 +453,63 @@
             function closePanel() {
                 sendToHost({ action: "close" });
             }
+
+            // ── Drag to move ──────────────────────────────────────────────────────
+            (function () {
+                let _drag = null;
+                document
+                    .getElementById("header")
+                    .addEventListener("mousedown", (e) => {
+                        if (e.target.closest(".header-btns")) return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            sendToHost({
+                                action: "move",
+                                dx: ev.screenX - _drag.ox,
+                                dy: ev.screenY - _drag.oy,
+                            });
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+            })();
+
+            // ── Theme injection ───────────────────────────────────────────────────
+            function applyTheme(t) {
+                if (!t) return;
+                const r = document.documentElement.style;
+                if (t.bg) r.setProperty("--bg", t.bg);
+                if (t.surface) r.setProperty("--surface", t.surface);
+                if (t.surface2) r.setProperty("--surface2", t.surface2);
+                if (t.hover) r.setProperty("--hover", t.hover);
+                if (t.accent) r.setProperty("--accent", t.accent);
+                if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
+                if (t.success) r.setProperty("--success", t.success);
+                if (t.dangerBg) r.setProperty("--danger-bg", t.dangerBg);
+                if (t.danger) r.setProperty("--danger", t.danger);
+                if (t.warning) r.setProperty("--warning", t.warning);
+                if (t.text) r.setProperty("--text", t.text);
+                if (t.radius !== undefined) {
+                    r.setProperty("--radius", t.radius + "px");
+                    r.setProperty(
+                        "--radius-s",
+                        Math.max(0, t.radius - 1) + "px",
+                    );
+                }
+            }
+
+            // ── Init ──────────────────────────────────────────────────────────────
+            document.addEventListener("DOMContentLoaded", () => {
+                sendToHost({ action: "ready" });
+            });
         </script>
     </body>
 </html>
