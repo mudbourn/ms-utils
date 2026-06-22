@@ -2088,7 +2088,7 @@ YQIDAQAB
                     return os.remove(trustedHashPath) ~= nil
                 end
 
-daa                -- Compare the current ms_core.lua hash to the stored trusted baseline.
+                -- Compare the current ms_core.lua hash to the stored trusted baseline.
                 -- Returns: status ("trusted"|"mismatch"|"uninitialized"), currentHash, trustedHash
                 -- Non-blocking: always returns the last-known cached value immediately and
                 -- kicks off a background hs.task hash when the 60-second window expires.
