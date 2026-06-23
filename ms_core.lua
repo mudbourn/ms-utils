@@ -7497,7 +7497,8 @@ YQIDAQAB
         -- in the background.  Each WebView creation is pushed into its own timer tick
         -- so the main thread never blocks for more than ~300 ms at a stretch.
         local _lCanvas, _lBarMax, _lBarY, _lFadingOut
-        local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad  -- forward-declared so callbacks inside do{} can close over them
+        local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad
+        local _needsIntegrityWarning = false  -- set by the integrity timer; shown after announce toasts
         do
             local sf  = hs.screen.mainScreen():frame()
             local lw, lh = 300, 104
