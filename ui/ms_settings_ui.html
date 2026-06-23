@@ -2323,6 +2323,21 @@
                         h("div", { cls: "group-label" }, "Active: " + current),
                     );
 
+                const otherProfiles = profiles.filter((n) => n !== current);
+                if (otherProfiles.length === 0) {
+                    body.appendChild(
+                        h(
+                            "div",
+                            { cls: "row disabled" },
+                            h(
+                                "div",
+                                { cls: "row-label" },
+                                "No saved profiles yet.",
+                            ),
+                        ),
+                    );
+                }
+
                 for (const name of profiles) {
                     const isCurrent = name === current;
                     const r = h("div", {

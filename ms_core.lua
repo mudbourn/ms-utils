@@ -1838,54 +1838,74 @@ YQIDAQAB
                         return
                     end
                     local folderName = sanitizeName(meta.name)
-                    -- Ensure the profiles directory and target subfolder both exist.
                     local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
-                    hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
-                    if not hs.fs.attributes(profilesPath .. folderName) then
+
+                    local function _commit()
+                        hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
+                        if not hs.fs.attributes(profilesPath .. folderName) then
+                            if roblox then pcall(function() roblox:activate() end) end
+                            ms.alert("Could not create profile folder.", 3)
+                            return
+                        end
+                        -- Read source file in binary mode (same as sound import).
+                        local f = io.open(selectedPath, "rb")
+                        if not f then
+                            if roblox then pcall(function() roblox:activate() end) end
+                            ms.alert("Could not read the selected file.", 3)
+                            return
+                        end
+                        local content = f:read("*all"); f:close()
+                        -- Security audit before writing anything.
+                        local auditErrs = auditMacros(content)
+                        if #auditErrs > 0 then
+                            if roblox then pcall(function() roblox:activate() end) end
+                            ms.alert("Import rejected \xe2\x80\x94 security scan failed:\n  \xe2\x80\xa2 "
+                                .. table.concat(auditErrs, "\n  \xe2\x80\xa2 "), 8)
+                            return
+                        end
+                        -- Write to profiles folder in binary mode.
+                        local dst    = profilesPath .. folderName .. "/ms_macros.lua"
+                        local copied = false
+                        local g = io.open(dst, "wb")
+                        if g then
+                            g:write(content); g:close()
+                            copied = true
+                        end
+                        -- Fallback: shell cp.
+                        if not copied then
+                            local _, st = hs.execute("/bin/cp " .. sq(selectedPath) .. " " .. sq(dst))
+                            copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
+                        end
+                        if not copied then
+                            if roblox then pcall(function() roblox:activate() end) end
+                            ms.alert("Could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if importing from outside ~/.hammerspoon.", 5)
+                            return
+                        end
+                        ms.playSlot("update")
+                        ms._profilesDirty = true
                         if roblox then pcall(function() roblox:activate() end) end
-                        ms.alert("Could not create profile folder.", 3)
-                        return
+                        hs.timer.doAfter(0.2, function()
+                            ms.alert("Profile \"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles.", 5, true)
+                        end)
                     end
-                    -- Read source file in binary mode (same as sound import).
-                    local f = io.open(selectedPath, "rb")
-                    if not f then
-                        if roblox then pcall(function() roblox:activate() end) end
-                        ms.alert("Could not read the selected file.", 3)
-                        return
+
+                    -- Warn before overwriting an existing saved profile.
+                    if hs.fs.attributes(profilesPath .. folderName) then
+                        ms.ui.modal({
+                            title   = "Overwrite Profile?",
+                            msg     = "\"" .. meta.name .. "\" is already in your library.\nReplace it with this file?",
+                            confirm = "Replace",
+                            cancel  = "Cancel",
+                        }, function(r)
+                            if r.confirmed then
+                                _commit()
+                            else
+                                if roblox then pcall(function() roblox:activate() end) end
+                            end
+                        end)
+                    else
+                        _commit()
                     end
-                    local content = f:read("*all"); f:close()
-                    -- Security audit before writing anything.
-                    local auditErrs = auditMacros(content)
-                    if #auditErrs > 0 then
-                        if roblox then pcall(function() roblox:activate() end) end
-                        ms.alert("Import rejected — security scan failed:\n  • "
-                            .. table.concat(auditErrs, "\n  • "), 8)
-                        return
-                    end
-                    -- Write to profiles folder in binary mode.
-                    local dst    = profilesPath .. folderName .. "/ms_macros.lua"
-                    local copied = false
-                    local g = io.open(dst, "wb")
-                    if g then
-                        g:write(content); g:close()
-                        copied = true
-                    end
-                    -- Fallback: shell cp (same pattern as sound import).
-                    if not copied then
-                        local _, st = hs.execute("/bin/cp " .. sq(selectedPath) .. " " .. sq(dst))
-                        copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
-                    end
-                    if not copied then
-                        if roblox then pcall(function() roblox:activate() end) end
-                        ms.alert("Could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if importing from outside ~/.hammerspoon.", 5)
-                        return
-                    end
-                    ms.playSlot("update")
-                    ms._profilesDirty = true
-                    if roblox then pcall(function() roblox:activate() end) end
-                    hs.timer.doAfter(0.2, function()
-                        ms.alert("Profile \"" .. meta.name .. "\" imported.\nSwitch to it from Settings > Profiles.", 5, true)
-                    end)
                 end
 
                 -- Exports the current active profile as a .mspkg zip package.
