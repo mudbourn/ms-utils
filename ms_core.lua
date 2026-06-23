@@ -2413,6 +2413,7 @@ YQIDAQAB
                             _panel:evaluateJavaScript(
                                 "setHashes('" .. t .. "', '" .. c .. "')"
                             )
+                            _panel:evaluateJavaScript("setPreviewMode()")
                             local tj = hs.json.encode(ms._theme or {})
                             if tj then
                                 _panel:evaluateJavaScript("applyTheme(" .. tj .. ")")
@@ -6430,12 +6431,17 @@ YQIDAQAB
                 end,
 
                 -- Fires the onAction callback for an action-type user setting.
+                -- After the sandboxed onAction runs, any entry in ms._systemActions
+                -- for the same key is also called.  That table is populated by
+                -- ms_core.lua after the sandbox finishes, so macros cannot set it.
                 userSettingAction = function(data)
                     if not data.key then return end
                     local def = ms._userSettingIndex[data.key]
                     if def and def.type == "action" and type(def.onAction) == "function" then
                         pcall(def.onAction)
                     end
+                    local sysAction = ms._systemActions and ms._systemActions[data.key]
+                    if type(sysAction) == "function" then pcall(sysAction) end
                     ms.ui.refresh()
                 end,
 
@@ -7468,7 +7474,7 @@ YQIDAQAB
                 -- it calls ms.integrity.check() from privileged scope, not through this proxy.
                 local frozenMs = setmetatable({}, {
                     __index    = function(t, k)
-                        if k == "integrity" or k == "dev" then
+                        if k == "integrity" or k == "dev" or k == "showGuardian" then
                             error("ms_macros.lua: ms." .. k .. " is not accessible from macros.", 2)
                         end
                         return ms[k]
@@ -7637,6 +7643,17 @@ YQIDAQAB
     -- END Hammerspoon mudscript Utility Library --
 
     -- Startup Executions --
+        -- Privileged system actions: registered here (outside the sandbox) so
+        -- macros cannot set or spoof them.  Each entry is keyed by the setting
+        -- key it belongs to and called by userSettingAction after the sandboxed
+        -- onAction has run.
+        ms._systemActions = {}
+        if ms._userSettingIndex["showTamperWarning"] then
+            ms._systemActions["showTamperWarning"] = function()
+                ms.showGuardian()
+            end
+        end
+
         -- Seed ms.binds from registry defaults for any id not set by the settings file.
         for _, id in ipairs(ms.registry._defList) do
             local def = ms.registry._defs[id]

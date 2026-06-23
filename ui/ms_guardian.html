@@ -170,7 +170,28 @@
                 background: color-mix(in srgb, var(--danger) 28%, transparent);
             }
 
-            /* ── Steps ──────────────────────────────────────────────────────── */
+            /* ── Preview badge (hidden by default, shown via setPreviewMode()) ── */
+            #preview-badge {
+                display: none;
+                position: absolute;
+                top: 6px;
+                right: 10px;
+                font-size: 9px;
+                font-weight: 700;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: var(--accent);
+                border: 1px solid var(--accent);
+                border-radius: 3px;
+                padding: 1px 5px;
+                pointer-events: none;
+                opacity: 0.75;
+            }
+            #preview-badge.visible {
+                display: block;
+            }
+
+            /* ── Steps ────────────────────────────────────────────── */
             .step {
                 display: none;
                 flex-direction: column;
@@ -185,6 +206,7 @@
     <body>
         <div id="titlebar">
             <span id="titlebar-text">mudscript — Tamper Protection</span>
+            <span id="preview-badge">preview</span>
         </div>
         <div id="wrap">
             <!-- Step 1: Mismatch warning -->
@@ -325,6 +347,12 @@
             function setHashes(trusted, current) {
                 document.getElementById("hash-trusted").textContent = trusted;
                 document.getElementById("hash-current").textContent = current;
+            }
+
+            function setPreviewMode() {
+                document
+                    .getElementById("preview-badge")
+                    .classList.add("visible");
             }
 
             function keepBlocked() {
