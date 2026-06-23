@@ -1,0 +1,19 @@
+{
+  "bg":       "#020d18",
+  "surface":  "#061525",
+  "surface2": "#0c2038",
+  "hover":    "#112d50",
+  "accent":   "#1b78c8",
+  "accentHi": "#2890e0",
+  "success":  "#1a9040",
+  "dangerBg": "#150408",
+  "danger":   "#c83028",
+  "warning":  "#c89020",
+  "text":     "#b8d4ec",
+  "radius":   5,
+  "font":     "Almendra",
+  "uifc": {
+    "settings": "",
+    "guardian": ""
+  }
+}
