@@ -3186,17 +3186,18 @@ YQIDAQAB
                         table.insert(sub, { title = "-" })
                         -- Per-event sound selection
                         local slots = {
-                            { id = "load",         label = "Load Complete"   },
-                            { id = "alert",        label = "Alert / Notice"  },
-                            { id = "enabled",      label = "Macros Enabled"  },
-                            { id = "disabled",     label = "Macros Disabled" },
-                            { id = "update",       label = "Setting Updated" },
-                            { id = "reset",        label = "Setting Reset"   },
-                            { id = "interact",     label = "Menu Interact"   },
-                            { id = "hover",        label = "Menu Hover"      },
-                            { id = "back",         label = "Menu Back"       },
-                            { id = "settingsOpen", label = "Settings Open"   },
-                            { id = "settingsClose",label = "Settings Close"  },
+                            { id = "startup",      label = "Loading Screen Start" },
+                            { id = "load",         label = "Loading Screen End"   },
+                            { id = "alert",        label = "Alert / Notice"       },
+                            { id = "enabled",      label = "Macros Enabled"       },
+                            { id = "disabled",     label = "Macros Disabled"      },
+                            { id = "update",       label = "Setting Updated"      },
+                            { id = "reset",        label = "Setting Reset"        },
+                            { id = "interact",     label = "Menu Interact"        },
+                            { id = "hover",        label = "Menu Hover"           },
+                            { id = "back",         label = "Menu Back"            },
+                            { id = "settingsOpen", label = "Settings Open"        },
+                            { id = "settingsClose",label = "Settings Close"       },
                         }
                         -- Sound list from discovered + imported files.
                         -- Reads from ms.sounds which is populated by _discoverSounds() at
@@ -4803,13 +4804,20 @@ YQIDAQAB
             end
 
             -- Plays the sound assigned to a named slot (e.g. "update", "reset", "alert").
-            -- Falls back to a file auto-discovered under the same slot name in SoundLib.
+            -- Resolution order for each slot:
+            --   1. ms.soundAssign[slotId]  — user override saved in settings
+            --   2. ms.sounds[slotId]       — file named exactly after the slot id
+            --   3. ms.sounds[_slotDefaults[slotId]] — built-in default filename for the slot
             -- Returns true if a sound was found and played; false if disabled or no file.
+            local _slotDefaults = {
+                startup = "Load Start",
+                load    = "Load End",
+            }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
                 -- Suppress all non-load sounds during startup so only launch.wav plays
                 -- while the loading screen is visible.  Gate opens in _announceLoad.
-                if not ms._startupSoundDone and slotId ~= "load" then return false end
+                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "startup" then return false end
                 -- Suppress if the same slot played within 50 ms.
                 local now = hs.timer.absoluteTime()
                 ms._playSlotTimes = ms._playSlotTimes or {}
@@ -4827,7 +4835,9 @@ YQIDAQAB
                 if assigned then
                     path = (ms.sounds and ms.sounds[assigned]) or assigned
                 else
-                    path = ms.sounds and ms.sounds[slotId]
+                    path = ms.sounds and (
+                        ms.sounds[slotId] or ms.sounds[_slotDefaults[slotId]]
+                    )
                 end
                 if not path then return false end
                 local handle = ms.sound(path) or false
@@ -7490,6 +7500,7 @@ YQIDAQAB
                   textAlignment="left" }
             )
             _lCanvas:show()
+            ms.playSlot("startup")  -- loading sequence start sound
             hs.timer.doAfter(0.05, function()
                 if _lCanvas then _lCanvas:alpha(1) end
             end)
