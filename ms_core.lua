@@ -7542,10 +7542,9 @@ YQIDAQAB
         _announceLoad = function()
             if _loadAnnounced then return end
             _loadAnnounced = true
-            -- Load-end sound fires the instant the canvas disappears.
-            pcall(function() ms.playSlot("load") end)
-            -- Offset the launch sound and toasts slightly so they don't overlap
-            -- with the load-end sound.
+            -- Load-end sound fires at the start of _lFadeOut above.
+            -- After a short offset, play the launch sound and show the announcement toasts
+            -- so they don't overlap with the load-end sound.
             hs.timer.doAfter(0.4, function()
                 -- Open the sound gate so the launch slot and all future sounds play.
                 ms._startupSoundDone = true
@@ -7569,6 +7568,7 @@ YQIDAQAB
         _lFadeOut = function()
             if not _lCanvas or _lFadingOut then return end
             _lFadingOut = true
+            ms.playSlot("load")  -- load-end sound plays as the canvas begins fading
             for i = 9, 0, -1 do
                 local a, d = i / 10, (9 - i) * 0.04
                 hs.timer.doAfter(d, function()
