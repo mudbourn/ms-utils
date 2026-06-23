@@ -28,3 +28,6 @@ lib/Jxon.ahk
 
 # Development planning docs — not shipped
 docs/WINDOWS_PORT_PLAN.md
+
+# LLM agent instructions — not shipped
+writing_style.txt

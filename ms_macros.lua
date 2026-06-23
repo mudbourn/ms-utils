@@ -72,7 +72,11 @@
             type = "divider",
             section = "calibration"
         })
-        ms.settings.define({ type = "groupLabel", label = "Lag Simulator", section = "calibration" })
+        ms.settings.define({
+            type = "groupLabel",
+            label = "Lag Simulator",
+            section = "calibration"
+        })
         ms.settings.define({
             type = "slider",
             key = "spamMoveX",
@@ -116,7 +120,11 @@
             type = "divider",
             section = "calibration"
         })
-        ms.settings.define({ type = "groupLabel", label = "Quick Slide",  section = "calibration" })
+        ms.settings.define({
+            type = "groupLabel",
+            label = "Quick Slide",
+            section = "calibration"
+        })
         ms.settings.define({
             type = "slider",
             key = "qsClickX",
@@ -280,6 +288,7 @@
                 label = "Jump High",
                 mod   = "v",
             })
+
             ms.bind.define("jumpLow",  HighLeapAssistFunction, {
                 sub   = "superJump",
                 label = "Jump Low",
@@ -387,6 +396,7 @@
                 label = "Throw Trick",
                 mod   = "alt",
             })
+
             ms.bind.define("throwLow",   ThrowTrickFunction, {
                 sub   = "superThrow",
                 label = "Throw Low",
