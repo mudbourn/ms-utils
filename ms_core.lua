@@ -6907,13 +6907,15 @@ YQIDAQAB
                     ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
                     panel:navigationCallback(function(_, action)
                         if action == "navigating" then return end
-                        _loadDevHistory(panel, function(e)
-                            return e.type == "macro" or e.type == "print"
-                                or e.type == "result" or e.type == "error"
-                                or e.type == "input"
+                        hs.timer.doAfter(0, function()
+                            _loadDevHistory(panel, function(e)
+                                return e.type == "macro" or e.type == "print"
+                                    or e.type == "result" or e.type == "error"
+                                    or e.type == "input"
+                            end)
+                            local tj = _devThemeJS()
+                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
-                        local tj = _devThemeJS()
-                        if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                     end)
                     return panel
                 end
@@ -6982,11 +6984,13 @@ YQIDAQAB
                     ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
                     panel:navigationCallback(function(_, action)
                         if action == "navigating" then return end
-                        _loadDevHistory(panel, function(e)
-                            return e.type=="macro" or e.type=="print" or e.type=="error"
+                        hs.timer.doAfter(0, function()
+                            _loadDevHistory(panel, function(e)
+                                return e.type=="macro" or e.type=="print" or e.type=="error"
+                            end)
+                            local tj = _devThemeJS()
+                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
-                        local tj = _devThemeJS()
-                        if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                     end)
                     return panel
                 end
@@ -7261,25 +7265,27 @@ YQIDAQAB
                     ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
                     panel:navigationCallback(function(_, action)
                         if action == "navigating" then return end
-                        local tj = _devThemeJS()
-                        if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                        if #ms.dev._windowHistory > 0 then
-                            local ok, j = pcall(hs.json.encode, ms.dev._windowHistory)
-                            if ok then pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end) end
-                        end
-                        local win = hs.window.focusedWindow()
-                        if win then
-                            local app   = (win:application() and win:application():name()) or "?"
-                            local title = win:title() or ""
-                            local wf    = win:frame()
-                            local ok2, j2 = pcall(hs.json.encode, {
-                                type="focus", ts=os.time(),
-                                app=app, title=title,
-                                w=math.floor(wf.w), h=math.floor(wf.h),
-                                x=math.floor(wf.x), y=math.floor(wf.y),
-                            })
-                            if ok2 then pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end) end
-                        end
+                        hs.timer.doAfter(0, function()
+                            local tj = _devThemeJS()
+                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                            if #ms.dev._windowHistory > 0 then
+                                local ok, j = pcall(hs.json.encode, ms.dev._windowHistory)
+                                if ok then pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end) end
+                            end
+                            local win = hs.window.focusedWindow()
+                            if win then
+                                local app   = (win:application() and win:application():name()) or "?"
+                                local title = win:title() or ""
+                                local wf    = win:frame()
+                                local ok2, j2 = pcall(hs.json.encode, {
+                                    type="focus", ts=os.time(),
+                                    app=app, title=title,
+                                    w=math.floor(wf.w), h=math.floor(wf.h),
+                                    x=math.floor(wf.x), y=math.floor(wf.y),
+                                })
+                                if ok2 then pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end) end
+                            end
+                        end)
                     end)
                     return panel
                 end
