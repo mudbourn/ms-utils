@@ -1564,6 +1564,19 @@ YQIDAQAB
                             end
                         end
                     end
+                    -- The active profile's ms_macros.lua lives at the root, not in its
+                    -- folder, so the directory scan above won't find it.  Include it
+                    -- explicitly whenever its folder exists on disk.
+                    local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                    if activeName ~= "" and hs.fs.attributes(profilesPath .. activeName) then
+                        local found = false
+                        for _, p in ipairs(list) do
+                            if p == activeName then found = true; break end
+                        end
+                        if not found then
+                            table.insert(list, activeName)
+                        end
+                    end
                     table.sort(list)
                     _profilesCache = list
                     return list
