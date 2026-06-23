@@ -1,6 +1,6 @@
 -- Core System ---- PLEASE EDIT CAREFULLY --
     -- Hammerspoon mudscript Utility Library --
-        -- 0. Pre-Load  --
+        -- 0. Pre-Load --
             -- hs.reload() re-runs this whole file but never tears down old native
             -- objects (watchers, timers, hotkeys). Without this, every reload
             -- leaves the previous ms._appWatcher running forever, stacked on top
@@ -1615,14 +1615,22 @@
                     -- macroMeta block will ever use).  JIT is disabled so the count hook
                     -- fires on every instruction on both Lua 5.x and LuaJIT.
                     if jit then pcall(jit.off, chunk, true) end
+
                     local _co = coroutine.create(chunk)
                     local _hookFires = 0
-                    debug.sethook(_co, function()
-                        _hookFires = _hookFires + 1
-                        if _hookFires > 2000 then  -- 2000 × 1000 = ~2 M VM instructions
-                            error("readMacroMeta: instruction limit exceeded (possible infinite loop in " .. filePath .. ")")
-                        end
-                    end, "", 1000)
+
+                    debug.sethook(
+                        _co,
+                        function()
+                            _hookFires = _hookFires + 1
+                            if _hookFires > 2000 then  -- 2000 × 1000 = ~2 M VM instructions
+                                error("readMacroMeta: instruction limit exceeded (possible infinite loop in " .. filePath .. ")")
+                            end
+                        end,
+                        "",
+                        1000
+                    )
+
                     coroutine.resume(_co)  -- errors and the watchdog error alike are harmless here
                     return captured.macroMeta
                 end
@@ -1891,11 +1899,21 @@
                         "/opt/","/tmp/","/System/","/Library/",
                         "~/","%.hammerspoon",
                     }) do
-                        local pos = clean:find(sysPath)
-                        if pos and not nearMedia(pos) then
-                            local snip = clean:sub(pos, math.min(#clean, pos+35))
-                                             :gsub("%s+", " ")
-                            table.insert(errs, "disallowed path: " .. snip)
+                        -- Scan ALL occurrences of this prefix, not just the first.
+                        -- The old clean:find() returned only the first hit: a macro
+                        -- could place a first occurrence next to a media extension to
+                        -- earn an exemption, leaving subsequent occurrences unchecked.
+                        local pos = 1
+                        while true do
+                            local found = clean:find(sysPath, pos)
+                            if not found then break end
+                            if not nearMedia(found) then
+                                local snip = clean:sub(found, math.min(#clean, found+35))
+                                                 :gsub("%s+", " ")
+                                table.insert(errs, "disallowed path: " .. snip)
+                                break  -- one error per prefix is enough
+                            end
+                            pos = found + 1
                         end
                     end
 
@@ -4239,9 +4257,7 @@
             end
         -- END --
 
-        -- 4. Mouse Actions --
-
-
+        -- 4. Mouse Actions -
             ms.scroll = function(direction, clicks)
                 if ms.dev._watcherPanel then
                     _flushCam()
@@ -6956,8 +6972,11 @@
                     local function sv(prop, key)
                         local val = t[key]
                         if type(val) == "string" then
-                            -- Sanitize: only accept valid hex colors or named values
-                            if val:match("^#[0-9a-fA-F]+$") or val:match("^rgb") then
+                            -- Hex-only: matches the loadTheme validation policy.
+                            -- The old `^rgb` branch is removed: it was a prefix-only
+                            -- check that would allow arbitrary content after "rgb",
+                            -- and loadTheme never stores non-hex colors anyway.
+                            if val:match("^#[0-9a-fA-F]+$") then
                                 table.insert(parts, string.format("r.setProperty('%s','%s')", prop, val))
                             end
                         end
@@ -6972,11 +6991,12 @@
                     if type(t.radius) == "number" then
                         table.insert(parts, string.format("r.setProperty('--radius','%dpx')", math.max(0, t.radius)))
                     end
-                    -- Font family
+                    -- Font family.
+                    -- loadTheme strips [;{}()<>"'] from font names before storing them,
+                    -- so no injection-relevant characters can reach this point.
                     local font = t.font
                     if type(font) == "string" and font ~= "" and not font:match("%.[ot]tf$") and not font:match("%.woff") then
-                        local safe = font:gsub("'", "\'")
-                        table.insert(parts, string.format("document.body.style.fontFamily=\"'%s',Palatino,Georgia,serif\"", safe))
+                        table.insert(parts, string.format("document.body.style.fontFamily=\"'%s',Palatino,Georgia,serif\"", font))
                     end
                     if #parts == 0 then return "" end
                     return "(function(){var r=document.documentElement.style;" .. table.concat(parts, ";") .. "})()"
