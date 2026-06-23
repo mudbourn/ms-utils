@@ -17,7 +17,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute hash and sign macOS MANIFEST
-        if: contains(github.event.head_commit.modified, 'ms_core.lua')
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
@@ -53,7 +52,6 @@ jobs:
           fi
 
       - name: Sign Windows runtime
-        if: contains(github.event.head_commit.modified, 'ms_core.ahk')
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
