@@ -7,140 +7,142 @@
 -- END Creator Credits --
 
 -- Pack Settings --
-    ms.settings.define({
-        key     = "clickLevel",
-        label   = "Click Method",
-        hint    = "Switches the method used to perform click sequences",
-        section = "calibration",
-        type    = "seg",
-        options = {
-            { label = "1", value = 1 },
-            { label = "2", value = 2 },
-            { label = "3", value = 3 },
-            { label = "4", value = 4 },
-        },
-        default  = 3,
-        save     = true,
-    })
--- END Pack Settings --
+    -- Click Level --
+        ms.settings.define({
+            key     = "clickLevel",
+            label   = "Click Method",
+            hint    = "Switches the method used to perform click sequences",
+            section = "calibration",
+            type    = "seg",
+            options = {
+                { label = "1", value = 1 },
+                { label = "2", value = 2 },
+                { label = "3", value = 3 },
+                { label = "4", value = 4 },
+            },
+            default  = 3,
+            save     = true,
+        })
+        ms.settings.define({
+            type = "divider",
+            section = "calibration"
+        })
+    -- END --
 
--- Coordinate Calibration --
-    -- All coordinates are REF-space pixels relative to the Roblox window
-    -- top-left (WindowTL). Use the Get Mouse Position bind (F8) while
-    -- hovering over the target UI element to read the correct value.
-    ms.menu.define({
-        id    = "calibration",
-        title = "Coordinate Calibration",
-        items = {
-            {
-                type  = "groupLabel",
-                label = "Slide Setup",
-            },
-            {
-                type    = "slider",
-                key     = "sgMenuX",
-                label   = "Menu Button X",
-                hint    = "X coord of the Z-menu button in the top bar",
-                min     = 350,
-                max     = 560,
-                step    = 1,
-                default = 445,
-                save    = true,
-            },
-            {
-                type    = "slider",
-                key     = "sgMenuY",
-                label   = "Menu Button Y",
-                hint    = "Y coord of the Z-menu button in the top bar",
-                min     = 20,
-                max     = 80,
-                step    = 1,
-                default = 37,
-                save    = true,
-            },
-            {
-                type    = "slider",
-                key     = "sgItemX",
-                label   = "Item Column X",
-                hint    = "X coord of the emote / action item column",
-                min     = 400,
-                max     = 560,
-                step    = 1,
-                default = 467,
-                save    = true,
-            },
-            {
-                type = "divider",
-            },
-            {
-                type  = "groupLabel",
-                label = "Lag Simulator",
-            },
-            {
-                type    = "slider",
-                key     = "spamMoveX",
-                label   = "Profiler Icon X",
-                hint    = "X coord of the Micro Profiler icon in the top bar",
-                min     = 380,
-                max     = 510,
-                step    = 1,
-                default = 437,
-                save    = true,
-            },
-            {
-                type    = "slider",
-                key     = "spamMoveY",
-                label   = "Profiler Icon Y",
-                hint    = "Y coord of the Micro Profiler icon in the top bar",
-                min     = 20,
-                max     = 70,
-                step    = 1,
-                default = 34,
-                save    = true,
-            },
-            {
-                type    = "slider",
-                key     = "spamClickX",
-                label   = "Profiler Action X",
-                hint    = "X coord for the profiler action click",
-                min     = 390,
-                max     = 530,
-                step    = 1,
-                default = 452,
-                save    = true,
-            },
-            {
-                type = "divider",
-            },
-            {
-                type  = "groupLabel",
-                label = "Quick Slide",
-            },
-            {
-                type    = "slider",
-                key     = "qsClickX",
-                label   = "Click Target X",
-                hint    = "X coord of the Quick Slide click target",
-                min     = 600,
-                max     = 1300,
-                step    = 1,
-                default = 920,
-                save    = true,
-            },
-            {
-                type    = "slider",
-                key     = "qsClickY",
-                label   = "Click Target Y",
-                hint    = "Y coord of the Quick Slide click target",
-                min     = 400,
-                max     = 900,
-                step    = 1,
-                default = 680,
-                save    = true,
-            },
-        },
-    })
--- END  Coordinate Calibration --
+    -- Slide Setup --
+        ms.settings.define({
+            type = "groupLabel",
+            label = "Slide Setup",
+            section = "calibration"
+        })
+        ms.settings.define({
+            type = "slider",
+            key = "sgMenuX",
+            label = "Menu Button X",
+            hint = "X coord of the Z-menu button in the top bar",
+            min = 350,
+            max = 560,
+            step = 1,
+            default = 445,
+            save = true,
+            section = "calibration",
+        })
+        ms.settings.define({
+            type = "slider", key = "sgMenuY", label = "Menu Button Y",
+            hint = "Y coord of the Z-menu button in the top bar",
+            min = 20, max = 80, step = 1, default = 37, save = true,
+            section = "calibration",
+        })
+        ms.settings.define({
+            type = "slider",
+            key = "sgItemX",
+            label = "Item Column X",
+            hint = "X coord of the emote / action item column",
+            min = 400,
+            max = 560,
+            step = 1,
+            default = 467,
+            save = true,
+            section = "calibration",
+        })
+    -- END --
+
+    -- Lag Simulator --
+        ms.settings.define({
+            type = "divider",
+            section = "calibration"
+        })
+        ms.settings.define({ type = "groupLabel", label = "Lag Simulator", section = "calibration" })
+        ms.settings.define({
+            type = "slider",
+            key = "spamMoveX",
+            label = "Profiler Icon X",
+            hint = "X coord of the Micro Profiler icon in the top bar",
+            min = 380,
+            max = 510,
+            step = 1,
+            default = 437,
+            save = true,
+            section = "calibration",
+        })
+        ms.settings.define({
+            type = "slider",
+            key = "spamMoveY",
+            label = "Profiler Icon Y",
+            hint = "Y coord of the Micro Profiler icon in the top bar",
+            min = 20,
+            max = 70,
+            step = 1,
+            default = 34,
+            save = true,
+            section = "calibration",
+        })
+        ms.settings.define({
+            type = "slider",
+            key = "spamClickX",
+            label = "Profiler Action X",
+            hint = "X coord for the profiler action click",
+            min = 390,
+            max = 530,
+            step = 1,
+            default = 452,
+            save = true,
+            section = "calibration",
+        })
+    -- END --
+
+    -- Quick Slide --
+        ms.settings.define({
+            type = "divider",
+            section = "calibration"
+        })
+        ms.settings.define({ type = "groupLabel", label = "Quick Slide",  section = "calibration" })
+        ms.settings.define({
+            type = "slider",
+            key = "qsClickX",
+            label = "Click Target X",
+            hint = "X coord of the Quick Slide click target",
+            min = 600,
+            max = 1300,
+            step = 1,
+            default = 920,
+            save = true,
+            section = "calibration",
+        })
+        ms.settings.define({
+            type = "slider",
+            key = "qsClickY",
+            label = "Click Target Y",
+            hint = "Y coord of the Quick Slide click target",
+            min = 400,
+            max = 900,
+            step = 1,
+            default = 680,
+            save = true,
+            section = "calibration",
+        })
+    -- END --
+-- END Pack Settings --
 
 -- Combat Warriors Macros --
     -- Macro Functions --
