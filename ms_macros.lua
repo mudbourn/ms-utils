@@ -573,8 +573,7 @@
             end)
 
             ms.bind.define("frameDump", function()
-                -- Same workaround: SpawnAltFunction is defined after this closure.
-                if ms._currentFlags and ms._currentFlags.alt then
+                if ms.modHeld("spawnAlt") then
                     local fn = ms.bind._wires.spawnAlt
                     if fn then fn() end
                 else ActionSpammerFunction() end
