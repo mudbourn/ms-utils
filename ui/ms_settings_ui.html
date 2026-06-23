@@ -780,6 +780,38 @@
                 color: var(--danger);
                 border: 1px solid rgba(212, 32, 32, 0.3);
             }
+            /* ── User-defined collapsible groups ─────────────────────────────── */
+            .user-group {
+                margin: 2px 0;
+            }
+            .user-group-summary {
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 12px;
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                list-style: none;
+                -webkit-user-select: none;
+                user-select: none;
+                border-bottom: 1px solid var(--border);
+            }
+            .user-group-summary::-webkit-details-marker {
+                display: none;
+            }
+            .user-group-arrow {
+                font-size: 8px;
+                display: inline-block;
+                transition: transform 0.15s;
+            }
+            details[open].user-group > .user-group-summary .user-group-arrow {
+                transform: rotate(90deg);
+            }
         </style>
     </head>
     <body>
@@ -1702,51 +1734,11 @@
                 return wrap;
             }
 
-            // ── buildTools — system settings (moved from Settings) ─────────────────
+            // ── buildTools — input and motion settings ─────────────────────────
             function buildTools(body) {
                 const hidden = S.hiddenFeatures || {};
-
-                // Camera Sensitivity
-                if (!hidden.sensitivity) {
-                    body.appendChild(
-                        buildSlider(
-                            "Camera Sensitivity",
-                            null,
-                            0.1,
-                            4,
-                            0.05,
-                            null,
-                            S.sensitivity ?? 1.5,
-                            (v) =>
-                                sendToHost({
-                                    action: "setSensitivity",
-                                    value: v,
-                                }),
-                            [
-                                {
-                                    icon: "↺",
-                                    label: "Reset to default",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "resetSetting",
-                                            key: "sensitivity",
-                                        }),
-                                },
-                            ],
-                        ),
-                    );
-                }
-
                 const hasTrackpad = !hidden.trackpad;
                 const hasSocd = !hidden.socd;
-                const hasIndep = !hidden.independentBinds;
-
-                if (
-                    !hidden.sensitivity &&
-                    (hasTrackpad || hasSocd || hasIndep)
-                ) {
-                    body.appendChild(divider());
-                }
 
                 // Trackpad Mode
                 if (hasTrackpad) {
@@ -1778,6 +1770,7 @@
 
                 // SOCD
                 if (hasSocd) {
+                    if (hasTrackpad) body.appendChild(divider());
                     body.appendChild(
                         row(
                             "SOCD Cleaning",
@@ -1813,10 +1806,7 @@
                                             label: "Last Wins",
                                             value: "lastWins",
                                         },
-                                        {
-                                            label: "Neutral",
-                                            value: "neutral",
-                                        },
+                                        { label: "Neutral", value: "neutral" },
                                         {
                                             label: "First Wins",
                                             value: "firstWins",
@@ -1845,59 +1835,6 @@
                         );
                     }
                 }
-
-                // Independent Binds
-                if (hasIndep) {
-                    body.appendChild(
-                        row(
-                            "Independent Binds",
-                            null,
-                            toggle(S.independentBindsEnabled ?? false, (e) =>
-                                sendToHost({
-                                    action: "setIndependentBinds",
-                                    value: e.target.checked,
-                                }),
-                            ),
-                            "",
-                            [
-                                {
-                                    icon: "↺",
-                                    label: "Reset to default",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "resetSetting",
-                                            key: "independentBinds",
-                                        }),
-                                },
-                            ],
-                        ),
-                    );
-                }
-
-                body.appendChild(divider());
-
-                body.appendChild(
-                    btnRow(
-                        actionBtn("Save as Default", "", async () => {
-                            const r = await openModal(
-                                "Save as Default",
-                                "Save current settings as the new default?\nThe existing default will be archived.",
-                                "Save",
-                            );
-                            if (r.confirmed)
-                                sendToHost({ action: "saveDefault" });
-                        }),
-                        actionBtn("Reset to Default", "danger", async () => {
-                            const r = await openModal(
-                                "Reset to Default",
-                                "Reset all settings to the saved default?\nCurrent settings will be overwritten.",
-                                "Reset",
-                            );
-                            if (r.confirmed)
-                                sendToHost({ action: "resetToDefault" });
-                        }),
-                    ),
-                );
             }
 
             // ── renderUserItem — shared renderer for user-defined items ─────────────
@@ -2020,13 +1957,104 @@
                     } else {
                         body.appendChild(btnRow(btn));
                     }
+                } else if (item.type === "group") {
+                    // Collapsible group containing nested settings items.
+                    const det = document.createElement("details");
+                    det.className = "user-group";
+                    det.open = item.open !== false;
+                    const sum = document.createElement("summary");
+                    sum.className = "user-group-summary";
+                    const arrow = document.createElement("span");
+                    arrow.className = "user-group-arrow";
+                    arrow.textContent = "\u25b8";
+                    sum.appendChild(arrow);
+                    sum.appendChild(
+                        document.createTextNode(
+                            "\u00a0" + (item.label || "Group"),
+                        ),
+                    );
+                    det.appendChild(sum);
+                    for (const child of item.items || []) {
+                        renderUserItem(det, child);
+                    }
+                    body.appendChild(det);
                 }
             }
 
-            // ── buildSettings — user-defined settings ──────────────────────────────
+            // ── buildSettings — system + user-defined settings ─────────────────
             function buildSettings(body) {
+                const hidden = S.hiddenFeatures || {};
+
+                // Camera Sensitivity (moved from Tools)
+                if (!hidden.sensitivity) {
+                    body.appendChild(
+                        buildSlider(
+                            "Camera Sensitivity",
+                            null,
+                            0.1,
+                            4,
+                            0.05,
+                            null,
+                            S.sensitivity ?? 1.5,
+                            (v) =>
+                                sendToHost({
+                                    action: "setSensitivity",
+                                    value: v,
+                                }),
+                            [
+                                {
+                                    icon: "↺",
+                                    label: "Reset to default",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetSetting",
+                                            key: "sensitivity",
+                                        }),
+                                },
+                            ],
+                        ),
+                    );
+                }
+
+                // Independent Binds (moved from Tools)
+                if (!hidden.independentBinds) {
+                    if (!hidden.sensitivity) body.appendChild(divider());
+                    body.appendChild(
+                        row(
+                            "Independent Binds",
+                            null,
+                            toggle(S.independentBindsEnabled ?? false, (e) =>
+                                sendToHost({
+                                    action: "setIndependentBinds",
+                                    value: e.target.checked,
+                                }),
+                            ),
+                            "",
+                            [
+                                {
+                                    icon: "↺",
+                                    label: "Reset to default",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetSetting",
+                                            key: "independentBinds",
+                                        }),
+                                },
+                            ],
+                        ),
+                    );
+                }
+
+                // User-defined settings targeting the Settings section
                 const items = S.userSettings || [];
-                if (items.length === 0) {
+                const hasSystem =
+                    !hidden.sensitivity || !hidden.independentBinds;
+                if (items.length > 0) {
+                    if (hasSystem) body.appendChild(divider());
+                    for (const item of items) {
+                        renderUserItem(body, item);
+                    }
+                } else if (!hasSystem) {
                     body.appendChild(groupLabel("No settings defined."));
                     const r = h("div", { cls: "row" });
                     const lbl = h("div", { cls: "row-label" });
@@ -2039,8 +2067,37 @@
                     );
                     r.appendChild(lbl);
                     body.appendChild(r);
-                    return;
                 }
+
+                // Save / Reset as Default (moved from Tools)
+                body.appendChild(divider());
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Save as Default", "", async () => {
+                            const r = await openModal(
+                                "Save as Default",
+                                "Save current settings as the new default?\nThe existing default will be archived.",
+                                "Save",
+                            );
+                            if (r.confirmed)
+                                sendToHost({ action: "saveDefault" });
+                        }),
+                        actionBtn("Reset to Default", "danger", async () => {
+                            const r = await openModal(
+                                "Reset to Default",
+                                "Reset all settings to the saved default?\nCurrent settings will be overwritten.",
+                                "Reset",
+                            );
+                            if (r.confirmed)
+                                sendToHost({ action: "resetToDefault" });
+                        }),
+                    ),
+                );
+            }
+
+            // ── buildCalibration — user-injected calibration settings ──────────
+            function buildCalibration(body) {
+                const items = S.userCalibrationSettings || [];
                 for (const item of items) {
                     renderUserItem(body, item);
                 }
@@ -2604,6 +2661,13 @@
                 scroll.appendChild(
                     section("settings", "Settings", buildSettings),
                 );
+                // Calibration section is only rendered when at least one user
+                // setting targets it (via ms.settings.define({ section: "calibration" })).
+                if ((S.userCalibrationSettings || []).length > 0) {
+                    scroll.appendChild(
+                        section("calibration", "Calibration", buildCalibration),
+                    );
+                }
                 scroll.appendChild(section("tools", "Tools", buildTools));
                 for (const menu of S.userMenus || []) {
                     const title = menu.icon

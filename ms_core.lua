@@ -647,6 +647,7 @@ YQIDAQAB
                     toggle = true, slider    = true, seg       = true,
                     action = true, divider   = true, groupLabel = true,
                     soundSlot = true,  -- user-defined sound event slot
+                    group     = true,  -- collapsible group of nested settings
                 }
                 -- Feature names ms.features.hide() is permitted to suppress.
                 -- "sound" and "profiles" are intentionally excluded.
@@ -1051,8 +1052,11 @@ YQIDAQAB
                 --   ms.features.hide("independentBinds") -- hide Ind. Binds row in Tools
                 --
                 -- ── ms.settings.define(def) ────────────────────────────────────────────────────────────────────
-                -- Registers one setting or visual item in the Settings section.
-                -- Items appear in declaration order.
+                -- Registers one setting or visual item in a panel section.
+                -- Items appear in declaration order within their target section.
+                --
+                -- Optional field: section = "settings" (default) | "calibration"
+                -- Optional field (type="group" only): items = { nested defs }
                 --
                 ms.settings.define = function(def)
                     assert(type(def) == "table",
@@ -1062,6 +1066,30 @@ YQIDAQAB
                         "ms.settings.define: unknown type '" .. tostring(t) .. "'")
                     -- Visual-only items need no key or value.
                     if t == "divider" or t == "groupLabel" then
+                        table.insert(ms._userSettingDefs, def)
+                        return
+                    end
+                    -- Collapsible group: register each nested item then store the group.
+                    if t == "group" then
+                        assert(type(def.items) == "table",
+                            "ms.settings.define: 'items' is required for type 'group'")
+                        for _, subDef in ipairs(def.items) do
+                            if type(subDef) == "table"
+                                and type(subDef.key) == "string" and #subDef.key > 0 then
+                                assert(not ms._userSettingIndex[subDef.key],
+                                    "ms.settings.define: duplicate key '" .. subDef.key .. "' in group")
+                                ms._userSettingIndex[subDef.key] = subDef
+                                local st = subDef.type
+                                if st ~= "action" and st ~= "soundSlot"
+                                    and st ~= "divider" and st ~= "groupLabel" then
+                                    ms._userSettingVals[subDef.key] = subDef.default
+                                    if subDef.default ~= nil
+                                        and type(subDef.onChange) == "function" then
+                                        pcall(subDef.onChange, subDef.default)
+                                    end
+                                end
+                            end
+                        end
                         table.insert(ms._userSettingDefs, def)
                         return
                     end
@@ -5469,28 +5497,65 @@ YQIDAQAB
                     end
                 end
 
-                -- Serialize user setting defs (strip function references for JSON).
-                local userSettings = {}
-                for _, def in ipairs(ms._userSettingDefs) do
-                    local item = {
-                        type    = def.type,
-                        key     = def.key,
-                        label   = def.label,
-                        hint    = def.hint,
+                -- Serialize user setting defs, routed by target section.
+                -- Helper: serialize a single def to a JSON-safe item table.
+                local function _serItem(d)
+                    local it = {
+                        type    = d.type,
+                        key     = d.key,
+                        label   = d.label,
+                        hint    = d.hint,
                     }
-                    if def.type == "slider" then
-                        item.min  = def.min;  item.max  = def.max
-                        item.step = def.step; item.unit = def.unit
-                    elseif def.type == "seg" then
-                        item.options = def.options
-                    elseif def.type == "action" then
-                        item.btnLabel = def.btnLabel; item.danger = def.danger
+                    if d.type == "slider" then
+                        it.min  = d.min;  it.max  = d.max
+                        it.step = d.step; it.unit = d.unit
+                    elseif d.type == "seg" then
+                        it.options = d.options
+                    elseif d.type == "action" then
+                        it.btnLabel = d.btnLabel; it.danger = d.danger
+                    elseif d.type == "group" then
+                        local subs = {}
+                        for _, sd in ipairs(d.items or {}) do
+                            local si = {
+                                type    = sd.type,
+                                key     = sd.key,
+                                label   = sd.label,
+                                hint    = sd.hint,
+                            }
+                            if sd.type == "slider" then
+                                si.min  = sd.min;  si.max  = sd.max
+                                si.step = sd.step; si.unit = sd.unit
+                            elseif sd.type == "seg"    then si.options  = sd.options
+                            elseif sd.type == "action" then
+                                si.btnLabel = sd.btnLabel; si.danger = sd.danger
+                            end
+                            if sd.key and sd.type ~= "action"
+                                and sd.type ~= "divider" and sd.type ~= "groupLabel" then
+                                si.value   = ms.settings.get(sd.key)
+                                si.default = sd.default
+                            end
+                            table.insert(subs, si)
+                        end
+                        it.items = subs
                     end
-                    if def.key then
-                        item.value   = ms.settings.get(def.key)
-                        item.default = def.default
+                    if d.key and d.type ~= "action"
+                        and d.type ~= "divider" and d.type ~= "groupLabel"
+                        and d.type ~= "group" then
+                        it.value   = ms.settings.get(d.key)
+                        it.default = d.default
                     end
-                    table.insert(userSettings, item)
+                    return it
+                end
+
+                local userSettings = {}
+                local userCalibrationSettings = {}
+                for _, def in ipairs(ms._userSettingDefs) do
+                    local item = _serItem(def)
+                    if (def.section or "settings") == "calibration" then
+                        table.insert(userCalibrationSettings, item)
+                    else
+                        table.insert(userSettings, item)
+                    end
                 end
                 -- Serialize custom section defs.
                 local userMenus = {}
@@ -5566,6 +5631,7 @@ YQIDAQAB
                     docsURL                 = ms._docsURL,
                     updateManifestURL       = ms._updateManifestURL,
                     userSettings            = userSettings,
+                    userCalibrationSettings = userCalibrationSettings,
                     userSoundSlots          = userSoundSlots,
                     userMenus               = userMenus,
                     hiddenFeatures          = ms._hiddenFeatures,
