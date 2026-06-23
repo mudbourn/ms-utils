@@ -3,7 +3,12 @@ data/.ms_trusted_hash
 
 # Per-user runtime settings
 data/ms_settings.json
+data/ms_settings_default.json
 data/ms_theme.json
+
+# Profile archives — change every time a profile switch happens;
+# these are runtime state, not source files
+profiles/
 
 # Developer tool logs
 data/ms_dev.log
