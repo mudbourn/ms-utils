@@ -3438,7 +3438,6 @@
                         local slots = {
                             { id = "startup",      label = "Loading Screen Start" },
                             { id = "load",         label = "Loading Screen End"   },
-                            { id = "launch",       label = "Launch Announcement"  },
                             { id = "alert",        label = "Alert / Notice"       },
                             { id = "enabled",      label = "Macros Enabled"       },
                             { id = "disabled",     label = "Macros Disabled"      },
@@ -5073,7 +5072,6 @@
             local _slotDefaults = {
                 startup = { "LoadStart", "Load Start" },
                 load    = { "LoadEnd",   "Load End"   },
-                launch  = { "Launch" },
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
@@ -7929,13 +7927,11 @@
             _loadAnnounced = true
             -- Load-end sound fires the instant the canvas disappears.
             pcall(function() ms.playSlot("load") end)
-            -- Offset the launch sound and toasts slightly so they don't overlap
-            -- with the load-end sound.
+            -- Brief pause before opening the gate so the load-end sound
+            -- has a moment before any subsequent sounds can play.
             hs.timer.doAfter(0.4, function()
-                -- Open the sound gate so the launch slot and all future sounds play.
+                -- Open the sound gate for all future sounds.
                 ms._startupSoundDone = true
-                -- Launch sound plays with the first toast.
-                pcall(function() ms.playSlot("launch") end)
                 -- 1. Settings notice (immediate)
                 ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true)
                 -- 2. Library creator \xe2\x80\x94 after first toast fades
