@@ -148,16 +148,16 @@
             --   openssl rsa -in private.pem -pubout -out public.pem
             --   → paste public.pem content here, add private.pem to GitHub Secrets
             ms._updatePublicKey = [[
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pyxWISHUScKsmK0fyqA
-QWUU0nzYEVpRYD+kRkZsL5AGqpjfNqfOky5bacE1jPXgu9LGz+b1pq1tuyZotvK/
-FrMeQDCmGWiu5RXAqsyg0iN1c1CHSvWAT40xi6g54u9ot9LMfzmBETlwWd4QoXOA
-OnT3KW0aia1EoyUjjNIRk6iv6pxi+BjHnGKoID6pAl9de+WASt/DETgCuKhQ7o/Y
-iGn43A9ZutKUfkV+Muu1RcTy62zbXcQrzK3cyLl0M7gfTm0YWPzaf+d3ATNnq/9j
-/952QfmXjVSGhU3EBxlEM6NWstNSNuaTWSMCcbcH+va/AMOHK1rRKQ3IOdzjYcQm
-YQIDAQAB
------END PUBLIC KEY-----
-]]
+            -----BEGIN PUBLIC KEY-----
+            MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pyxWISHUScKsmK0fyqA
+            QWUU0nzYEVpRYD+kRkZsL5AGqpjfNqfOky5bacE1jPXgu9LGz+b1pq1tuyZotvK/
+            FrMeQDCmGWiu5RXAqsyg0iN1c1CHSvWAT40xi6g54u9ot9LMfzmBETlwWd4QoXOA
+            OnT3KW0aia1EoyUjjNIRk6iv6pxi+BjHnGKoID6pAl9de+WASt/DETgCuKhQ7o/Y
+            iGn43A9ZutKUfkV+Muu1RcTy62zbXcQrzK3cyLl0M7gfTm0YWPzaf+d3ATNnq/9j
+            /952QfmXjVSGhU3EBxlEM6NWstNSNuaTWSMCcbcH+va/AMOHK1rRKQ3IOdzjYcQm
+            YQIDAQAB
+            -----END PUBLIC KEY-----
+            ]]
 
             -- User Settings & Menu API State ─────────────────────────────────────
             ms.settings          = {}  -- user settings API namespace
@@ -204,7 +204,7 @@ YQIDAQAB
             require("hs.menubar")
             require("hs.application")
 
-            -- ── Developer Tools — ms.dev ───────────────────────────────────────────────────
+            -- Developer Tools — ms.dev --
             ms.dev = {
                 _consolePanel    = nil,
                 _watcherPanel    = nil,
@@ -749,8 +749,30 @@ YQIDAQAB
                         local v = tonumber(data.soundVolume)
                         if v and v >= 0 and v <= 100 then ms.soundVolume = math.floor(v) end
                     end
-                    if data.soundAssign      then ms.soundAssign     = data.soundAssign      end
-                    if data.importedSounds   then ms.importedSounds  = data.importedSounds   end
+                    if data.soundAssign and type(data.soundAssign) == "table" then
+                        local _sa = {}
+                        for k, v in pairs(data.soundAssign) do
+                            -- Keys are slot IDs (strings); values must be plain sound names
+                            -- with no path separators to prevent SoundLib boundary escapes.
+                            if type(k) == "string" and type(v) == "string"
+                                and not v:find("[/\\]") and not v:find("%.%.")
+                            then
+                                _sa[k] = v
+                            end
+                        end
+                        ms.soundAssign = _sa
+                    end
+                    if data.importedSounds and type(data.importedSounds) == "table" then
+                        local _is = {}
+                        for k, v in pairs(data.importedSounds) do
+                            if type(k) == "string" and type(v) == "string"
+                                and not v:find("[/\\]") and not v:find("%.%.")
+                            then
+                                _is[k] = v
+                            end
+                        end
+                        ms.importedSounds = _is
+                    end
                     if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
                     if data.devArchiveLimit ~= nil then
                         local n = tonumber(data.devArchiveLimit)
@@ -1067,7 +1089,7 @@ YQIDAQAB
                     ms.alert("Settings reloaded.", 5, true)
                 end
 
-                -- ── User Settings & Menu API ─────────────────────────────────────────────────────────────────────
+                -- User Settings & Menu API --
                 --
                 -- These functions are called from ms_macros.lua (after ms.macroMeta, before
                 -- macro functions) to declare custom settings, panel sections, and to hide
@@ -1304,9 +1326,9 @@ YQIDAQAB
                     ms._hiddenFeatures[name] = true
                 end
 
-                -- ── END User Settings & Menu API ─────────────────────────────────────────────────────────────────────
+                -- END User Settings & Menu API --
 
-                -- ── Theme System ─────────────────────────────────────────────────────
+                -- Theme System --
                 --
                 -- Loads data/ms_theme.json and validates every value.
                 -- Safe to call multiple times; always resets to _themeDefaults first.
@@ -1372,7 +1394,7 @@ YQIDAQAB
                     end
                 end
 
-                -- ── END Theme System ────────────────────────────────────────
+                -- END Theme System --
 
                 -- Reads width and height from a PNG file's IHDR chunk (bytes 16–23).
                 -- Returns w, h as integers, or nil, nil on failure.
@@ -1409,7 +1431,7 @@ YQIDAQAB
                     end
                 end
 
-                -- ── Capability Detection — ms.has(feature) ───────────────────────────────────
+                -- Capability Detection --
                 --
                 -- Returns true if the named feature is present and configured.
                 -- Safe to call from ms_macros.lua at any point after ms.macroMeta.
@@ -1487,9 +1509,9 @@ YQIDAQAB
                     return false
                 end
 
-                -- ── END Capability Detection ──────────────────────────────────────────────────
+                -- END Capability Detection --
 
-                -- ── Profile Management ──────────────────────────────────────────────
+                -- Profile Management --
 
                 -- Builds ms_settings_default.json from registry declarations + ms.macroDefaults.
                 -- Called automatically when no default file exists. macroDefaults values take
@@ -2184,9 +2206,9 @@ YQIDAQAB
                     end
                 end
 
-                -- ── End Profile Management ───────────────────────────────────────────
+                -- END Profile Management --
 
-                -- ── System Integrity / Update System ─────────────────────────────────
+                -- System Integrity --
 
                 ms.integrity = {}
 
@@ -2394,9 +2416,9 @@ YQIDAQAB
                     end)
                 end
 
-                -- ── End System Integrity / Update System ─────────────────────────────────
+                -- END System Integrity --
 
-                -- ── ms.showGuardian([trusted, current]) ─────────────────────────────────
+                -- ms.showGuardian --
                 -- Shows the tamper-protection panel as a preview/test with the given
                 -- (or auto-generated placeholder) hash snippets.  Useful for verifying
                 -- theme application and panel layout without triggering a real mismatch.
@@ -4706,7 +4728,7 @@ YQIDAQAB
             ms.cam._setupWatcher()
         -- END --
 
-        -- 8. Macro Bind Controller
+        -- 8. Macro Bind Controller --
             -- Notification for enable/disable state changes.
             -- _doNotify is called synchronously by setMacros — no outer deferral
             -- that could swallow errors silently. The debounce lives *inside*
@@ -6863,7 +6885,7 @@ YQIDAQAB
             end
         -- END --
 
-        -- 13. Developer Panels --
+        -- 12. Developer Panels --
             do
                 local _devBase = "file://" .. os.getenv("HOME") .. "/.hammerspoon/ui/"
                 local _home    = os.getenv("HOME")
@@ -7494,7 +7516,7 @@ YQIDAQAB
             end
         -- END --
 
-        -- 12. Safety Nets --
+        -- 13. Safety Nets --
             -- Load ms_macros.lua inside a restricted sandbox environment.
             -- Blocks direct hs API access, require, filesystem ops, and environment
             -- escape hatches. The ms table is wrapped in a proxy that errors on any
@@ -7680,7 +7702,7 @@ YQIDAQAB
                     spawnAlt = { enabled = false },
                 },
             }
-        -- END Safety Nets --
+        -- END --
     -- END Hammerspoon mudscript Utility Library --
 
     -- Startup Executions --
