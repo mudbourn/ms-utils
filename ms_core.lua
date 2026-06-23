@@ -2428,33 +2428,25 @@
                 -- Shows the tamper-protection panel as a preview/test with the given
                 -- (or auto-generated placeholder) hash snippets.  Useful for verifying
                 -- theme application and panel layout without triggering a real mismatch.
-
-                -- Build (or rebuild) the guardian preview WebView if it doesn't exist yet.
-                -- Keeps the panel hidden until showGuardian() is called.  Called during
-                -- the loading sequence and lazily inside showGuardian() as a fallback.
-                ms._prewarmGuardian = function()
-                    if ms._guardianPreviewPanel then return end
-                    local _home     = os.getenv("HOME")
+                ms.showGuardian = function(trusted, current)
+                    trusted = trusted or ("a3f8" .. string.rep("0", 12))
+                    current = current or ("9c1e" .. string.rep("f", 12))
+                    local _home = os.getenv("HOME")
                     local _htmlPath = _home .. "/.hammerspoon/ui/ms_guardian.html"
                     local _baseURL  = "file://" .. _home .. "/.hammerspoon/ui/"
-                    ms._guardianPreviewUC = hs.webview.usercontent.new("guardianPreview")
-                    ms._guardianPreviewUC:setCallback(function(msg)
+                    local _uc = hs.webview.usercontent.new("guardianPreview")
+                    local _panel = nil
+                    local _pos   = nil
+                    _uc:setCallback(function(msg)
                         local body = msg.body
                         if body == "keepBlocked" or body == "confirmDelete" then
-                            -- Hide rather than delete so the panel stays prewarmed.
-                            pcall(function()
-                                if ms._guardianPreviewPanel then ms._guardianPreviewPanel:hide() end
-                            end)
+                            pcall(function() if _panel then _panel:delete() end end)
                         else
                             local ok, data = pcall(hs.json.decode, body)
-                            if ok and data and data.action == "move" and ms._guardianPreviewPos then
-                                ms._guardianPreviewPos.x = ms._guardianPreviewPos.x + (data.dx or 0)
-                                ms._guardianPreviewPos.y = ms._guardianPreviewPos.y + (data.dy or 0)
-                                pcall(function()
-                                    if ms._guardianPreviewPanel then
-                                        ms._guardianPreviewPanel:frame(ms._guardianPreviewPos)
-                                    end
-                                end)
+                            if ok and data and data.action == "move" and _pos then
+                                _pos.x = _pos.x + (data.dx or 0)
+                                _pos.y = _pos.y + (data.dy or 0)
+                                pcall(function() _panel:frame(_pos) end)
                             end
                         end
                     end)
@@ -2462,49 +2454,30 @@
                     local w, h = 360, 300
                     local x = sf.x + math.floor((sf.w - w) / 2)
                     local y = sf.y + math.floor((sf.h - h) / 2)
-                    ms._guardianPreviewPos   = { x = x, y = y, w = w, h = h }
-                    ms._guardianPreviewPanel = hs.webview.new(ms._guardianPreviewPos, {}, ms._guardianPreviewUC)
-                    if not ms._guardianPreviewPanel then return end
-                    pcall(function() ms._guardianPreviewPanel:windowStyle(0) end)
-                    pcall(function() ms._guardianPreviewPanel:level(hs.canvas.windowLevels.popUpMenu or 101) end)
-                    pcall(function() ms._guardianPreviewPanel:shadow(true) end)
+                    _pos   = { x = x, y = y, w = w, h = h }
+                    _panel = hs.webview.new(_pos, {}, _uc)
+                    if not _panel then return end
+                    pcall(function() _panel:windowStyle(0) end)
+                    pcall(function() _panel:level(hs.canvas.windowLevels.popUpMenu or 101) end)
+                    pcall(function() _panel:shadow(true) end)
                     local f = io.open(_htmlPath, "r")
-                    if not f then ms._guardianPreviewPanel = nil; return end
-                    ms._guardianPreviewPanel:html(f:read("*all"), _baseURL); f:close()
-                    -- Apply theme once the page loads; deferred to avoid the same
-                    -- nav-callback re-entrancy issue the dev panels had.
-                    ms._guardianPreviewPanel:navigationCallback(function()
-                        hs.timer.doAfter(0, function()
-                            if not ms._guardianPreviewPanel then return end
+                    if not f then return end
+                    _panel:html(f:read("*all"), _baseURL); f:close()
+                    _panel:show()
+                    _panel:navigationCallback(function()
+                        pcall(function()
+                            local t = trusted:sub(1, 16) .. "\xe2\x80\xa6"
+                            local c = current:sub(1, 16)  .. "\xe2\x80\xa6"
+                            _panel:evaluateJavaScript(
+                                "setHashes('" .. t .. "', '" .. c .. "')"
+                            )
+                            _panel:evaluateJavaScript("setPreviewMode()")
                             local tj = hs.json.encode(ms._theme or {})
                             if tj then
-                                pcall(function()
-                                    ms._guardianPreviewPanel:evaluateJavaScript("applyTheme(" .. tj .. ")")
-                                end)
+                                _panel:evaluateJavaScript("applyTheme(" .. tj .. ")")
                             end
                         end)
                     end)
-                end
-
-                ms.showGuardian = function(trusted, current)
-                    trusted = trusted or ("a3f8" .. string.rep("0", 12))
-                    current = current or ("9c1e" .. string.rep("f", 12))
-                    -- Build the panel now if the prewarm hasn't run yet.
-                    ms._prewarmGuardian()
-                    if not ms._guardianPreviewPanel then return end
-                    pcall(function()
-                        local t = trusted:sub(1, 16) .. "\xe2\x80\xa6"
-                        local c = current:sub(1, 16)  .. "\xe2\x80\xa6"
-                        ms._guardianPreviewPanel:evaluateJavaScript(
-                            "setHashes('" .. t .. "', '" .. c .. "')"
-                        )
-                        ms._guardianPreviewPanel:evaluateJavaScript("setPreviewMode()")
-                        local tj = hs.json.encode(ms._theme or {})
-                        if tj then
-                            ms._guardianPreviewPanel:evaluateJavaScript("applyTheme(" .. tj .. ")")
-                        end
-                    end)
-                    ms._guardianPreviewPanel:show()
                 end
 
                 -- Returns the effective bind config for an id, accounting for trackpad mode overrides
@@ -6818,12 +6791,7 @@
                 pcall(function() ms.ui._panel:bringToFront(true) end)
                 ms.ui._open = true
                 ms.playSlot("settingsOpen")
-                -- Only re-inject state if something changed since the last refresh.
-                -- When the panel was prewarmed and nothing has changed, it already shows
-                -- correct content and the re-inject just causes a visible flicker.
-                if _uiStateDirty or not _uiStateJSON then
-                    ms.ui.refresh()
-                end
+                ms.ui.refresh()
             end
 
             ms.ui.hide = function()
@@ -7575,7 +7543,7 @@
                 -- it calls ms.integrity.check() from privileged scope, not through this proxy.
                 local frozenMs = setmetatable({}, {
                     __index    = function(t, k)
-                        if k == "integrity" or k == "dev" or k == "showGuardian" or k == "_prewarmGuardian" then
+                        if k == "integrity" or k == "dev" or k == "showGuardian" then
                             error("ms_macros.lua: ms." .. k .. " is not accessible from macros.", 2)
                         end
                         return ms[k]
@@ -7962,17 +7930,11 @@
         -- never freezes for more than one build at a time.
         hs.timer.doAfter(0, function()
             ms.ui.prebuild()
-            _lUpdate(16, "Building UI state cache\xe2\x80\xa6")
+            _lUpdate(18, "Building UI state cache\xe2\x80\xa6")
         end)
         hs.timer.doAfter(0.3, function()
             ms.ui.prewarm()
-            _lUpdate(28, "Loading settings panel\xe2\x80\xa6")
-        end)
-        hs.timer.doAfter(1.0, function()
-            _lUpdate(40, "Loading tamper warning\xe2\x80\xa6")
-            hs.timer.doAfter(0, function()
-                pcall(function() ms._prewarmGuardian() end)
-            end)
+            _lUpdate(32, "Loading settings panel\xe2\x80\xa6")
         end)
         -- Each dev-panel step is split across two ticks:
         --   tick 1 (doAfter N): update the progress label and bar, then return so
