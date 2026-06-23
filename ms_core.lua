@@ -213,6 +213,7 @@ YQIDAQAB
                 _watcherPanelPos = nil,
                 _keysPanelPos    = nil,
                 _activeKeys      = {},
+                _activeButtons   = {},  -- button number → true while held
                 _coordMode       = "screen",  -- screen | window | ref | screenCenter
             }
             local _devLogPath = os.getenv("HOME") .. "/Documents/ms_dev.log"
@@ -305,6 +306,19 @@ YQIDAQAB
 
             ms.dev._onMouseEvent = function(button, isDown, x, y)
                 _devWrite({ type = "mouse", button = button, down = isDown, x = x, y = y })
+                -- Track held buttons and push the updated state to the active-button pills.
+                if isDown then ms.dev._activeButtons[button] = true
+                else            ms.dev._activeButtons[button] = nil end
+                if ms.dev._keysPanel and ms.dev._keysReady then
+                    local active = {}
+                    for btn in pairs(ms.dev._activeButtons) do table.insert(active, btn) end
+                    local aok, aj = pcall(hs.json.encode, { x = x, y = y, buttons = active })
+                    if aok then
+                        pcall(function()
+                            ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. aj .. ")")
+                        end)
+                    end
+                end
             end
 
             hs.timer.doAfter(0.3, function()
@@ -6892,7 +6906,7 @@ YQIDAQAB
                     if f then panel:html(f:read("*all"), _devBase); f:close() end
                     ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
                     panel:navigationCallback(function(_, action)
-                        if action ~= "didNavigate" then return end
+                        if action == "navigating" then return end
                         _loadDevHistory(panel, function(e)
                             return e.type == "macro" or e.type == "print"
                                 or e.type == "result" or e.type == "error"
@@ -6967,7 +6981,7 @@ YQIDAQAB
                     if f then panel:html(f:read("*all"), _devBase); f:close() end
                     ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
                     panel:navigationCallback(function(_, action)
-                        if action ~= "didNavigate" then return end
+                        if action == "navigating" then return end
                         _loadDevHistory(panel, function(e)
                             return e.type=="macro" or e.type=="print" or e.type=="error"
                         end)
@@ -7246,7 +7260,7 @@ YQIDAQAB
                     if f then panel:html(f:read("*all"), _devBase); f:close() end
                     ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
                     panel:navigationCallback(function(_, action)
-                        if action ~= "didNavigate" then return end
+                        if action == "navigating" then return end
                         local tj = _devThemeJS()
                         if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         if #ms.dev._windowHistory > 0 then
@@ -7573,12 +7587,27 @@ YQIDAQAB
             local ly  = sf.y + sf.h - 150 - lh  -- bottom edge aligns with toast baseline
             _lBarMax  = lw - 32
             _lBarY    = 62
-            local clrBg     = { red=0.024, green=0.016, blue=0.008, alpha=0.95 }
-            local clrAccent = { red=0.769, green=0.102, blue=0.102, alpha=1.0  }
-            local clrText   = { red=0.941, green=0.867, blue=0.690, alpha=1.0  }
-            local clrText2  = { red=0.824, green=0.647, blue=0.392, alpha=0.72 }
-            local clrTrack  = { red=0.063, green=0.039, blue=0.024, alpha=1.0  }
-            local clrBorder = { red=0.510, green=0.196, blue=0.086, alpha=0.55 }
+            -- Derive palette from the loaded theme so the canvas respects the active profile.
+            -- Falls back to the original dark crimson defaults when a key is absent.
+            local function _themeColor(hex, fallR, fallG, fallB, alpha)
+                local r, g, b = (hex or ""):match("^#?(%x%x)(%x%x)(%x%x)$")
+                if r then
+                    return {
+                        red   = tonumber(r, 16) / 255,
+                        green = tonumber(g, 16) / 255,
+                        blue  = tonumber(b, 16) / 255,
+                        alpha = alpha or 1.0,
+                    }
+                end
+                return { red = fallR, green = fallG, blue = fallB, alpha = alpha or 1.0 }
+            end
+            local _t = ms._theme or {}
+            local clrBg     = _themeColor(_t.bg,       0.024, 0.016, 0.008, 0.95)
+            local clrAccent = _themeColor(_t.accent,   0.769, 0.102, 0.102, 1.0)
+            local clrText   = _themeColor(_t.text,     0.941, 0.867, 0.690, 1.0)
+            local clrText2  = _themeColor(_t.warning,  0.824, 0.647, 0.392, 0.72)
+            local clrTrack  = _themeColor(_t.surface2, 0.063, 0.039, 0.024, 1.0)
+            local clrBorder = _themeColor(_t.hover,    0.510, 0.196, 0.086, 0.55)
             _lCanvas = hs.canvas.new({ x=lx, y=ly, w=lw, h=lh })
             _lCanvas:level(hs.canvas.windowLevels.popUpMenu or 25)
             _lCanvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
