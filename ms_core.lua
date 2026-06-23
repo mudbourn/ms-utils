@@ -7776,6 +7776,10 @@
             local clrText2  = _themeColor(_t.warning,  0.824, 0.647, 0.392, 0.72)
             local clrTrack  = _themeColor(_t.surface2, 0.063, 0.039, 0.024, 1.0)
             local clrBorder = _themeColor(_t.hover,    0.510, 0.196, 0.086, 0.55)
+            -- Derive font: accept any plain name (no path separators), fall back to Almendra.
+            local _titleFont = (type(_t.font) == "string" and #_t.font > 0
+                and not _t.font:find("[/\\]"))
+                and _t.font or "Almendra"
             _lCanvas = hs.canvas.new({ x=lx, y=ly, w=lw, h=lh })
             _lCanvas:level(hs.canvas.windowLevels.popUpMenu or 25)
             _lCanvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
@@ -7792,7 +7796,7 @@
                 -- 3: title (static)
                 { type="text", text="mudscript",
                   frame={ x=16, y=13, w=lw-32, h=22 },
-                  textFont="Almendra", textSize=15,
+                  textFont=_titleFont, textSize=15,
                   textColor=clrText, textAlignment="left" },
                 -- 4: status line (updated by _lUpdate)
                 { type="text", text="Starting up\xe2\x80\xa6",
