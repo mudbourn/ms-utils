@@ -259,38 +259,29 @@
             "use strict";
 
             // ── Theme ─────────────────────────────────────────────────────────
-            // Read data/ms_theme.json synchronously before the page renders so
-            // the guardian always matches the active profile's palette.
-            // Falls back to the :root defaults silently on any error.
-            (function applyTheme() {
-                try {
-                    const xhr = new XMLHttpRequest();
-                    xhr.open("GET", "../data/ms_theme.json", false);
-                    xhr.send();
-                    if (xhr.status !== 0 && xhr.status !== 200) return;
-                    const t = JSON.parse(xhr.responseText);
-                    const r = document.documentElement.style;
-                    const set = (prop, val) => {
-                        if (val) r.setProperty(prop, val);
-                    };
-                    set("--bg", t.bg);
-                    set("--surface", t.surface);
-                    set("--surface2", t.surface2);
-                    set("--accent", t.accent);
-                    set("--danger", t.danger);
-                    set("--text", t.text);
-                    // Derive --border from hover at 55% opacity.
-                    if (t.hover) r.setProperty("--border", t.hover + "8c");
-                    // Derive --text2 from text at 75% opacity.
-                    if (t.text) r.setProperty("--text2", t.text + "bf");
-                    if (typeof t.radius === "number")
-                        r.setProperty("--radius", t.radius + "px");
-                    if (t.font && !/[\/\\]/.test(t.font))
-                        document.body.style.fontFamily = `"${t.font}", Almendra, Palatino, Georgia, serif`;
-                } catch (_) {
-                    /* use :root defaults */
-                }
-            })();
+            // Called by the Spoon via evaluateJavaScript once the page loads,
+            // with the parsed ms_theme.json object as the argument.
+            function applyTheme(t) {
+                if (!t) return;
+                const r = document.documentElement.style;
+                const set = (prop, val) => {
+                    if (val) r.setProperty(prop, val);
+                };
+                set("--bg", t.bg);
+                set("--surface", t.surface);
+                set("--surface2", t.surface2);
+                set("--accent", t.accent);
+                set("--danger", t.danger);
+                set("--text", t.text);
+                // Derive --border from hover at 55% opacity.
+                if (t.hover) r.setProperty("--border", t.hover + "8c");
+                // Derive --text2 from text at 75% opacity.
+                if (t.text) r.setProperty("--text2", t.text + "bf");
+                if (typeof t.radius === "number")
+                    r.setProperty("--radius", t.radius + "px");
+                if (t.font && !/[\/\\]/.test(t.font))
+                    document.body.style.fontFamily = `"${t.font}", Almendra, Palatino, Georgia, serif`;
+            }
 
             // Suppress native right-click context menu.
             document.addEventListener("contextmenu", (e) => e.preventDefault());
