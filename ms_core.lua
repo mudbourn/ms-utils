@@ -2022,82 +2022,104 @@ YQIDAQAB
                         os.execute("rm -rf " .. sq(tmpDir)); return
                     end
                     local folderName = sanitizeName(meta.name)
-                    hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
-                    -- ms_macros.lua
-                    local dst = profilesPath .. folderName .. "/ms_macros.lua"
-                    local copied = false
-                    local gf = io.open(dst, "wb")
-                    if gf then gf:write(content); gf:close(); copied = true end
-                    if not copied then
-                        local _, st = hs.execute("/bin/cp " .. sq(macroSrc) .. " " .. sq(dst))
-                        copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
-                    end
-                    if not copied then
-                        if roblox then pcall(function() roblox:activate() end) end
-                        ms.alert("Import failed: could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if needed.", 5)
-                        os.execute("rm -rf " .. sq(tmpDir)); return
-                    end
-                    -- ms_settings.json (optional — user keybinds, sensitivity, mods, etc.)
-                    local settingsSrc = tmpDir .. "ms_settings.json"
-                    if hs.fs.attributes(settingsSrc) then
-                        hs.execute("/bin/cp " .. sq(settingsSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
-                    end
-                    -- ms_settings_default.json (optional)
-                    local defSrc = tmpDir .. "ms_settings_default.json"
-                    if hs.fs.attributes(defSrc) then
-                        hs.execute("/bin/cp " .. sq(defSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
-                    end
-                    -- ms_theme.json (optional)
-                    local themeSrc = tmpDir .. "ms_theme.json"
-                    if hs.fs.attributes(themeSrc) then
-                        hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
-                    end
-                    -- sounds/ (optional) — copy into SoundLib, skip existing, track in importedSounds
-                    local soundsDir = tmpDir .. "sounds/"
-                    local soundsAdded = {}
-                    if hs.fs.attributes(soundsDir) then
-                        local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
-                        if not hs.fs.attributes(slibDir) then
-                            hs.execute("mkdir -p '" .. SoundLib .. "'")
+
+                    local function _commit()
+                        hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
+                        -- ms_macros.lua
+                        local dst = profilesPath .. folderName .. "/ms_macros.lua"
+                        local copied = false
+                        local gf = io.open(dst, "wb")
+                        if gf then gf:write(content); gf:close(); copied = true end
+                        if not copied then
+                            local _, st = hs.execute("/bin/cp " .. sq(macroSrc) .. " " .. sq(dst))
+                            copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
                         end
-                        for file in hs.fs.dir(soundsDir) do
-                            if file ~= "." and file ~= ".." then
-                                local importName = file:match("^(.+)%.[^%.]+$") or file
-                                local srcSnd = soundsDir .. file
-                                local dstSnd = SoundLib .. file
-                                if not hs.fs.attributes(dstSnd) then
-                                    local sf = io.open(srcSnd, "rb")
-                                    if sf then
-                                        local data = sf:read("*all"); sf:close()
-                                        local out = io.open(dstSnd, "wb")
-                                        if out then
-                                            out:write(data); out:close()
-                                            ms.importedSounds = ms.importedSounds or {}
-                                            ms.importedSounds[importName] = file
-                                            table.insert(soundsAdded, importName)
+                        if not copied then
+                            if roblox then pcall(function() roblox:activate() end) end
+                            ms.alert("Import failed: could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if needed.", 5)
+                            os.execute("rm -rf " .. sq(tmpDir)); return
+                        end
+                        -- ms_settings.json (optional)
+                        local settingsSrc = tmpDir .. "ms_settings.json"
+                        if hs.fs.attributes(settingsSrc) then
+                            hs.execute("/bin/cp " .. sq(settingsSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
+                        end
+                        -- ms_settings_default.json (optional)
+                        local defSrc = tmpDir .. "ms_settings_default.json"
+                        if hs.fs.attributes(defSrc) then
+                            hs.execute("/bin/cp " .. sq(defSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
+                        end
+                        -- ms_theme.json (optional)
+                        local themeSrc = tmpDir .. "ms_theme.json"
+                        if hs.fs.attributes(themeSrc) then
+                            hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
+                        end
+                        -- sounds/ (optional) — copy into SoundLib, skip existing, track in importedSounds
+                        local soundsDir = tmpDir .. "sounds/"
+                        local soundsAdded = {}
+                        if hs.fs.attributes(soundsDir) then
+                            local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
+                            if not hs.fs.attributes(slibDir) then
+                                hs.execute("mkdir -p '" .. SoundLib .. "'")
+                            end
+                            for file in hs.fs.dir(soundsDir) do
+                                if file ~= "." and file ~= ".." then
+                                    local importName = file:match("^(.+)%.[^%.]+$") or file
+                                    local srcSnd = soundsDir .. file
+                                    local dstSnd = SoundLib .. file
+                                    if not hs.fs.attributes(dstSnd) then
+                                        local sf = io.open(srcSnd, "rb")
+                                        if sf then
+                                            local data = sf:read("*all"); sf:close()
+                                            local out = io.open(dstSnd, "wb")
+                                            if out then
+                                                out:write(data); out:close()
+                                                ms.importedSounds = ms.importedSounds or {}
+                                                ms.importedSounds[importName] = file
+                                                table.insert(soundsAdded, importName)
+                                            end
                                         end
                                     end
                                 end
                             end
+                            if #soundsAdded > 0 then
+                                ms.saveSettings()
+                                ms._soundsDirty = true
+                                ms._discoverSounds()
+                            end
                         end
-                        if #soundsAdded > 0 then
-                            ms.saveSettings()
-                            ms._soundsDirty = true
-                            ms._discoverSounds()
-                        end
+                        os.execute("rm -rf " .. sq(tmpDir))
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.playSlot("update")
+                        hs.timer.doAfter(0.2, function()
+                            local msg = "\"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles."
+                            if #soundsAdded > 0 then
+                                msg = msg .. "\n" .. #soundsAdded .. " sound" .. (#soundsAdded > 1 and "s" or "") .. " added to library."
+                            end
+                            ms.alert(msg, 6, true)
+                            ms._profilesDirty = true
+                            ms.ui.refresh()
+                        end)
                     end
-                    os.execute("rm -rf " .. sq(tmpDir))
-                    if roblox then pcall(function() roblox:activate() end) end
-                    ms.playSlot("update")
-                    hs.timer.doAfter(0.2, function()
-                        local msg = "\"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles."
-                        if #soundsAdded > 0 then
-                            msg = msg .. "\n" .. #soundsAdded .. " sound" .. (#soundsAdded > 1 and "s" or "") .. " added to library."
-                        end
-                        ms.alert(msg, 6, true)
-                        ms._profilesDirty = true
-                        ms.ui.refresh()
-                    end)
+
+                    -- Warn before overwriting an existing saved profile.
+                    if hs.fs.attributes(profilesPath .. folderName) then
+                        ms.ui.modal({
+                            title   = "Overwrite Profile?",
+                            msg     = "\"" .. meta.name .. "\" is already in your library.\nReplace it with this package?",
+                            confirm = "Replace",
+                            cancel  = "Cancel",
+                        }, function(r)
+                            if r.confirmed then
+                                _commit()
+                            else
+                                os.execute("rm -rf " .. sq(tmpDir))
+                                if roblox then pcall(function() roblox:activate() end) end
+                            end
+                        end)
+                    else
+                        _commit()
+                    end
                 end
 
                 -- ── End Profile Management ───────────────────────────────────────────
@@ -5902,6 +5924,9 @@ YQIDAQAB
                 -- Deletes all saved profiles except the active one.
                 clearProfiles = function()
                     local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                    -- Guard: if the active profile name is blank we can't safely identify
+                    -- which folder to protect, so refuse to delete anything.
+                    if activeName == "" then return end
                     if not hs.fs.attributes(profilesPath) then return end
                     local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                     local deleted = 0
