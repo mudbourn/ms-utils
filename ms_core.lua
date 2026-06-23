@@ -4783,6 +4783,9 @@
                     pcall(function() ms.cam.disable() end)
                     if not silent then _doNotify(0) end
                 end
+                -- Repaint the panel immediately when it is open so the macro
+                -- enabled/disabled indicator updates the moment the user tabs.
+                if ms.ui and ms.ui._open then ms.ui.refresh() end
             end
 
             ms._appWatcher = hs.application.watcher.new(function(appName, eventType, app)
