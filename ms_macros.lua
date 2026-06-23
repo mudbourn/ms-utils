@@ -446,8 +446,6 @@
                     ms.press("space")
                     ms.wait(100)
                 end
-                -- ms.press("space")
-                -- ms.wait(2000)
                 ms.release("space")
             end)
 
