@@ -290,8 +290,12 @@
                 const s = typeof msg === "string" ? msg : JSON.stringify(msg);
                 if (window.chrome?.webview) {
                     window.chrome.webview.postMessage(s);
-                } else {
+                } else if (window.webkit?.messageHandlers?.guardian) {
                     window.webkit.messageHandlers.guardian.postMessage(s);
+                } else if (window.webkit?.messageHandlers?.guardianPreview) {
+                    window.webkit.messageHandlers.guardianPreview.postMessage(
+                        s,
+                    );
                 }
             }
 

@@ -2366,6 +2366,61 @@ YQIDAQAB
 
                 -- ── End System Integrity / Update System ─────────────────────────────────
 
+                -- ── ms.showGuardian([trusted, current]) ─────────────────────────────────
+                -- Shows the tamper-protection panel as a preview/test with the given
+                -- (or auto-generated placeholder) hash snippets.  Useful for verifying
+                -- theme application and panel layout without triggering a real mismatch.
+                ms.showGuardian = function(trusted, current)
+                    trusted = trusted or ("a3f8" .. string.rep("0", 12))
+                    current = current or ("9c1e" .. string.rep("f", 12))
+                    local _home = os.getenv("HOME")
+                    local _htmlPath = _home .. "/.hammerspoon/ui/ms_guardian.html"
+                    local _baseURL  = "file://" .. _home .. "/.hammerspoon/ui/"
+                    local _uc = hs.webview.usercontent.new("guardianPreview")
+                    local _panel = nil
+                    local _pos   = nil
+                    _uc:setCallback(function(msg)
+                        local body = msg.body
+                        if body == "keepBlocked" or body == "confirmDelete" then
+                            pcall(function() if _panel then _panel:delete() end end)
+                        else
+                            local ok, data = pcall(hs.json.decode, body)
+                            if ok and data and data.action == "move" and _pos then
+                                _pos.x = _pos.x + (data.dx or 0)
+                                _pos.y = _pos.y + (data.dy or 0)
+                                pcall(function() _panel:frame(_pos) end)
+                            end
+                        end
+                    end)
+                    local sf = hs.screen.mainScreen():frame()
+                    local w, h = 360, 300
+                    local x = sf.x + math.floor((sf.w - w) / 2)
+                    local y = sf.y + math.floor((sf.h - h) / 2)
+                    _pos   = { x = x, y = y, w = w, h = h }
+                    _panel = hs.webview.new(_pos, {}, _uc)
+                    if not _panel then return end
+                    pcall(function() _panel:windowStyle(0) end)
+                    pcall(function() _panel:level(hs.canvas.windowLevels.popUpMenu or 101) end)
+                    pcall(function() _panel:shadow(true) end)
+                    local f = io.open(_htmlPath, "r")
+                    if not f then return end
+                    _panel:html(f:read("*all"), _baseURL); f:close()
+                    _panel:show()
+                    _panel:navigationCallback(function()
+                        pcall(function()
+                            local t = trusted:sub(1, 16) .. "\xe2\x80\xa6"
+                            local c = current:sub(1, 16)  .. "\xe2\x80\xa6"
+                            _panel:evaluateJavaScript(
+                                "setHashes('" .. t .. "', '" .. c .. "')"
+                            )
+                            local tj = hs.json.encode(ms._theme or {})
+                            if tj then
+                                _panel:evaluateJavaScript("applyTheme(" .. tj .. ")")
+                            end
+                        end)
+                    end)
+                end
+
                 -- Returns the effective bind config for an id, accounting for trackpad mode overrides
                 ms.effectiveBind = function(id)
                     if ms.trackpadMode and ms.trackpadBindOverrides and ms.trackpadBindOverrides[id] then
