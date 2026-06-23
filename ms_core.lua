@@ -682,8 +682,16 @@ YQIDAQAB
                         if num and num >= 0.1 and num <= 4 then CUR_CAM_SENS = num end
                     end
                     if data.frameLevel ~= nil then
-                        local num = tonumber(data.frameLevel)
-                        if num and num >= 1 and num <= 4 then clickLevel = num end
+                        -- frameLevel was the old baked-in persistence key for clickLevel.
+                        -- Migrate it into the user settings table on load so the user
+                        -- setting picks it up, then discard the root-level key.
+                        data.user = data.user or {}
+                        if data.user.clickLevel == nil then
+                            local num = tonumber(data.frameLevel)
+                            if num and num >= 1 and num <= 4 then
+                                data.user.clickLevel = num
+                            end
+                        end
                     end
                     if data.trackpadMode     ~= nil then ms.trackpadMode           = (data.trackpadMode     == true) end
                     if data.socdEnabled      ~= nil then ms.socdEnabled            = (data.socdEnabled      == true) end

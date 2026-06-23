@@ -11,6 +11,7 @@
         key     = "clickLevel",
         label   = "Click Method",
         hint    = "Switches the method used to perform click sequences",
+        section = "calibration",
         type    = "seg",
         options = {
             { label = "1", value = 1 },
@@ -20,7 +21,6 @@
         },
         default  = 3,
         save     = true,
-        onChange = function(v) ms.setClickLevel(v) end,
     })
 -- END --
 
@@ -156,28 +156,31 @@
 
 
             local getD1 = function()
-                local d1           = 52
-                if clickLevel     == 4 then d1 = d1 + 30
-                elseif clickLevel == 3 then d1 = d1 + 20
-                elseif clickLevel == 2 then d1 = d1 + 10
+                local d1  = 52
+                local lvl = ms.settings.get("clickLevel")
+                if lvl     == 4 then d1 = d1 + 30
+                elseif lvl == 3 then d1 = d1 + 20
+                elseif lvl == 2 then d1 = d1 + 10
                 end
                 return d1
             end
 
             local getD2 = function()
-                local d2           = 63
-                if clickLevel     == 4 then d2 = d2 + 20
-                elseif clickLevel == 3 then d2 = d2 + 20
-                elseif clickLevel == 2 then d2 = d2 + 10
+                local d2  = 63
+                local lvl = ms.settings.get("clickLevel")
+                if lvl     == 4 then d2 = d2 + 20
+                elseif lvl == 3 then d2 = d2 + 20
+                elseif lvl == 2 then d2 = d2 + 10
                 end
                 return d2
             end
 
             local getD3 = function()
-                local d3           = 52
-                if clickLevel     == 4 then d3 = d3 + 30
-                elseif clickLevel == 3 then d3 = d3 + 30
-                elseif clickLevel == 2 then d3 = d3 + 10
+                local d3  = 52
+                local lvl = ms.settings.get("clickLevel")
+                if lvl     == 4 then d3 = d3 + 30
+                elseif lvl == 3 then d3 = d3 + 30
+                elseif lvl == 2 then d3 = d3 + 10
                 end
                 return d3
             end
