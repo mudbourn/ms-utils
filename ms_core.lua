@@ -4813,6 +4813,7 @@ YQIDAQAB
             local _slotDefaults = {
                 startup = { "LoadStart", "Load Start" },
                 load    = { "LoadEnd",   "Load End"   },
+                launch  = { "Launch" },
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
