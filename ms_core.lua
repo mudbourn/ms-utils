@@ -6878,25 +6878,17 @@ YQIDAQAB
                         if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
                         ms.dev._keysOpen = false
                     elseif data.action == "ready" then
-                        -- DOMContentLoaded fired — page JS is guaranteed ready.
-                        -- This is the primary initialization path; the nav callback
-                        -- acts only as a belt-and-suspenders fallback.
-                        hs.timer.doAfter(0, function()
-                            if not ms.dev._keysPanel then return end
-                            if ms.dev._keysReady then return end  -- already initialized
+                        -- DOMContentLoaded fired: page JS is parsed and ready.
+                        -- Only record that the panel is ready here — no evaluateJavaScript
+                        -- calls, because the navigation is still in-flight and any
+                        -- synchronous JS call from within this usercontent callback
+                        -- re-enters WebKit and deadlocks the loading sequence.
+                        -- History + theme injection happen in keys.show() instead.
+                        if not ms.dev._keysReady then
                             ms.dev._keysReady = true
                             local _p = hs.mouse.absolutePosition()
                             ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
-                            _loadDevHistory(ms.dev._keysPanel, function(e)
-                                return e.type=="key" or e.type=="mouse"
-                                    or e.type=="scroll" or e.type=="mousemove"
-                            end)
-                            pcall(function() ms.dev._pushMouseState() end)
-                            local tj = _devThemeJS()
-                            if tj ~= "" then
-                                pcall(function() ms.dev._keysPanel:evaluateJavaScript(tj) end)
-                            end
-                        end)
+                        end
                     elseif data.action == "setCoordMode" then
                         ms.dev._coordMode = data.mode or "screen"
                         -- Re-push current position immediately in the new coordinate system.
@@ -6936,23 +6928,15 @@ YQIDAQAB
                     ms.dev._keysReady    = false
                     panel:navigationCallback(function(_, action)
                         if action ~= "didNavigate" then return end
-                        -- Belt-and-suspenders: the "ready" usercontent message
-                        -- (sent by DOMContentLoaded in ms_keys.html) is the primary
-                        -- init trigger.  This path fires only if "ready" was missed.
-                        hs.timer.doAfter(0, function()
-                            if not ms.dev._keysPanel then return end
-                            if ms.dev._keysReady then return end  -- "ready" already ran
+                        -- Mark the panel ready so live key/mouse events are routed to it.
+                        -- No evaluateJavaScript here: calling JS from inside a navigation
+                        -- callback re-enters WebKit synchronously and hangs the load sequence.
+                        -- History + theme are injected in keys.show() once the panel is visible.
+                        if not ms.dev._keysReady then
                             ms.dev._keysReady = true
                             local _p = hs.mouse.absolutePosition()
                             ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
-                            _loadDevHistory(panel, function(e)
-                                return e.type=="key" or e.type=="mouse"
-                                    or e.type=="scroll" or e.type=="mousemove"
-                            end)
-                            pcall(function() ms.dev._pushMouseState() end)
-                            local tj = _devThemeJS()
-                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                        end)
+                        end
                     end)
                     return panel
                 end
@@ -6970,6 +6954,21 @@ YQIDAQAB
                     -- (keys.hide sets _keysReady = false to avoid updating a hidden view).
                     ms.dev._keysReady = true
                     ms.playSlot("settingsOpen")
+                    -- Inject history and theme after the panel is visible and WebKit is
+                    -- fully idle.  doAfter(0.1) gives the show animation one frame and
+                    -- ensures navigation is long-settled before evaluateJavaScript runs.
+                    hs.timer.doAfter(0.1, function()
+                        if not ms.dev._keysPanel or not ms.dev._keysOpen then return end
+                        _loadDevHistory(ms.dev._keysPanel, function(e)
+                            return e.type=="key" or e.type=="mouse"
+                                or e.type=="scroll" or e.type=="mousemove"
+                        end)
+                        pcall(function() ms.dev._pushMouseState() end)
+                        local tj = _devThemeJS()
+                        if tj ~= "" then
+                            pcall(function() ms.dev._keysPanel:evaluateJavaScript(tj) end)
+                        end
+                    end)
                     -- Poll mouse position every 100 ms so display stays current.
                     if ms.dev._mousePoller then ms.dev._mousePoller:stop() end
                     ms.dev._mousePoller = hs.timer.doEvery(0.1, function()
