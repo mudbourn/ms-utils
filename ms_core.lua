@@ -4803,15 +4803,16 @@ YQIDAQAB
                 return s  -- return handle so callers can stop playback
             end
 
-            -- Plays the sound assigned to a named slot (e.g. "update", "reset", "alert").
             -- Resolution order for each slot:
             --   1. ms.soundAssign[slotId]  — user override saved in settings
             --   2. ms.sounds[slotId]       — file named exactly after the slot id
-            --   3. ms.sounds[_slotDefaults[slotId]] — built-in default filename for the slot
+            --   3. ms.sounds[_slotDefaults[slotId][n]] — built-in default filenames (tried in order)
             -- Returns true if a sound was found and played; false if disabled or no file.
+            -- Default candidates use the PascalCase convention of the bundled sounds folder
+            -- (e.g. MacrosOn.wav, SettingsOpen.wav) then fall back to the spaced variant.
             local _slotDefaults = {
-                startup = "Load Start",
-                load    = "Load End",
+                startup = { "LoadStart", "Load Start" },
+                load    = { "LoadEnd",   "Load End"   },
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
@@ -4835,9 +4836,16 @@ YQIDAQAB
                 if assigned then
                     path = (ms.sounds and ms.sounds[assigned]) or assigned
                 else
-                    path = ms.sounds and (
-                        ms.sounds[slotId] or ms.sounds[_slotDefaults[slotId]]
-                    )
+                    path = ms.sounds and ms.sounds[slotId]
+                    if not path then
+                        local candidates = _slotDefaults[slotId]
+                        if candidates then
+                            for _, name in ipairs(candidates) do
+                                path = ms.sounds and ms.sounds[name]
+                                if path then break end
+                            end
+                        end
+                    end
                 end
                 if not path then return false end
                 local handle = ms.sound(path) or false

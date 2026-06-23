@@ -257,6 +257,7 @@ class ms {
     }
 
     ; Play the sound assigned to a named slot (e.g. "update", "enabled", "load").
+    ; Resolution order: explicit soundAssign override → exact slot-id filename → built-in default.
     ; Suppresses duplicate plays within 50 ms.
     static playSlot(slotId) {
         global _ms_soundEnabled, _ms_sounds, _ms_soundAssign, _ms_playSlotTimes
@@ -271,6 +272,21 @@ class ms {
             path := _ms_sounds[assigned]
         else if _ms_sounds.Has(slotId)
             path := _ms_sounds[slotId]
+        else {
+            ; Built-in default filenames — PascalCase first, then spaced variant.
+            static _defaults := Map(
+                "startup", ["LoadStart", "Load Start"],
+                "load",    ["LoadEnd",   "Load End"  ]
+            )
+            if _defaults.Has(slotId) {
+                for candidate in _defaults[slotId] {
+                    if _ms_sounds.Has(candidate) {
+                        path := _ms_sounds[candidate]
+                        break
+                    }
+                }
+            }
+        }
         if path = ""  return false
         ms.sound(path, true)
         return true
