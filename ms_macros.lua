@@ -582,9 +582,8 @@
                 group   = "optional",
                 label   = "Lag Simulator (Micro Profiler)",
                 default = {
-                    type = "key",
-                    mods = {},
-                    key  = "=",
+                    type   = "mouse",
+                    button = 2,
                 },
             })
         -- END --
