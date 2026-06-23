@@ -22,7 +22,7 @@
         default  = 3,
         save     = true,
     })
--- END --
+-- END Pack Settings --
 
 -- Coordinate Calibration --
     -- All coordinates are REF-space pixels relative to the Roblox window
@@ -140,7 +140,7 @@
             },
         },
     })
--- END --
+-- END  Coordinate Calibration --
 
 -- Combat Warriors Macros --
     -- Macro Functions --
