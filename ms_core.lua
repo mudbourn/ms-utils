@@ -7605,20 +7605,33 @@ YQIDAQAB
             hs.timer.doAfter(0.4, function()
                 -- Open the sound gate so the launch slot and all future sounds play.
                 ms._startupSoundDone = true
-                pcall(function()
-                    ms.playSlot("launch")  -- Launch.wav plays with the toasts
-                    ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 6, true)
+                -- Launch sound plays with the first toast.
+                pcall(function() ms.playSlot("launch") end)
+                -- 1. Settings notice (immediate)
+                ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true)
+                -- 2. Library creator \xe2\x80\x94 after first toast fades
+                hs.timer.doAfter(3, function()
+                    ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 3, true)
+                end)
+                -- 3. Macro pack creator \xe2\x80\x94 after second toast fades
+                hs.timer.doAfter(6, function()
                     if ms.macroMeta then
                         local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
                         if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
                         if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
-                        ms.alert(msg, 6, true)
+                        ms.alert(msg, 3, true)
                     end
-                    ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 6, true)
                 end)
                 -- Loading complete: allow macros to run and activate them if Roblox is already focused.
                 ms._loadComplete = true
                 if ms._robloxActive then ms.setMacros(1, true) end
+                -- 4. Integrity warning \xe2\x80\x94 after all three announce toasts have faded
+                -- (3 x 3 s = 9 s total) plus a 1 s gap so there is no overlap.
+                hs.timer.doAfter(10, function()
+                    if _needsIntegrityWarning then
+                        ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
+                    end
+                end)
             end)
         end
 
@@ -7721,8 +7734,9 @@ YQIDAQAB
                     end
                 end
             end
-            -- MANIFEST missing, stale, or hash mismatch — ask the user to trust manually.
-            ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
+            -- Bootstrap failed: flag the warning so _announceLoad shows it after
+            -- the startup toasts have had time to display and fade.
+            _needsIntegrityWarning = true
         end)
         -- Activate Roblox so the app watcher can seed _robloxActive correctly
         -- on first launch.
