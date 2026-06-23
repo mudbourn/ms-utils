@@ -4273,9 +4273,13 @@
                         elseif type == hs.eventtap.event.types.otherMouseDown then
                             b = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
                             isDown = true
+                            -- Track scroll-wheel click (button 2) hold state so
+                            -- ms.keystate(998, true) works like ms.keystate(999, true) for right-click.
+                            if b == 2 then ms.keytrack[998] = true end
                         else -- otherMouseUp
                             b = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
                             isDown = false
+                            if b == 2 then ms.keytrack[998] = false end
                         end
 
                         -- Always log to the input monitor regardless of BindValidity.

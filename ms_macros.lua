@@ -563,7 +563,7 @@
                 ms.Mouse(Click, Left, WindowTL,
                     ms.settings.get("spamClickX"), d3)
                 ms.wait(50)
-                while ms.keystate("=") do
+                while ms.keystate(998, true) do
                     ms.Mouse(Click, Left, Mouse, 0, 0)
                     ms.wait(15)
                 end
