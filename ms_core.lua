@@ -6,71 +6,79 @@
             -- leaves the previous ms._appWatcher running forever, stacked on top
             -- of every watcher from every reload before it. Stop the prior
             -- generation before this load creates a new one.
-            -- ── Watcher teardown (belt-and-suspenders; primary is in init.lua stub) ──────
-            if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
+            -- Watcher teardown (belt-and-suspenders; primary is in init.lua stub) --
+                if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
 
-            -- ── Guardian tamper check moved to Spoons/MsGuardian.spoon/ ────────────────
-            -- MsGuardian.spoon hashes this file (ms_core.lua) before dofile()-ing it.
-            -- The check no longer lives here so it cannot be excised by editing this file.
+            -- END --
+
+            -- Guardian tamper check moved to Spoons/MsGuardian.spoon/ --
+                -- MsGuardian.spoon hashes this file (ms_core.lua) before dofile()-ing it.
+                -- The check no longer lives here so it cannot be excised by editing this file.
 
 
-            -- One-time migration: move settings/hash files from root into data/ ──────
-            -- Safe to run on every reload; skips files that already exist at the new path.
-            do
-                local _h = os.getenv("HOME") .. "/.hammerspoon"
-                os.execute("mkdir -p '" .. _h .. "/data'")
-                local function _mvToData(name)
-                    local src = _h .. "/" .. name
-                    local dst = _h .. "/data/" .. name
-                    if hs.fs.attributes(dst) then return end
-                    if not hs.fs.attributes(src) then return end
-                    local f = io.open(src, "rb"); if not f then return end
-                    local c = f:read("*all"); f:close()
-                    local g = io.open(dst, "wb"); if not g then return end
-                    g:write(c); g:close(); os.remove(src)
+            -- END --
+
+            -- One-time migration: move settings/hash files from root into data/ --
+                -- Safe to run on every reload; skips files that already exist at the new path.
+                do
+                    local _h = os.getenv("HOME") .. "/.hammerspoon"
+                    os.execute("mkdir -p '" .. _h .. "/data'")
+                    local function _mvToData(name)
+                        local src = _h .. "/" .. name
+                        local dst = _h .. "/data/" .. name
+                        if hs.fs.attributes(dst) then return end
+                        if not hs.fs.attributes(src) then return end
+                        local f = io.open(src, "rb"); if not f then return end
+                        local c = f:read("*all"); f:close()
+                        local g = io.open(dst, "wb"); if not g then return end
+                        g:write(c); g:close(); os.remove(src)
+                    end
+                    _mvToData("ms_settings.json")
+                    _mvToData("ms_settings_default.json")
+                    _mvToData(".ms_trusted_hash")
                 end
-                _mvToData("ms_settings.json")
-                _mvToData("ms_settings_default.json")
-                _mvToData(".ms_trusted_hash")
-            end
 
-            -- Font installation ──────────────────────────────────────────────────────
-            -- Copies bundled fonts from ui/fonts/ into ~/Library/Fonts/ so they are
-            -- available as system fonts for hs.canvas (canvas cannot load .ttf files
-            -- directly — only installed font names work).
-            -- Runs on every reload but is a no-op once fonts are present.
-            -- If any font is newly installed, reloads immediately so the macOS font
-            -- daemon registers them before any canvas toast renders.
-            do
-                local _h       = os.getenv("HOME") .. "/.hammerspoon"
-                local _srcDir  = _h .. "/ui/fonts/"
-                local _dstDir  = os.getenv("HOME") .. "/Library/Fonts/"
-                local _installed = false
-                hs.fs.mkdir(_dstDir)
-                if hs.fs.attributes(_srcDir) then
-                    for _file in hs.fs.dir(_srcDir) do
-                        if _file ~= "." and _file ~= ".." then
-                            local _ext = _file:match("%.([^%.]+)$")
-                            if _ext == "ttf" or _ext == "otf" or _ext == "woff" or _ext == "woff2" then
-                                local _dst = _dstDir .. _file
-                                if not hs.fs.attributes(_dst) then
-                                    local _f = io.open(_srcDir .. _file, "rb")
-                                    if _f then
-                                        local _c = _f:read("*all"); _f:close()
-                                        local _g = io.open(_dst, "wb")
-                                        if _g then _g:write(_c); _g:close(); _installed = true end
+            -- END --
+
+            -- Font installation --
+                -- Copies bundled fonts from ui/fonts/ into ~/Library/Fonts/ so they are
+                -- available as system fonts for hs.canvas (canvas cannot load .ttf files
+                -- directly — only installed font names work).
+                -- Runs on every reload but is a no-op once fonts are present.
+                -- If any font is newly installed, reloads immediately so the macOS font
+                -- daemon registers them before any canvas toast renders.
+                do
+                    local _h       = os.getenv("HOME") .. "/.hammerspoon"
+                    local _srcDir  = _h .. "/ui/fonts/"
+                    local _dstDir  = os.getenv("HOME") .. "/Library/Fonts/"
+                    local _installed = false
+                    hs.fs.mkdir(_dstDir)
+                    if hs.fs.attributes(_srcDir) then
+                        for _file in hs.fs.dir(_srcDir) do
+                            if _file ~= "." and _file ~= ".." then
+                                local _ext = _file:match("%.([^%.]+)$")
+                                if _ext == "ttf" or _ext == "otf" or _ext == "woff" or _ext == "woff2" then
+                                    local _dst = _dstDir .. _file
+                                    if not hs.fs.attributes(_dst) then
+                                        local _f = io.open(_srcDir .. _file, "rb")
+                                        if _f then
+                                            local _c = _f:read("*all"); _f:close()
+                                            local _g = io.open(_dst, "wb")
+                                            if _g then _g:write(_c); _g:close(); _installed = true end
+                                        end
                                     end
                                 end
                             end
                         end
                     end
+                    if _installed then
+                        -- Reload so fonts are registered with the font daemon before
+                        -- canvas renders anything. This extra load only happens once.
+                        hs.reload(); return
+                    end
                 end
-                if _installed then
-                    -- Reload so fonts are registered with the font daemon before
-                    -- canvas renders anything. This extra load only happens once.
-                    hs.reload(); return
-                end
-            end
+            -- END --
+
         -- END --
 
         -- 1. Prefix Variables & State Tracking --
@@ -159,220 +167,222 @@
             -----END PUBLIC KEY-----
             ]]
 
-            -- User Settings & Menu API State ─────────────────────────────────────
-            ms.settings          = {}  -- user settings API namespace
-            ms.menu              = {}  -- custom section API namespace (ms.menu.define)
-            ms._menubar          = nil  -- hs.menubar instance (menu-bar icon); set in Section 7
-            ms.features          = {}  -- feature visibility API namespace
-            ms._userSettingDefs  = {}  -- ordered list of all setting/item definitions
-            ms._userSettingIndex = {}  -- key → def, for O(1) lookup
-            ms._userSettingVals  = {}  -- key → current live value
-            ms._userMenuDefs     = {}  -- ordered list of ms.menu.define() entries
-            ms._hiddenFeatures   = {}  -- set: name → true (from ms.features.hide())
-            -- Theme defaults — matches the shipped data/ms_theme.json baseline.
-            -- ms.loadTheme() overrides these with the user's file at startup.
-            ms._themeDefaults = {
-                bg       = "#060402",
-                surface  = "#100806",
-                surface2 = "#1c100c",
-                hover    = "#301610",
-                accent   = "#c41a1a",
-                accentHi = "#e52424",
-                success  = "#4a7820",
-                dangerBg = "#1e0608",
-                danger   = "#d42020",
-                warning  = "#c47820",
-                text     = "#f0ddb0",
-                radius   = 3,
-                font     = "Almendra",
-                uifc     = { settings = "", guardian = "" },
-            }
-            ms._theme = {}
-            for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
-            ms._themeLoaded = false  -- set true by ms.loadTheme() when a file loads successfully
+            -- User Settings & Menu API State --
+                ms.settings          = {}  -- user settings API namespace
+                ms.menu              = {}  -- custom section API namespace (ms.menu.define)
+                ms._menubar          = nil  -- hs.menubar instance (menu-bar icon); set in Section 7
+                ms.features          = {}  -- feature visibility API namespace
+                ms._userSettingDefs  = {}  -- ordered list of all setting/item definitions
+                ms._userSettingIndex = {}  -- key → def, for O(1) lookup
+                ms._userSettingVals  = {}  -- key → current live value
+                ms._userMenuDefs     = {}  -- ordered list of ms.menu.define() entries
+                ms._hiddenFeatures   = {}  -- set: name → true (from ms.features.hide())
+                -- Theme defaults — matches the shipped data/ms_theme.json baseline.
+                -- ms.loadTheme() overrides these with the user's file at startup.
+                ms._themeDefaults = {
+                    bg       = "#060402",
+                    surface  = "#100806",
+                    surface2 = "#1c100c",
+                    hover    = "#301610",
+                    accent   = "#c41a1a",
+                    accentHi = "#e52424",
+                    success  = "#4a7820",
+                    dangerBg = "#1e0608",
+                    danger   = "#d42020",
+                    warning  = "#c47820",
+                    text     = "#f0ddb0",
+                    radius   = 3,
+                    font     = "Almendra",
+                    uifc     = { settings = "", guardian = "" },
+                }
+                ms._theme = {}
+                for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
+                ms._themeLoaded = false  -- set true by ms.loadTheme() when a file loads successfully
 
-            require("hs.eventtap")
-            require("hs.mouse")
-            require("hs.uielement")
-            require("hs.timer")
-            require("hs.hotkey")
-            require("hs.json")
-            require("hs.keycodes")
-            require("hs.canvas")
-            require("hs.window")
-            require("hs.screen")
-            require("hs.menubar")
-            require("hs.application")
+                require("hs.eventtap")
+                require("hs.mouse")
+                require("hs.uielement")
+                require("hs.timer")
+                require("hs.hotkey")
+                require("hs.json")
+                require("hs.keycodes")
+                require("hs.canvas")
+                require("hs.window")
+                require("hs.screen")
+                require("hs.menubar")
+                require("hs.application")
 
-            -- Developer Tools — ms.dev --
-            ms.dev = {
-                _consolePanel    = nil,
-                _watcherPanel    = nil,
-                _keysPanel       = nil,
-                _consolePanelPos = nil,
-                _watcherPanelPos = nil,
-                _keysPanelPos    = nil,
-                _activeKeys      = {},
-                _activeButtons   = {},  -- button number → true while held
-                _coordMode       = "screen",  -- screen | window | ref | screenCenter
-            }
-            local _devLogDir  = os.getenv("HOME") .. "/Documents/"
-            local _devLogPath = _devLogDir .. "ms_dev.log"
-            local _devArchDir = _devLogDir .. "ms_dev_logs/"
-            do
-                -- On every reload, archive the previous session's log so each
-                -- session starts clean and history never bloats the file.
-                if hs.fs.attributes(_devLogPath) then
-                    hs.fs.mkdir(_devArchDir)
-                    local _stamp = os.date("%Y-%m-%d_%H%M%S")
-                    os.rename(_devLogPath, _devArchDir .. "ms_dev_" .. _stamp .. ".log")
-                    -- Prune: keep only the 20 most recent archives.
-                    local _list = {}
-                    for _name in hs.fs.dir(_devArchDir) do
-                        if _name:match("^ms_dev_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$") then
-                            table.insert(_list, _name)
+                -- Developer Tools — ms.dev --
+                ms.dev = {
+                    _consolePanel    = nil,
+                    _watcherPanel    = nil,
+                    _keysPanel       = nil,
+                    _consolePanelPos = nil,
+                    _watcherPanelPos = nil,
+                    _keysPanelPos    = nil,
+                    _activeKeys      = {},
+                    _activeButtons   = {},  -- button number → true while held
+                    _coordMode       = "screen",  -- screen | window | ref | screenCenter
+                }
+                local _devLogDir  = os.getenv("HOME") .. "/Documents/"
+                local _devLogPath = _devLogDir .. "ms_dev.log"
+                local _devArchDir = _devLogDir .. "ms_dev_logs/"
+                do
+                    -- On every reload, archive the previous session's log so each
+                    -- session starts clean and history never bloats the file.
+                    if hs.fs.attributes(_devLogPath) then
+                        hs.fs.mkdir(_devArchDir)
+                        local _stamp = os.date("%Y-%m-%d_%H%M%S")
+                        os.rename(_devLogPath, _devArchDir .. "ms_dev_" .. _stamp .. ".log")
+                        -- Prune: keep only the 20 most recent archives.
+                        local _list = {}
+                        for _name in hs.fs.dir(_devArchDir) do
+                            if _name:match("^ms_dev_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$") then
+                                table.insert(_list, _name)
+                            end
                         end
-                    end
-                    table.sort(_list)  -- lexicographic == chronological for this format
-                    local _limit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
-                        and ms._devArchiveLimit or 15
-                    while #_list > _limit do
-                        os.remove(_devArchDir .. _list[1])
-                        table.remove(_list, 1)
+                        table.sort(_list)  -- lexicographic == chronological for this format
+                        local _limit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
+                            and ms._devArchiveLimit or 15
+                        while #_list > _limit do
+                            os.remove(_devArchDir .. _list[1])
+                            table.remove(_list, 1)
+                        end
                     end
                 end
-            end
-            local _devBusy = false
-            local _devLastConsoleType = nil  -- last key/mouse/macro type sent; gates repeat suppression
+                local _devBusy = false
+                local _devLastConsoleType = nil  -- last key/mouse/macro type sent; gates repeat suppression
 
-            local function _devWrite(entry)
-                if _devBusy then return end
-                _devBusy = true
-                entry.ts = os.date("%H:%M:%S")
-                pcall(function()
-                    local f = io.open(_devLogPath, "a")
-                    if f then f:write(hs.json.encode(entry) .. "\n"); f:close() end
-                end)
-                local ok, json = pcall(hs.json.encode, entry)
-                if ok then
-                    local t = entry.type
-                    -- Console routing with consecutive-repeat suppression.
-                    -- key/mouse/macro: only send when the type changes from the last sent.
-                    -- print/error/result/input: always send and reset the gate.
-                    if ms.dev._consolePanel and t ~= "mousemove" then
-                        local send = false
-                        if t == "key" or t == "mouse" or t == "macro" then
-                            if _devLastConsoleType ~= t then
-                                _devLastConsoleType = t
+                local function _devWrite(entry)
+                    if _devBusy then return end
+                    _devBusy = true
+                    entry.ts = os.date("%H:%M:%S")
+                    pcall(function()
+                        local f = io.open(_devLogPath, "a")
+                        if f then f:write(hs.json.encode(entry) .. "\n"); f:close() end
+                    end)
+                    local ok, json = pcall(hs.json.encode, entry)
+                    if ok then
+                        local t = entry.type
+                        -- Console routing with consecutive-repeat suppression.
+                        -- key/mouse/macro: only send when the type changes from the last sent.
+                        -- print/error/result/input: always send and reset the gate.
+                        if ms.dev._consolePanel and t ~= "mousemove" then
+                            local send = false
+                            if t == "key" or t == "mouse" or t == "macro" then
+                                if _devLastConsoleType ~= t then
+                                    _devLastConsoleType = t
+                                    send = true
+                                end
+                            else
+                                -- Non-indicator type: always show and reset gate so the
+                                -- next key/mouse/macro press shows a fresh badge.
+                                _devLastConsoleType = nil
                                 send = true
                             end
-                        else
-                            -- Non-indicator type: always show and reset gate so the
-                            -- next key/mouse/macro press shows a fresh badge.
-                            _devLastConsoleType = nil
-                            send = true
+                            if send then
+                                pcall(function()
+                                    ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                                end)
+                            end
                         end
-                        if send then
+                        -- Watcher: macro, print, error (step entries pushed directly)
+                        if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error") then
                             pcall(function()
-                                ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                                ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                            end)
+                        end
+                        -- Input Monitor: key, mouse, scroll, mousemove
+                        if ms.dev._keysPanel and ms.dev._keysReady
+                            and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
+                            pcall(function()
+                                ms.dev._keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
                             end)
                         end
                     end
-                    -- Watcher: macro, print, error (step entries pushed directly)
-                    if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error") then
-                        pcall(function()
-                            ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                        end)
-                    end
-                    -- Input Monitor: key, mouse, scroll, mousemove
-                    if ms.dev._keysPanel and ms.dev._keysReady
-                        and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
-                        pcall(function()
-                            ms.dev._keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                        end)
-                    end
+                    _devBusy = false
                 end
-                _devBusy = false
-            end
 
-            local _origPrint = print
-            _G.print = function(...)
-                _origPrint(...)
-                local parts = {}
-                for i = 1, select('#', ...) do parts[i] = tostring(select(i, ...)) end
-                _devWrite({ type = "print", msg = table.concat(parts, "\t") })
-            end
+                local _origPrint = print
+                _G.print = function(...)
+                    _origPrint(...)
+                    local parts = {}
+                    for i = 1, select('#', ...) do parts[i] = tostring(select(i, ...)) end
+                    _devWrite({ type = "print", msg = table.concat(parts, "\t") })
+                end
 
-            ms.dev._onMacroFire = function(id, label, parentId, parentLabel, trigger)
-                _devWrite({
-                    type        = "macro",
-                    id          = id,
-                    label       = label or id,
-                    parentLabel = parentLabel,
-                    trigger     = trigger,
-                })
-            end
+                ms.dev._onMacroFire = function(id, label, parentId, parentLabel, trigger)
+                    _devWrite({
+                        type        = "macro",
+                        id          = id,
+                        label       = label or id,
+                        parentLabel = parentLabel,
+                        trigger     = trigger,
+                    })
+                end
 
-            ms.dev._onKeyEvent = function(keyCode, keyName, isDown)
-                _devWrite({ type = "key", key = keyName or ("code:" .. tostring(keyCode)), down = isDown })
-                if isDown then ms.dev._activeKeys[keyCode] = keyName or tostring(keyCode)
-                else            ms.dev._activeKeys[keyCode] = nil end
-                if ms.dev._keysPanel then
-                    local active = {}
-                    for _, name in pairs(ms.dev._activeKeys) do table.insert(active, name) end
-                    local aok, aj = pcall(hs.json.encode, active)
-                    if aok then
-                        pcall(function()
-                            ms.dev._keysPanel:evaluateJavaScript("updateActiveKeys(" .. aj .. ")")
-                        end)
+                ms.dev._onKeyEvent = function(keyCode, keyName, isDown)
+                    _devWrite({ type = "key", key = keyName or ("code:" .. tostring(keyCode)), down = isDown })
+                    if isDown then ms.dev._activeKeys[keyCode] = keyName or tostring(keyCode)
+                    else            ms.dev._activeKeys[keyCode] = nil end
+                    if ms.dev._keysPanel then
+                        local active = {}
+                        for _, name in pairs(ms.dev._activeKeys) do table.insert(active, name) end
+                        local aok, aj = pcall(hs.json.encode, active)
+                        if aok then
+                            pcall(function()
+                                ms.dev._keysPanel:evaluateJavaScript("updateActiveKeys(" .. aj .. ")")
+                            end)
+                        end
                     end
                 end
-            end
 
-            ms.dev._onMouseEvent = function(button, isDown, x, y)
-                _devWrite({ type = "mouse", button = button, down = isDown, x = x, y = y })
-                -- Track held buttons and push the updated state to the active-button pills.
-                if isDown then ms.dev._activeButtons[button] = true
-                else            ms.dev._activeButtons[button] = nil end
-                if ms.dev._keysPanel and ms.dev._keysReady then
-                    local active = {}
-                    for btn in pairs(ms.dev._activeButtons) do table.insert(active, btn) end
-                    local aok, aj = pcall(hs.json.encode, { x = x, y = y, buttons = active })
-                    if aok then
-                        pcall(function()
-                            ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. aj .. ")")
-                        end)
+                ms.dev._onMouseEvent = function(button, isDown, x, y)
+                    _devWrite({ type = "mouse", button = button, down = isDown, x = x, y = y })
+                    -- Track held buttons and push the updated state to the active-button pills.
+                    if isDown then ms.dev._activeButtons[button] = true
+                    else            ms.dev._activeButtons[button] = nil end
+                    if ms.dev._keysPanel and ms.dev._keysReady then
+                        local active = {}
+                        for btn in pairs(ms.dev._activeButtons) do table.insert(active, btn) end
+                        local aok, aj = pcall(hs.json.encode, { x = x, y = y, buttons = active })
+                        if aok then
+                            pcall(function()
+                                ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. aj .. ")")
+                            end)
+                        end
                     end
                 end
-            end
 
-            hs.timer.doAfter(0.3, function()
-                local roblox = hs.application.get("Roblox")
-                if roblox then
-                    -- Seed _robloxActive now so the Hammerspoon step of the bounce
-                    -- correctly triggers ms._inputOpen via the app watcher.
-                    -- Without this the watcher sees _robloxActive=false and skips
-                    -- setting _inputOpen, causing a spurious ENABLED toast on return.
-                    ms._robloxActive = true
+                hs.timer.doAfter(0.3, function()
+                    local roblox = hs.application.get("Roblox")
+                    if roblox then
+                        -- Seed _robloxActive now so the Hammerspoon step of the bounce
+                        -- correctly triggers ms._inputOpen via the app watcher.
+                        -- Without this the watcher sees _robloxActive=false and skips
+                        -- setting _inputOpen, causing a spurious ENABLED toast on return.
+                        ms._robloxActive = true
 
-                    -- Bounce through Hammerspoon so macOS registers a genuine fresh
-                    -- Roblox activation. A direct roblox:activate() is a no-op when
-                    -- Roblox is already frontmost (common after a reload from the
-                    -- Hammerspoon console) and never fires the app watcher, leaving
-                    -- ms._inputOpen stuck true for the rest of the session.
-                    local hs_app = hs.application.get("Hammerspoon")
-                    if hs_app then hs_app:activate() end
+                        -- Bounce through Hammerspoon so macOS registers a genuine fresh
+                        -- Roblox activation. A direct roblox:activate() is a no-op when
+                        -- Roblox is already frontmost (common after a reload from the
+                        -- Hammerspoon console) and never fires the app watcher, leaving
+                        -- ms._inputOpen stuck true for the rest of the session.
+                        local hs_app = hs.application.get("Hammerspoon")
+                        if hs_app then hs_app:activate() end
 
-                    hs.timer.doAfter(0.25, function()
-                        -- Re-fetch the app handle; the captured reference can become
-                        -- stale between the outer and inner timer callbacks.
-                        local app = hs.application.get("Roblox") or roblox
-                        local ok, win = pcall(function() return app:mainWindow() end)
-                        if ok and win then pcall(function() win:focus() end) end
-                        pcall(function() app:activate() end)
-                    end)
-                end
-            end)
+                        hs.timer.doAfter(0.25, function()
+                            -- Re-fetch the app handle; the captured reference can become
+                            -- stale between the outer and inner timer callbacks.
+                            local app = hs.application.get("Roblox") or roblox
+                            local ok, win = pcall(function() return app:mainWindow() end)
+                            if ok and win then pcall(function() win:focus() end) end
+                            pcall(function() app:activate() end)
+                        end)
+                    end
+                end)
+            -- END --
+
         -- END --
 
         -- 2. Conditions, States, and UI Elements--
@@ -681,650 +691,662 @@
                     return nil
                 end
 
-                -- ── User Settings — validation helpers ──────────────────────────────────────
-                local _SETTING_TYPES = {
-                    toggle = true, slider    = true, seg       = true,
-                    action = true, divider   = true, groupLabel = true,
-                    soundSlot = true,  -- user-defined sound event slot
-                    group     = true,  -- collapsible group of nested settings
-                }
-                -- Feature names ms.features.hide() is permitted to suppress.
-                -- "sound" and "profiles" are intentionally excluded.
-                local _HIDEABLE_FEATURES = {
-                    socd             = true,
-                    trackpad         = true,
-                    independentBinds = true,
-                    sensitivity      = true,
-                }
-                -- Returns the validated (and possibly clamped) value, or nil on failure.
-                local function _validateUserValue(def, value)
-                    if def.type == "toggle" then
-                        if value == true or value == false then return value end
-                    elseif def.type == "slider" then
-                        local n = tonumber(value)
-                        if n then return math.max(def.min or 0, math.min(def.max or 100, n)) end
-                    elseif def.type == "seg" then
-                        if type(def.options) == "table" then
-                            for _, opt in ipairs(def.options) do
-                                if opt.value == value then return value end
-                            end
-                        end
-                    end
-                    return nil
-                end
-
-                -- Applies a decoded settings table to the live runtime state.
-                ms._applySettings = function(data)
-                    if not data then return end
-                    if data.sensitivity ~= nil then
-                        local num = tonumber(data.sensitivity)
-                        if num and num >= 0.1 and num <= 4 then CUR_CAM_SENS = num end
-                    end
-                    if data.frameLevel ~= nil then
-                        -- frameLevel was the old baked-in persistence key for clickLevel.
-                        -- Migrate it into the user settings table on load so the user
-                        -- setting picks it up, then discard the root-level key.
-                        data.user = data.user or {}
-                        if data.user.clickLevel == nil then
-                            local num = tonumber(data.frameLevel)
-                            if num and num >= 1 and num <= 4 then
-                                data.user.clickLevel = num
-                            end
-                        end
-                    end
-                    if data.trackpadMode     ~= nil then ms.trackpadMode           = (data.trackpadMode     == true) end
-                    if data.socdEnabled      ~= nil then ms.socdEnabled            = (data.socdEnabled      == true) end
-                    if data.independentBinds ~= nil then ms.independentBindsEnabled = (data.independentBinds == true) end
-                    if data.socdMode then
-                        if data.socdMode == "lastWins" or data.socdMode == "neutral" or data.socdMode == "firstWins" then
-                            ms.socdMode = data.socdMode
-                        end
-                    end
-                    if data.trackpadHoldKeys and ms.trackpadHoldKeys then
-                        if data.trackpadHoldKeys.left  then ms.trackpadHoldKeys.left  = data.trackpadHoldKeys.left  end
-                        if data.trackpadHoldKeys.right then ms.trackpadHoldKeys.right = data.trackpadHoldKeys.right end
-                    end
-                    if data.soundEnabled ~= nil then ms.soundEnabled = (data.soundEnabled == true) end
-                    if data.soundVolume  ~= nil then
-                        local v = tonumber(data.soundVolume)
-                        if v and v >= 0 and v <= 100 then ms.soundVolume = math.floor(v) end
-                    end
-                    if data.soundAssign and type(data.soundAssign) == "table" then
-                        local _sa = {}
-                        for k, v in pairs(data.soundAssign) do
-                            -- Keys are slot IDs (strings); values must be plain sound names
-                            -- with no path separators to prevent SoundLib boundary escapes.
-                            if type(k) == "string" and type(v) == "string"
-                                and not v:find("[/\\]") and not v:find("%.%.")
-                            then
-                                _sa[k] = v
-                            end
-                        end
-                        ms.soundAssign = _sa
-                    end
-                    if data.importedSounds and type(data.importedSounds) == "table" then
-                        local _is = {}
-                        for k, v in pairs(data.importedSounds) do
-                            if type(k) == "string" and type(v) == "string"
-                                and not v:find("[/\\]") and not v:find("%.%.")
-                            then
-                                _is[k] = v
-                            end
-                        end
-                        ms.importedSounds = _is
-                    end
-                    if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
-                    if data.devArchiveLimit ~= nil then
-                        local n = tonumber(data.devArchiveLimit)
-                        if n and n >= 0 and n <= 50 then ms._devArchiveLimit = math.floor(n) end
-                    end
-                    if data.macros then
-                        for id, entry in pairs(data.macros) do
-                            if entry.enabled ~= nil then
-                                ms.binds[id] = entry.enabled
-                            end
-                            if entry.bind then
-                                local def = ms.registry._defs and ms.registry._defs[id]
-                                if def and not def.sub then
-                                    ms.bindConfig[id] = entry.bind
-                                else
-                                    ms.subBinds[id] = entry.bind
-                                end
-                            end
-                            if entry.mod ~= nil then
-                                                -- "" = explicitly cleared (no modifier); nil = use declared default.
-                                                -- Both are stored as-is so the cleared state persists after reload.
-                                                ms.modConfig[id] = entry.mod
-                            end
-                            if entry.cooldown ~= nil then
-                                local n = tonumber(entry.cooldown)
-                                if n and n >= 0 then ms.cooldowns[id] = math.floor(n) end
-                            end
-                        end
-                    end
-                    -- Apply user-defined settings from the "user" sub-table.
-                    -- Runs last so user settings always take final effect.
-                    -- Fires onChange callbacks, which sync system bridges (e.g. ms.setClickLevel).
-                    if data.user and type(data.user) == "table" then
-                        for key, value in pairs(data.user) do
-                            local uDef = ms._userSettingIndex[key]
-                            if uDef and uDef.type ~= "action" then
-                                local validated = _validateUserValue(uDef, value)
-                                if validated ~= nil then
-                                    ms._userSettingVals[key] = validated
-                                    if type(uDef.onChange) == "function" then
-                                        pcall(uDef.onChange, validated)
-                                    end
+                -- User Settings — validation helpers --
+                    local _SETTING_TYPES = {
+                        toggle = true, slider    = true, seg       = true,
+                        action = true, divider   = true, groupLabel = true,
+                        soundSlot = true,  -- user-defined sound event slot
+                        group     = true,  -- collapsible group of nested settings
+                    }
+                    -- Feature names ms.features.hide() is permitted to suppress.
+                    -- "sound" and "profiles" are intentionally excluded.
+                    local _HIDEABLE_FEATURES = {
+                        socd             = true,
+                        trackpad         = true,
+                        independentBinds = true,
+                        sensitivity      = true,
+                    }
+                    -- Returns the validated (and possibly clamped) value, or nil on failure.
+                    local function _validateUserValue(def, value)
+                        if def.type == "toggle" then
+                            if value == true or value == false then return value end
+                        elseif def.type == "slider" then
+                            local n = tonumber(value)
+                            if n then return math.max(def.min or 0, math.min(def.max or 100, n)) end
+                        elseif def.type == "seg" then
+                            if type(def.options) == "table" then
+                                for _, opt in ipairs(def.options) do
+                                    if opt.value == value then return value end
                                 end
                             end
                         end
+                        return nil
                     end
-                end
 
-                -- Parses the old flat settings file into a settings table.
-                -- Unknown keys are silently skipped; returns (data, skippedKeys).
-                ms._convertFlatSettings = function(file)
-                    local data    = { macros = {} }
-                    local skipped = {}
-                    for line in file:lines() do
-                        local key, val = line:match("^(.-)=(.+)$")
-                        if not key then
-                            -- blank or malformed line; skip
-                        elseif key == "sensitivity" then
-                            local num = tonumber(val)
-                            if num and num >= 0.1 and num <= 4 then data.sensitivity = num end
-                        elseif key == "clickLevel" or key == "frameLevel" then
-                            -- Legacy key — migrate into user settings on next save.
-                            local num = tonumber(val)
-                            if num and num >= 1 and num <= 4 then
-                                data.user = data.user or {}
-                                if not data.user.clickLevel then
+                    -- Applies a decoded settings table to the live runtime state.
+                    ms._applySettings = function(data)
+                        if not data then return end
+                        if data.sensitivity ~= nil then
+                            local num = tonumber(data.sensitivity)
+                            if num and num >= 0.1 and num <= 4 then CUR_CAM_SENS = num end
+                        end
+                        if data.frameLevel ~= nil then
+                            -- frameLevel was the old baked-in persistence key for clickLevel.
+                            -- Migrate it into the user settings table on load so the user
+                            -- setting picks it up, then discard the root-level key.
+                            data.user = data.user or {}
+                            if data.user.clickLevel == nil then
+                                local num = tonumber(data.frameLevel)
+                                if num and num >= 1 and num <= 4 then
                                     data.user.clickLevel = num
                                 end
                             end
-                        elseif key == "binds" then
-                            local decoded = hs.json.decode(val)
-                            if decoded then
-                                for id, enabled in pairs(decoded) do
-                                    data.macros[id] = data.macros[id] or {}
-                                    data.macros[id].enabled = enabled
+                        end
+                        if data.trackpadMode     ~= nil then ms.trackpadMode           = (data.trackpadMode     == true) end
+                        if data.socdEnabled      ~= nil then ms.socdEnabled            = (data.socdEnabled      == true) end
+                        if data.independentBinds ~= nil then ms.independentBindsEnabled = (data.independentBinds == true) end
+                        if data.socdMode then
+                            if data.socdMode == "lastWins" or data.socdMode == "neutral" or data.socdMode == "firstWins" then
+                                ms.socdMode = data.socdMode
+                            end
+                        end
+                        if data.trackpadHoldKeys and ms.trackpadHoldKeys then
+                            if data.trackpadHoldKeys.left  then ms.trackpadHoldKeys.left  = data.trackpadHoldKeys.left  end
+                            if data.trackpadHoldKeys.right then ms.trackpadHoldKeys.right = data.trackpadHoldKeys.right end
+                        end
+                        if data.soundEnabled ~= nil then ms.soundEnabled = (data.soundEnabled == true) end
+                        if data.soundVolume  ~= nil then
+                            local v = tonumber(data.soundVolume)
+                            if v and v >= 0 and v <= 100 then ms.soundVolume = math.floor(v) end
+                        end
+                        if data.soundAssign and type(data.soundAssign) == "table" then
+                            local _sa = {}
+                            for k, v in pairs(data.soundAssign) do
+                                -- Keys are slot IDs (strings); values must be plain sound names
+                                -- with no path separators to prevent SoundLib boundary escapes.
+                                if type(k) == "string" and type(v) == "string"
+                                    and not v:find("[/\\]") and not v:find("%.%.")
+                                then
+                                    _sa[k] = v
                                 end
                             end
-                        elseif key == "trackpadMode"     then data.trackpadMode     = (val == "true")
-                        elseif key == "socdEnabled"      then data.socdEnabled      = (val == "true")
-                        elseif key == "independentBinds" then data.independentBinds = (val == "true")
-                        elseif key == "socdMode" then
-                            if val == "lastWins" or val == "neutral" or val == "firstWins" then
-                                data.socdMode = val
-                            end
-                        elseif key == "trackpadHoldLeft" then
-                            data.trackpadHoldKeys = data.trackpadHoldKeys or {}
-                            data.trackpadHoldKeys.left = val
-                        elseif key == "trackpadHoldRight" then
-                            data.trackpadHoldKeys = data.trackpadHoldKeys or {}
-                            data.trackpadHoldKeys.right = val
-                        elseif key:sub(1, 5) == "bind_" then
-                            local id = key:sub(6)
-                            local parsed = ms.parseBind(val)
-                            if parsed then
-                                data.macros[id] = data.macros[id] or {}
-                                data.macros[id].bind = parsed
-                            end
-                        elseif key:sub(1, 4) == "mod_" then
-                            local id = key:sub(5)
-                            data.macros[id] = data.macros[id] or {}
-                            data.macros[id].mod = (val == "") and nil or val
-                        elseif key:sub(1, 8) == "subbind_" then
-                            local id = key:sub(9)
-                            local parsed = ms.parseBind(val)
-                            if parsed then
-                                data.macros[id] = data.macros[id] or {}
-                                data.macros[id].bind = parsed
-                            end
-                        else
-                            table.insert(skipped, key)
+                            ms.soundAssign = _sa
                         end
-                    end
-                    return data, skipped
-                end
-
-                ms.saveSettings = function()
-                    if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
-                    local data = {
-                        sensitivity      = CUR_CAM_SENS,
-                        trackpadMode     = ms.trackpadMode,
-                        socdEnabled      = ms.socdEnabled,
-                        socdMode         = ms.socdMode or "lastWins",
-                        independentBinds = ms.independentBindsEnabled,
-                        trackpadHoldKeys = {
-                            left  = ms.trackpadHoldKeys and ms.trackpadHoldKeys.left  or "n",
-                            right = ms.trackpadHoldKeys and ms.trackpadHoldKeys.right or "j",
-                        },
-                        soundEnabled     = ms.soundEnabled,
-                        soundVolume      = ms.soundVolume,
-                        soundAssign      = ms.soundAssign,
-                        importedSounds   = ms.importedSounds or {},
-                        skipDevPrewarm   = ms._skipDevPrewarm or false,
-                        devArchiveLimit  = ms._devArchiveLimit or 15,
-                        user             = ms._userSettingVals or {},
-                        macros = {},
-                    }
-                    -- Enabled state per macro
-                    for id, enabled in pairs(ms.binds or {}) do
-                        data.macros[id] = data.macros[id] or {}
-                        data.macros[id].enabled = enabled
-                    end
-                    -- Root bind overrides (only written when different from code default)
-                    for id, cfg in pairs(ms.bindConfig or {}) do
-                        local regEntry = ms.registry._defs and ms.registry._defs[id]
-                        local def = regEntry and regEntry.default
-                        if def then
-                            local isDifferent = false
-                            if cfg.type ~= def.type then
-                                isDifferent = true
-                            elseif cfg.type == "mouse" and cfg.button ~= def.button then
-                                isDifferent = true
-                            elseif cfg.type == "key" then
-                                local cfgMods = table.concat(cfg.mods or {}, "+")
-                                local defMods = table.concat(def.mods or {}, "+")
-                                if cfg.key ~= def.key or cfgMods ~= defMods then isDifferent = true end
+                        if data.importedSounds and type(data.importedSounds) == "table" then
+                            local _is = {}
+                            for k, v in pairs(data.importedSounds) do
+                                if type(k) == "string" and type(v) == "string"
+                                    and not v:find("[/\\]") and not v:find("%.%.")
+                                then
+                                    _is[k] = v
+                                end
                             end
-                            if isDifferent then
-                                data.macros[id] = data.macros[id] or {}
-                                data.macros[id].bind = cfg
+                            ms.importedSounds = _is
+                        end
+                        if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
+                        if data.devArchiveLimit ~= nil then
+                            local n = tonumber(data.devArchiveLimit)
+                            if n and n >= 0 and n <= 50 then ms._devArchiveLimit = math.floor(n) end
+                        end
+                        if data.macros then
+                            for id, entry in pairs(data.macros) do
+                                if entry.enabled ~= nil then
+                                    ms.binds[id] = entry.enabled
+                                end
+                                if entry.bind then
+                                    local def = ms.registry._defs and ms.registry._defs[id]
+                                    if def and not def.sub then
+                                        ms.bindConfig[id] = entry.bind
+                                    else
+                                        ms.subBinds[id] = entry.bind
+                                    end
+                                end
+                                if entry.mod ~= nil then
+                                                    -- "" = explicitly cleared (no modifier); nil = use declared default.
+                                                    -- Both are stored as-is so the cleared state persists after reload.
+                                                    ms.modConfig[id] = entry.mod
+                                end
+                                if entry.cooldown ~= nil then
+                                    local n = tonumber(entry.cooldown)
+                                    if n and n >= 0 then ms.cooldowns[id] = math.floor(n) end
+                                end
                             end
                         end
-                    end
-                    -- Modifier key overrides
-                    for id, key in pairs(ms.modConfig or {}) do
-                        data.macros[id] = data.macros[id] or {}
-                        data.macros[id].mod = key
-                    end
-                    -- Sub-item independent binds
-                    for id, cfg in pairs(ms.subBinds or {}) do
-                        data.macros[id] = data.macros[id] or {}
-                        data.macros[id].bind = cfg
-                    end
-                    -- User cooldown overrides
-                    for id, cooldown in pairs(ms.cooldowns or {}) do
-                        data.macros[id] = data.macros[id] or {}
-                        data.macros[id].cooldown = cooldown
-                    end
-                    local f = io.open(jsonPath, "w")
-                    if f then
-                        f:write(hs.json.encode(data, true))
-                        f:close()
-                    end
-                end
-
-                ms.loadSettings = function()
-                    if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
-                    -- JSON file takes priority
-                    local f = io.open(jsonPath, "r")
-                    if f then
-                        local content = f:read("*all")
-                        f:close()
-                        local data = hs.json.decode(content)
-                        if data then
-                            ms._applySettings(data)
-                            return
-                        end
-                        -- JSON present but unreadable; fall through to flat-file check.
-                    end
-                    -- Auto-convert from old flat file if JSON is absent
-                    local oldF = io.open(settingsPath, "r")
-                    if oldF then
-                        local data, skipped = ms._convertFlatSettings(oldF)
-                        oldF:close()
-                        ms._applySettings(data)
-                        ms.saveSettings()
-                        os.rename(settingsPath, archivePath .. "ms_settings_txt.bak")
-                        hs.timer.doAfter(1, function()
-                            if #skipped > 0 then
-                                ms.alert("Settings converted to JSON.\nSkipped unknown keys: " .. table.concat(skipped, ", "), 8)
-                            else
-                                ms.alert("Settings converted to JSON format.\nOld file backed up to backups/ms_settings_txt.bak.", 6)
-                            end
-                        end)
-                        return
-                    end
-                    -- Fall back to shipped default settings file
-                    local df = io.open(defaultPath, "r")
-                    if df then
-                        local content = df:read("*all")
-                        df:close()
-                        local data = hs.json.decode(content)
-                        if data then
-                            ms._applySettings(data)
-                            return
-                        end
-                    end
-                    -- No settings file found — build default from macro declarations.
-                    ms._buildDefaultSettings()
-                    local df2 = io.open(defaultPath, "r")
-                    if df2 then
-                        local content2 = df2:read("*all"); df2:close()
-                        local data2 = hs.json.decode(content2)
-                        if data2 then ms._applySettings(data2) end
-                    end
-                end
-
-                -- Archives the current default and saves the current settings in its place.
-                ms.saveDefault = function()
-                    ms.saveSettings()
-                    local sf = io.open(jsonPath, "r")
-                    if not sf then ms.alert("Could not read current settings.", 3); return end
-                    local content = sf:read("*all")
-                    sf:close()
-                    -- Archive the existing default if one exists.
-                    local existingDf = io.open(defaultPath, "r")
-                    if existingDf then
-                        local oldContent = existingDf:read("*all")
-                        existingDf:close()
-                        os.execute("mkdir -p '" .. archivePath .. "'")
-                        local timestamp = os.date("%Y-%m-%d_%H%M")
-                        local archiveFile = archivePath .. "ms_settings_default_" .. timestamp .. ".json"
-                        local af = io.open(archiveFile, "w")
-                        if af then af:write(oldContent); af:close() end
-                    end
-                    -- Write the new default.
-                    local df = io.open(defaultPath, "w")
-                    if df then
-                        df:write(content)
-                        df:close()
-                        ms.alert("Default settings saved.", 3)
-                    end
-                end
-
-                -- Applies the saved default settings and rebinds everything.
-                -- Returns true on success, false if no default file is found.
-                ms.resetToDefault = function()
-                    local f = io.open(defaultPath, "r")
-                    if not f then
-                        ms.alert("No default settings file found.", 3)
-                        return false
-                    end
-                    local content = f:read("*all")
-                    f:close()
-                    local data = hs.json.decode(content)
-                    if not data then
-                        ms.alert("Default settings file could not be decoded.", 3)
-                        return false
-                    end
-                    -- Clear all per-macro customisations before applying so the default
-                    -- is a full replacement, not a merge on top of the current state.
-                    -- Without this, any bind/mod/subbind not present in the default file
-                    -- would silently persist because _applySettings only sets what it sees.
-                    ms.bindConfig = {}
-                    ms.subBinds   = {}
-                    ms.modConfig  = {}
-                    ms.cooldowns  = {}
-                    ms._applySettings(data)
-                    -- Also reset user-defined settings to their declared defaults.
-                    for key, def in pairs(ms._userSettingIndex) do
-                        if def.type ~= "action" and def.default ~= nil then
-                            ms._userSettingVals[key] = def.default
-                            if type(def.onChange) == "function" then
-                                pcall(def.onChange, def.default)
-                            end
-                        end
-                    end
-                    ms.saveSettings()
-                    ms.bind.rebind()
-                    ms.cam.updateAnchor()
-                    ms.cam.updateMultiplier()
-                    ms.socdApply()
-                    return true
-                end
-
-                -- Reloads settings from disk and applies them fully.
-                -- Single source of truth called by both the menu item and the Alt+] hotkey.
-                ms.reloadSettings = function()
-                    ms.loadSettings()
-                    ms.bind.rebind()
-                    ms.cam.updateAnchor()
-                    ms.cam.updateMultiplier()
-                    ms.socdApply()
-                    ms.playSlot("update")
-                    ms.alert("Settings reloaded.", 5, true)
-                end
-
-                -- User Settings & Menu API --
-                --
-                -- These functions are called from ms_macros.lua (after ms.macroMeta, before
-                -- macro functions) to declare custom settings, panel sections, and to hide
-                -- unused built-in features.
-                --
-                -- Callbacks (onChange, onAction) defined in ms_macros.lua run inside the
-                -- macro sandbox — they have access to ms.* functions and safe Lua builtins,
-                -- but cannot touch hs.*, io.*, os.*, or any filesystem / shell API.
-                --
-                -- Quick reference:
-                --
-                --   ms.settings.define({ key="k", type="toggle", default=false,
-                --       label="My Toggle", onChange=function(v) end })
-                --
-                --   ms.settings.define({ key="k", type="slider", min=0, max=100,
-                --       step=1, unit="ms", default=50, label="My Slider",
-                --       onChange=function(v) end })
-                --
-                --   ms.settings.define({ key="k", type="seg",
-                --       options={{label="A",value="a"},{label="B",value="b"}},
-                --       default="a", label="My Seg", onChange=function(v) end })
-                --
-                --   ms.settings.define({ key="k", type="action",
-                --       label="Row label", btnLabel="Run", danger=false,
-                --       onAction=function() end })
-                --
-                --   ms.settings.define({ type="divider" })
-                --   ms.settings.define({ type="groupLabel", label="My Group" })
-                --
-                --   ms.settings.get("k")          -- read current value
-                --   ms.settings.set("k", value)   -- write + save + fire onChange
-                --
-                --   ms.menu.define({ id="sec", title="My Section", icon="⚔",
-                --       items={ {type="toggle", key="k", ...}, ... } })
-                --
-                --   ms.features.hide("socd")          -- hide SOCD rows in Tools
-                --   ms.features.hide("trackpad")      -- hide Trackpad row in Tools
-                --   ms.features.hide("sensitivity")   -- hide Sensitivity slider in Tools
-                --   ms.features.hide("independentBinds") -- hide Ind. Binds row in Tools
-                --
-                -- ── ms.settings.define(def) ────────────────────────────────────────────────────────────────────
-                -- Registers one setting or visual item in a panel section.
-                -- Items appear in declaration order within their target section.
-                --
-                -- Optional field: section = "settings" (default) | "calibration"
-                -- Optional field (type="group" only): items = { nested defs }
-                --
-                ms.settings.define = function(def)
-                    assert(type(def) == "table",
-                        "ms.settings.define: argument must be a table")
-                    local t = def.type
-                    assert(_SETTING_TYPES[t],
-                        "ms.settings.define: unknown type '" .. tostring(t) .. "'")
-                    -- Visual-only items need no key or value.
-                    if t == "divider" or t == "groupLabel" then
-                        table.insert(ms._userSettingDefs, def)
-                        return
-                    end
-                    -- Collapsible group: register each nested item then store the group.
-                    if t == "group" then
-                        assert(type(def.items) == "table",
-                            "ms.settings.define: 'items' is required for type 'group'")
-                        for _, subDef in ipairs(def.items) do
-                            if type(subDef) == "table"
-                                and type(subDef.key) == "string" and #subDef.key > 0 then
-                                assert(not ms._userSettingIndex[subDef.key],
-                                    "ms.settings.define: duplicate key '" .. subDef.key .. "' in group")
-                                ms._userSettingIndex[subDef.key] = subDef
-                                local st = subDef.type
-                                if st ~= "action" and st ~= "soundSlot"
-                                    and st ~= "divider" and st ~= "groupLabel" then
-                                    ms._userSettingVals[subDef.key] = subDef.default
-                                    if subDef.default ~= nil
-                                        and type(subDef.onChange) == "function" then
-                                        pcall(subDef.onChange, subDef.default)
+                        -- Apply user-defined settings from the "user" sub-table.
+                        -- Runs last so user settings always take final effect.
+                        -- Fires onChange callbacks, which sync system bridges (e.g. ms.setClickLevel).
+                        if data.user and type(data.user) == "table" then
+                            for key, value in pairs(data.user) do
+                                local uDef = ms._userSettingIndex[key]
+                                if uDef and uDef.type ~= "action" then
+                                    local validated = _validateUserValue(uDef, value)
+                                    if validated ~= nil then
+                                        ms._userSettingVals[key] = validated
+                                        if type(uDef.onChange) == "function" then
+                                            pcall(uDef.onChange, validated)
+                                        end
                                     end
                                 end
                             end
                         end
-                        table.insert(ms._userSettingDefs, def)
-                        return
                     end
-                    -- Sound slot: no stored value — assignment lives in ms.soundAssign[key].
-                    if t == "soundSlot" then
-                        local key = def.key
-                        assert(type(key) == "string" and #key > 0,
-                            "ms.settings.define: 'key' is required for type 'soundSlot'")
-                        assert(not ms._userSettingIndex[key],
-                            "ms.settings.define: duplicate key '" .. key .. "'")
-                        ms._userSettingIndex[key] = def
-                        table.insert(ms._userSettingDefs, def)
-                        return
-                    end
-                    local key = def.key
-                    assert(type(key) == "string" and #key > 0,
-                        "ms.settings.define: 'key' is required for type '" .. t .. "'")
-                    assert(not ms._userSettingIndex[key],
-                        "ms.settings.define: duplicate key '" .. key .. "'")
-                    if def.onChange then
-                        assert(type(def.onChange) == "function",
-                            "ms.settings.define: onChange must be a function")
-                    end
-                    if def.onAction then
-                        assert(type(def.onAction) == "function",
-                            "ms.settings.define: onAction must be a function")
-                    end
-                    ms._userSettingIndex[key] = def
-                    table.insert(ms._userSettingDefs, def)
-                    -- Action items carry no stored value.
-                    if t == "action" then return end
-                    -- Seed with declared default; _applySettings will override with the
-                    -- saved value once settings load from disk (after ms_macros.lua runs).
-                    ms._userSettingVals[key] = def.default
-                    if def.default ~= nil and type(def.onChange) == "function" then
-                        pcall(def.onChange, def.default)
-                    end
-                end
 
-                -- ── ms.settings.get(key) ──────────────────────────────────────────────────────────────────────
-                -- Returns the current value of a user setting, or its declared default.
-                -- Safe to call inside ms.fn()-wrapped macro bodies at any time.
-                --
-                ms.settings.get = function(key)
-                    assert(type(key) == "string", "ms.settings.get: key must be a string")
-                    local def = ms._userSettingIndex[key]
-                    if not def then return nil end
-                    -- soundSlot values live in ms.soundAssign, not _userSettingVals.
-                    if def.type == "soundSlot" then
-                        return (ms.soundAssign and ms.soundAssign[key]) or def.default
-                    end
-                    local v = ms._userSettingVals[key]
-                    return v ~= nil and v or def.default
-                end
-
-                -- ── ms.settings.set(key, value) ────────────────────────────────────────────────────────────
-                -- Programmatically updates a user setting.
-                -- Validates the value, persists if save ~= false, and fires onChange.
-                --
-                ms.settings.set = function(key, value)
-                    assert(type(key) == "string", "ms.settings.set: key must be a string")
-                    local def = ms._userSettingIndex[key]
-                    if not def then
-                        print("ms.settings.set: unknown key '" .. tostring(key) .. "'")
-                        return
-                    end
-                    if def.type == "action" then
-                        print("ms.settings.set: action items have no value (key='" .. key .. "')")
-                        return
-                    end
-                    if def.type == "soundSlot" then
-                        -- soundSlot assignments are managed by the Sound panel, not _userSettingVals.
-                        -- Calling set() on a soundSlot key is not supported; use the Sound section UI.
-                        print("ms.settings.set: '" .. key .. "' is a soundSlot — assign sounds via Settings \xc2\xbb Sound.")
-                        return
-                    end
-                    local validated = _validateUserValue(def, value)
-                    if validated == nil then
-                        print("ms.settings.set: invalid value " .. tostring(value)
-                            .. " for key '" .. key .. "'")
-                        return
-                    end
-                    ms._userSettingVals[key] = validated
-                    if def.save ~= false then ms.saveSettings() end
-                    if type(def.onChange) == "function" then
-                        pcall(def.onChange, validated)
-                    end
-                end
-
-                -- ── ms.menu.define(def) ────────────────────────────────────────────────────────────────────────
-                -- Registers a custom panel section that appears below the Tools section.
-                -- Sections appear in the order ms.menu.define is called.
-                --
-                --   id    (required) Unique identifier string.
-                --   title (required) Header text shown in the panel.
-                --   icon  (optional) Emoji prepended to the title in the panel header.
-                --   items (required) Array of item definitions (same fields as
-                --                    ms.settings.define entries). Each item with a key
-                --                    is automatically reachable via ms.settings.get/set.
-                --
-                ms.menu.define = function(def)
-                    assert(type(def) == "table",
-                        "ms.menu.define: argument must be a table")
-                    assert(type(def.id) == "string" and #def.id > 0,
-                        "ms.menu.define: 'id' is required")
-                    assert(type(def.title) == "string" and #def.title > 0,
-                        "ms.menu.define: 'title' is required")
-                    assert(type(def.items) == "table",
-                        "ms.menu.define: 'items' must be a table")
-                    -- Register each keyed item so ms.settings.get/set works for them.
-                    for _, item in ipairs(def.items) do
-                        if type(item) == "table"
-                            and type(item.key) == "string" and #item.key > 0
-                            and not ms._userSettingIndex[item.key] then
-                            if item.onChange then
-                                assert(type(item.onChange) == "function",
-                                    "ms.menu.define: item onChange must be a function")
+                    -- Parses the old flat settings file into a settings table.
+                    -- Unknown keys are silently skipped; returns (data, skippedKeys).
+                    ms._convertFlatSettings = function(file)
+                        local data    = { macros = {} }
+                        local skipped = {}
+                        for line in file:lines() do
+                            local key, val = line:match("^(.-)=(.+)$")
+                            if not key then
+                                -- blank or malformed line; skip
+                            elseif key == "sensitivity" then
+                                local num = tonumber(val)
+                                if num and num >= 0.1 and num <= 4 then data.sensitivity = num end
+                            elseif key == "clickLevel" or key == "frameLevel" then
+                                -- Legacy key — migrate into user settings on next save.
+                                local num = tonumber(val)
+                                if num and num >= 1 and num <= 4 then
+                                    data.user = data.user or {}
+                                    if not data.user.clickLevel then
+                                        data.user.clickLevel = num
+                                    end
+                                end
+                            elseif key == "binds" then
+                                local decoded = hs.json.decode(val)
+                                if decoded then
+                                    for id, enabled in pairs(decoded) do
+                                        data.macros[id] = data.macros[id] or {}
+                                        data.macros[id].enabled = enabled
+                                    end
+                                end
+                            elseif key == "trackpadMode"     then data.trackpadMode     = (val == "true")
+                            elseif key == "socdEnabled"      then data.socdEnabled      = (val == "true")
+                            elseif key == "independentBinds" then data.independentBinds = (val == "true")
+                            elseif key == "socdMode" then
+                                if val == "lastWins" or val == "neutral" or val == "firstWins" then
+                                    data.socdMode = val
+                                end
+                            elseif key == "trackpadHoldLeft" then
+                                data.trackpadHoldKeys = data.trackpadHoldKeys or {}
+                                data.trackpadHoldKeys.left = val
+                            elseif key == "trackpadHoldRight" then
+                                data.trackpadHoldKeys = data.trackpadHoldKeys or {}
+                                data.trackpadHoldKeys.right = val
+                            elseif key:sub(1, 5) == "bind_" then
+                                local id = key:sub(6)
+                                local parsed = ms.parseBind(val)
+                                if parsed then
+                                    data.macros[id] = data.macros[id] or {}
+                                    data.macros[id].bind = parsed
+                                end
+                            elseif key:sub(1, 4) == "mod_" then
+                                local id = key:sub(5)
+                                data.macros[id] = data.macros[id] or {}
+                                data.macros[id].mod = (val == "") and nil or val
+                            elseif key:sub(1, 8) == "subbind_" then
+                                local id = key:sub(9)
+                                local parsed = ms.parseBind(val)
+                                if parsed then
+                                    data.macros[id] = data.macros[id] or {}
+                                    data.macros[id].bind = parsed
+                                end
+                            else
+                                table.insert(skipped, key)
                             end
-                            if item.onAction then
-                                assert(type(item.onAction) == "function",
-                                    "ms.menu.define: item onAction must be a function")
-                            end
-                            ms._userSettingIndex[item.key] = item
-                            if item.type ~= "action" then
-                                ms._userSettingVals[item.key] = item.default
-                                if item.default ~= nil and type(item.onChange) == "function" then
-                                    pcall(item.onChange, item.default)
+                        end
+                        return data, skipped
+                    end
+
+                    ms.saveSettings = function()
+                        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+                        local data = {
+                            sensitivity      = CUR_CAM_SENS,
+                            trackpadMode     = ms.trackpadMode,
+                            socdEnabled      = ms.socdEnabled,
+                            socdMode         = ms.socdMode or "lastWins",
+                            independentBinds = ms.independentBindsEnabled,
+                            trackpadHoldKeys = {
+                                left  = ms.trackpadHoldKeys and ms.trackpadHoldKeys.left  or "n",
+                                right = ms.trackpadHoldKeys and ms.trackpadHoldKeys.right or "j",
+                            },
+                            soundEnabled     = ms.soundEnabled,
+                            soundVolume      = ms.soundVolume,
+                            soundAssign      = ms.soundAssign,
+                            importedSounds   = ms.importedSounds or {},
+                            skipDevPrewarm   = ms._skipDevPrewarm or false,
+                            devArchiveLimit  = ms._devArchiveLimit or 15,
+                            user             = ms._userSettingVals or {},
+                            macros = {},
+                        }
+                        -- Enabled state per macro
+                        for id, enabled in pairs(ms.binds or {}) do
+                            data.macros[id] = data.macros[id] or {}
+                            data.macros[id].enabled = enabled
+                        end
+                        -- Root bind overrides (only written when different from code default)
+                        for id, cfg in pairs(ms.bindConfig or {}) do
+                            local regEntry = ms.registry._defs and ms.registry._defs[id]
+                            local def = regEntry and regEntry.default
+                            if def then
+                                local isDifferent = false
+                                if cfg.type ~= def.type then
+                                    isDifferent = true
+                                elseif cfg.type == "mouse" and cfg.button ~= def.button then
+                                    isDifferent = true
+                                elseif cfg.type == "key" then
+                                    local cfgMods = table.concat(cfg.mods or {}, "+")
+                                    local defMods = table.concat(def.mods or {}, "+")
+                                    if cfg.key ~= def.key or cfgMods ~= defMods then isDifferent = true end
+                                end
+                                if isDifferent then
+                                    data.macros[id] = data.macros[id] or {}
+                                    data.macros[id].bind = cfg
                                 end
                             end
                         end
+                        -- Modifier key overrides
+                        for id, key in pairs(ms.modConfig or {}) do
+                            data.macros[id] = data.macros[id] or {}
+                            data.macros[id].mod = key
+                        end
+                        -- Sub-item independent binds
+                        for id, cfg in pairs(ms.subBinds or {}) do
+                            data.macros[id] = data.macros[id] or {}
+                            data.macros[id].bind = cfg
+                        end
+                        -- User cooldown overrides
+                        for id, cooldown in pairs(ms.cooldowns or {}) do
+                            data.macros[id] = data.macros[id] or {}
+                            data.macros[id].cooldown = cooldown
+                        end
+                        local f = io.open(jsonPath, "w")
+                        if f then
+                            f:write(hs.json.encode(data, true))
+                            f:close()
+                        end
                     end
-                    table.insert(ms._userMenuDefs, def)
-                end
 
-                -- ── ms.features.hide(name) ───────────────────────────────────────────────────────────────────
-                -- Hides a built-in panel feature for this macro pack session.
-                -- Purely cosmetic — the underlying feature remains functional.
-                -- The item reappears when the call is removed and Hammerspoon reloads.
-                --
-                -- Accepted names:
-                --   "sensitivity"        Camera Sensitivity slider in Tools
-                --   "socd"               SOCD Cleaning + Mode rows in Tools
-                --   "trackpad"           Trackpad / Pen Mode row in Tools
-                --   "independentBinds"   Independent Binds row in Tools
-                --
-                -- Note: "sound" and "profiles" cannot be hidden.
-                --
-                ms.features.hide = function(name)
-                    if not _HIDEABLE_FEATURES[name] then
-                        print("ms.features.hide: '" .. tostring(name)
-                            .. "' is not a hideable feature. "
-                            .. "Accepted: sensitivity, socd, trackpad, independentBinds")
-                        return
+                    ms.loadSettings = function()
+                        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+                        -- JSON file takes priority
+                        local f = io.open(jsonPath, "r")
+                        if f then
+                            local content = f:read("*all")
+                            f:close()
+                            local data = hs.json.decode(content)
+                            if data then
+                                ms._applySettings(data)
+                                return
+                            end
+                            -- JSON present but unreadable; fall through to flat-file check.
+                        end
+                        -- Auto-convert from old flat file if JSON is absent
+                        local oldF = io.open(settingsPath, "r")
+                        if oldF then
+                            local data, skipped = ms._convertFlatSettings(oldF)
+                            oldF:close()
+                            ms._applySettings(data)
+                            ms.saveSettings()
+                            os.rename(settingsPath, archivePath .. "ms_settings_txt.bak")
+                            hs.timer.doAfter(1, function()
+                                if #skipped > 0 then
+                                    ms.alert("Settings converted to JSON.\nSkipped unknown keys: " .. table.concat(skipped, ", "), 8)
+                                else
+                                    ms.alert("Settings converted to JSON format.\nOld file backed up to backups/ms_settings_txt.bak.", 6)
+                                end
+                            end)
+                            return
+                        end
+                        -- Fall back to shipped default settings file
+                        local df = io.open(defaultPath, "r")
+                        if df then
+                            local content = df:read("*all")
+                            df:close()
+                            local data = hs.json.decode(content)
+                            if data then
+                                ms._applySettings(data)
+                                return
+                            end
+                        end
+                        -- No settings file found — build default from macro declarations.
+                        ms._buildDefaultSettings()
+                        local df2 = io.open(defaultPath, "r")
+                        if df2 then
+                            local content2 = df2:read("*all"); df2:close()
+                            local data2 = hs.json.decode(content2)
+                            if data2 then ms._applySettings(data2) end
+                        end
                     end
-                    ms._hiddenFeatures[name] = true
-                end
+
+                    -- Archives the current default and saves the current settings in its place.
+                    ms.saveDefault = function()
+                        ms.saveSettings()
+                        local sf = io.open(jsonPath, "r")
+                        if not sf then ms.alert("Could not read current settings.", 3); return end
+                        local content = sf:read("*all")
+                        sf:close()
+                        -- Archive the existing default if one exists.
+                        local existingDf = io.open(defaultPath, "r")
+                        if existingDf then
+                            local oldContent = existingDf:read("*all")
+                            existingDf:close()
+                            os.execute("mkdir -p '" .. archivePath .. "'")
+                            local timestamp = os.date("%Y-%m-%d_%H%M")
+                            local archiveFile = archivePath .. "ms_settings_default_" .. timestamp .. ".json"
+                            local af = io.open(archiveFile, "w")
+                            if af then af:write(oldContent); af:close() end
+                        end
+                        -- Write the new default.
+                        local df = io.open(defaultPath, "w")
+                        if df then
+                            df:write(content)
+                            df:close()
+                            ms.alert("Default settings saved.", 3)
+                        end
+                    end
+
+                    -- Applies the saved default settings and rebinds everything.
+                    -- Returns true on success, false if no default file is found.
+                    ms.resetToDefault = function()
+                        local f = io.open(defaultPath, "r")
+                        if not f then
+                            ms.alert("No default settings file found.", 3)
+                            return false
+                        end
+                        local content = f:read("*all")
+                        f:close()
+                        local data = hs.json.decode(content)
+                        if not data then
+                            ms.alert("Default settings file could not be decoded.", 3)
+                            return false
+                        end
+                        -- Clear all per-macro customisations before applying so the default
+                        -- is a full replacement, not a merge on top of the current state.
+                        -- Without this, any bind/mod/subbind not present in the default file
+                        -- would silently persist because _applySettings only sets what it sees.
+                        ms.bindConfig = {}
+                        ms.subBinds   = {}
+                        ms.modConfig  = {}
+                        ms.cooldowns  = {}
+                        ms._applySettings(data)
+                        -- Also reset user-defined settings to their declared defaults.
+                        for key, def in pairs(ms._userSettingIndex) do
+                            if def.type ~= "action" and def.default ~= nil then
+                                ms._userSettingVals[key] = def.default
+                                if type(def.onChange) == "function" then
+                                    pcall(def.onChange, def.default)
+                                end
+                            end
+                        end
+                        ms.saveSettings()
+                        ms.bind.rebind()
+                        ms.cam.updateAnchor()
+                        ms.cam.updateMultiplier()
+                        ms.socdApply()
+                        return true
+                    end
+
+                    -- Reloads settings from disk and applies them fully.
+                    -- Single source of truth called by both the menu item and the Alt+] hotkey.
+                    ms.reloadSettings = function()
+                        ms.loadSettings()
+                        ms.bind.rebind()
+                        ms.cam.updateAnchor()
+                        ms.cam.updateMultiplier()
+                        ms.socdApply()
+                        ms.playSlot("update")
+                        ms.alert("Settings reloaded.", 5, true)
+                    end
+
+                    -- User Settings & Menu API --
+                    --
+                    -- These functions are called from ms_macros.lua (after ms.macroMeta, before
+                    -- macro functions) to declare custom settings, panel sections, and to hide
+                    -- unused built-in features.
+                    --
+                    -- Callbacks (onChange, onAction) defined in ms_macros.lua run inside the
+                    -- macro sandbox — they have access to ms.* functions and safe Lua builtins,
+                    -- but cannot touch hs.*, io.*, os.*, or any filesystem / shell API.
+                    --
+                    -- Quick reference:
+                    --
+                    --   ms.settings.define({ key="k", type="toggle", default=false,
+                    --       label="My Toggle", onChange=function(v) end })
+                    --
+                    --   ms.settings.define({ key="k", type="slider", min=0, max=100,
+                    --       step=1, unit="ms", default=50, label="My Slider",
+                    --       onChange=function(v) end })
+                    --
+                    --   ms.settings.define({ key="k", type="seg",
+                    --       options={{label="A",value="a"},{label="B",value="b"}},
+                    --       default="a", label="My Seg", onChange=function(v) end })
+                    --
+                    --   ms.settings.define({ key="k", type="action",
+                    --       label="Row label", btnLabel="Run", danger=false,
+                    --       onAction=function() end })
+                    --
+                    --   ms.settings.define({ type="divider" })
+                    --   ms.settings.define({ type="groupLabel", label="My Group" })
+                    --
+                    --   ms.settings.get("k")          -- read current value
+                    --   ms.settings.set("k", value)   -- write + save + fire onChange
+                    --
+                    --   ms.menu.define({ id="sec", title="My Section", icon="⚔",
+                    --       items={ {type="toggle", key="k", ...}, ... } })
+                    --
+                    --   ms.features.hide("socd")          -- hide SOCD rows in Tools
+                    --   ms.features.hide("trackpad")      -- hide Trackpad row in Tools
+                    --   ms.features.hide("sensitivity")   -- hide Sensitivity slider in Tools
+                    --   ms.features.hide("independentBinds") -- hide Ind. Binds row in Tools
+                    --
+                -- END --
+
+                -- ms.settings.define(def) --
+                    -- Registers one setting or visual item in a panel section.
+                    -- Items appear in declaration order within their target section.
+                    --
+                    -- Optional field: section = "settings" (default) | "calibration"
+                    -- Optional field (type="group" only): items = { nested defs }
+                    --
+                    ms.settings.define = function(def)
+                        assert(type(def) == "table",
+                            "ms.settings.define: argument must be a table")
+                        local t = def.type
+                        assert(_SETTING_TYPES[t],
+                            "ms.settings.define: unknown type '" .. tostring(t) .. "'")
+                        -- Visual-only items need no key or value.
+                        if t == "divider" or t == "groupLabel" then
+                            table.insert(ms._userSettingDefs, def)
+                            return
+                        end
+                        -- Collapsible group: register each nested item then store the group.
+                        if t == "group" then
+                            assert(type(def.items) == "table",
+                                "ms.settings.define: 'items' is required for type 'group'")
+                            for _, subDef in ipairs(def.items) do
+                                if type(subDef) == "table"
+                                    and type(subDef.key) == "string" and #subDef.key > 0 then
+                                    assert(not ms._userSettingIndex[subDef.key],
+                                        "ms.settings.define: duplicate key '" .. subDef.key .. "' in group")
+                                    ms._userSettingIndex[subDef.key] = subDef
+                                    local st = subDef.type
+                                    if st ~= "action" and st ~= "soundSlot"
+                                        and st ~= "divider" and st ~= "groupLabel" then
+                                        ms._userSettingVals[subDef.key] = subDef.default
+                                        if subDef.default ~= nil
+                                            and type(subDef.onChange) == "function" then
+                                            pcall(subDef.onChange, subDef.default)
+                                        end
+                                    end
+                                end
+                            end
+                            table.insert(ms._userSettingDefs, def)
+                            return
+                        end
+                        -- Sound slot: no stored value — assignment lives in ms.soundAssign[key].
+                        if t == "soundSlot" then
+                            local key = def.key
+                            assert(type(key) == "string" and #key > 0,
+                                "ms.settings.define: 'key' is required for type 'soundSlot'")
+                            assert(not ms._userSettingIndex[key],
+                                "ms.settings.define: duplicate key '" .. key .. "'")
+                            ms._userSettingIndex[key] = def
+                            table.insert(ms._userSettingDefs, def)
+                            return
+                        end
+                        local key = def.key
+                        assert(type(key) == "string" and #key > 0,
+                            "ms.settings.define: 'key' is required for type '" .. t .. "'")
+                        assert(not ms._userSettingIndex[key],
+                            "ms.settings.define: duplicate key '" .. key .. "'")
+                        if def.onChange then
+                            assert(type(def.onChange) == "function",
+                                "ms.settings.define: onChange must be a function")
+                        end
+                        if def.onAction then
+                            assert(type(def.onAction) == "function",
+                                "ms.settings.define: onAction must be a function")
+                        end
+                        ms._userSettingIndex[key] = def
+                        table.insert(ms._userSettingDefs, def)
+                        -- Action items carry no stored value.
+                        if t == "action" then return end
+                        -- Seed with declared default; _applySettings will override with the
+                        -- saved value once settings load from disk (after ms_macros.lua runs).
+                        ms._userSettingVals[key] = def.default
+                        if def.default ~= nil and type(def.onChange) == "function" then
+                            pcall(def.onChange, def.default)
+                        end
+                    end
+
+                -- END --
+
+                -- ms.settings.get(key) --
+                    -- Returns the current value of a user setting, or its declared default.
+                    -- Safe to call inside ms.fn()-wrapped macro bodies at any time.
+                    --
+                    ms.settings.get = function(key)
+                        assert(type(key) == "string", "ms.settings.get: key must be a string")
+                        local def = ms._userSettingIndex[key]
+                        if not def then return nil end
+                        -- soundSlot values live in ms.soundAssign, not _userSettingVals.
+                        if def.type == "soundSlot" then
+                            return (ms.soundAssign and ms.soundAssign[key]) or def.default
+                        end
+                        local v = ms._userSettingVals[key]
+                        return v ~= nil and v or def.default
+                    end
+
+                -- END --
+
+                -- ms.settings.set(key, value) --
+                    -- Programmatically updates a user setting.
+                    -- Validates the value, persists if save ~= false, and fires onChange.
+                    --
+                    ms.settings.set = function(key, value)
+                        assert(type(key) == "string", "ms.settings.set: key must be a string")
+                        local def = ms._userSettingIndex[key]
+                        if not def then
+                            print("ms.settings.set: unknown key '" .. tostring(key) .. "'")
+                            return
+                        end
+                        if def.type == "action" then
+                            print("ms.settings.set: action items have no value (key='" .. key .. "')")
+                            return
+                        end
+                        if def.type == "soundSlot" then
+                            -- soundSlot assignments are managed by the Sound panel, not _userSettingVals.
+                            -- Calling set() on a soundSlot key is not supported; use the Sound section UI.
+                            print("ms.settings.set: '" .. key .. "' is a soundSlot — assign sounds via Settings \xc2\xbb Sound.")
+                            return
+                        end
+                        local validated = _validateUserValue(def, value)
+                        if validated == nil then
+                            print("ms.settings.set: invalid value " .. tostring(value)
+                                .. " for key '" .. key .. "'")
+                            return
+                        end
+                        ms._userSettingVals[key] = validated
+                        if def.save ~= false then ms.saveSettings() end
+                        if type(def.onChange) == "function" then
+                            pcall(def.onChange, validated)
+                        end
+                    end
+
+                -- END --
+
+                -- ms.menu.define(def) --
+                    -- Registers a custom panel section that appears below the Tools section.
+                    -- Sections appear in the order ms.menu.define is called.
+                    --
+                    --   id    (required) Unique identifier string.
+                    --   title (required) Header text shown in the panel.
+                    --   icon  (optional) Emoji prepended to the title in the panel header.
+                    --   items (required) Array of item definitions (same fields as
+                    --                    ms.settings.define entries). Each item with a key
+                    --                    is automatically reachable via ms.settings.get/set.
+                    --
+                    ms.menu.define = function(def)
+                        assert(type(def) == "table",
+                            "ms.menu.define: argument must be a table")
+                        assert(type(def.id) == "string" and #def.id > 0,
+                            "ms.menu.define: 'id' is required")
+                        assert(type(def.title) == "string" and #def.title > 0,
+                            "ms.menu.define: 'title' is required")
+                        assert(type(def.items) == "table",
+                            "ms.menu.define: 'items' must be a table")
+                        -- Register each keyed item so ms.settings.get/set works for them.
+                        for _, item in ipairs(def.items) do
+                            if type(item) == "table"
+                                and type(item.key) == "string" and #item.key > 0
+                                and not ms._userSettingIndex[item.key] then
+                                if item.onChange then
+                                    assert(type(item.onChange) == "function",
+                                        "ms.menu.define: item onChange must be a function")
+                                end
+                                if item.onAction then
+                                    assert(type(item.onAction) == "function",
+                                        "ms.menu.define: item onAction must be a function")
+                                end
+                                ms._userSettingIndex[item.key] = item
+                                if item.type ~= "action" then
+                                    ms._userSettingVals[item.key] = item.default
+                                    if item.default ~= nil and type(item.onChange) == "function" then
+                                        pcall(item.onChange, item.default)
+                                    end
+                                end
+                            end
+                        end
+                        table.insert(ms._userMenuDefs, def)
+                    end
+
+                -- END --
+
+                -- ms.features.hide(name) --
+                    -- Hides a built-in panel feature for this macro pack session.
+                    -- Purely cosmetic — the underlying feature remains functional.
+                    -- The item reappears when the call is removed and Hammerspoon reloads.
+                    --
+                    -- Accepted names:
+                    --   "sensitivity"        Camera Sensitivity slider in Tools
+                    --   "socd"               SOCD Cleaning + Mode rows in Tools
+                    --   "trackpad"           Trackpad / Pen Mode row in Tools
+                    --   "independentBinds"   Independent Binds row in Tools
+                    --
+                    -- Note: "sound" and "profiles" cannot be hidden.
+                    --
+                    ms.features.hide = function(name)
+                        if not _HIDEABLE_FEATURES[name] then
+                            print("ms.features.hide: '" .. tostring(name)
+                                .. "' is not a hideable feature. "
+                                .. "Accepted: sensitivity, socd, trackpad, independentBinds")
+                            return
+                        end
+                        ms._hiddenFeatures[name] = true
+                    end
+
+                -- END --
 
                 -- END User Settings & Menu API --
 
@@ -1743,185 +1765,193 @@
                 -- fire at position 1 of the cleaned source.
                 -- Returns a (possibly empty) list of violation strings.
                 auditMacros = function(src)
-                    -- ── Lexer pass: neutralize string literals and comments ───────────────
-                    -- Replaces their *contents* with spaces so deny patterns below only
-                    -- fire on actual executable code tokens.  Newlines are preserved so
-                    -- the global-function line check at the end has stable line numbers.
-                    --
-                    -- Handles all four Lua token kinds:
-                    --   "..." / '...'          short strings (with \-escape sequences)
-                    --   [=*[...]=*]            long strings of any bracket level
-                    --   -- line comment
-                    --   --[=*[...]=*]          block comments of any bracket level
-                    --
-                    -- Why this replaces the old two-pass regex approach:
-                    -- The old stripper searched for "--" in raw source text without
-                    -- understanding string literals.  A string like "--[[" would open a
-                    -- fake block comment in the scanner, silently removing the deny-
-                    -- pattern check for every line that followed until a "]]" appeared.
-                    -- This is the Lua equivalent of the SQL-injection quote trick: use
-                    -- a delimiter character inside a literal to escape the surrounding
-                    -- context in the parser.  A proper lexer eliminates the ambiguity.
+                    -- Lexer pass: neutralize string literals and comments --
+                        -- Replaces their *contents* with spaces so deny patterns below only
+                        -- fire on actual executable code tokens.  Newlines are preserved so
+                        -- the global-function line check at the end has stable line numbers.
+                        --
+                        -- Handles all four Lua token kinds:
+                        --   "..." / '...'          short strings (with \-escape sequences)
+                        --   [=*[...]=*]            long strings of any bracket level
+                        --   -- line comment
+                        --   --[=*[...]=*]          block comments of any bracket level
+                        --
+                        -- Why this replaces the old two-pass regex approach:
+                        -- The old stripper searched for "--" in raw source text without
+                        -- understanding string literals.  A string like "--[[" would open a
+                        -- fake block comment in the scanner, silently removing the deny-
+                        -- pattern check for every line that followed until a "]]" appeared.
+                        -- This is the Lua equivalent of the SQL-injection quote trick: use
+                        -- a delimiter character inside a literal to escape the surrounding
+                        -- context in the parser.  A proper lexer eliminates the ambiguity.
 
-                    local function blank(s) return s:gsub("[^\n]", " ") end
-                    local out = {}
-                    local i, n = 1, #src
+                        local function blank(s) return s:gsub("[^\n]", " ") end
+                        local out = {}
+                        local i, n = 1, #src
 
-                    while i <= n do
-                        local c = src:sub(i, i)
+                        while i <= n do
+                            local c = src:sub(i, i)
 
-                        if c == '"' or c == "'" then
-                            -- ── Short quoted string ─────────────────────────────────────
-                            -- Walk until unescaped closing quote or bare newline.
-                            -- A bare newline inside a short string is a Lua syntax error,
-                            -- but we stop there anyway to avoid run-on blanking.
-                            local j = i + 1
-                            while j <= n do
-                                local ch = src:sub(j, j)
-                                if ch == "\\" then
-                                    j = j + 2       -- skip escape + the escaped char
-                                elseif ch == c then
-                                    break           -- found unescaped closing quote
-                                elseif ch == "\n" then
-                                    break           -- unterminated string
-                                else
-                                    j = j + 1
-                                end
-                            end
-                            out[#out + 1] = blank(src:sub(i, j))
-                            i = j + 1
+                            if c == '"' or c == "'" then
+                                -- Short quoted string --
+                                    -- Walk until unescaped closing quote or bare newline.
+                                    -- A bare newline inside a short string is a Lua syntax error,
+                                    -- but we stop there anyway to avoid run-on blanking.
+                                    local j = i + 1
+                                    while j <= n do
+                                        local ch = src:sub(j, j)
+                                        if ch == "\\" then
+                                            j = j + 2       -- skip escape + the escaped char
+                                        elseif ch == c then
+                                            break           -- found unescaped closing quote
+                                        elseif ch == "\n" then
+                                            break           -- unterminated string
+                                        else
+                                            j = j + 1
+                                        end
+                                    end
+                                    out[#out + 1] = blank(src:sub(i, j))
+                                    i = j + 1
 
-                        elseif c == "-" and src:sub(i + 1, i + 1) == "-" then
-                            -- ── Comment ────────────────────────────────────────────────
-                            local j      = i + 2   -- first char after --
-                            local isLong = false
-                            if src:sub(j, j) == "[" then
-                                local eq = 0
-                                while src:sub(j + 1 + eq, j + 1 + eq) == "=" do eq = eq + 1 end
-                                if src:sub(j + 1 + eq, j + 1 + eq) == "[" then
-                                    -- Block comment --[=*[...]=*]
-                                    local closer = "]" .. string.rep("=", eq) .. "]"
-                                    local _, ce  = src:find(closer, j + 2 + eq, true)
-                                    out[#out + 1] = blank(src:sub(i, ce or n))
-                                    i = ce and ce + 1 or n + 1
-                                    isLong = true
-                                end
-                            end
-                            if not isLong then
-                                -- Line comment: blank to end of line, keep the newline.
-                                local nl = src:find("\n", j)
-                                if nl then
-                                    out[#out + 1] = blank(src:sub(i, nl - 1)) .. "\n"
-                                    i = nl + 1
-                                else
-                                    out[#out + 1] = blank(src:sub(i))
-                                    i = n + 1
-                                end
-                            end
+                                -- END --
 
-                        elseif c == "[" then
-                            -- ── Long string [=*[...]=*] ──────────────────────────────────
-                            local eq = 0
-                            while src:sub(i + 1 + eq, i + 1 + eq) == "=" do eq = eq + 1 end
-                            if src:sub(i + 1 + eq, i + 1 + eq) == "[" then
-                                local closer = "]" .. string.rep("=", eq) .. "]"
-                                local _, ce  = src:find(closer, i + 2 + eq, true)
-                                out[#out + 1] = blank(src:sub(i, ce or n))
-                                i = ce and ce + 1 or n + 1
+                            elseif c == "-" and src:sub(i + 1, i + 1) == "-" then
+                                -- Comment --
+                                    local j      = i + 2   -- first char after --
+                                    local isLong = false
+                                    if src:sub(j, j) == "[" then
+                                        local eq = 0
+                                        while src:sub(j + 1 + eq, j + 1 + eq) == "=" do eq = eq + 1 end
+                                        if src:sub(j + 1 + eq, j + 1 + eq) == "[" then
+                                            -- Block comment --[=*[...]=*]
+                                            local closer = "]" .. string.rep("=", eq) .. "]"
+                                            local _, ce  = src:find(closer, j + 2 + eq, true)
+                                            out[#out + 1] = blank(src:sub(i, ce or n))
+                                            i = ce and ce + 1 or n + 1
+                                            isLong = true
+                                        end
+                                    end
+                                    if not isLong then
+                                        -- Line comment: blank to end of line, keep the newline.
+                                        local nl = src:find("\n", j)
+                                        if nl then
+                                            out[#out + 1] = blank(src:sub(i, nl - 1)) .. "\n"
+                                            i = nl + 1
+                                        else
+                                            out[#out + 1] = blank(src:sub(i))
+                                            i = n + 1
+                                        end
+                                    end
+
+                                -- END --
+
+                            elseif c == "[" then
+                                -- Long string [=*[...]=*] --
+                                    local eq = 0
+                                    while src:sub(i + 1 + eq, i + 1 + eq) == "=" do eq = eq + 1 end
+                                    if src:sub(i + 1 + eq, i + 1 + eq) == "[" then
+                                        local closer = "]" .. string.rep("=", eq) .. "]"
+                                        local _, ce  = src:find(closer, i + 2 + eq, true)
+                                        out[#out + 1] = blank(src:sub(i, ce or n))
+                                        i = ce and ce + 1 or n + 1
+                                    else
+                                        out[#out + 1] = c
+                                        i = i + 1
+                                    end
+
+                                -- END --
+
                             else
                                 out[#out + 1] = c
                                 i = i + 1
                             end
-
-                        else
-                            out[#out + 1] = c
-                            i = i + 1
                         end
-                    end
 
-                    local clean = " " .. table.concat(out)
-                    local errs  = {}
-                    local function deny(pat, label)
-                        if clean:find(pat) then table.insert(errs, label) end
-                    end
-
-                    -- Direct Hammerspoon API
-                    deny("[^%w%.]hs%.[%a_]",      "direct hs.* API access")
-
-                    -- Dynamic code loading
-                    deny("[^%w%.]load%s*%(",       "load()")
-                    deny("loadfile%s*%(",           "loadfile()")
-                    deny("loadstring%s*%(",         "loadstring()")
-                    deny("[^%w%.]dofile%s*%(",      "dofile()")
-                    deny("[^%w%.]require%s*%(",     "require()")
-
-                    -- OS / filesystem / shell
-                    deny("[^%w%.]os%.[%a_]",        "os.* access")
-                    deny("[^%w%.]io%.[%a_]",        "io.* access")
-                    deny("[^%w%.]popen%s*%(",       "popen()")
-
-                    -- Dangerous stdlib
-                    deny("[^%w%.]debug%.[%a_]",     "debug.* access")
-                    deny("[^%w%.]package%.[%a_]",   "package.* access")
-                    deny("collectgarbage%s*%(",     "collectgarbage()")
-
-                    -- Sandbox / metatable / environment escape
-                    deny("setmetatable%s*%(",       "setmetatable()")
-                    deny("getmetatable%s*%(",       "getmetatable()")
-                    deny("[^%w_]rawget%s*%(",       "rawget()")
-                    deny("[^%w_]rawset%s*%(",       "rawset()")
-                    deny("setfenv%s*%(",            "setfenv()")
-                    deny("getfenv%s*%(",            "getfenv()")
-                    deny("%f[%w_]_G%f[^%w_]",      "_G global-environment access")
-
-                    -- App control / URL / process
-                    deny(":launch%s*%(",            ":launch()")
-                    deny(":activate%s*%(",          ":activate()")
-                    deny("openURL%s*%(",            "openURL()")
-
-                    -- Filesystem paths to OS directories.
-                    -- Exception: context within ~120 chars contains a media extension.
-                    local mediaExts = {
-                        "%.mp3","%.wav","%.aiff","%.m4a","%.ogg","%.flac",
-                        "%.caf","%.aac","%.mp4","%.mov","%.avi",
-                        "%.jpg","%.jpeg","%.png","%.gif","%.webp","%.bmp","%.tiff",
-                    }
-                    local function nearMedia(pos)
-                        local ctx = clean:sub(math.max(1, pos-10), math.min(#clean, pos+120))
-                        for _, ext in ipairs(mediaExts) do
-                            if ctx:find(ext) then return true end
+                        local clean = " " .. table.concat(out)
+                        local errs  = {}
+                        local function deny(pat, label)
+                            if clean:find(pat) then table.insert(errs, label) end
                         end
-                        return false
-                    end
-                    for _, sysPath in ipairs({
-                        "/Users/","/home/","/Applications/",
-                        "/usr/","/var/","/etc/","/bin/","/sbin/",
-                        "/opt/","/tmp/","/System/","/Library/",
-                        "~/","%.hammerspoon",
-                    }) do
-                        -- Scan ALL occurrences of this prefix, not just the first.
-                        -- The old clean:find() returned only the first hit: a macro
-                        -- could place a first occurrence next to a media extension to
-                        -- earn an exemption, leaving subsequent occurrences unchecked.
-                        local pos = 1
-                        while true do
-                            local found = clean:find(sysPath, pos)
-                            if not found then break end
-                            if not nearMedia(found) then
-                                local snip = clean:sub(found, math.min(#clean, found+35))
-                                                 :gsub("%s+", " ")
-                                table.insert(errs, "disallowed path: " .. snip)
-                                break  -- one error per prefix is enough
+
+                        -- Direct Hammerspoon API
+                        deny("[^%w%.]hs%.[%a_]",      "direct hs.* API access")
+
+                        -- Dynamic code loading
+                        deny("[^%w%.]load%s*%(",       "load()")
+                        deny("loadfile%s*%(",           "loadfile()")
+                        deny("loadstring%s*%(",         "loadstring()")
+                        deny("[^%w%.]dofile%s*%(",      "dofile()")
+                        deny("[^%w%.]require%s*%(",     "require()")
+
+                        -- OS / filesystem / shell
+                        deny("[^%w%.]os%.[%a_]",        "os.* access")
+                        deny("[^%w%.]io%.[%a_]",        "io.* access")
+                        deny("[^%w%.]popen%s*%(",       "popen()")
+
+                        -- Dangerous stdlib
+                        deny("[^%w%.]debug%.[%a_]",     "debug.* access")
+                        deny("[^%w%.]package%.[%a_]",   "package.* access")
+                        deny("collectgarbage%s*%(",     "collectgarbage()")
+
+                        -- Sandbox / metatable / environment escape
+                        deny("setmetatable%s*%(",       "setmetatable()")
+                        deny("getmetatable%s*%(",       "getmetatable()")
+                        deny("[^%w_]rawget%s*%(",       "rawget()")
+                        deny("[^%w_]rawset%s*%(",       "rawset()")
+                        deny("setfenv%s*%(",            "setfenv()")
+                        deny("getfenv%s*%(",            "getfenv()")
+                        deny("%f[%w_]_G%f[^%w_]",      "_G global-environment access")
+
+                        -- App control / URL / process
+                        deny(":launch%s*%(",            ":launch()")
+                        deny(":activate%s*%(",          ":activate()")
+                        deny("openURL%s*%(",            "openURL()")
+
+                        -- Filesystem paths to OS directories.
+                        -- Exception: context within ~120 chars contains a media extension.
+                        local mediaExts = {
+                            "%.mp3","%.wav","%.aiff","%.m4a","%.ogg","%.flac",
+                            "%.caf","%.aac","%.mp4","%.mov","%.avi",
+                            "%.jpg","%.jpeg","%.png","%.gif","%.webp","%.bmp","%.tiff",
+                        }
+                        local function nearMedia(pos)
+                            local ctx = clean:sub(math.max(1, pos-10), math.min(#clean, pos+120))
+                            for _, ext in ipairs(mediaExts) do
+                                if ctx:find(ext) then return true end
                             end
-                            pos = found + 1
+                            return false
                         end
-                    end
+                        for _, sysPath in ipairs({
+                            "/Users/","/home/","/Applications/",
+                            "/usr/","/var/","/etc/","/bin/","/sbin/",
+                            "/opt/","/tmp/","/System/","/Library/",
+                            "~/","%.hammerspoon",
+                        }) do
+                            -- Scan ALL occurrences of this prefix, not just the first.
+                            -- The old clean:find() returned only the first hit: a macro
+                            -- could place a first occurrence next to a media extension to
+                            -- earn an exemption, leaving subsequent occurrences unchecked.
+                            local pos = 1
+                            while true do
+                                local found = clean:find(sysPath, pos)
+                                if not found then break end
+                                if not nearMedia(found) then
+                                    local snip = clean:sub(found, math.min(#clean, found+35))
+                                                     :gsub("%s+", " ")
+                                    table.insert(errs, "disallowed path: " .. snip)
+                                    break  -- one error per prefix is enough
+                                end
+                                pos = found + 1
+                            end
+                        end
 
-                    -- Non-local global function definitions.
-                    -- All helpers in ms_macros.lua must be declared with 'local'.
-                    -- A bare 'function name()' at the start of a line creates a global.
-                    for line in clean:gmatch("[^\n]+") do
-                        local name = line:match("^%s*function%s+([%a_][%w_]*)%s*%(")
+                        -- Non-local global function definitions.
+                        -- All helpers in ms_macros.lua must be declared with 'local'.
+                        -- A bare 'function name()' at the start of a line creates a global.
+                        for line in clean:gmatch("[^\n]+") do
+                            local name = line:match("^%s*function%s+([%a_][%w_]*)%s*%(")
+                    -- END --
+
                         if name then
                             table.insert(errs, "non-local global function definition: " .. name .. "()")
                         end
@@ -4144,117 +4174,119 @@
                 return false
             end):start()
 
-            -- ── Macro Watcher tracing helpers ─────────────────────────────────────────
-            -- Fires only when the Macro Monitor panel is open; no-op otherwise.
-            local _camMoveAccum  = 0   -- consecutive cam.move calls awaiting flush
-            local _traceSuppress = false  -- true while ms.type is dispatching internally
+            -- Macro Watcher tracing helpers --
+                -- Fires only when the Macro Monitor panel is open; no-op otherwise.
+                local _camMoveAccum  = 0   -- consecutive cam.move calls awaiting flush
+                local _traceSuppress = false  -- true while ms.type is dispatching internally
 
-            local function _watcherStep(msg)
-                if not ms.dev._watcherPanel then return end
-                local co  = coroutine.running()
-                local ctx = co and ms._coroContext[co]
-                if ctx and ctx.cancelled then return end
-                local label = (ctx and ctx.label) or "macro"
-                local ok, j = pcall(hs.json.encode, {
-                    type = "step", ts = os.time(),
-                    msg  = "[" .. label .. "] " .. msg,
-                })
-                if ok then
-                    pcall(function()
-                        ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
-                    end)
-                end
-            end
-
-            -- Flush accumulated cam.move calls before logging a different action.
-            local function _flushCam()
-                if _camMoveAccum > 0 then
-                    _watcherStep("cam.move \xc3\x97" .. _camMoveAccum)
-                    _camMoveAccum = 0
-                end
-            end
-
-            ms.press = function(key, mods, hidinject)
-                if ms.dev._watcherPanel and not _traceSuppress then
-                    _flushCam()
-                    local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                    _watcherStep("↓ " .. tostring(key) .. modsStr)
-                end
-                local keyCode = getCode(key)
-                if not keyCode then
-                    print("Error: Could not find keyCode for " .. tostring(key))
-                    return
-                end
-                ms._macroHeldKeys[keyCode] = { mods = mods or {}, hidinject = hidinject }
-                local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, true)
-                if hidinject then
-                    local app = hs.application.get("Roblox")
-                    if app then ev:post(app); return end
-                end
-                ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
-                ev:post()
-            end
-
-            ms.release = function(key, mods, hidinject)
-                if ms.dev._watcherPanel and not _traceSuppress then
-                    _flushCam()
-                    _watcherStep("↑ " .. tostring(key))
-                end
-                local keyCode = getCode(key)
-                if not keyCode then return end
-                ms._macroHeldKeys[keyCode] = nil
-                local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, false)
-                if hidinject then
-                    local app = hs.application.get("Roblox")
-                    if app then ev:post(app); return end
-                end
-                ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
-                ev:post()
-            end
-
-            ms.type = function(key, mods, hidinject)
-                if ms.dev._watcherPanel then
-                    _flushCam()
-                    local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                    _watcherStep("type " .. tostring(key) .. modsStr)
-                end
-                local _saved = _traceSuppress
-                _traceSuppress = true
-                ms.press(key, mods, hidinject)
-                ms.wait(15)
-                ms.release(key, mods, hidinject)
-                _traceSuppress = _saved  -- restore rather than reset; safe across cancellation
-            end
-
-            ms.key = function(mods, key, swallow, pressFn, releaseFn)
-                local keyCode = getCode(key)
-                if not keyCode then
-                    print("Error: Could not find keyCode for " .. tostring(key))
-                    return
-                end
-
-                local modSet = {}
-                for _, m in ipairs(mods or {}) do modSet[m] = true end
-
-                local binding = {
-                    keyCode = keyCode,
-                    mods = modSet,
-                    swallow = swallow,
-                    pressFn = pressFn,
-                    releaseFn = releaseFn,
-                }
-
-                table.insert(ms._keyBindings, binding)
-
-                return { delete = function()
-                    for i, b in ipairs(ms._keyBindings) do
-                        if b == binding then
-                            table.remove(ms._keyBindings, i)
-                            break
-                        end
+                local function _watcherStep(msg)
+                    if not ms.dev._watcherPanel then return end
+                    local co  = coroutine.running()
+                    local ctx = co and ms._coroContext[co]
+                    if ctx and ctx.cancelled then return end
+                    local label = (ctx and ctx.label) or "macro"
+                    local ok, j = pcall(hs.json.encode, {
+                        type = "step", ts = os.time(),
+                        msg  = "[" .. label .. "] " .. msg,
+                    })
+                    if ok then
+                        pcall(function()
+                            ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                        end)
                     end
-                end}
-            end
+                end
+
+                -- Flush accumulated cam.move calls before logging a different action.
+                local function _flushCam()
+                    if _camMoveAccum > 0 then
+                        _watcherStep("cam.move \xc3\x97" .. _camMoveAccum)
+                        _camMoveAccum = 0
+                    end
+                end
+
+                ms.press = function(key, mods, hidinject)
+                    if ms.dev._watcherPanel and not _traceSuppress then
+                        _flushCam()
+                        local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
+                        _watcherStep("↓ " .. tostring(key) .. modsStr)
+                    end
+                    local keyCode = getCode(key)
+                    if not keyCode then
+                        print("Error: Could not find keyCode for " .. tostring(key))
+                        return
+                    end
+                    ms._macroHeldKeys[keyCode] = { mods = mods or {}, hidinject = hidinject }
+                    local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, true)
+                    if hidinject then
+                        local app = hs.application.get("Roblox")
+                        if app then ev:post(app); return end
+                    end
+                    ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    ev:post()
+                end
+
+                ms.release = function(key, mods, hidinject)
+                    if ms.dev._watcherPanel and not _traceSuppress then
+                        _flushCam()
+                        _watcherStep("↑ " .. tostring(key))
+                    end
+                    local keyCode = getCode(key)
+                    if not keyCode then return end
+                    ms._macroHeldKeys[keyCode] = nil
+                    local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, false)
+                    if hidinject then
+                        local app = hs.application.get("Roblox")
+                        if app then ev:post(app); return end
+                    end
+                    ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    ev:post()
+                end
+
+                ms.type = function(key, mods, hidinject)
+                    if ms.dev._watcherPanel then
+                        _flushCam()
+                        local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
+                        _watcherStep("type " .. tostring(key) .. modsStr)
+                    end
+                    local _saved = _traceSuppress
+                    _traceSuppress = true
+                    ms.press(key, mods, hidinject)
+                    ms.wait(15)
+                    ms.release(key, mods, hidinject)
+                    _traceSuppress = _saved  -- restore rather than reset; safe across cancellation
+                end
+
+                ms.key = function(mods, key, swallow, pressFn, releaseFn)
+                    local keyCode = getCode(key)
+                    if not keyCode then
+                        print("Error: Could not find keyCode for " .. tostring(key))
+                        return
+                    end
+
+                    local modSet = {}
+                    for _, m in ipairs(mods or {}) do modSet[m] = true end
+
+                    local binding = {
+                        keyCode = keyCode,
+                        mods = modSet,
+                        swallow = swallow,
+                        pressFn = pressFn,
+                        releaseFn = releaseFn,
+                    }
+
+                    table.insert(ms._keyBindings, binding)
+
+                    return { delete = function()
+                        for i, b in ipairs(ms._keyBindings) do
+                            if b == binding then
+                                table.remove(ms._keyBindings, i)
+                                break
+                            end
+                        end
+                    end}
+                end
+            -- END --
+
         -- END --
 
         -- 4. Mouse Actions -
@@ -5872,934 +5904,522 @@
                 }
             end
 
-            -- ── UI State Cache ───────────────────────────────────────────────────────────
-            -- Pre-encodes the full state JSON so ms.ui.refresh() is instant.
-            -- Built once at startup, then rebuilt only when state actually changes.
-            local _uiStateDirty = true   -- true = cache needs rebuilding
-            local _uiStateJSON  = nil    -- "receiveState(...)" ready to eval
+            -- UI State Cache --
+                -- Pre-encodes the full state JSON so ms.ui.refresh() is instant.
+                -- Built once at startup, then rebuilt only when state actually changes.
+                local _uiStateDirty = true   -- true = cache needs rebuilding
+                local _uiStateJSON  = nil    -- "receiveState(...)" ready to eval
 
-            -- Rebuilds the cache synchronously. Safe to call before the panel exists.
-            local function _rebuildUICache()
-                local ok, json = pcall(hs.json.encode, _buildUIState())
-                if ok then
-                    _uiStateJSON  = "receiveState(" .. json .. ");"
-                    _uiStateDirty = false
-                end
-            end
-
-            -- Mark the cache stale. Refresh will rebuild on next call.
-            ms.ui.markDirty = function() _uiStateDirty = true end
-
-            -- Pushes a fresh state snapshot into the open panel. Safe to call even
-            -- when the panel hasn't been built yet (no-op) or isn't visible.
-            ms.ui.refresh = function()
-                if not ms.ui._panel then return end
-                if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
-                if _uiStateJSON then
-                    pcall(function()
-                        ms.ui._panel:evaluateJavaScript(_uiStateJSON)
-                    end)
-                end
-            end
-
-            -- Pre-builds the UI state cache so the first panel open is instant.
-            -- Called once at startup (via doAfter(0)) so _applySettings has had
-            -- a full event-loop tick to finish before the snapshot is taken.
-            ms.ui.prebuild = function()
-                if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
-            end
-
-            local function _emptyToNil(s) if s == nil or s == "" then return nil end; return s end
-
-            -- One handler per `action` the page can send via sendToHost({action=...}).
-            -- Each mirrors the equivalent native-menu code path 1:1 (same save/rebind/
-            -- playSlot calls) so behaviour matches the old menu exactly.
-            ms.ui._actions = {
-                ready = function() ms.ui.refresh() end,
-
-                setMacros = function(data)
-                    ms.setMacros(tonumber(data.value) == 1 and 1 or 0)
-                    ms.ui.refresh()
-                end,
-
-                playSlot = function(data) if data.slot then ms.playSlot(data.slot) end end,
-
-                alert = function(data)
-                    if data.msg then
-                        ms.alert(tostring(data.msg), tonumber(data.duration) or 3, data.noSound == true)
+                -- Rebuilds the cache synchronously. Safe to call before the panel exists.
+                local function _rebuildUICache()
+                    local ok, json = pcall(hs.json.encode, _buildUIState())
+                    if ok then
+                        _uiStateJSON  = "receiveState(" .. json .. ");"
+                        _uiStateDirty = false
                     end
-                end,
+                end
 
-                close = function() ms.ui.hide() end,
+                -- Mark the cache stale. Refresh will rebuild on next call.
+                ms.ui.markDirty = function() _uiStateDirty = true end
 
-                moveWindow = function(data)
+                -- Pushes a fresh state snapshot into the open panel. Safe to call even
+                -- when the panel hasn't been built yet (no-op) or isn't visible.
+                ms.ui.refresh = function()
                     if not ms.ui._panel then return end
-                    pcall(function()
-                        local dx = tonumber(data.dx) or 0
-                        local dy = tonumber(data.dy) or 0
-                        -- Never read panel:frame() here — the getter returns the last
-                        -- *committed* (rendered) position, which lags behind the last
-                        -- requested position under fast movement.  Applying a delta to a
-                        -- stale position discards the previous move request, causing the
-                        -- rubber-band stutter.  Instead we accumulate into _panelPos, a
-                        -- Lua-side tracker that is always up-to-date.
-                        if not ms.ui._panelPos then
-                            -- Fallback: seed from the webview if somehow unset.
-                            local f = ms.ui._panel:frame()
-                            ms.ui._panelPos = { x = f.x, y = f.y, w = f.w, h = f.h }
+                    if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
+                    if _uiStateJSON then
+                        pcall(function()
+                            ms.ui._panel:evaluateJavaScript(_uiStateJSON)
+                        end)
+                    end
+                end
+
+                -- Pre-builds the UI state cache so the first panel open is instant.
+                -- Called once at startup (via doAfter(0)) so _applySettings has had
+                -- a full event-loop tick to finish before the snapshot is taken.
+                ms.ui.prebuild = function()
+                    if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
+                end
+
+                local function _emptyToNil(s) if s == nil or s == "" then return nil end; return s end
+
+                -- One handler per `action` the page can send via sendToHost({action=...}).
+                -- Each mirrors the equivalent native-menu code path 1:1 (same save/rebind/
+                -- playSlot calls) so behaviour matches the old menu exactly.
+                ms.ui._actions = {
+                    ready = function() ms.ui.refresh() end,
+
+                    setMacros = function(data)
+                        ms.setMacros(tonumber(data.value) == 1 and 1 or 0)
+                        ms.ui.refresh()
+                    end,
+
+                    playSlot = function(data) if data.slot then ms.playSlot(data.slot) end end,
+
+                    alert = function(data)
+                        if data.msg then
+                            ms.alert(tostring(data.msg), tonumber(data.duration) or 3, data.noSound == true)
                         end
-                        ms.ui._panelPos.x = ms.ui._panelPos.x + dx
-                        ms.ui._panelPos.y = ms.ui._panelPos.y + dy
-                        ms.ui._panel:frame(ms.ui._panelPos)
-                    end)
-                end,
+                    end,
 
-                reloadMacros = function() hs.reload() end,
+                    close = function() ms.ui.hide() end,
 
-                reloadSettings = function()
-                    ms.reloadSettings()
-                    ms.ui.refresh()
-                end,
+                    moveWindow = function(data)
+                        if not ms.ui._panel then return end
+                        pcall(function()
+                            local dx = tonumber(data.dx) or 0
+                            local dy = tonumber(data.dy) or 0
+                            -- Never read panel:frame() here — the getter returns the last
+                            -- *committed* (rendered) position, which lags behind the last
+                            -- requested position under fast movement.  Applying a delta to a
+                            -- stale position discards the previous move request, causing the
+                            -- rubber-band stutter.  Instead we accumulate into _panelPos, a
+                            -- Lua-side tracker that is always up-to-date.
+                            if not ms.ui._panelPos then
+                                -- Fallback: seed from the webview if somehow unset.
+                                local f = ms.ui._panel:frame()
+                                ms.ui._panelPos = { x = f.x, y = f.y, w = f.w, h = f.h }
+                            end
+                            ms.ui._panelPos.x = ms.ui._panelPos.x + dx
+                            ms.ui._panelPos.y = ms.ui._panelPos.y + dy
+                            ms.ui._panel:frame(ms.ui._panelPos)
+                        end)
+                    end,
 
-                setPreloadDevTools = function(data)
-                    ms._skipDevPrewarm = not (data.value and true or false)
-                    ms.saveSettings()
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
+                    reloadMacros = function() hs.reload() end,
 
-                setDevArchiveLimit = function(data)
-                    local n = tonumber(data.value)
-                    if n and n >= 0 and n <= 50 then
-                        ms._devArchiveLimit = math.floor(n)
+                    reloadSettings = function()
+                        ms.reloadSettings()
+                        ms.ui.refresh()
+                    end,
+
+                    setPreloadDevTools = function(data)
+                        ms._skipDevPrewarm = not (data.value and true or false)
                         ms.saveSettings()
                         ms.playSlot("update")
-                    end
-                    ms.ui.refresh()
-                end,
+                        ms.ui.refresh()
+                    end,
 
-                setMacroEnabled = function(data)
-                    if not data.id then return end
-                    ms.binds[data.id] = (data.value == true)
-                    ms.saveSettings()
-                    ms.bind.rebind()
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
-
-                setSensitivity = function(data)
-                    local num = tonumber(data.value)
-                    if num and num >= 0.1 and num <= 4 then
-                        CUR_CAM_SENS = num
-                        ms.saveSettings()
-                        ms.cam.updateMultiplier()
-                        ms.playSlot("update")
-                    end
-                    ms.ui.refresh()
-                end,
-
-                setTrackpadMode = function(data)
-                    ms.trackpadMode = (data.value == true)
-                    ms.saveSettings()
-                    ms.bind.rebind()
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
-
-                setSocdEnabled = function(data)
-                    ms.socdEnabled = (data.value == true)
-                    ms.saveSettings()
-                    ms.socdApply()
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
-
-                setSocdMode = function(data)
-                    if data.value == "lastWins" or data.value == "neutral" or data.value == "firstWins" then
-                        ms.socdMode = data.value
-                        ms.saveSettings()
-                        ms.playSlot("update")
-                    end
-                    ms.ui.refresh()
-                end,
-
-                setIndependentBinds = function(data)
-                    local turningOn = (data.value == true)
-                    ms.independentBindsEnabled = turningOn
-                    -- When turning ON: pre-clear any sub bind that conflicts with a root
-                    -- bind or with another sub bind, so rebind() starts clean.
-                    if turningOn then
-                        local function bindKey(c)
-                            if not c then return nil end
-                            if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
-                            local mods = {}
-                            for _, m in ipairs(c.mods or {}) do table.insert(mods, m) end
-                            table.sort(mods)
-                            return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
+                    setDevArchiveLimit = function(data)
+                        local n = tonumber(data.value)
+                        if n and n >= 0 and n <= 50 then
+                            ms._devArchiveLimit = math.floor(n)
+                            ms.saveSettings()
+                            ms.playSlot("update")
                         end
-                        local usedKeys = {}
-                        for _, id in ipairs(ms.registry._defList or {}) do
-                            local def = ms.registry._defs[id]
-                            if def and not def.sub then
-                                local k = bindKey(ms.effectiveBind(id))
-                                if k then usedKeys[k] = id end
+                        ms.ui.refresh()
+                    end,
+
+                    setMacroEnabled = function(data)
+                        if not data.id then return end
+                        ms.binds[data.id] = (data.value == true)
+                        ms.saveSettings()
+                        ms.bind.rebind()
+                        ms.playSlot("update")
+                        ms.ui.refresh()
+                    end,
+
+                    setSensitivity = function(data)
+                        local num = tonumber(data.value)
+                        if num and num >= 0.1 and num <= 4 then
+                            CUR_CAM_SENS = num
+                            ms.saveSettings()
+                            ms.cam.updateMultiplier()
+                            ms.playSlot("update")
+                        end
+                        ms.ui.refresh()
+                    end,
+
+                    setTrackpadMode = function(data)
+                        ms.trackpadMode = (data.value == true)
+                        ms.saveSettings()
+                        ms.bind.rebind()
+                        ms.playSlot("update")
+                        ms.ui.refresh()
+                    end,
+
+                    setSocdEnabled = function(data)
+                        ms.socdEnabled = (data.value == true)
+                        ms.saveSettings()
+                        ms.socdApply()
+                        ms.playSlot("update")
+                        ms.ui.refresh()
+                    end,
+
+                    setSocdMode = function(data)
+                        if data.value == "lastWins" or data.value == "neutral" or data.value == "firstWins" then
+                            ms.socdMode = data.value
+                            ms.saveSettings()
+                            ms.playSlot("update")
+                        end
+                        ms.ui.refresh()
+                    end,
+
+                    setIndependentBinds = function(data)
+                        local turningOn = (data.value == true)
+                        ms.independentBindsEnabled = turningOn
+                        -- When turning ON: pre-clear any sub bind that conflicts with a root
+                        -- bind or with another sub bind, so rebind() starts clean.
+                        if turningOn then
+                            local function bindKey(c)
+                                if not c then return nil end
+                                if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
+                                local mods = {}
+                                for _, m in ipairs(c.mods or {}) do table.insert(mods, m) end
+                                table.sort(mods)
+                                return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
+                            end
+                            local usedKeys = {}
+                            for _, id in ipairs(ms.registry._defList or {}) do
+                                local def = ms.registry._defs[id]
+                                if def and not def.sub then
+                                    local k = bindKey(ms.effectiveBind(id))
+                                    if k then usedKeys[k] = id end
+                                end
+                            end
+                            for subId, c in pairs(ms.subBinds or {}) do
+                                local k = bindKey(c)
+                                if k then
+                                    if usedKeys[k] then
+                                        ms.subBinds[subId] = nil
+                                    else
+                                        usedKeys[k] = subId
+                                    end
+                                end
                             end
                         end
-                        for subId, c in pairs(ms.subBinds or {}) do
-                            local k = bindKey(c)
-                            if k then
-                                if usedKeys[k] then
-                                    ms.subBinds[subId] = nil
+                        ms.saveSettings()
+                        ms.bind.rebind()
+                        ms.playSlot("update")
+                        ms.ui.refresh()
+                    end,
+
+                    saveDefault = function()
+                        ms.saveDefault()
+                        ms.ui.refresh()
+                    end,
+
+                    resetToDefault = function()
+                        if ms.resetToDefault() then ms.playSlot("reset") end
+                        ms.ui.refresh()
+                    end,
+
+                    setSoundEnabled = function(data)
+                        ms.soundEnabled = (data.value == true)
+                        ms.saveSettings()
+                        ms.playSlot("update")
+                        ms.ui.refresh()
+                    end,
+
+                    setSoundVolume = function(data)
+                        local num = tonumber(data.value)
+                        if num and num >= 0 and num <= 100 then
+                            ms.soundVolume = math.floor(num)
+                            ms.saveSettings()
+                            ms.playSlot("update")
+                        end
+                        ms.ui.refresh()
+                    end,
+
+                    setSoundAssign = function(data)
+                        if not data.slot then return end
+                        ms.soundAssign = ms.soundAssign or {}
+                        ms.soundAssign[data.slot] = _emptyToNil(data.name)
+                        ms.saveSettings()
+                        ms.playSlot("update")
+                        ms.ui.refresh()
+                    end,
+
+                    -- switchProfile() reloads Hammerspoon ~3s after success (see Profile
+                    -- Management above), so no explicit refresh is needed on success.
+                    switchProfile = function(data) if data.name then switchProfile(data.name) end end,
+
+                    -- Deletes a single non-active saved profile.
+                    deleteProfile = function(data)
+                        if not data.name then return end
+                        local targetName = sanitizeName(data.name)
+                        local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                        -- Hard guard: never delete the active profile.
+                        if targetName == "" or targetName == activeName then return end
+                        local dir = profilesPath .. targetName
+                        if not hs.fs.attributes(dir) then return end
+                        local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                        os.execute("rm -rf " .. sq(dir))
+                        ms._profilesDirty = true
+                        ms.playSlot("reset")
+                        hs.timer.doAfter(0.05, function()
+                            ms.alert("Profile \"" .. data.name .. "\" deleted.", 2, true)
+                            ms.ui.refresh()
+                        end)
+                    end,
+
+                    -- Deletes all saved profiles except the active one.
+                    clearProfiles = function()
+                        local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                        -- Guard: if the active profile name is blank we can't safely identify
+                        -- which folder to protect, so refuse to delete anything.
+                        if activeName == "" then return end
+                        if not hs.fs.attributes(profilesPath) then return end
+                        local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                        local deleted = 0
+                        for entry in hs.fs.dir(profilesPath) do
+                            if entry ~= "." and entry ~= ".." then
+                                local safe = sanitizeName(entry)
+                                if safe ~= "" and safe ~= activeName then
+                                    local dir = profilesPath .. entry
+                                    local attr = hs.fs.attributes(dir)
+                                    if attr and attr.mode == "directory" then
+                                        os.execute("rm -rf " .. sq(dir))
+                                        deleted = deleted + 1
+                                    end
+                                end
+                            end
+                        end
+                        ms._profilesDirty = true
+                        ms.playSlot("reset")
+                        hs.timer.doAfter(0.05, function()
+                            ms.alert(deleted .. " profile" .. (deleted == 1 and "" or "s") .. " deleted.", 3, true)
+                            ms.ui.refresh()
+                        end)
+                    end,
+
+                    -- importProfile() drives its own native file picker / alerts.
+                    importProfile    = function() importProfile() end,
+                    importProfilePkg = function() importProfilePkg() end,
+                    exportProfilePkg = function() exportProfilePkg() end,
+
+                    importSounds = function()
+                        ms.playSlot("alert")
+                        local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
+                        local result = hs.dialog.chooseFileOrFolder(
+                            "Select one or more sound files to add to your library",
+                            hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
+                            true, false, true
+                        )
+                        local paths = {}
+                        for _, v in pairs(result or {}) do
+                            if type(v) == "string" then table.insert(paths, v) end
+                        end
+                        if #paths == 0 then ms.ui.show(); return end
+                        if not hs.fs.attributes(slibDir) then
+                            hs.execute("mkdir -p '" .. SoundLib .. "'")
+                        end
+                        if not hs.fs.attributes(slibDir) then
+                            ms.ui.show()
+                            ms.alert("Could not create sounds folder:\n" .. SoundLib, 4)
+                            return
+                        end
+                        local function sq(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                        local added, failed = {}, {}
+                        for _, srcPath in ipairs(paths) do
+                            local filename   = srcPath:match("([^/]+)$")
+                            local importName = filename and (filename:match("^(.+)%.[^%.]+$") or filename)
+                            if not filename or not importName then
+                                table.insert(failed, srcPath)
+                            else
+                                local dst    = SoundLib .. filename
+                                local copied = false
+                                if srcPath ~= dst then
+                                    local f = io.open(srcPath, "rb")
+                                    if f then
+                                        local content = f:read("*all"); f:close()
+                                        local g = io.open(dst, "wb")
+                                        if g then g:write(content); g:close(); copied = true end
+                                    end
+                                    if not copied then
+                                        local _, st = hs.execute("/bin/cp " .. sq(srcPath) .. " " .. sq(dst))
+                                        copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
+                                    end
+                                    if not copied then table.insert(failed, importName) end
                                 else
-                                    usedKeys[k] = subId
+                                    copied = true
+                                end
+                                if copied then
+                                    ms.importedSounds = ms.importedSounds or {}
+                                    ms.importedSounds[importName] = filename
+                                    table.insert(added, importName)
                                 end
                             end
                         end
-                    end
-                    ms.saveSettings()
-                    ms.bind.rebind()
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
-
-                saveDefault = function()
-                    ms.saveDefault()
-                    ms.ui.refresh()
-                end,
-
-                resetToDefault = function()
-                    if ms.resetToDefault() then ms.playSlot("reset") end
-                    ms.ui.refresh()
-                end,
-
-                setSoundEnabled = function(data)
-                    ms.soundEnabled = (data.value == true)
-                    ms.saveSettings()
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
-
-                setSoundVolume = function(data)
-                    local num = tonumber(data.value)
-                    if num and num >= 0 and num <= 100 then
-                        ms.soundVolume = math.floor(num)
-                        ms.saveSettings()
-                        ms.playSlot("update")
-                    end
-                    ms.ui.refresh()
-                end,
-
-                setSoundAssign = function(data)
-                    if not data.slot then return end
-                    ms.soundAssign = ms.soundAssign or {}
-                    ms.soundAssign[data.slot] = _emptyToNil(data.name)
-                    ms.saveSettings()
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
-
-                -- switchProfile() reloads Hammerspoon ~3s after success (see Profile
-                -- Management above), so no explicit refresh is needed on success.
-                switchProfile = function(data) if data.name then switchProfile(data.name) end end,
-
-                -- Deletes a single non-active saved profile.
-                deleteProfile = function(data)
-                    if not data.name then return end
-                    local targetName = sanitizeName(data.name)
-                    local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
-                    -- Hard guard: never delete the active profile.
-                    if targetName == "" or targetName == activeName then return end
-                    local dir = profilesPath .. targetName
-                    if not hs.fs.attributes(dir) then return end
-                    local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
-                    os.execute("rm -rf " .. sq(dir))
-                    ms._profilesDirty = true
-                    ms.playSlot("reset")
-                    hs.timer.doAfter(0.05, function()
-                        ms.alert("Profile \"" .. data.name .. "\" deleted.", 2, true)
-                        ms.ui.refresh()
-                    end)
-                end,
-
-                -- Deletes all saved profiles except the active one.
-                clearProfiles = function()
-                    local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
-                    -- Guard: if the active profile name is blank we can't safely identify
-                    -- which folder to protect, so refuse to delete anything.
-                    if activeName == "" then return end
-                    if not hs.fs.attributes(profilesPath) then return end
-                    local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
-                    local deleted = 0
-                    for entry in hs.fs.dir(profilesPath) do
-                        if entry ~= "." and entry ~= ".." then
-                            local safe = sanitizeName(entry)
-                            if safe ~= "" and safe ~= activeName then
-                                local dir = profilesPath .. entry
-                                local attr = hs.fs.attributes(dir)
-                                if attr and attr.mode == "directory" then
-                                    os.execute("rm -rf " .. sq(dir))
-                                    deleted = deleted + 1
-                                end
-                            end
+                        if #added > 0 then
+                            ms.saveSettings()
+                            ms._soundsDirty = true
+                            ms._discoverSounds()
                         end
-                    end
-                    ms._profilesDirty = true
-                    ms.playSlot("reset")
-                    hs.timer.doAfter(0.05, function()
-                        ms.alert(deleted .. " profile" .. (deleted == 1 and "" or "s") .. " deleted.", 3, true)
-                        ms.ui.refresh()
-                    end)
-                end,
-
-                -- importProfile() drives its own native file picker / alerts.
-                importProfile    = function() importProfile() end,
-                importProfilePkg = function() importProfilePkg() end,
-                exportProfilePkg = function() exportProfilePkg() end,
-
-                importSounds = function()
-                    ms.playSlot("alert")
-                    local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
-                    local result = hs.dialog.chooseFileOrFolder(
-                        "Select one or more sound files to add to your library",
-                        hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
-                        true, false, true
-                    )
-                    local paths = {}
-                    for _, v in pairs(result or {}) do
-                        if type(v) == "string" then table.insert(paths, v) end
-                    end
-                    if #paths == 0 then ms.ui.show(); return end
-                    if not hs.fs.attributes(slibDir) then
-                        hs.execute("mkdir -p '" .. SoundLib .. "'")
-                    end
-                    if not hs.fs.attributes(slibDir) then
                         ms.ui.show()
-                        ms.alert("Could not create sounds folder:\n" .. SoundLib, 4)
-                        return
-                    end
-                    local function sq(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
-                    local added, failed = {}, {}
-                    for _, srcPath in ipairs(paths) do
-                        local filename   = srcPath:match("([^/]+)$")
+                        hs.timer.doAfter(0.15, function()
+                            if #added > 0 then ms.playSlot("update") end
+                            if #added > 0 and #failed == 0 then
+                                local label = #added == 1
+                                    and ("Sound \"" .. added[1] .. "\" added.")
+                                    or  (#added .. " sounds added.")
+                                ms.alert(label, 3, true)
+                            elseif #added > 0 then
+                                ms.alert(#added .. " added, " .. #failed .. " failed.", 3, true)
+                            else
+                                ms.alert("Import failed.\nGrant Hammerspoon Full Disk Access if importing from outside ~/.hammerspoon.", 5)
+                            end
+                            ms.ui.refresh()
+                        end)
+                    end,
+
+                    -- Import a sound file and assign it directly to a specific slot.
+                    importSoundForSlot = function(data)
+                        if not data.slot then return end
+                        local slot = data.slot
+                        ms.playSlot("alert")
+                        local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
+                        local result = hs.dialog.chooseFileOrFolder(
+                            "Select a sound file for \"" .. (data.label or slot) .. "\"",
+                            hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
+                            true, false, false
+                        )
+                        local selectedPath
+                        for _, v in pairs(result or {}) do
+                            if type(v) == "string" then selectedPath = v; break end
+                        end
+                        if not selectedPath then ms.ui.show(); return end
+                        if not hs.fs.attributes(slibDir) then
+                            hs.execute("mkdir -p '" .. SoundLib .. "'")
+                        end
+                        local function sq(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                        local filename   = selectedPath:match("([^/]+)$")
                         local importName = filename and (filename:match("^(.+)%.[^%.]+$") or filename)
                         if not filename or not importName then
-                            table.insert(failed, srcPath)
-                        else
-                            local dst    = SoundLib .. filename
-                            local copied = false
-                            if srcPath ~= dst then
-                                local f = io.open(srcPath, "rb")
-                                if f then
-                                    local content = f:read("*all"); f:close()
-                                    local g = io.open(dst, "wb")
-                                    if g then g:write(content); g:close(); copied = true end
-                                end
-                                if not copied then
-                                    local _, st = hs.execute("/bin/cp " .. sq(srcPath) .. " " .. sq(dst))
-                                    copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
-                                end
-                                if not copied then table.insert(failed, importName) end
-                            else
-                                copied = true
-                            end
-                            if copied then
-                                ms.importedSounds = ms.importedSounds or {}
-                                ms.importedSounds[importName] = filename
-                                table.insert(added, importName)
-                            end
+                            ms.ui.show(); ms.alert("Could not read filename.", 3); return
                         end
-                    end
-                    if #added > 0 then
+                        local dst    = SoundLib .. filename
+                        local copied = false
+                        if selectedPath ~= dst then
+                            local f = io.open(selectedPath, "rb")
+                            if f then
+                                local content = f:read("*all"); f:close()
+                                local g = io.open(dst, "wb")
+                                if g then g:write(content); g:close(); copied = true end
+                            end
+                            if not copied then
+                                local _, st = hs.execute("/bin/cp " .. sq(selectedPath) .. " " .. sq(dst))
+                                copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
+                            end
+                        else
+                            copied = true
+                        end
+                        ms.ui.show()
+                        if not copied then
+                            hs.timer.doAfter(0.15, function()
+                                ms.alert("Import failed.\nGrant Hammerspoon Full Disk Access if needed.", 5)
+                            end)
+                            return
+                        end
+                        ms.importedSounds = ms.importedSounds or {}
+                        ms.importedSounds[importName] = filename
+                        ms.soundAssign = ms.soundAssign or {}
+                        ms.soundAssign[slot] = importName
                         ms.saveSettings()
                         ms._soundsDirty = true
                         ms._discoverSounds()
-                    end
-                    ms.ui.show()
-                    hs.timer.doAfter(0.15, function()
-                        if #added > 0 then ms.playSlot("update") end
-                        if #added > 0 and #failed == 0 then
-                            local label = #added == 1
-                                and ("Sound \"" .. added[1] .. "\" added.")
-                                or  (#added .. " sounds added.")
-                            ms.alert(label, 3, true)
-                        elseif #added > 0 then
-                            ms.alert(#added .. " added, " .. #failed .. " failed.", 3, true)
-                        else
-                            ms.alert("Import failed.\nGrant Hammerspoon Full Disk Access if importing from outside ~/.hammerspoon.", 5)
-                        end
-                        ms.ui.refresh()
-                    end)
-                end,
-
-                -- Import a sound file and assign it directly to a specific slot.
-                importSoundForSlot = function(data)
-                    if not data.slot then return end
-                    local slot = data.slot
-                    ms.playSlot("alert")
-                    local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
-                    local result = hs.dialog.chooseFileOrFolder(
-                        "Select a sound file for \"" .. (data.label or slot) .. "\"",
-                        hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
-                        true, false, false
-                    )
-                    local selectedPath
-                    for _, v in pairs(result or {}) do
-                        if type(v) == "string" then selectedPath = v; break end
-                    end
-                    if not selectedPath then ms.ui.show(); return end
-                    if not hs.fs.attributes(slibDir) then
-                        hs.execute("mkdir -p '" .. SoundLib .. "'")
-                    end
-                    local function sq(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
-                    local filename   = selectedPath:match("([^/]+)$")
-                    local importName = filename and (filename:match("^(.+)%.[^%.]+$") or filename)
-                    if not filename or not importName then
-                        ms.ui.show(); ms.alert("Could not read filename.", 3); return
-                    end
-                    local dst    = SoundLib .. filename
-                    local copied = false
-                    if selectedPath ~= dst then
-                        local f = io.open(selectedPath, "rb")
-                        if f then
-                            local content = f:read("*all"); f:close()
-                            local g = io.open(dst, "wb")
-                            if g then g:write(content); g:close(); copied = true end
-                        end
-                        if not copied then
-                            local _, st = hs.execute("/bin/cp " .. sq(selectedPath) .. " " .. sq(dst))
-                            copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
-                        end
-                    else
-                        copied = true
-                    end
-                    ms.ui.show()
-                    if not copied then
+                        ms.playSlot("update")
                         hs.timer.doAfter(0.15, function()
-                            ms.alert("Import failed.\nGrant Hammerspoon Full Disk Access if needed.", 5)
-                        end)
-                        return
-                    end
-                    ms.importedSounds = ms.importedSounds or {}
-                    ms.importedSounds[importName] = filename
-                    ms.soundAssign = ms.soundAssign or {}
-                    ms.soundAssign[slot] = importName
-                    ms.saveSettings()
-                    ms._soundsDirty = true
-                    ms._discoverSounds()
-                    ms.playSlot("update")
-                    hs.timer.doAfter(0.15, function()
-                        ms.alert("\"" .. importName .. "\" imported and assigned.", 3, true)
-                        ms.ui.refresh()
-                    end)
-                end,
-
-                openWindowMonitor = function() if ms.dev and ms.dev.window then ms.dev.window.toggle() end end,
-
-                openConsole = function() hs.openConsole() end,
-
-                editMacros = function()
-                    os.execute("open " .. os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua")
-                end,
-
-                editTheme = function()
-                    os.execute("open " .. themePath)
-                end,
-
-                reloadTheme = function()
-                    ms.loadTheme()
-                    -- Rebuild the panel if open so uifc/size changes take effect.
-                    if ms.ui._open then
-                        ms.ui.hide()
-                        hs.timer.doAfter(0.1, function() ms.ui.show() end)
-                    else
-                        ms.ui.refresh()
-                    end
-                end,
-
-                trustCurrentVersion = function()
-                    ms.integrity.trustCurrent()
-                    ms.ui.refresh()
-                end,
-
-                deleteTrustedHash = function()
-                    ms.integrity.deleteTrustedHash()
-                    ms.alert("Trusted hash deleted.\nTamper protection is now OFF until you re-trust.", 5)
-                    ms.ui.refresh()
-                end,
-
-                checkIntegrity = function()
-                    local status, cur, trusted = ms.integrity.check()
-                    if status == "trusted" then
-                        ms.alert("\xe2\x9c\x93 ms_core.lua matches trusted hash.\n" .. (cur and cur:sub(1, 16) or "?") .. "\xe2\x80\xa6", 5, true)
-                        ms.ui.refresh()
-                    elseif status == "mismatch" then
-                        -- Reload so the startup guardian seizes full control.
-                        hs.reload()
-                    else
-                        ms.alert("No trusted hash on record.\nUse \"Trust Current Version\" to seed trust.", 5)
-                        ms.ui.refresh()
-                    end
-                end,
-
-                openURL = function(data) if data.url then hs.urlevent.openURL(data.url) end end,
-
-                checkForUpdate = function() ms.integrity.update() end,
-
-                openConsole       = function() ms.dev.console.toggle()  end,
-                openWatcher       = function() ms.dev.watcher.toggle()  end,
-                openKeys          = function() ms.dev.keys.toggle()     end,
-                openWindowMonitor = function() ms.dev.window.toggle()   end,
-
-                -- Triggered by right-click › Rebind… on a macro row in the webview.
-                -- Runs the same eventtap capture used by the native menu rebind flow.
-                startRebind = function(data)
-                    if not data.id then return end
-                    local def = ms.registry._defs[data.id]
-                    if not def then return end
-                    local label = def.label or data.id
-
-                    local function bindDisplay(c)
-                        if not c then return "unset" end
-                        if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
-                        local parts = {}
-                        for _, m in ipairs(c.mods or {}) do table.insert(parts, m) end
-                        table.insert(parts, c.key or "")
-                        return table.concat(parts, "+")
-                    end
-
-                    ms.alert("Rebinding: " .. label
-                        .. "\nCurrent: " .. bindDisplay(ms.effectiveBind(data.id))
-                        .. "\nPress your new key or mouse button.\nEscape to cancel.", 15)
-
-                    -- Mark as input-open so the app watcher treats the upcoming focus
-                    -- shift to Hammerspoon (for the confirm dialog) as a dialog cycle
-                    -- rather than a genuine app switch, suppressing the disable toast.
-                    -- Also temporarily clear _open so the app watcher's early-return
-                    -- guard (which skips _inputOpen when the panel is visible) doesn't
-                    -- swallow the Hammerspoon activation event.
-                    ms._inputOpen = true
-                    ms.ui._open   = false
-
-                    local capture
-                    local cancelTimer
-
-                    local function restorePanel()
-                        -- Re-flag the panel as open (it was never actually closed),
-                        -- then hand focus back to Roblox so the app watcher fires
-                        -- the Roblox-activated path and re-enables macros properly.
-                        ms.ui._open = true
-                        local roblox = hs.application.get("Roblox")
-                        if roblox then
-                            hs.timer.doAfter(0.05, function()
-                                local ok, win = pcall(function() return roblox:mainWindow() end)
-                                if ok and win then pcall(function() win:focus() end) end
-                                pcall(function() roblox:activate() end)
-                            end)
-                        end
-                    end
-
-                    capture = hs.eventtap.new({
-                        hs.eventtap.event.types.keyDown,
-                        hs.eventtap.event.types.leftMouseDown,
-                        hs.eventtap.event.types.rightMouseDown,
-                        hs.eventtap.event.types.otherMouseDown,
-                    }, function(event)
-                        capture:stop(); capture = nil; cancelTimer:stop()
-
-                        local parsed, bindStr2
-                        local t = event:getType()
-
-                        if t == hs.eventtap.event.types.keyDown then
-                            local keyCode = event:getKeyCode()
-                            local flags = event:getFlags()
-                            if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
-                                ms._inputOpen = false
-                                ms.alert("Rebind cancelled.", 2)
-                                restorePanel()
-                                return true
-                            end
-                            local mods = {}
-                            if flags.cmd   then table.insert(mods, "cmd")   end
-                            if flags.alt   then table.insert(mods, "alt")   end
-                            if flags.ctrl  then table.insert(mods, "ctrl")  end
-                            if flags.shift then table.insert(mods, "shift") end
-                            local keyStr = hs.keycodes.map[keyCode]
-                            if keyStr then
-                                parsed   = { type="key", mods=mods, key=keyStr }
-                                local parts = {}
-                                for _, m in ipairs(mods) do table.insert(parts, m) end
-                                table.insert(parts, keyStr)
-                                bindStr2 = table.concat(parts, "+")
-                            end
-                        else
-                            local btn
-                            if     t == hs.eventtap.event.types.leftMouseDown  then btn = 0
-                            elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
-                            else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
-                            parsed   = { type="mouse", button=btn }
-                            bindStr2 = "Mouse " .. btn
-                        end
-
-                        if parsed then
-                            local conflictId = ms.bind.siblingConflict(data.id, parsed)
-                            if conflictId then
-                                local cLabel = (ms.registry._defs[conflictId] and ms.registry._defs[conflictId].label) or conflictId
-                                ms.playSlot("alert")
-                                ms._inputOpen = false
-                                ms.alert("Bind Conflict: \"" .. bindStr2 .. "\" is already used by \"" .. cLabel .. "\".\nChoose a different input.", 4)
-                                restorePanel()
-                                return true
-                            end
-                            ms.playSlot("interact")
-                            ms._inputOpen = false
-                            ms.ui.modal({
-                                title   = "Confirm Rebind",
-                                msg     = "Set \"" .. label .. "\" to:  " .. bindStr2,
-                                confirm = "Confirm",
-                                cancel  = "Cancel",
-                            }, function(r)
-                                if r.confirmed then
-                                    -- Sub-items store in subBinds; root binds in bindConfig.
-                                    if def.sub then
-                                        ms.subBinds[data.id] = parsed
-                                    else
-                                        ms.bindConfig[data.id] = parsed
-                                    end
-                                    ms.saveSettings()
-                                    ms.playSlot("update")
-                                    ms.bind.rebind()
-                                    restorePanel()
-                                    hs.timer.doAfter(0.2, function()
-                                        ms.alert(label .. " rebound to: " .. bindStr2, 3, true)
-                                        ms.ui.refresh()
-                                    end)
-                                else
-                                    ms.alert("Rebind cancelled.", 2)
-                                    restorePanel()
-                                    ms.ui.refresh()
-                                end
-                            end)
-                        else
-                            ms._inputOpen = false
-                            ms.alert("Could not read input. Try again.", 2)
-                            restorePanel()
-                        end
-                        return true
-                    end)
-
-                    capture:start()
-                    cancelTimer = hs.timer.doAfter(15, function()
-                        if capture then
-                            capture:stop(); capture = nil
-                            ms._inputOpen = false
-                            ms.alert("Rebind timed out.", 2)
-                            restorePanel()
-                            ms.ui.refresh()
-                        end
-                    end)
-                end,
-
-                -- Resets a single system setting to its macro-pack default (ms.macroDefaults).
-                resetSetting = function(data)
-                    local key = data.key
-                    local def = ms.macroDefaults or {}
-                    if key == "sensitivity" then
-                        CUR_CAM_SENS = tonumber(def.sensitivity) or 1.5
-                        ms.saveSettings(); ms.cam.updateMultiplier()
-                    elseif key == "trackpadMode" then
-                        ms.trackpadMode = (def.trackpadMode == true)
-                        ms.saveSettings(); ms.bind.rebind()
-                    elseif key == "socdEnabled" then
-                        ms.socdEnabled = (def.socdEnabled == true)
-                        ms.saveSettings(); ms.socdApply()
-                    elseif key == "socdMode" then
-                        ms.socdMode = def.socdMode or "lastWins"
-                        ms.saveSettings()
-                    elseif key == "independentBinds" then
-                        ms.independentBindsEnabled = (def.independentBinds == true)
-                        ms.saveSettings(); ms.bind.rebind()
-                    elseif key == "soundEnabled" then
-                        ms.soundEnabled = true
-                        ms.saveSettings()
-                    elseif key == "soundVolume" then
-                        ms.soundVolume = 100
-                        ms.saveSettings()
-                    end
-                    ms.playSlot("reset")
-                    ms.ui.refresh()
-                end,
-
-                -- Changes a user-defined setting value from the panel.
-                -- Routes through ms.settings.set for validation, persistence, and onChange.
-                userSettingChange = function(data)
-                    if not data.key then return end
-                    ms.settings.set(data.key, data.value)
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
-
-                -- Fires the onAction callback for an action-type user setting.
-                -- After the sandboxed onAction runs, any entry in ms._systemActions
-                -- for the same key is also called.  That table is populated by
-                -- ms_core.lua after the sandbox finishes, so macros cannot set it.
-                userSettingAction = function(data)
-                    if not data.key then return end
-                    local def = ms._userSettingIndex[data.key]
-                    if def and def.type == "action" and type(def.onAction) == "function" then
-                        pcall(def.onAction)
-                    end
-                    local sysAction = ms._systemActions and ms._systemActions[data.key]
-                    if type(sysAction) == "function" then pcall(sysAction) end
-                    ms.ui.refresh()
-                end,
-
-                -- Resets a user-defined setting to its declared default value.
-                resetUserSetting = function(data)
-                    if not data.key then return end
-                    local def = ms._userSettingIndex[data.key]
-                    if not def or def.default == nil then return end
-                    ms.settings.set(data.key, def.default)
-                    ms.playSlot("reset")
-                    ms.ui.refresh()
-                end,
-
-                -- Receives the result of a Lua-initiated HTML modal (openLuaModal in JS).
-                -- Fires the pending _modalCallback and clears it.
-                modalResult = function(data)
-                    if ms.ui._modalCallback then
-                        local cb = ms.ui._modalCallback
-                        ms.ui._modalCallback = nil
-                        pcall(cb, {
-                            confirmed = data.confirmed == true,
-                            value     = type(data.value) == "string" and data.value or "",
-                        })
-                    end
-                end,
-
-                -- Resets a macro's bind back to its defined default.
-                resetBind = function(data)
-                    if not data.id then return end
-                    local def = ms.registry._defs[data.id]
-                    if not def then return end
-                    -- Sub-items use subBinds; root binds use bindConfig.
-                    if def.sub then
-                        ms.subBinds[data.id] = nil
-                        -- In independent bind mode, clearing a sub's bind means it can no
-                        -- longer fire at all — disable it so the UI reflects that.
-                        if ms.independentBindsEnabled then
-                            ms.binds[data.id] = false
-                        end
-                    else
-                        ms.bindConfig[data.id] = nil
-                    end
-                    ms.saveSettings()
-                    ms.bind.rebind()
-                    ms.playSlot("reset")
-                    hs.timer.doAfter(0.1, function()
-                        ms.alert((def.label or data.id) .. " reset to default.", 2, true)
-                        ms.ui.refresh()
-                    end)
-                end,
-
-                -- Sets the modifier key for a sub-item.
-                setModifier = function(data)
-                    if not data.id then return end
-                    local key = type(data.key) == "string" and data.key:match("^%s*(.-)%s*$") or ""
-                    ms.modConfig[data.id] = (key ~= "") and key or nil
-                    ms.saveSettings()
-                    ms.bind.rebind()
-                    ms.playSlot("update")
-                    ms.ui.refresh()
-                end,
-
-                -- Clears the modifier key for a sub-item to "no modifier" (empty string).
-                -- An empty string means "explicitly cleared", distinct from nil which means
-                -- "use declared default". getMod() returns "" → keystate("") = false.
-                clearModifier = function(data)
-                    if not data.id then return end
-                    ms.modConfig[data.id] = ""
-                    ms.saveSettings()
-                    ms.bind.rebind()
-                    ms.playSlot("reset")
-                    ms.ui.refresh()
-                end,
-
-                -- Starts a key-capture session to set the modifier for a sub-item.
-                -- Captures the next keyDown or modifier-key press.
-                -- Backspace clears the modifier; bare Escape cancels.
-                startModRebind = function(data)
-                    if not data.id then return end
-                    local def = ms.registry._defs[data.id]
-                    if not def or not def.sub then return end
-                    local label = def.label or data.id
-                    local cur   = ms.getMod(data.id)
-
-                    ms.alert("Modifier for \"" .. label .. "\""
-                        .. "\nCurrent: " .. (cur or "unset")
-                        .. "\nPress a key  —  Backspace to clear  —  Escape to cancel.", 15)
-
-                    ms._inputOpen = true
-                    ms.ui._open   = false
-
-                    local capture, cancelTimer
-                    local prevFlags = {}
-
-                    local function finish(newKey, cancelled)
-                        ms._inputOpen = false
-                        if not cancelled then
-                            ms.modConfig[data.id] = newKey  -- nil = cleared
-                            ms.saveSettings()
-                            ms.bind.rebind()
-                            ms.playSlot(newKey and "update" or "reset")
-                        end
-                        ms.ui.show()
-                        hs.timer.doAfter(0.1, function()
-                            if not cancelled then
-                                if newKey then
-                                    ms.alert("Modifier set to: " .. newKey, 3, true)
-                                else
-                                    ms.alert("Modifier cleared.", 3, true)
-                                end
-                            else
-                                ms.alert("Modifier rebind cancelled.", 2)
-                            end
+                            ms.alert("\"" .. importName .. "\" imported and assigned.", 3, true)
                             ms.ui.refresh()
                         end)
-                    end
-
-                    capture = hs.eventtap.new({
-                        hs.eventtap.event.types.keyDown,
-                        hs.eventtap.event.types.flagsChanged,
-                    }, function(event)
-                        local t     = event:getType()
-                        local flags = event:getFlags()
-
-                        if t == hs.eventtap.event.types.flagsChanged then
-                            -- Detect which modifier key was just pressed (not released).
-                            local newMod = nil
-                            if flags.shift and not prevFlags.shift then newMod = "shift"
-                            elseif flags.alt   and not prevFlags.alt   then newMod = "alt"
-                            elseif flags.ctrl  and not prevFlags.ctrl  then newMod = "ctrl"
-                            elseif flags.cmd   and not prevFlags.cmd   then newMod = "cmd" end
-                            prevFlags = flags
-                            if not newMod then return false end  -- modifier released
-                            capture:stop(); capture = nil; cancelTimer:stop()
-                            finish(newMod, false)
-                            return false
-                        end
-
-                        -- keyDown event.
-                        capture:stop(); capture = nil; cancelTimer:stop()
-                        local keyCode = event:getKeyCode()
-                        if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
-                            finish(nil, true)   -- bare Escape = cancel
-                        elseif keyCode == 51 then
-                            finish(nil, false)  -- Backspace = clear
-                        else
-                            local keyName = hs.keycodes.map[keyCode]
-                            finish(keyName or nil, keyName == nil)
-                        end
-                        return true
-                    end)
-
-                    capture:start()
-                    cancelTimer = hs.timer.doAfter(15, function()
-                        if capture then
-                            capture:stop(); capture = nil
-                            finish(nil, true)
-                        end
-                    end)
-                end,
-            }
-
-            -- Freeze the dispatch table so macro-sandbox code cannot inject new handlers
-            -- by writing to nested ms.* sub-tables.  The frozenMs proxy only blocks direct
-            -- writes to ms itself (e.g. ms.foo = x); it does not proxy writes to tables
-            -- that are reachable through it (e.g. ms.ui._actions.evil = fn).  Applying a
-            -- __newindex here means any such write errors immediately, regardless of where
-            -- in the call stack it originates.  Reads (action dispatch) still work via
-            -- __index on the backing table.
-            do
-                local _backing = ms.ui._actions
-                ms.ui._actions = setmetatable({}, {
-                    __index    = _backing,
-                    __newindex = function(_, k)
-                        error("ms.ui._actions is read-only (attempted write to '" .. tostring(k) .. "')", 2)
                     end,
-                    __len      = function() return #_backing end,
-                })
-            end
-            -- always posts a JSON string of the form { action = "...", ... }.
-            local _ucMS = hs.webview.usercontent.new("ms")
-            _ucMS:setCallback(function(message)
-                local ok, data = pcall(hs.json.decode, message.body)
-                if not ok or type(data) ~= "table" or not data.action then
-                    print("ms.ui: malformed message from panel: " .. tostring(message.body))
-                    return
-                end
-                local handler = ms.ui._actions[data.action]
-                if not handler then
-                    print("ms.ui: unknown action from panel: " .. tostring(data.action))
-                    return
-                end
-                local ok2, err = pcall(handler, data)
-                if not ok2 then
-                    print("ms.ui: action '" .. data.action .. "' error: " .. tostring(err))
-                end
-            end)
 
-            -- Positions the panel in the left half of the screen — centred between
-            -- the left edge and the screen midpoint, near the top of the usable area.
-            local function _panelFrame()
-                local screen = hs.screen.mainScreen():frame()
-                local w, h = panelW, panelH
-                -- If a UIFC is configured, size the window to the PNG's exact dimensions.
-                -- This allows any aspect ratio (9:16, 16:9, 1:1, 3:4, 4:3) as long as
-                -- the PNG is designed with the 360×640 content area centered.
-                -- Falls back to 1.25× expansion when PNG dimensions can't be read.
-                if type(ms._theme and ms._theme.uifc) == "table"
-                    and ms._theme.uifc.settings ~= "" then
-                    local wp = os.getenv("HOME") .. "/.hammerspoon/" .. ms._theme.uifc.settings
-                    if hs.fs.attributes(wp) then
-                        local pw = ms._theme._uifcW
-                        local ph = ms._theme._uifcH
-                        if pw and ph then
-                            w, h = pw, ph
+                    openWindowMonitor = function() if ms.dev and ms.dev.window then ms.dev.window.toggle() end end,
+
+                    openConsole = function() hs.openConsole() end,
+
+                    editMacros = function()
+                        os.execute("open " .. os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua")
+                    end,
+
+                    editTheme = function()
+                        os.execute("open " .. themePath)
+                    end,
+
+                    reloadTheme = function()
+                        ms.loadTheme()
+                        -- Rebuild the panel if open so uifc/size changes take effect.
+                        if ms.ui._open then
+                            ms.ui.hide()
+                            hs.timer.doAfter(0.1, function() ms.ui.show() end)
                         else
-                            w = math.floor(w * 1.25)
-                            h = math.floor(h * 1.25)
+                            ms.ui.refresh()
                         end
-                    end
-                end
-                -- X: centred between the left screen edge and the screen midpoint.
-                local x = screen.x + math.floor((screen.w / 2 - w) / 2)
-                -- Y: vertically centred on the usable screen area.
-                local y = screen.y + math.floor((screen.h - h) / 2)
-                h = math.min(h, (screen.y + screen.h) - y - 20)
-                return { x = x, y = y, w = w, h = h }
-            end
+                    end,
 
-            local function _buildPanel()
-                local panel = hs.webview.new(_panelFrame(), { developerExtrasEnabled = true }, _ucMS)
-                if not panel then return nil end
-                -- Borderless (0): no title bar, no traffic lights, no chrome.
-                -- The HTML has its own close button; native window decorations aren't needed.
-                -- shadow(true) keeps depth cues without any chrome.
-                pcall(function() panel:windowStyle(0) end)
-                pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                pcall(function() panel:allowTextEntry(true) end)
-                pcall(function() panel:shadow(true) end)
-                pcall(function() panel:closeOnEscape(true) end)
-                -- Keep _open in sync when the user closes via the X button or Escape.
-                pcall(function()
-                    panel:windowCallback(function(action)
-                        if action == "closing" then
-                            ms.ui._open     = false
-                            ms.ui._panel    = nil   -- nil out stale ref; next show() will rebuild
-                            ms.ui._panelPos = nil   -- discard tracked position; will re-seed on next show()
-                            ms._inputOpen = true -- suppress spurious "Macros: ENABLED" toast
-                            ms.playSlot("settingsClose")
+                    trustCurrentVersion = function()
+                        ms.integrity.trustCurrent()
+                        ms.ui.refresh()
+                    end,
+
+                    deleteTrustedHash = function()
+                        ms.integrity.deleteTrustedHash()
+                        ms.alert("Trusted hash deleted.\nTamper protection is now OFF until you re-trust.", 5)
+                        ms.ui.refresh()
+                    end,
+
+                    checkIntegrity = function()
+                        local status, cur, trusted = ms.integrity.check()
+                        if status == "trusted" then
+                            ms.alert("\xe2\x9c\x93 ms_core.lua matches trusted hash.\n" .. (cur and cur:sub(1, 16) or "?") .. "\xe2\x80\xa6", 5, true)
+                            ms.ui.refresh()
+                        elseif status == "mismatch" then
+                            -- Reload so the startup guardian seizes full control.
+                            hs.reload()
+                        else
+                            ms.alert("No trusted hash on record.\nUse \"Trust Current Version\" to seed trust.", 5)
+                            ms.ui.refresh()
+                        end
+                    end,
+
+                    openURL = function(data) if data.url then hs.urlevent.openURL(data.url) end end,
+
+                    checkForUpdate = function() ms.integrity.update() end,
+
+                    openConsole       = function() ms.dev.console.toggle()  end,
+                    openWatcher       = function() ms.dev.watcher.toggle()  end,
+                    openKeys          = function() ms.dev.keys.toggle()     end,
+                    openWindowMonitor = function() ms.dev.window.toggle()   end,
+
+                    -- Triggered by right-click › Rebind… on a macro row in the webview.
+                    -- Runs the same eventtap capture used by the native menu rebind flow.
+                    startRebind = function(data)
+                        if not data.id then return end
+                        local def = ms.registry._defs[data.id]
+                        if not def then return end
+                        local label = def.label or data.id
+
+                        local function bindDisplay(c)
+                            if not c then return "unset" end
+                            if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
+                            local parts = {}
+                            for _, m in ipairs(c.mods or {}) do table.insert(parts, m) end
+                            table.insert(parts, c.key or "")
+                            return table.concat(parts, "+")
+                        end
+
+                        ms.alert("Rebinding: " .. label
+                            .. "\nCurrent: " .. bindDisplay(ms.effectiveBind(data.id))
+                            .. "\nPress your new key or mouse button.\nEscape to cancel.", 15)
+
+                        -- Mark as input-open so the app watcher treats the upcoming focus
+                        -- shift to Hammerspoon (for the confirm dialog) as a dialog cycle
+                        -- rather than a genuine app switch, suppressing the disable toast.
+                        -- Also temporarily clear _open so the app watcher's early-return
+                        -- guard (which skips _inputOpen when the panel is visible) doesn't
+                        -- swallow the Hammerspoon activation event.
+                        ms._inputOpen = true
+                        ms.ui._open   = false
+
+                        local capture
+                        local cancelTimer
+
+                        local function restorePanel()
+                            -- Re-flag the panel as open (it was never actually closed),
+                            -- then hand focus back to Roblox so the app watcher fires
+                            -- the Roblox-activated path and re-enables macros properly.
+                            ms.ui._open = true
                             local roblox = hs.application.get("Roblox")
                             if roblox then
                                 hs.timer.doAfter(0.05, function()
@@ -6809,125 +6429,543 @@
                                 end)
                             end
                         end
-                    end)
-                end)
-                panel:html(_loadPanelHTML(), uiBasePath)
-                return panel
-            end
 
-            ms.ui.show = function()
-                if not ms.ui._panel then
-                    ms.ui._panel = _buildPanel()
-                    if not ms.ui._panel then
-                        ms.alert("Settings panel failed to load — check the Hammerspoon Console.", 5)
+                        capture = hs.eventtap.new({
+                            hs.eventtap.event.types.keyDown,
+                            hs.eventtap.event.types.leftMouseDown,
+                            hs.eventtap.event.types.rightMouseDown,
+                            hs.eventtap.event.types.otherMouseDown,
+                        }, function(event)
+                            capture:stop(); capture = nil; cancelTimer:stop()
+
+                            local parsed, bindStr2
+                            local t = event:getType()
+
+                            if t == hs.eventtap.event.types.keyDown then
+                                local keyCode = event:getKeyCode()
+                                local flags = event:getFlags()
+                                if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
+                                    ms._inputOpen = false
+                                    ms.alert("Rebind cancelled.", 2)
+                                    restorePanel()
+                                    return true
+                                end
+                                local mods = {}
+                                if flags.cmd   then table.insert(mods, "cmd")   end
+                                if flags.alt   then table.insert(mods, "alt")   end
+                                if flags.ctrl  then table.insert(mods, "ctrl")  end
+                                if flags.shift then table.insert(mods, "shift") end
+                                local keyStr = hs.keycodes.map[keyCode]
+                                if keyStr then
+                                    parsed   = { type="key", mods=mods, key=keyStr }
+                                    local parts = {}
+                                    for _, m in ipairs(mods) do table.insert(parts, m) end
+                                    table.insert(parts, keyStr)
+                                    bindStr2 = table.concat(parts, "+")
+                                end
+                            else
+                                local btn
+                                if     t == hs.eventtap.event.types.leftMouseDown  then btn = 0
+                                elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
+                                else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
+                                parsed   = { type="mouse", button=btn }
+                                bindStr2 = "Mouse " .. btn
+                            end
+
+                            if parsed then
+                                local conflictId = ms.bind.siblingConflict(data.id, parsed)
+                                if conflictId then
+                                    local cLabel = (ms.registry._defs[conflictId] and ms.registry._defs[conflictId].label) or conflictId
+                                    ms.playSlot("alert")
+                                    ms._inputOpen = false
+                                    ms.alert("Bind Conflict: \"" .. bindStr2 .. "\" is already used by \"" .. cLabel .. "\".\nChoose a different input.", 4)
+                                    restorePanel()
+                                    return true
+                                end
+                                ms.playSlot("interact")
+                                ms._inputOpen = false
+                                ms.ui.modal({
+                                    title   = "Confirm Rebind",
+                                    msg     = "Set \"" .. label .. "\" to:  " .. bindStr2,
+                                    confirm = "Confirm",
+                                    cancel  = "Cancel",
+                                }, function(r)
+                                    if r.confirmed then
+                                        -- Sub-items store in subBinds; root binds in bindConfig.
+                                        if def.sub then
+                                            ms.subBinds[data.id] = parsed
+                                        else
+                                            ms.bindConfig[data.id] = parsed
+                                        end
+                                        ms.saveSettings()
+                                        ms.playSlot("update")
+                                        ms.bind.rebind()
+                                        restorePanel()
+                                        hs.timer.doAfter(0.2, function()
+                                            ms.alert(label .. " rebound to: " .. bindStr2, 3, true)
+                                            ms.ui.refresh()
+                                        end)
+                                    else
+                                        ms.alert("Rebind cancelled.", 2)
+                                        restorePanel()
+                                        ms.ui.refresh()
+                                    end
+                                end)
+                            else
+                                ms._inputOpen = false
+                                ms.alert("Could not read input. Try again.", 2)
+                                restorePanel()
+                            end
+                            return true
+                        end)
+
+                        capture:start()
+                        cancelTimer = hs.timer.doAfter(15, function()
+                            if capture then
+                                capture:stop(); capture = nil
+                                ms._inputOpen = false
+                                ms.alert("Rebind timed out.", 2)
+                                restorePanel()
+                                ms.ui.refresh()
+                            end
+                        end)
+                    end,
+
+                    -- Resets a single system setting to its macro-pack default (ms.macroDefaults).
+                    resetSetting = function(data)
+                        local key = data.key
+                        local def = ms.macroDefaults or {}
+                        if key == "sensitivity" then
+                            CUR_CAM_SENS = tonumber(def.sensitivity) or 1.5
+                            ms.saveSettings(); ms.cam.updateMultiplier()
+                        elseif key == "trackpadMode" then
+                            ms.trackpadMode = (def.trackpadMode == true)
+                            ms.saveSettings(); ms.bind.rebind()
+                        elseif key == "socdEnabled" then
+                            ms.socdEnabled = (def.socdEnabled == true)
+                            ms.saveSettings(); ms.socdApply()
+                        elseif key == "socdMode" then
+                            ms.socdMode = def.socdMode or "lastWins"
+                            ms.saveSettings()
+                        elseif key == "independentBinds" then
+                            ms.independentBindsEnabled = (def.independentBinds == true)
+                            ms.saveSettings(); ms.bind.rebind()
+                        elseif key == "soundEnabled" then
+                            ms.soundEnabled = true
+                            ms.saveSettings()
+                        elseif key == "soundVolume" then
+                            ms.soundVolume = 100
+                            ms.saveSettings()
+                        end
+                        ms.playSlot("reset")
+                        ms.ui.refresh()
+                    end,
+
+                    -- Changes a user-defined setting value from the panel.
+                    -- Routes through ms.settings.set for validation, persistence, and onChange.
+                    userSettingChange = function(data)
+                        if not data.key then return end
+                        ms.settings.set(data.key, data.value)
+                        ms.playSlot("update")
+                        ms.ui.refresh()
+                    end,
+
+                    -- Fires the onAction callback for an action-type user setting.
+                    -- After the sandboxed onAction runs, any entry in ms._systemActions
+                    -- for the same key is also called.  That table is populated by
+                    -- ms_core.lua after the sandbox finishes, so macros cannot set it.
+                    userSettingAction = function(data)
+                        if not data.key then return end
+                        local def = ms._userSettingIndex[data.key]
+                        if def and def.type == "action" and type(def.onAction) == "function" then
+                            pcall(def.onAction)
+                        end
+                        local sysAction = ms._systemActions and ms._systemActions[data.key]
+                        if type(sysAction) == "function" then pcall(sysAction) end
+                        ms.ui.refresh()
+                    end,
+
+                    -- Resets a user-defined setting to its declared default value.
+                    resetUserSetting = function(data)
+                        if not data.key then return end
+                        local def = ms._userSettingIndex[data.key]
+                        if not def or def.default == nil then return end
+                        ms.settings.set(data.key, def.default)
+                        ms.playSlot("reset")
+                        ms.ui.refresh()
+                    end,
+
+                    -- Receives the result of a Lua-initiated HTML modal (openLuaModal in JS).
+                    -- Fires the pending _modalCallback and clears it.
+                    modalResult = function(data)
+                        if ms.ui._modalCallback then
+                            local cb = ms.ui._modalCallback
+                            ms.ui._modalCallback = nil
+                            pcall(cb, {
+                                confirmed = data.confirmed == true,
+                                value     = type(data.value) == "string" and data.value or "",
+                            })
+                        end
+                    end,
+
+                    -- Resets a macro's bind back to its defined default.
+                    resetBind = function(data)
+                        if not data.id then return end
+                        local def = ms.registry._defs[data.id]
+                        if not def then return end
+                        -- Sub-items use subBinds; root binds use bindConfig.
+                        if def.sub then
+                            ms.subBinds[data.id] = nil
+                            -- In independent bind mode, clearing a sub's bind means it can no
+                            -- longer fire at all — disable it so the UI reflects that.
+                            if ms.independentBindsEnabled then
+                                ms.binds[data.id] = false
+                            end
+                        else
+                            ms.bindConfig[data.id] = nil
+                        end
+                        ms.saveSettings()
+                        ms.bind.rebind()
+                        ms.playSlot("reset")
+                        hs.timer.doAfter(0.1, function()
+                            ms.alert((def.label or data.id) .. " reset to default.", 2, true)
+                            ms.ui.refresh()
+                        end)
+                    end,
+
+                    -- Sets the modifier key for a sub-item.
+                    setModifier = function(data)
+                        if not data.id then return end
+                        local key = type(data.key) == "string" and data.key:match("^%s*(.-)%s*$") or ""
+                        ms.modConfig[data.id] = (key ~= "") and key or nil
+                        ms.saveSettings()
+                        ms.bind.rebind()
+                        ms.playSlot("update")
+                        ms.ui.refresh()
+                    end,
+
+                    -- Clears the modifier key for a sub-item to "no modifier" (empty string).
+                    -- An empty string means "explicitly cleared", distinct from nil which means
+                    -- "use declared default". getMod() returns "" → keystate("") = false.
+                    clearModifier = function(data)
+                        if not data.id then return end
+                        ms.modConfig[data.id] = ""
+                        ms.saveSettings()
+                        ms.bind.rebind()
+                        ms.playSlot("reset")
+                        ms.ui.refresh()
+                    end,
+
+                    -- Starts a key-capture session to set the modifier for a sub-item.
+                    -- Captures the next keyDown or modifier-key press.
+                    -- Backspace clears the modifier; bare Escape cancels.
+                    startModRebind = function(data)
+                        if not data.id then return end
+                        local def = ms.registry._defs[data.id]
+                        if not def or not def.sub then return end
+                        local label = def.label or data.id
+                        local cur   = ms.getMod(data.id)
+
+                        ms.alert("Modifier for \"" .. label .. "\""
+                            .. "\nCurrent: " .. (cur or "unset")
+                            .. "\nPress a key  —  Backspace to clear  —  Escape to cancel.", 15)
+
+                        ms._inputOpen = true
+                        ms.ui._open   = false
+
+                        local capture, cancelTimer
+                        local prevFlags = {}
+
+                        local function finish(newKey, cancelled)
+                            ms._inputOpen = false
+                            if not cancelled then
+                                ms.modConfig[data.id] = newKey  -- nil = cleared
+                                ms.saveSettings()
+                                ms.bind.rebind()
+                                ms.playSlot(newKey and "update" or "reset")
+                            end
+                            ms.ui.show()
+                            hs.timer.doAfter(0.1, function()
+                                if not cancelled then
+                                    if newKey then
+                                        ms.alert("Modifier set to: " .. newKey, 3, true)
+                                    else
+                                        ms.alert("Modifier cleared.", 3, true)
+                                    end
+                                else
+                                    ms.alert("Modifier rebind cancelled.", 2)
+                                end
+                                ms.ui.refresh()
+                            end)
+                        end
+
+                        capture = hs.eventtap.new({
+                            hs.eventtap.event.types.keyDown,
+                            hs.eventtap.event.types.flagsChanged,
+                        }, function(event)
+                            local t     = event:getType()
+                            local flags = event:getFlags()
+
+                            if t == hs.eventtap.event.types.flagsChanged then
+                                -- Detect which modifier key was just pressed (not released).
+                                local newMod = nil
+                                if flags.shift and not prevFlags.shift then newMod = "shift"
+                                elseif flags.alt   and not prevFlags.alt   then newMod = "alt"
+                                elseif flags.ctrl  and not prevFlags.ctrl  then newMod = "ctrl"
+                                elseif flags.cmd   and not prevFlags.cmd   then newMod = "cmd" end
+                                prevFlags = flags
+                                if not newMod then return false end  -- modifier released
+                                capture:stop(); capture = nil; cancelTimer:stop()
+                                finish(newMod, false)
+                                return false
+                            end
+
+                            -- keyDown event.
+                            capture:stop(); capture = nil; cancelTimer:stop()
+                            local keyCode = event:getKeyCode()
+                            if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
+                                finish(nil, true)   -- bare Escape = cancel
+                            elseif keyCode == 51 then
+                                finish(nil, false)  -- Backspace = clear
+                            else
+                                local keyName = hs.keycodes.map[keyCode]
+                                finish(keyName or nil, keyName == nil)
+                            end
+                            return true
+                        end)
+
+                        capture:start()
+                        cancelTimer = hs.timer.doAfter(15, function()
+                            if capture then
+                                capture:stop(); capture = nil
+                                finish(nil, true)
+                            end
+                        end)
+                    end,
+                }
+
+                -- Freeze the dispatch table so macro-sandbox code cannot inject new handlers
+                -- by writing to nested ms.* sub-tables.  The frozenMs proxy only blocks direct
+                -- writes to ms itself (e.g. ms.foo = x); it does not proxy writes to tables
+                -- that are reachable through it (e.g. ms.ui._actions.evil = fn).  Applying a
+                -- __newindex here means any such write errors immediately, regardless of where
+                -- in the call stack it originates.  Reads (action dispatch) still work via
+                -- __index on the backing table.
+                do
+                    local _backing = ms.ui._actions
+                    ms.ui._actions = setmetatable({}, {
+                        __index    = _backing,
+                        __newindex = function(_, k)
+                            error("ms.ui._actions is read-only (attempted write to '" .. tostring(k) .. "')", 2)
+                        end,
+                        __len      = function() return #_backing end,
+                    })
+                end
+                -- always posts a JSON string of the form { action = "...", ... }.
+                local _ucMS = hs.webview.usercontent.new("ms")
+                _ucMS:setCallback(function(message)
+                    local ok, data = pcall(hs.json.decode, message.body)
+                    if not ok or type(data) ~= "table" or not data.action then
+                        print("ms.ui: malformed message from panel: " .. tostring(message.body))
                         return
                     end
-                end
-                local _pf = _panelFrame()
-                ms.ui._panelPos = { x = _pf.x, y = _pf.y, w = _pf.w, h = _pf.h }
-                pcall(function() ms.ui._panel:frame(_pf) end)
-                ms.ui._panel:show()
-                pcall(function() ms.ui._panel:bringToFront(true) end)
-                ms.ui._open = true
-                ms.playSlot("settingsOpen")
-                ms.ui.refresh()
-            end
-
-            ms.ui.hide = function()
-                if ms.ui._panel then ms.ui._panel:hide() end
-                if ms.ui._open then ms.playSlot("settingsClose") end
-                ms.ui._open = false
-                -- Restore Roblox focus silently via the _inputOpen path.
-                local roblox = hs.application.get("Roblox")
-                if roblox then
-                    ms._inputOpen = true
-                    hs.timer.doAfter(0.05, function()
-                        local ok, win = pcall(function() return roblox:mainWindow() end)
-                        if ok and win then pcall(function() win:focus() end) end
-                        pcall(function() roblox:activate() end)
-                    end)
-                end
-            end
-
-            ms.ui.toggle = function()
-                if ms.ui._open then ms.ui.hide() else ms.ui.show() end
-            end
-
-            -- Pre-builds the WebView panel (hidden) so WebKit loads HTML, CSS,
-            -- fonts, and JS in the background during startup.  By the time the
-            -- user first opens the panel the heavy initialisation is already done.
-            -- Defined here (after _buildPanel) so the upvalue is properly in scope.
-            -- Called from the Startup Executions block via doAfter(0).
-            ms.ui.prewarm = function()
-                if not ms.ui._panel then
-                    ms.ui._panel = _buildPanel()
-                end
-                -- Push the pre-built state once WebKit has had time to register
-                -- receiveState().  Skipped if the panel is already open.
-                hs.timer.doAfter(2, function()
-                    if ms.ui._panel and not ms.ui._open then
-                        ms.ui.refresh()
+                    local handler = ms.ui._actions[data.action]
+                    if not handler then
+                        print("ms.ui: unknown action from panel: " .. tostring(data.action))
+                        return
+                    end
+                    local ok2, err = pcall(handler, data)
+                    if not ok2 then
+                        print("ms.ui: action '" .. data.action .. "' error: " .. tostring(err))
                     end
                 end)
-            end
 
-            -- ── ms.ui.modal(data, callback) ─────────────────────────────────────────────
-            -- Shows an HTML confirmation modal in the settings panel.
-            -- Opens the panel automatically if not currently visible.
-            -- data:     { title, msg, confirm, cancel }
-            -- callback: function({ confirmed = bool })
-            --
-            ms.ui.modal = function(data, callback)
-                if not callback then return end
-                if not ms.ui._panel then
-                    pcall(callback, { confirmed = false })
-                    return
+                -- Positions the panel in the left half of the screen — centred between
+                -- the left edge and the screen midpoint, near the top of the usable area.
+                local function _panelFrame()
+                    local screen = hs.screen.mainScreen():frame()
+                    local w, h = panelW, panelH
+                    -- If a UIFC is configured, size the window to the PNG's exact dimensions.
+                    -- This allows any aspect ratio (9:16, 16:9, 1:1, 3:4, 4:3) as long as
+                    -- the PNG is designed with the 360×640 content area centered.
+                    -- Falls back to 1.25× expansion when PNG dimensions can't be read.
+                    if type(ms._theme and ms._theme.uifc) == "table"
+                        and ms._theme.uifc.settings ~= "" then
+                        local wp = os.getenv("HOME") .. "/.hammerspoon/" .. ms._theme.uifc.settings
+                        if hs.fs.attributes(wp) then
+                            local pw = ms._theme._uifcW
+                            local ph = ms._theme._uifcH
+                            if pw and ph then
+                                w, h = pw, ph
+                            else
+                                w = math.floor(w * 1.25)
+                                h = math.floor(h * 1.25)
+                            end
+                        end
+                    end
+                    -- X: centred between the left screen edge and the screen midpoint.
+                    local x = screen.x + math.floor((screen.w / 2 - w) / 2)
+                    -- Y: vertically centred on the usable screen area.
+                    local y = screen.y + math.floor((screen.h - h) / 2)
+                    h = math.min(h, (screen.y + screen.h) - y - 20)
+                    return { x = x, y = y, w = w, h = h }
                 end
-                ms.ui._modalCallback = callback
-                if not ms.ui._open then ms.ui.show() end
-                local ok, json = pcall(hs.json.encode, {
-                    title   = data.title   or "",
-                    msg     = data.msg     or "",
-                    confirm = data.confirm or "OK",
-                    cancel  = data.cancel  or "Cancel",
-                })
-                if not ok then pcall(callback, { confirmed = false }); return end
-                hs.timer.doAfter(0.05, function()
-                    pcall(function()
-                        ms.ui._panel:evaluateJavaScript("openLuaModal(" .. json .. ")")
-                    end)
-                end)
-            end
 
-            -- ── ms.ui.prompt(data, callback) ─────────────────────────────────────────────
-            -- Shows an HTML text-input modal in the settings panel.
-            -- Opens the panel automatically if not currently visible.
-            -- data:     { title, msg, confirm, cancel, default }
-            -- callback: function({ confirmed = bool, value = string })
-            --
-            ms.ui.prompt = function(data, callback)
-                if not callback then return end
-                if not ms.ui._panel then
-                    pcall(callback, { confirmed = false, value = "" })
-                    return
-                end
-                ms.ui._modalCallback = callback
-                if not ms.ui._open then ms.ui.show() end
-                local ok, json = pcall(hs.json.encode, {
-                    title        = data.title   or "",
-                    msg          = data.msg     or "",
-                    confirm      = data.confirm or "OK",
-                    cancel       = data.cancel  or "Cancel",
-                    hasInput     = true,
-                    inputDefault = data.default or "",
-                })
-                if not ok then pcall(callback, { confirmed = false, value = "" }); return end
-                hs.timer.doAfter(0.05, function()
+                local function _buildPanel()
+                    local panel = hs.webview.new(_panelFrame(), { developerExtrasEnabled = true }, _ucMS)
+                    if not panel then return nil end
+                    -- Borderless (0): no title bar, no traffic lights, no chrome.
+                    -- The HTML has its own close button; native window decorations aren't needed.
+                    -- shadow(true) keeps depth cues without any chrome.
+                    pcall(function() panel:windowStyle(0) end)
+                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                    pcall(function() panel:allowTextEntry(true) end)
+                    pcall(function() panel:shadow(true) end)
+                    pcall(function() panel:closeOnEscape(true) end)
+                    -- Keep _open in sync when the user closes via the X button or Escape.
                     pcall(function()
-                        ms.ui._panel:evaluateJavaScript("openLuaModal(" .. json .. ")")
+                        panel:windowCallback(function(action)
+                            if action == "closing" then
+                                ms.ui._open     = false
+                                ms.ui._panel    = nil   -- nil out stale ref; next show() will rebuild
+                                ms.ui._panelPos = nil   -- discard tracked position; will re-seed on next show()
+                                ms._inputOpen = true -- suppress spurious "Macros: ENABLED" toast
+                                ms.playSlot("settingsClose")
+                                local roblox = hs.application.get("Roblox")
+                                if roblox then
+                                    hs.timer.doAfter(0.05, function()
+                                        local ok, win = pcall(function() return roblox:mainWindow() end)
+                                        if ok and win then pcall(function() win:focus() end) end
+                                        pcall(function() roblox:activate() end)
+                                    end)
+                                end
+                            end
+                        end)
                     end)
-                end)
-            end
+                    panel:html(_loadPanelHTML(), uiBasePath)
+                    return panel
+                end
+
+                ms.ui.show = function()
+                    if not ms.ui._panel then
+                        ms.ui._panel = _buildPanel()
+                        if not ms.ui._panel then
+                            ms.alert("Settings panel failed to load — check the Hammerspoon Console.", 5)
+                            return
+                        end
+                    end
+                    local _pf = _panelFrame()
+                    ms.ui._panelPos = { x = _pf.x, y = _pf.y, w = _pf.w, h = _pf.h }
+                    pcall(function() ms.ui._panel:frame(_pf) end)
+                    ms.ui._panel:show()
+                    pcall(function() ms.ui._panel:bringToFront(true) end)
+                    ms.ui._open = true
+                    ms.playSlot("settingsOpen")
+                    ms.ui.refresh()
+                end
+
+                ms.ui.hide = function()
+                    if ms.ui._panel then ms.ui._panel:hide() end
+                    if ms.ui._open then ms.playSlot("settingsClose") end
+                    ms.ui._open = false
+                    -- Restore Roblox focus silently via the _inputOpen path.
+                    local roblox = hs.application.get("Roblox")
+                    if roblox then
+                        ms._inputOpen = true
+                        hs.timer.doAfter(0.05, function()
+                            local ok, win = pcall(function() return roblox:mainWindow() end)
+                            if ok and win then pcall(function() win:focus() end) end
+                            pcall(function() roblox:activate() end)
+                        end)
+                    end
+                end
+
+                ms.ui.toggle = function()
+                    if ms.ui._open then ms.ui.hide() else ms.ui.show() end
+                end
+
+                -- Pre-builds the WebView panel (hidden) so WebKit loads HTML, CSS,
+                -- fonts, and JS in the background during startup.  By the time the
+                -- user first opens the panel the heavy initialisation is already done.
+                -- Defined here (after _buildPanel) so the upvalue is properly in scope.
+                -- Called from the Startup Executions block via doAfter(0).
+                ms.ui.prewarm = function()
+                    if not ms.ui._panel then
+                        ms.ui._panel = _buildPanel()
+                    end
+                    -- Push the pre-built state once WebKit has had time to register
+                    -- receiveState().  Skipped if the panel is already open.
+                    hs.timer.doAfter(2, function()
+                        if ms.ui._panel and not ms.ui._open then
+                            ms.ui.refresh()
+                        end
+                    end)
+                end
+
+            -- END --
+
+            -- ms.ui.modal(data, callback) --
+                -- Shows an HTML confirmation modal in the settings panel.
+                -- Opens the panel automatically if not currently visible.
+                -- data:     { title, msg, confirm, cancel }
+                -- callback: function({ confirmed = bool })
+                --
+                ms.ui.modal = function(data, callback)
+                    if not callback then return end
+                    if not ms.ui._panel then
+                        pcall(callback, { confirmed = false })
+                        return
+                    end
+                    ms.ui._modalCallback = callback
+                    if not ms.ui._open then ms.ui.show() end
+                    local ok, json = pcall(hs.json.encode, {
+                        title   = data.title   or "",
+                        msg     = data.msg     or "",
+                        confirm = data.confirm or "OK",
+                        cancel  = data.cancel  or "Cancel",
+                    })
+                    if not ok then pcall(callback, { confirmed = false }); return end
+                    hs.timer.doAfter(0.05, function()
+                        pcall(function()
+                            ms.ui._panel:evaluateJavaScript("openLuaModal(" .. json .. ")")
+                        end)
+                    end)
+                end
+
+            -- END --
+
+            -- ms.ui.prompt(data, callback) --
+                -- Shows an HTML text-input modal in the settings panel.
+                -- Opens the panel automatically if not currently visible.
+                -- data:     { title, msg, confirm, cancel, default }
+                -- callback: function({ confirmed = bool, value = string })
+                --
+                ms.ui.prompt = function(data, callback)
+                    if not callback then return end
+                    if not ms.ui._panel then
+                        pcall(callback, { confirmed = false, value = "" })
+                        return
+                    end
+                    ms.ui._modalCallback = callback
+                    if not ms.ui._open then ms.ui.show() end
+                    local ok, json = pcall(hs.json.encode, {
+                        title        = data.title   or "",
+                        msg          = data.msg     or "",
+                        confirm      = data.confirm or "OK",
+                        cancel       = data.cancel  or "Cancel",
+                        hasInput     = true,
+                        inputDefault = data.default or "",
+                    })
+                    if not ok then pcall(callback, { confirmed = false, value = "" }); return end
+                    hs.timer.doAfter(0.05, function()
+                        pcall(function()
+                            ms.ui._panel:evaluateJavaScript("openLuaModal(" .. json .. ")")
+                        end)
+                    end)
+                end
+            -- END --
+
         -- END --
 
         -- 12. Developer Panels --
@@ -7018,550 +7056,608 @@
                     return panel, uc, { x=x, y=y, w=w, h=h }
                 end
 
-                -- ── Console ───────────────────────────────────────────────────────────
-                local _ucCon = hs.webview.usercontent.new("msConsole")
-                _ucCon:setCallback(function(msg)
-                    local ok, data = pcall(hs.json.decode, msg.body)
-                    if not ok or type(data) ~= "table" then return end
-                    if data.action == "execute" and data.code then
-                        -- Try as expression, fall back to statement.
-                        local fn, err = load("return " .. data.code)
-                        if not fn then fn, err = load(data.code) end
-                        if not fn then
-                            _devWrite({ type = "error", msg = err or "syntax error" })
-                        else
-                            local res = table.pack(pcall(fn))
-                            local success = table.remove(res, 1)
-                            if not success then
-                                _devWrite({ type = "error", msg = tostring(res[1]) })
-                            elseif #res > 0 then
-                                local parts = {}
-                                for _, v in ipairs(res) do parts[#parts+1] = tostring(v) end
-                                _devWrite({ type = "result", msg = table.concat(parts, "\t") })
-                            end
+
+                -- Dev panel fade helpers --
+                    -- Shared 150 ms fade-in / fade-out for all four developer panels.
+                    -- Each panel gets its own timer slot keyed by a short string so a
+                    -- re-open while fading out cancels the out-animation and reverses.
+                    local _devFadeTimers = {}
+
+                    local function _devFadeIn(panel, key)
+                        if _devFadeTimers[key] then
+                            _devFadeTimers[key]:stop()
+                            _devFadeTimers[key] = nil
                         end
-                    elseif data.action == "clear" then
-                        local f = io.open(_devLogPath, "w"); if f then f:close() end
-                    elseif data.action == "close" then
-                        if ms.dev._consolePanel then ms.dev._consolePanel:hide() end
+                        pcall(function() panel:alpha(0) end)
+                        local step, steps = 0, 6
+                        _devFadeTimers[key] = hs.timer.doEvery(0.15 / steps, function()
+                            step = step + 1
+                            pcall(function() panel:alpha(step / steps) end)
+                            if step >= steps then
+                                _devFadeTimers[key]:stop()
+                                _devFadeTimers[key] = nil
+                            end
+                        end)
+                    end
+
+                    local function _devFadeOut(panel, key, onDone)
+                        if _devFadeTimers[key] then
+                            _devFadeTimers[key]:stop()
+                            _devFadeTimers[key] = nil
+                        end
+                        local step, steps = 0, 6
+                        _devFadeTimers[key] = hs.timer.doEvery(0.15 / steps, function()
+                            step = step + 1
+                            pcall(function() panel:alpha(1 - (step / steps)) end)
+                            if step >= steps then
+                                _devFadeTimers[key]:stop()
+                                _devFadeTimers[key] = nil
+                                if onDone then onDone() end
+                            end
+                        end)
+                    end
+
+                -- END --
+
+                -- Console --
+                    local _ucCon = hs.webview.usercontent.new("msConsole")
+                    _ucCon:setCallback(function(msg)
+                        local ok, data = pcall(hs.json.decode, msg.body)
+                        if not ok or type(data) ~= "table" then return end
+                        if data.action == "execute" and data.code then
+                            -- Try as expression, fall back to statement.
+                            local fn, err = load("return " .. data.code)
+                            if not fn then fn, err = load(data.code) end
+                            if not fn then
+                                _devWrite({ type = "error", msg = err or "syntax error" })
+                            else
+                                local res = table.pack(pcall(fn))
+                                local success = table.remove(res, 1)
+                                if not success then
+                                    _devWrite({ type = "error", msg = tostring(res[1]) })
+                                elseif #res > 0 then
+                                    local parts = {}
+                                    for _, v in ipairs(res) do parts[#parts+1] = tostring(v) end
+                                    _devWrite({ type = "result", msg = table.concat(parts, "\t") })
+                                end
+                            end
+                        elseif data.action == "clear" then
+                            local f = io.open(_devLogPath, "w"); if f then f:close() end
+                        elseif data.action == "close" then
+                            ms.dev.console.hide()
+                        elseif data.action == "openWatcher" then
+                            ms.dev.watcher.show()
+                        elseif data.action == "openKeys" then
+                            ms.dev.keys.show()
+                        elseif data.action == "move" and ms.dev._consolePanelPos then
+                            ms.dev._consolePanelPos.x = ms.dev._consolePanelPos.x + (data.dx or 0)
+                            ms.dev._consolePanelPos.y = ms.dev._consolePanelPos.y + (data.dy or 0)
+                            if ms.dev._consolePanel then
+                                pcall(function() ms.dev._consolePanel:frame(ms.dev._consolePanelPos) end)
+                            end
+                        elseif data.action == "playSlot" and data.slot then
+                            ms.playSlot(data.slot)
+                        end
+                    end)
+
+                    -- Builds the console WebView (hidden). Called at startup by
+                    -- ms.dev.prewarm() so the panel is ready before the user opens it.
+                    local function _buildConsolePanel()
+                        local screen = hs.screen.mainScreen():frame()
+                        local w, h   = 360, 640
+                        local x = screen.x + screen.w - w - 20
+                        local y = screen.y + 20
+                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                            { developerExtrasEnabled = true }, _ucCon)
+                        if not panel then return nil end
+                        pcall(function() panel:windowStyle(0) end)
+                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                        pcall(function() panel:allowTextEntry(true) end)
+                        pcall(function() panel:shadow(true) end)
+                        local f = io.open(_home .. "/.hammerspoon/ui/ms_console.html", "r")
+                        if f then panel:html(f:read("*all"), _devBase); f:close() end
+                        ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
+                        panel:navigationCallback(function(_, action)
+                            if action == "navigating" then return end
+                            -- History is loaded in console.show() so the log read
+                            -- never blocks the startup prewarm sequence.
+                            hs.timer.doAfter(0, function()
+                                local tj = _devThemeJS()
+                                if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                            end)
+                        end)
+                        return panel
+                    end
+
+                    ms.dev.console = {}
+                    ms.dev.console.show = function()
+                        if not ms.dev._consolePanel then
+                            ms.dev._consolePanel = _buildConsolePanel()
+                            if not ms.dev._consolePanel then return end
+                        end
+                        ms.dev._consoleOpen = true
+                        ms.playSlot("settingsOpen")
+                        ms.dev._consolePanel:show()
+                        pcall(function() ms.dev._consolePanel:bringToFront(true) end)
+                        _devFadeIn(ms.dev._consolePanel, "console")
+                        -- Inject history and theme after the panel is visible.
+                        hs.timer.doAfter(0.1, function()
+                            if not ms.dev._consolePanel or not ms.dev._consoleOpen then return end
+                            _loadDevHistory(ms.dev._consolePanel, function(e)
+                                return e.type == "macro" or e.type == "print"
+                                    or e.type == "result" or e.type == "error"
+                                    or e.type == "input"
+                            end)
+                            local tj = _devThemeJS()
+                            if tj ~= "" then
+                                pcall(function() ms.dev._consolePanel:evaluateJavaScript(tj) end)
+                            end
+                        end)
+                    end
+                    ms.dev.console.hide = function()
                         ms.dev._consoleOpen = false
-                    elseif data.action == "openWatcher" then
-                        ms.dev.watcher.show()
-                    elseif data.action == "openKeys" then
-                        ms.dev.keys.show()
-                    elseif data.action == "move" and ms.dev._consolePanelPos then
-                        ms.dev._consolePanelPos.x = ms.dev._consolePanelPos.x + (data.dx or 0)
-                        ms.dev._consolePanelPos.y = ms.dev._consolePanelPos.y + (data.dy or 0)
                         if ms.dev._consolePanel then
-                            pcall(function() ms.dev._consolePanel:frame(ms.dev._consolePanelPos) end)
-                        end
-                    elseif data.action == "playSlot" and data.slot then
-                        ms.playSlot(data.slot)
-                    end
-                end)
-
-                -- Builds the console WebView (hidden). Called at startup by
-                -- ms.dev.prewarm() so the panel is ready before the user opens it.
-                local function _buildConsolePanel()
-                    local screen = hs.screen.mainScreen():frame()
-                    local w, h   = 360, 640
-                    local x = screen.x + screen.w - w - 20
-                    local y = screen.y + 20
-                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                        { developerExtrasEnabled = true }, _ucCon)
-                    if not panel then return nil end
-                    pcall(function() panel:windowStyle(0) end)
-                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                    pcall(function() panel:allowTextEntry(true) end)
-                    pcall(function() panel:shadow(true) end)
-                    local f = io.open(_home .. "/.hammerspoon/ui/ms_console.html", "r")
-                    if f then panel:html(f:read("*all"), _devBase); f:close() end
-                    ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
-                    panel:navigationCallback(function(_, action)
-                        if action == "navigating" then return end
-                        -- History is loaded in console.show() so the log read
-                        -- never blocks the startup prewarm sequence.
-                        hs.timer.doAfter(0, function()
-                            local tj = _devThemeJS()
-                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                        end)
-                    end)
-                    return panel
-                end
-
-                ms.dev.console = {}
-                ms.dev.console.show = function()
-                    if not ms.dev._consolePanel then
-                        ms.dev._consolePanel = _buildConsolePanel()
-                        if not ms.dev._consolePanel then return end
-                    end
-                    ms.dev._consolePanel:show()
-                    pcall(function() ms.dev._consolePanel:bringToFront(true) end)
-                    ms.dev._consoleOpen = true
-                    ms.playSlot("settingsOpen")
-                    -- Inject history and theme after the panel is visible.
-                    hs.timer.doAfter(0.1, function()
-                        if not ms.dev._consolePanel or not ms.dev._consoleOpen then return end
-                        _loadDevHistory(ms.dev._consolePanel, function(e)
-                            return e.type == "macro" or e.type == "print"
-                                or e.type == "result" or e.type == "error"
-                                or e.type == "input"
-                        end)
-                        local tj = _devThemeJS()
-                        if tj ~= "" then
-                            pcall(function() ms.dev._consolePanel:evaluateJavaScript(tj) end)
-                        end
-                    end)
-                end
-                ms.dev.console.hide   = function()
-                    if ms.dev._consolePanel then
-                        ms.playSlot("settingsClose")
-                        ms.dev._consolePanel:hide()
-                    end
-                    ms.dev._consoleOpen = false
-                end
-                ms.dev.console.toggle = function()
-                    if ms.dev._consoleOpen then ms.dev.console.hide()
-                    else ms.dev.console.show() end
-                end
-
-                -- ── Macro Watcher ─────────────────────────────────────────────────────
-                local _ucWatcher = hs.webview.usercontent.new("msWatcher")
-                _ucWatcher:setCallback(function(msg)
-                    local ok, data = pcall(hs.json.decode, msg.body)
-                    if not ok or type(data) ~= "table" then return end
-                    if data.action == "clear" then
-                        -- Clear only macro/print/error entries from the log (keep keys).
-                        -- Simplest: just clear the whole log.
-                        local f = io.open(_devLogPath, "w"); if f then f:close() end
-                    elseif data.action == "close" then
-                        if ms.dev._watcherPanel then ms.dev._watcherPanel:hide() end
-                        ms.dev._watcherOpen = false
-                    elseif data.action == "move" and ms.dev._watcherPanelPos then
-                        ms.dev._watcherPanelPos.x = ms.dev._watcherPanelPos.x + (data.dx or 0)
-                        ms.dev._watcherPanelPos.y = ms.dev._watcherPanelPos.y + (data.dy or 0)
-                        if ms.dev._watcherPanel then
-                            pcall(function() ms.dev._watcherPanel:frame(ms.dev._watcherPanelPos) end)
-                        end
-                    elseif data.action == "playSlot" and data.slot then
-                        ms.playSlot(data.slot)
-                    end
-                end)
-
-                -- Builds the macro watcher WebView (hidden). Pre-warmed at startup.
-                local function _buildWatcherPanel()
-                    local screen = hs.screen.mainScreen():frame()
-                    local w, h   = 360, 640
-                    local x = screen.x + screen.w - w - 50
-                    local y = screen.y + 44
-                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                        { developerExtrasEnabled = true }, _ucWatcher)
-                    if not panel then return nil end
-                    pcall(function() panel:windowStyle(0) end)
-                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                    pcall(function() panel:shadow(true) end)
-                    local f = io.open(_home .. "/.hammerspoon/ui/ms_watcher.html", "r")
-                    if f then panel:html(f:read("*all"), _devBase); f:close() end
-                    ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
-                    panel:navigationCallback(function(_, action)
-                        if action == "navigating" then return end
-                        -- History is loaded in watcher.show() so the log read
-                        -- never blocks the startup prewarm sequence.
-                        hs.timer.doAfter(0, function()
-                            local tj = _devThemeJS()
-                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                        end)
-                    end)
-                    return panel
-                end
-
-                ms.dev.watcher = {}
-                ms.dev.watcher.show = function()
-                    if not ms.dev._watcherPanel then
-                        ms.dev._watcherPanel = _buildWatcherPanel()
-                        if not ms.dev._watcherPanel then return end
-                    end
-                    ms.dev._watcherPanel:show()
-                    pcall(function() ms.dev._watcherPanel:bringToFront(true) end)
-                    ms.dev._watcherOpen = true
-                    ms.playSlot("settingsOpen")
-                    -- Inject history and theme after the panel is visible.
-                    hs.timer.doAfter(0.1, function()
-                        if not ms.dev._watcherPanel or not ms.dev._watcherOpen then return end
-                        _loadDevHistory(ms.dev._watcherPanel, function(e)
-                            return e.type=="macro" or e.type=="print" or e.type=="error"
-                        end)
-                        local tj = _devThemeJS()
-                        if tj ~= "" then
-                            pcall(function() ms.dev._watcherPanel:evaluateJavaScript(tj) end)
-                        end
-                    end)
-                end
-                ms.dev.watcher.hide   = function()
-                    if ms.dev._watcherPanel then
-                        ms.playSlot("settingsClose")
-                        ms.dev._watcherPanel:hide()
-                    end
-                    ms.dev._watcherOpen = false
-                end
-                ms.dev.watcher.toggle = function()
-                    if ms.dev._watcherOpen then ms.dev.watcher.hide()
-                    else ms.dev.watcher.show() end
-                end
-
-                -- ── Key Monitor ───────────────────────────────────────────────────────
-                local _ucKeys = hs.webview.usercontent.new("msKeys")
-                _ucKeys:setCallback(function(msg)
-                    local ok, data = pcall(hs.json.decode, msg.body)
-                    if not ok or type(data) ~= "table" then return end
-                    if data.action == "clear" then
-                        local f = io.open(_devLogPath, "w"); if f then f:close() end
-                    elseif data.action == "close" then
-                        if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
-                        ms.dev._keysOpen = false
-                    elseif data.action == "ready" then
-                        -- DOMContentLoaded fired: page JS is parsed and ready.
-                        -- Only record that the panel is ready here — no evaluateJavaScript
-                        -- calls, because the navigation is still in-flight and any
-                        -- synchronous JS call from within this usercontent callback
-                        -- re-enters WebKit and deadlocks the loading sequence.
-                        -- History + theme injection happen in keys.show() instead.
-                        if not ms.dev._keysReady then
-                            ms.dev._keysReady = true
-                            local _p = hs.mouse.absolutePosition()
-                            ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
-                        end
-                    elseif data.action == "setCoordMode" then
-                        ms.dev._coordMode = data.mode or "screen"
-                        -- Re-push current position immediately in the new coordinate system.
-                        hs.timer.doAfter(0.01, function()
-                            if ms.dev._keysPanel then
-                                pcall(function() ms.dev._pushMouseState() end)
-                            end
-                        end)
-                    elseif data.action == "move" and ms.dev._keysPanelPos then
-                        ms.dev._keysPanelPos.x = ms.dev._keysPanelPos.x + (data.dx or 0)
-                        ms.dev._keysPanelPos.y = ms.dev._keysPanelPos.y + (data.dy or 0)
-                        if ms.dev._keysPanel then
-                            pcall(function() ms.dev._keysPanel:frame(ms.dev._keysPanelPos) end)
-                        end
-                    elseif data.action == "playSlot" and data.slot then
-                        ms.playSlot(data.slot)
-                    end
-                end)
-
-                -- Builds the input monitor WebView (hidden). Pre-warmed at startup.
-                local function _buildKeysPanel()
-                    local screen = hs.screen.mainScreen():frame()
-                    local w, h   = 360, 640
-                    local x = screen.x + screen.w - w - 80
-                    local y = screen.y + 68
-                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                        { developerExtrasEnabled = true }, _ucKeys)
-                    if not panel then return nil end
-                    pcall(function() panel:windowStyle(0) end)
-                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                    pcall(function() panel:shadow(true) end)
-                    local f = io.open(_home .. "/.hammerspoon/ui/ms_keys.html", "r")
-                    if not f then return nil end
-                    panel:html(f:read("*all"), _devBase); f:close()
-                    ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
-                    ms.dev._keysReady    = false
-                    panel:navigationCallback(function(_, action)
-                        if action ~= "didNavigate" then return end
-                        -- Mark the panel ready so live key/mouse events are routed to it.
-                        -- No evaluateJavaScript here: calling JS from inside a navigation
-                        -- callback re-enters WebKit synchronously and hangs the load sequence.
-                        -- History + theme are injected in keys.show() once the panel is visible.
-                        if not ms.dev._keysReady then
-                            ms.dev._keysReady = true
-                            local _p = hs.mouse.absolutePosition()
-                            ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
-                        end
-                    end)
-                    return panel
-                end
-
-                ms.dev.keys = {}
-                ms.dev.keys.show = function()
-                    if not ms.dev._keysPanel then
-                        ms.dev._keysPanel = _buildKeysPanel()
-                        if not ms.dev._keysPanel then return end
-                    end
-                    ms.dev._keysPanel:show()
-                    pcall(function() ms.dev._keysPanel:bringToFront(true) end)
-                    ms.dev._keysOpen = true
-                    -- Re-enable event routing in case the panel was previously hidden
-                    -- (keys.hide sets _keysReady = false to avoid updating a hidden view).
-                    ms.dev._keysReady = true
-                    ms.playSlot("settingsOpen")
-                    -- Inject history and theme after the panel is visible and WebKit is
-                    -- fully idle.  doAfter(0.1) gives the show animation one frame and
-                    -- ensures navigation is long-settled before evaluateJavaScript runs.
-                    hs.timer.doAfter(0.1, function()
-                        if not ms.dev._keysPanel or not ms.dev._keysOpen then return end
-                        _loadDevHistory(ms.dev._keysPanel, function(e)
-                            return e.type=="key" or e.type=="mouse"
-                                or e.type=="scroll" or e.type=="mousemove"
-                        end)
-                        pcall(function() ms.dev._pushMouseState() end)
-                        local tj = _devThemeJS()
-                        if tj ~= "" then
-                            pcall(function() ms.dev._keysPanel:evaluateJavaScript(tj) end)
-                        end
-                    end)
-                    -- Poll mouse position every 100 ms so display stays current.
-                    if ms.dev._mousePoller then ms.dev._mousePoller:stop() end
-                    ms.dev._mousePoller = hs.timer.doEvery(0.1, function()
-                        if not ms.dev._keysPanel then
-                            if ms.dev._mousePoller then
-                                ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
-                            end
-                            return
-                        end
-                        local _p = hs.mouse.absolutePosition()
-                        local _x, _y = math.floor(_p.x), math.floor(_p.y)
-                        local prev = ms.dev._mousePos
-                        if not prev or _x ~= prev.x or _y ~= prev.y then
-                            ms.dev._mousePos = { x = _x, y = _y }
-                            ms.dev._pushMouseState(_x, _y)
-                        end
-                    end)
-                end
-                ms.dev.keys.hide   = function()
-                    if ms.dev._mousePoller then
-                        ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
-                    end
-                    ms.dev._keysReady = false
-                    if ms.dev._keysPanel then
-                        ms.playSlot("settingsClose")
-                        ms.dev._keysPanel:hide()
-                    end
-                    ms.dev._keysOpen = false
-                end
-                ms.dev.keys.toggle = function()
-                    if ms.dev._keysOpen then ms.dev.keys.hide()
-                    else ms.dev.keys.show() end
-                end
-
-                -- ── Mouse state pusher ────────────────────────────────────────────────
-                -- Defined here so both the nav callback and the poller can call it.
-                -- Applies the coordinate transform selected by the user's dropdown.
-                ms.dev._pushMouseState = function(x, y)
-                    if not ms.dev._keysPanel then return end
-                    local _x = x or (ms.dev._mousePos and ms.dev._mousePos.x) or 0
-                    local _y = y or (ms.dev._mousePos and ms.dev._mousePos.y) or 0
-                    -- Transform raw screen coordinates to the selected reference frame.
-                    local mode = ms.dev._coordMode or "screen"
-                    local tx, ty = _x, _y
-                    if mode == "window" or mode == "ref" then
-                        local win = ms.getRobloxWin()
-                        if win then
-                            local f = win:frame()
-                            tx = _x - f.x
-                            ty = _y - f.y
-                            if mode == "ref" then
-                                tx = math.floor(tx * (1680 / f.w) + 0.5)
-                                ty = math.floor(ty * (1044 / f.h) + 0.5)
-                            end
-                        end
-                    elseif mode == "screenCenter" then
-                        local sf = hs.screen.mainScreen():frame()
-                        tx = _x - math.floor(sf.w / 2)
-                        ty = _y - math.floor(sf.h / 2)
-                    end
-                    local j = string.format('{"x":%d,"y":%d}', math.floor(tx), math.floor(ty))
-                    pcall(function()
-                        ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. j .. ")")
-                    end)
-                end
-
-                -- ── Dev step logger (call from macros to trace execution) ────────────────
-                ms.dev.step = function(msg)
-                    if not ms.dev._watcherPanel then return end
-                    local ok, j = pcall(hs.json.encode, {
-                        type = "step",
-                        ts   = os.time(),
-                        msg  = tostring(msg or ""),
-                    })
-                    if ok then
-                        pcall(function()
-                            ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
-                        end)
-                    end
-                end
-
-                -- ── Window Monitor ────────────────────────────────────────────────────
-                local _ucWindow = hs.webview.usercontent.new("msWindow")
-                _ucWindow:setCallback(function(msg)
-                    local ok, data = pcall(hs.json.decode, msg.body)
-                    if not ok or type(data) ~= "table" then return end
-                    if data.action == "clear" then
-                        ms.dev._windowHistory = {}
-                    elseif data.action == "close" then
-                        if ms.dev._windowPanel then ms.dev._windowPanel:hide() end
-                        ms.dev._windowOpen = false
-                        if ms.dev._windowPoller then
-                            ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil
-                        end
-                    elseif data.action == "move" and ms.dev._windowPanelPos then
-                        ms.dev._windowPanelPos.x = ms.dev._windowPanelPos.x + (data.dx or 0)
-                        ms.dev._windowPanelPos.y = ms.dev._windowPanelPos.y + (data.dy or 0)
-                        if ms.dev._windowPanel then
-                            pcall(function() ms.dev._windowPanel:frame(ms.dev._windowPanelPos) end)
-                        end
-                    elseif data.action == "playSlot" and data.slot then
-                        ms.playSlot(data.slot)
-                    end
-                end)
-
-                ms.dev._windowHistory = {}
-                ms.dev._windowMaxHistory = 80
-                ms.dev._windowLast = nil  -- last focused window id, for change detection
-
-                -- Push an entry into the panel and history ring buffer.
-                local function _pushWindowEvent(entry)
-                    table.insert(ms.dev._windowHistory, entry)
-                    if #ms.dev._windowHistory > ms.dev._windowMaxHistory then
-                        table.remove(ms.dev._windowHistory, 1)
-                    end
-                    if ms.dev._windowPanel then
-                        local ok, j = pcall(hs.json.encode, entry)
-                        if ok then
-                            pcall(function()
-                                ms.dev._windowPanel:evaluateJavaScript(
-                                    "appendEntry(" .. j .. ");updateCurrentWindow(" .. j .. ")"
-                                )
+                            ms.playSlot("settingsClose")
+                            _devFadeOut(ms.dev._consolePanel, "console", function()
+                                if ms.dev._consolePanel then ms.dev._consolePanel:hide() end
                             end)
                         end
                     end
-                end
+                    ms.dev.console.toggle = function()
+                        if ms.dev._consoleOpen then ms.dev.console.hide()
+                        else ms.dev.console.show() end
+                    end
 
-                -- Builds the window monitor WebView (hidden). Pre-warmed at startup.
-                local function _buildWindowPanel()
-                    local screen = hs.screen.mainScreen():frame()
-                    local w, h   = 360, 480
-                    local x = screen.x + screen.w - w - 110
-                    local y = screen.y + 68
-                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                        { developerExtrasEnabled = true }, _ucWindow)
-                    if not panel then return nil end
-                    pcall(function() panel:windowStyle(0) end)
-                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                    pcall(function() panel:shadow(true) end)
-                    local f = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
-                    if f then panel:html(f:read("*all"), _devBase); f:close() end
-                    ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
-                    panel:navigationCallback(function(_, action)
-                        if action == "navigating" then return end
-                        hs.timer.doAfter(0, function()
-                            local tj = _devThemeJS()
-                            if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                            if #ms.dev._windowHistory > 0 then
-                                local ok, j = pcall(hs.json.encode, ms.dev._windowHistory)
-                                if ok then pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end) end
+                -- END --
+
+                -- Macro Watcher --
+                    local _ucWatcher = hs.webview.usercontent.new("msWatcher")
+                    _ucWatcher:setCallback(function(msg)
+                        local ok, data = pcall(hs.json.decode, msg.body)
+                        if not ok or type(data) ~= "table" then return end
+                        if data.action == "clear" then
+                            -- Clear only macro/print/error entries from the log (keep keys).
+                            -- Simplest: just clear the whole log.
+                            local f = io.open(_devLogPath, "w"); if f then f:close() end
+                        elseif data.action == "close" then
+                            ms.dev.watcher.hide()
+                        elseif data.action == "move" and ms.dev._watcherPanelPos then
+                            ms.dev._watcherPanelPos.x = ms.dev._watcherPanelPos.x + (data.dx or 0)
+                            ms.dev._watcherPanelPos.y = ms.dev._watcherPanelPos.y + (data.dy or 0)
+                            if ms.dev._watcherPanel then
+                                pcall(function() ms.dev._watcherPanel:frame(ms.dev._watcherPanelPos) end)
                             end
-                            local win = hs.window.focusedWindow()
-                            if win then
-                                local app   = (win:application() and win:application():name()) or "?"
-                                local title = win:title() or ""
-                                local wf    = win:frame()
-                                local ok2, j2 = pcall(hs.json.encode, {
-                                    type="focus", ts=os.time(),
-                                    app=app, title=title,
-                                    w=math.floor(wf.w), h=math.floor(wf.h),
-                                    x=math.floor(wf.x), y=math.floor(wf.y),
-                                })
-                                if ok2 then pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end) end
+                        elseif data.action == "playSlot" and data.slot then
+                            ms.playSlot(data.slot)
+                        end
+                    end)
+
+                    -- Builds the macro watcher WebView (hidden). Pre-warmed at startup.
+                    local function _buildWatcherPanel()
+                        local screen = hs.screen.mainScreen():frame()
+                        local w, h   = 360, 640
+                        local x = screen.x + screen.w - w - 50
+                        local y = screen.y + 44
+                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                            { developerExtrasEnabled = true }, _ucWatcher)
+                        if not panel then return nil end
+                        pcall(function() panel:windowStyle(0) end)
+                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                        pcall(function() panel:shadow(true) end)
+                        local f = io.open(_home .. "/.hammerspoon/ui/ms_watcher.html", "r")
+                        if f then panel:html(f:read("*all"), _devBase); f:close() end
+                        ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
+                        panel:navigationCallback(function(_, action)
+                            if action == "navigating" then return end
+                            -- History is loaded in watcher.show() so the log read
+                            -- never blocks the startup prewarm sequence.
+                            hs.timer.doAfter(0, function()
+                                local tj = _devThemeJS()
+                                if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                            end)
+                        end)
+                        return panel
+                    end
+
+                    ms.dev.watcher = {}
+                    ms.dev.watcher.show = function()
+                        if not ms.dev._watcherPanel then
+                            ms.dev._watcherPanel = _buildWatcherPanel()
+                            if not ms.dev._watcherPanel then return end
+                        end
+                        ms.dev._watcherOpen = true
+                        ms.playSlot("settingsOpen")
+                        ms.dev._watcherPanel:show()
+                        pcall(function() ms.dev._watcherPanel:bringToFront(true) end)
+                        _devFadeIn(ms.dev._watcherPanel, "watcher")
+                        -- Inject history and theme after the panel is visible.
+                        hs.timer.doAfter(0.1, function()
+                            if not ms.dev._watcherPanel or not ms.dev._watcherOpen then return end
+                            _loadDevHistory(ms.dev._watcherPanel, function(e)
+                                return e.type=="macro" or e.type=="print" or e.type=="error"
+                            end)
+                            local tj = _devThemeJS()
+                            if tj ~= "" then
+                                pcall(function() ms.dev._watcherPanel:evaluateJavaScript(tj) end)
                             end
                         end)
-                    end)
-                    return panel
-                end
-
-                ms.dev.window = {}
-                ms.dev.window.show = function()
-                    if not ms.dev._windowPanel then
-                        ms.dev._windowPanel = _buildWindowPanel()
-                        if not ms.dev._windowPanel then return end
                     end
-                    ms.dev._windowPanel:show()
-                    pcall(function() ms.dev._windowPanel:bringToFront(true) end)
-                    ms.dev._windowOpen = true
-                    ms.playSlot("settingsOpen")
-                    -- Poll every 0.4 s for focused window changes.
-                    if ms.dev._windowPoller then ms.dev._windowPoller:stop() end
-                    ms.dev._windowPoller = hs.timer.doEvery(0.4, function()
-                        if not ms.dev._windowOpen then
-                            if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
-                            return
+                    ms.dev.watcher.hide = function()
+                        ms.dev._watcherOpen = false
+                        if ms.dev._watcherPanel then
+                            ms.playSlot("settingsClose")
+                            _devFadeOut(ms.dev._watcherPanel, "watcher", function()
+                                if ms.dev._watcherPanel then ms.dev._watcherPanel:hide() end
+                            end)
                         end
-                        local win = hs.window.focusedWindow()
-                        if not win then return end
-                        local winId = win:id()
-                        if winId == ms.dev._windowLast then return end
-                        ms.dev._windowLast = winId
-                        local app   = (win:application() and win:application():name()) or "?"
-                        local title = win:title() or ""
-                        local f     = win:frame()
-                        _pushWindowEvent({
-                            type="focus", ts=os.time(),
-                            app=app, title=title,
-                            w=math.floor(f.w), h=math.floor(f.h),
-                            x=math.floor(f.x), y=math.floor(f.y),
-                        })
+                    end
+                    ms.dev.watcher.toggle = function()
+                        if ms.dev._watcherOpen then ms.dev.watcher.hide()
+                        else ms.dev.watcher.show() end
+                    end
+
+                -- END --
+
+                -- Key Monitor --
+                    local _ucKeys = hs.webview.usercontent.new("msKeys")
+                    _ucKeys:setCallback(function(msg)
+                        local ok, data = pcall(hs.json.decode, msg.body)
+                        if not ok or type(data) ~= "table" then return end
+                        if data.action == "clear" then
+                            local f = io.open(_devLogPath, "w"); if f then f:close() end
+                        elseif data.action == "close" then
+                            ms.dev.keys.hide()
+                        elseif data.action == "ready" then
+                            -- DOMContentLoaded fired: page JS is parsed and ready.
+                            -- Only record that the panel is ready here — no evaluateJavaScript
+                            -- calls, because the navigation is still in-flight and any
+                            -- synchronous JS call from within this usercontent callback
+                            -- re-enters WebKit and deadlocks the loading sequence.
+                            -- History + theme injection happen in keys.show() instead.
+                            if not ms.dev._keysReady then
+                                ms.dev._keysReady = true
+                                local _p = hs.mouse.absolutePosition()
+                                ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
+                            end
+                        elseif data.action == "setCoordMode" then
+                            ms.dev._coordMode = data.mode or "screen"
+                            -- Re-push current position immediately in the new coordinate system.
+                            hs.timer.doAfter(0.01, function()
+                                if ms.dev._keysPanel then
+                                    pcall(function() ms.dev._pushMouseState() end)
+                                end
+                            end)
+                        elseif data.action == "move" and ms.dev._keysPanelPos then
+                            ms.dev._keysPanelPos.x = ms.dev._keysPanelPos.x + (data.dx or 0)
+                            ms.dev._keysPanelPos.y = ms.dev._keysPanelPos.y + (data.dy or 0)
+                            if ms.dev._keysPanel then
+                                pcall(function() ms.dev._keysPanel:frame(ms.dev._keysPanelPos) end)
+                            end
+                        elseif data.action == "playSlot" and data.slot then
+                            ms.playSlot(data.slot)
+                        end
                     end)
-                end
-                ms.dev.window.hide = function()
-                    if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
-                    if ms.dev._windowPanel then
-                        ms.playSlot("settingsClose")
-                        ms.dev._windowPanel:hide()
-                    end
-                    ms.dev._windowOpen = false
-                end
-                ms.dev.window.toggle = function()
-                    if ms.dev._windowOpen then ms.dev.window.hide()
-                    else ms.dev.window.show() end
-                end
 
-                -- Pre-warm all four developer panels (hidden) so they load instantly
-                -- when the user first opens them.  Called from startup after a delay
-                -- so it doesn't compete with the main settings panel prewarm.
-                -- Each builder is a local in this scope, so upvalues resolve correctly.
-                ms.dev.prewarm = function()
-                    if not ms.dev._consolePanel then
-                        ms.dev._consolePanel = _buildConsolePanel()
+                    -- Builds the input monitor WebView (hidden). Pre-warmed at startup.
+                    local function _buildKeysPanel()
+                        local screen = hs.screen.mainScreen():frame()
+                        local w, h   = 360, 640
+                        local x = screen.x + screen.w - w - 80
+                        local y = screen.y + 68
+                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                            { developerExtrasEnabled = true }, _ucKeys)
+                        if not panel then return nil end
+                        pcall(function() panel:windowStyle(0) end)
+                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                        pcall(function() panel:shadow(true) end)
+                        local f = io.open(_home .. "/.hammerspoon/ui/ms_keys.html", "r")
+                        if not f then return nil end
+                        panel:html(f:read("*all"), _devBase); f:close()
+                        ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
+                        ms.dev._keysReady    = false
+                        panel:navigationCallback(function(_, action)
+                            if action ~= "didNavigate" then return end
+                            -- Mark the panel ready so live key/mouse events are routed to it.
+                            -- No evaluateJavaScript here: calling JS from inside a navigation
+                            -- callback re-enters WebKit synchronously and hangs the load sequence.
+                            -- History + theme are injected in keys.show() once the panel is visible.
+                            if not ms.dev._keysReady then
+                                ms.dev._keysReady = true
+                                local _p = hs.mouse.absolutePosition()
+                                ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
+                            end
+                        end)
+                        return panel
                     end
-                    if not ms.dev._watcherPanel then
-                        ms.dev._watcherPanel = _buildWatcherPanel()
-                    end
-                    if not ms.dev._keysPanel then
-                        ms.dev._keysPanel = _buildKeysPanel()
-                    end
-                    if not ms.dev._windowPanel then
-                        ms.dev._windowPanel = _buildWindowPanel()
-                    end
-                end
 
-                -- Builds a single named dev panel. Used by the startup loading sequence
-                -- to spread WebView creation across separate timer ticks so the main
-                -- thread is never blocked for longer than ~300 ms at a time.
-                ms.dev.prewarmStep = function(which)
-                    if     which == "console" and not ms.dev._consolePanel then
-                        ms.dev._consolePanel = _buildConsolePanel()
-                    elseif which == "watcher" and not ms.dev._watcherPanel then
-                        ms.dev._watcherPanel = _buildWatcherPanel()
-                    elseif which == "keys"    and not ms.dev._keysPanel    then
-                        ms.dev._keysPanel    = _buildKeysPanel()
-                    elseif which == "window"  and not ms.dev._windowPanel  then
-                        ms.dev._windowPanel  = _buildWindowPanel()
+                    ms.dev.keys = {}
+                    ms.dev.keys.show = function()
+                        if not ms.dev._keysPanel then
+                            ms.dev._keysPanel = _buildKeysPanel()
+                            if not ms.dev._keysPanel then return end
+                        end
+                        ms.dev._keysOpen = true
+                        ms.dev._keysReady = true
+                        ms.playSlot("settingsOpen")
+                        ms.dev._keysPanel:show()
+                        pcall(function() ms.dev._keysPanel:bringToFront(true) end)
+                        _devFadeIn(ms.dev._keysPanel, "keys")
+                        -- Inject history and theme after the panel is visible and WebKit is
+                        -- fully idle.  doAfter(0.1) gives the show animation one frame and
+                        -- ensures navigation is long-settled before evaluateJavaScript runs.
+                        hs.timer.doAfter(0.1, function()
+                            if not ms.dev._keysPanel or not ms.dev._keysOpen then return end
+                            _loadDevHistory(ms.dev._keysPanel, function(e)
+                                return e.type=="key" or e.type=="mouse"
+                                    or e.type=="scroll" or e.type=="mousemove"
+                            end)
+                            pcall(function() ms.dev._pushMouseState() end)
+                            local tj = _devThemeJS()
+                            if tj ~= "" then
+                                pcall(function() ms.dev._keysPanel:evaluateJavaScript(tj) end)
+                            end
+                        end)
+                        -- Poll mouse position every 100 ms so display stays current.
+                        if ms.dev._mousePoller then ms.dev._mousePoller:stop() end
+                        ms.dev._mousePoller = hs.timer.doEvery(0.1, function()
+                            if not ms.dev._keysPanel then
+                                if ms.dev._mousePoller then
+                                    ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
+                                end
+                                return
+                            end
+                            local _p = hs.mouse.absolutePosition()
+                            local _x, _y = math.floor(_p.x), math.floor(_p.y)
+                            local prev = ms.dev._mousePos
+                            if not prev or _x ~= prev.x or _y ~= prev.y then
+                                ms.dev._mousePos = { x = _x, y = _y }
+                                ms.dev._pushMouseState(_x, _y)
+                            end
+                        end)
                     end
-                end
+                    ms.dev.keys.hide = function()
+                        if ms.dev._mousePoller then
+                            ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
+                        end
+                        ms.dev._keysReady = false
+                        ms.dev._keysOpen  = false
+                        if ms.dev._keysPanel then
+                            ms.playSlot("settingsClose")
+                            _devFadeOut(ms.dev._keysPanel, "keys", function()
+                                if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
+                            end)
+                        end
+                    end
+                    ms.dev.keys.toggle = function()
+                        if ms.dev._keysOpen then ms.dev.keys.hide()
+                        else ms.dev.keys.show() end
+                    end
+
+                -- END --
+
+                -- Mouse state pusher --
+                    -- Defined here so both the nav callback and the poller can call it.
+                    -- Applies the coordinate transform selected by the user's dropdown.
+                    ms.dev._pushMouseState = function(x, y)
+                        if not ms.dev._keysPanel then return end
+                        local _x = x or (ms.dev._mousePos and ms.dev._mousePos.x) or 0
+                        local _y = y or (ms.dev._mousePos and ms.dev._mousePos.y) or 0
+                        -- Transform raw screen coordinates to the selected reference frame.
+                        local mode = ms.dev._coordMode or "screen"
+                        local tx, ty = _x, _y
+                        if mode == "window" or mode == "ref" then
+                            local win = ms.getRobloxWin()
+                            if win then
+                                local f = win:frame()
+                                tx = _x - f.x
+                                ty = _y - f.y
+                                if mode == "ref" then
+                                    tx = math.floor(tx * (1680 / f.w) + 0.5)
+                                    ty = math.floor(ty * (1044 / f.h) + 0.5)
+                                end
+                            end
+                        elseif mode == "screenCenter" then
+                            local sf = hs.screen.mainScreen():frame()
+                            tx = _x - math.floor(sf.w / 2)
+                            ty = _y - math.floor(sf.h / 2)
+                        end
+                        local j = string.format('{"x":%d,"y":%d}', math.floor(tx), math.floor(ty))
+                        pcall(function()
+                            ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. j .. ")")
+                        end)
+                    end
+
+                -- END --
+
+                -- Dev step logger (call from macros to trace execution) --
+                    ms.dev.step = function(msg)
+                        if not ms.dev._watcherPanel then return end
+                        local ok, j = pcall(hs.json.encode, {
+                            type = "step",
+                            ts   = os.time(),
+                            msg  = tostring(msg or ""),
+                        })
+                        if ok then
+                            pcall(function()
+                                ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                            end)
+                        end
+                    end
+
+                -- END --
+
+                -- Window Monitor --
+                    local _ucWindow = hs.webview.usercontent.new("msWindow")
+                    _ucWindow:setCallback(function(msg)
+                        local ok, data = pcall(hs.json.decode, msg.body)
+                        if not ok or type(data) ~= "table" then return end
+                        if data.action == "clear" then
+                            ms.dev._windowHistory = {}
+                        elseif data.action == "close" then
+                            ms.dev.window.hide()
+                        elseif data.action == "move" and ms.dev._windowPanelPos then
+                            ms.dev._windowPanelPos.x = ms.dev._windowPanelPos.x + (data.dx or 0)
+                            ms.dev._windowPanelPos.y = ms.dev._windowPanelPos.y + (data.dy or 0)
+                            if ms.dev._windowPanel then
+                                pcall(function() ms.dev._windowPanel:frame(ms.dev._windowPanelPos) end)
+                            end
+                        elseif data.action == "playSlot" and data.slot then
+                            ms.playSlot(data.slot)
+                        end
+                    end)
+
+                    ms.dev._windowHistory = {}
+                    ms.dev._windowMaxHistory = 80
+                    ms.dev._windowLast = nil  -- last focused window id, for change detection
+
+                    -- Push an entry into the panel and history ring buffer.
+                    local function _pushWindowEvent(entry)
+                        table.insert(ms.dev._windowHistory, entry)
+                        if #ms.dev._windowHistory > ms.dev._windowMaxHistory then
+                            table.remove(ms.dev._windowHistory, 1)
+                        end
+                        if ms.dev._windowPanel then
+                            local ok, j = pcall(hs.json.encode, entry)
+                            if ok then
+                                pcall(function()
+                                    ms.dev._windowPanel:evaluateJavaScript(
+                                        "appendEntry(" .. j .. ");updateCurrentWindow(" .. j .. ")"
+                                    )
+                                end)
+                            end
+                        end
+                    end
+
+                    -- Builds the window monitor WebView (hidden). Pre-warmed at startup.
+                    local function _buildWindowPanel()
+                        local screen = hs.screen.mainScreen():frame()
+                        local w, h   = 360, 480
+                        local x = screen.x + screen.w - w - 110
+                        local y = screen.y + 68
+                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
+                            { developerExtrasEnabled = true }, _ucWindow)
+                        if not panel then return nil end
+                        pcall(function() panel:windowStyle(0) end)
+                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
+                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                        pcall(function() panel:shadow(true) end)
+                        local f = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
+                        if f then panel:html(f:read("*all"), _devBase); f:close() end
+                        ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
+                        panel:navigationCallback(function(_, action)
+                            if action == "navigating" then return end
+                            hs.timer.doAfter(0, function()
+                                local tj = _devThemeJS()
+                                if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
+                                if #ms.dev._windowHistory > 0 then
+                                    local ok, j = pcall(hs.json.encode, ms.dev._windowHistory)
+                                    if ok then pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end) end
+                                end
+                                local win = hs.window.focusedWindow()
+                                if win then
+                                    local app   = (win:application() and win:application():name()) or "?"
+                                    local title = win:title() or ""
+                                    local wf    = win:frame()
+                                    local ok2, j2 = pcall(hs.json.encode, {
+                                        type="focus", ts=os.time(),
+                                        app=app, title=title,
+                                        w=math.floor(wf.w), h=math.floor(wf.h),
+                                        x=math.floor(wf.x), y=math.floor(wf.y),
+                                    })
+                                    if ok2 then pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end) end
+                                end
+                            end)
+                        end)
+                        return panel
+                    end
+
+                    ms.dev.window = {}
+                    ms.dev.window.show = function()
+                        if not ms.dev._windowPanel then
+                            ms.dev._windowPanel = _buildWindowPanel()
+                            if not ms.dev._windowPanel then return end
+                        end
+                        ms.dev._windowOpen = true
+                        ms.playSlot("settingsOpen")
+                        ms.dev._windowPanel:show()
+                        pcall(function() ms.dev._windowPanel:bringToFront(true) end)
+                        _devFadeIn(ms.dev._windowPanel, "window")
+                        -- Poll every 0.4 s for focused window changes.
+                        if ms.dev._windowPoller then ms.dev._windowPoller:stop() end
+                        ms.dev._windowPoller = hs.timer.doEvery(0.4, function()
+                            if not ms.dev._windowOpen then
+                                if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
+                                return
+                            end
+                            local win = hs.window.focusedWindow()
+                            if not win then return end
+                            local winId = win:id()
+                            if winId == ms.dev._windowLast then return end
+                            ms.dev._windowLast = winId
+                            local app   = (win:application() and win:application():name()) or "?"
+                            local title = win:title() or ""
+                            local f     = win:frame()
+                            _pushWindowEvent({
+                                type="focus", ts=os.time(),
+                                app=app, title=title,
+                                w=math.floor(f.w), h=math.floor(f.h),
+                                x=math.floor(f.x), y=math.floor(f.y),
+                            })
+                        end)
+                    end
+                    ms.dev.window.hide = function()
+                        if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
+                        ms.dev._windowOpen = false
+                        if ms.dev._windowPanel then
+                            ms.playSlot("settingsClose")
+                            _devFadeOut(ms.dev._windowPanel, "window", function()
+                                if ms.dev._windowPanel then ms.dev._windowPanel:hide() end
+                            end)
+                        end
+                    end
+                    ms.dev.window.toggle = function()
+                        if ms.dev._windowOpen then ms.dev.window.hide()
+                        else ms.dev.window.show() end
+                    end
+
+                    -- Pre-warm all four developer panels (hidden) so they load instantly
+                    -- when the user first opens them.  Called from startup after a delay
+                    -- so it doesn't compete with the main settings panel prewarm.
+                    -- Each builder is a local in this scope, so upvalues resolve correctly.
+                    ms.dev.prewarm = function()
+                        if not ms.dev._consolePanel then
+                            ms.dev._consolePanel = _buildConsolePanel()
+                        end
+                        if not ms.dev._watcherPanel then
+                            ms.dev._watcherPanel = _buildWatcherPanel()
+                        end
+                        if not ms.dev._keysPanel then
+                            ms.dev._keysPanel = _buildKeysPanel()
+                        end
+                        if not ms.dev._windowPanel then
+                            ms.dev._windowPanel = _buildWindowPanel()
+                        end
+                    end
+
+                    -- Builds a single named dev panel. Used by the startup loading sequence
+                    -- to spread WebView creation across separate timer ticks so the main
+                    -- thread is never blocked for longer than ~300 ms at a time.
+                    ms.dev.prewarmStep = function(which)
+                        if     which == "console" and not ms.dev._consolePanel then
+                            ms.dev._consolePanel = _buildConsolePanel()
+                        elseif which == "watcher" and not ms.dev._watcherPanel then
+                            ms.dev._watcherPanel = _buildWatcherPanel()
+                        elseif which == "keys"    and not ms.dev._keysPanel    then
+                            ms.dev._keysPanel    = _buildKeysPanel()
+                        elseif which == "window"  and not ms.dev._windowPanel  then
+                            ms.dev._windowPanel  = _buildWindowPanel()
+                        end
+                    end
+                -- END --
+
             end
         -- END --
 
@@ -7796,308 +7892,310 @@
         ms.socdApply()
         BindValidity = 0  -- block macros during loading; _announceLoad re-enables when toasts fire
         ms._startupSoundDone = false  -- suppresses all non-load sounds until _announceLoad runs
-        -- ── Startup Loading Indicator ─────────────────────────────────────────────
-        -- Lightweight hs.canvas panel that shows progress while WebViews initialise
-        -- in the background.  Each WebView creation is pushed into its own timer tick
-        -- so the main thread never blocks for more than ~300 ms at a stretch.
-        local _lCanvas, _lBarMax, _lBarY, _lFadingOut
-        local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad
-        local _needsIntegrityWarning = false  -- set by the integrity timer; shown after announce toasts
-        do
-            local sf  = hs.screen.mainScreen():frame()
-            local lw, lh = 300, 104
-            local lx  = sf.x + math.floor((sf.w - lw) / 2)
-            local ly  = sf.y + sf.h - 150 - lh  -- bottom edge aligns with toast baseline
-            _lBarMax  = lw - 32
-            _lBarY    = 62
-            -- Derive palette from the loaded theme so the canvas respects the active profile.
-            -- Falls back to the original dark crimson defaults when a key is absent.
-            local function _themeColor(hex, fallR, fallG, fallB, alpha)
-                local r, g, b = (hex or ""):match("^#?(%x%x)(%x%x)(%x%x)$")
-                if r then
-                    return {
-                        red   = tonumber(r, 16) / 255,
-                        green = tonumber(g, 16) / 255,
-                        blue  = tonumber(b, 16) / 255,
-                        alpha = alpha or 1.0,
-                    }
+        -- Startup Loading Indicator --
+            -- Lightweight hs.canvas panel that shows progress while WebViews initialise
+            -- in the background.  Each WebView creation is pushed into its own timer tick
+            -- so the main thread never blocks for more than ~300 ms at a stretch.
+            local _lCanvas, _lBarMax, _lBarY, _lFadingOut
+            local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad
+            local _needsIntegrityWarning = false  -- set by the integrity timer; shown after announce toasts
+            do
+                local sf  = hs.screen.mainScreen():frame()
+                local lw, lh = 300, 104
+                local lx  = sf.x + math.floor((sf.w - lw) / 2)
+                local ly  = sf.y + sf.h - 150 - lh  -- bottom edge aligns with toast baseline
+                _lBarMax  = lw - 32
+                _lBarY    = 62
+                -- Derive palette from the loaded theme so the canvas respects the active profile.
+                -- Falls back to the original dark crimson defaults when a key is absent.
+                local function _themeColor(hex, fallR, fallG, fallB, alpha)
+                    local r, g, b = (hex or ""):match("^#?(%x%x)(%x%x)(%x%x)$")
+                    if r then
+                        return {
+                            red   = tonumber(r, 16) / 255,
+                            green = tonumber(g, 16) / 255,
+                            blue  = tonumber(b, 16) / 255,
+                            alpha = alpha or 1.0,
+                        }
+                    end
+                    return { red = fallR, green = fallG, blue = fallB, alpha = alpha or 1.0 }
                 end
-                return { red = fallR, green = fallG, blue = fallB, alpha = alpha or 1.0 }
+                local _t = ms._theme or {}
+                local clrBg     = _themeColor(_t.bg,       0.024, 0.016, 0.008, 0.95)
+                local clrAccent = _themeColor(_t.accent,   0.769, 0.102, 0.102, 1.0)
+                local clrText   = _themeColor(_t.text,     0.941, 0.867, 0.690, 1.0)
+                local clrText2  = _themeColor(_t.warning,  0.824, 0.647, 0.392, 0.72)
+                local clrTrack  = _themeColor(_t.surface2, 0.063, 0.039, 0.024, 1.0)
+                local clrBorder = _themeColor(_t.hover,    0.510, 0.196, 0.086, 0.55)
+                -- Derive font: accept any plain name (no path separators), fall back to Almendra.
+                local _titleFont = (type(_t.font) == "string" and #_t.font > 0
+                    and not _t.font:find("[/\\]"))
+                    and _t.font or "Almendra"
+                _lCanvas = hs.canvas.new({ x=lx, y=ly, w=lw, h=lh })
+                _lCanvas:level(hs.canvas.windowLevels.popUpMenu or 25)
+                _lCanvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
+                _lCanvas:alpha(0)
+                _lCanvas:appendElements(
+                    -- 1: background
+                    { type="rectangle", action="strokeAndFill",
+                      fillColor=clrBg, strokeColor=clrBorder, strokeWidth=1,
+                      roundedRectRadii={ xRadius=5, yRadius=5 } },
+                    -- 2: top accent strip
+                    { type="rectangle", action="fill", fillColor=clrAccent,
+                      frame={ x=0, y=0, w=lw, h=2 },
+                      roundedRectRadii={ xRadius=5, yRadius=5 } },
+                    -- 3: title (static)
+                    { type="text", text="mudscript",
+                      frame={ x=16, y=13, w=lw-32, h=22 },
+                      textFont=_titleFont, textSize=15,
+                      textColor=clrText, textAlignment="left" },
+                    -- 4: status line (updated by _lUpdate)
+                    { type="text", text="Starting up\xe2\x80\xa6",
+                      frame={ x=16, y=37, w=lw-32, h=16 },
+                      textFont="Helvetica Neue", textSize=11,
+                      textColor=clrText2, textAlignment="left" },
+                    -- 5: progress track
+                    { type="rectangle", action="fill", fillColor=clrTrack,
+                      frame={ x=16, y=_lBarY, w=_lBarMax, h=3 },
+                      roundedRectRadii={ xRadius=1.5, yRadius=1.5 } },
+                    -- 6: progress fill (frame.w updated by _lUpdate)
+                    { type="rectangle", action="fill", fillColor=clrAccent,
+                      frame={ x=16, y=_lBarY, w=0, h=3 },
+                      roundedRectRadii={ xRadius=1.5, yRadius=1.5 } },
+                    -- 7: separator above checkbox row
+                    { type="rectangle", action="fill", fillColor=clrBorder,
+                      frame={ x=16, y=75, w=_lBarMax, h=1 } },
+                    -- 8: hit area — transparent full-width row, trackMouseDown for click detection
+                    { type="rectangle", action="fill",
+                      fillColor={ red=0, green=0, blue=0, alpha=0 },
+                      frame={ x=16, y=80, w=_lBarMax, h=18 },
+                      trackMouseDown=true },
+                    -- 9: checkbox glyph (☐ / ☑) — updated on toggle
+                    { type="text",
+                      text=(ms._skipDevPrewarm and "\xe2\x98\x91" or "\xe2\x98\x90"),
+                      frame={ x=17, y=80, w=18, h=18 },
+                      textFont="Helvetica Neue", textSize=13,
+                      textColor=clrText2, textAlignment="left" },
+                    -- 10: label
+                    { type="text", text="Skip dev tool preloading",
+                      frame={ x=36, y=83, w=_lBarMax-22, h=14 },
+                      textFont="Helvetica Neue", textSize=11,
+                      textColor=(ms._skipDevPrewarm and clrText or clrText2),
+                      textAlignment="left" },
+                    -- 11: active profile name (right-aligned in the title row)
+                    { type="text",
+                      text=(ms.macroMeta and ms.macroMeta.name) or "",
+                      frame={ x=16, y=15, w=lw-32, h=18 },
+                      textFont="Helvetica Neue", textSize=10,
+                      textColor=clrText2, textAlignment="right" }
+                )
+                _lCanvas:show()
+                ms.playSlot("startup")  -- loading sequence start sound
+                hs.timer.doAfter(0.05, function()
+                    if _lCanvas then _lCanvas:alpha(1) end
+                end)
+                _lCanvas:mouseCallback(function(canvas, event, id, x, y)
+                    if event ~= "mouseDown" or id ~= 8 then return end
+                    ms._skipDevPrewarm = not ms._skipDevPrewarm
+                    pcall(ms.saveSettings)
+                    canvas[9].text       = ms._skipDevPrewarm and "\xe2\x98\x91" or "\xe2\x98\x90"
+                    canvas[10].textColor = ms._skipDevPrewarm and clrText or clrText2
+                    if ms._skipDevPrewarm and not _lFadingOut then
+                        _lUpdate(100, "Developer tools skipped.")
+                        hs.timer.doAfter(0.8, _lFadeOut)
+                    end
+                end)
             end
-            local _t = ms._theme or {}
-            local clrBg     = _themeColor(_t.bg,       0.024, 0.016, 0.008, 0.95)
-            local clrAccent = _themeColor(_t.accent,   0.769, 0.102, 0.102, 1.0)
-            local clrText   = _themeColor(_t.text,     0.941, 0.867, 0.690, 1.0)
-            local clrText2  = _themeColor(_t.warning,  0.824, 0.647, 0.392, 0.72)
-            local clrTrack  = _themeColor(_t.surface2, 0.063, 0.039, 0.024, 1.0)
-            local clrBorder = _themeColor(_t.hover,    0.510, 0.196, 0.086, 0.55)
-            -- Derive font: accept any plain name (no path separators), fall back to Almendra.
-            local _titleFont = (type(_t.font) == "string" and #_t.font > 0
-                and not _t.font:find("[/\\]"))
-                and _t.font or "Almendra"
-            _lCanvas = hs.canvas.new({ x=lx, y=ly, w=lw, h=lh })
-            _lCanvas:level(hs.canvas.windowLevels.popUpMenu or 25)
-            _lCanvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
-            _lCanvas:alpha(0)
-            _lCanvas:appendElements(
-                -- 1: background
-                { type="rectangle", action="strokeAndFill",
-                  fillColor=clrBg, strokeColor=clrBorder, strokeWidth=1,
-                  roundedRectRadii={ xRadius=5, yRadius=5 } },
-                -- 2: top accent strip
-                { type="rectangle", action="fill", fillColor=clrAccent,
-                  frame={ x=0, y=0, w=lw, h=2 },
-                  roundedRectRadii={ xRadius=5, yRadius=5 } },
-                -- 3: title (static)
-                { type="text", text="mudscript",
-                  frame={ x=16, y=13, w=lw-32, h=22 },
-                  textFont=_titleFont, textSize=15,
-                  textColor=clrText, textAlignment="left" },
-                -- 4: status line (updated by _lUpdate)
-                { type="text", text="Starting up\xe2\x80\xa6",
-                  frame={ x=16, y=37, w=lw-32, h=16 },
-                  textFont="Helvetica Neue", textSize=11,
-                  textColor=clrText2, textAlignment="left" },
-                -- 5: progress track
-                { type="rectangle", action="fill", fillColor=clrTrack,
-                  frame={ x=16, y=_lBarY, w=_lBarMax, h=3 },
-                  roundedRectRadii={ xRadius=1.5, yRadius=1.5 } },
-                -- 6: progress fill (frame.w updated by _lUpdate)
-                { type="rectangle", action="fill", fillColor=clrAccent,
-                  frame={ x=16, y=_lBarY, w=0, h=3 },
-                  roundedRectRadii={ xRadius=1.5, yRadius=1.5 } },
-                -- 7: separator above checkbox row
-                { type="rectangle", action="fill", fillColor=clrBorder,
-                  frame={ x=16, y=75, w=_lBarMax, h=1 } },
-                -- 8: hit area — transparent full-width row, trackMouseDown for click detection
-                { type="rectangle", action="fill",
-                  fillColor={ red=0, green=0, blue=0, alpha=0 },
-                  frame={ x=16, y=80, w=_lBarMax, h=18 },
-                  trackMouseDown=true },
-                -- 9: checkbox glyph (☐ / ☑) — updated on toggle
-                { type="text",
-                  text=(ms._skipDevPrewarm and "\xe2\x98\x91" or "\xe2\x98\x90"),
-                  frame={ x=17, y=80, w=18, h=18 },
-                  textFont="Helvetica Neue", textSize=13,
-                  textColor=clrText2, textAlignment="left" },
-                -- 10: label
-                { type="text", text="Skip dev tool preloading",
-                  frame={ x=36, y=83, w=_lBarMax-22, h=14 },
-                  textFont="Helvetica Neue", textSize=11,
-                  textColor=(ms._skipDevPrewarm and clrText or clrText2),
-                  textAlignment="left" },
-                -- 11: active profile name (right-aligned in the title row)
-                { type="text",
-                  text=(ms.macroMeta and ms.macroMeta.name) or "",
-                  frame={ x=16, y=15, w=lw-32, h=18 },
-                  textFont="Helvetica Neue", textSize=10,
-                  textColor=clrText2, textAlignment="right" }
-            )
-            _lCanvas:show()
-            ms.playSlot("startup")  -- loading sequence start sound
-            hs.timer.doAfter(0.05, function()
-                if _lCanvas then _lCanvas:alpha(1) end
+
+            _lUpdate = function(pct, msg)
+                if not _lCanvas then return end
+                _lCanvas[4].text  = msg
+                _lCanvas[6].frame = {
+                    x=16, y=_lBarY,
+                    w=math.max(4, math.floor(_lBarMax * pct / 100)), h=3,
+                }
+            end
+
+            -- Plays the load-complete sounds and shows the startup toasts.  Fires once
+            -- (guarded by _loadAnnounced) — triggered from the canvas delete callback
+            -- so it runs immediately after the loading screen is gone.
+            -- doAfter(7.0) below acts as a fallback in case the canvas never fades.
+            _announceLoad = function()
+                if _loadAnnounced then return end
+                _loadAnnounced = true
+                -- Load-end sound fires the instant the canvas disappears.
+                pcall(function() ms.playSlot("load") end)
+                -- Brief pause before opening the gate so the load-end sound
+                -- has a moment before any subsequent sounds can play.
+                hs.timer.doAfter(0.4, function()
+                    -- Open the sound gate for all future sounds.
+                    ms._startupSoundDone = true
+                    -- Launch sound plays with the first toast.
+                    pcall(function() ms.playSlot("launch") end)
+                    -- 1. Settings notice (immediate)
+                    ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true)
+                    -- 2. Library creator \xe2\x80\x94 after first toast fades
+                    hs.timer.doAfter(3, function()
+                        ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 3, true)
+                    end)
+                    -- 3. Macro pack creator \xe2\x80\x94 after second toast fades
+                    hs.timer.doAfter(6, function()
+                        if ms.macroMeta then
+                            local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
+                            if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
+                            if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
+                            ms.alert(msg, 3, true)
+                        end
+                    end)
+                    -- Loading complete: allow macros to run and activate them if Roblox is already focused.
+                    ms._loadComplete = true
+                    if ms._robloxActive then ms.setMacros(1, true) end
+                    -- 4. Integrity warning \xe2\x80\x94 after all three announce toasts have faded
+                    -- (3 x 3 s = 9 s total) plus a 1 s gap so there is no overlap.
+                    hs.timer.doAfter(10, function()
+                        if _needsIntegrityWarning then
+                            ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
+                        end
+                    end)
+                end)
+            end
+
+            _lFadeOut = function()
+                if not _lCanvas or _lFadingOut then return end
+                _lFadingOut = true
+                for i = 9, 0, -1 do
+                    local a, d = i / 10, (9 - i) * 0.04
+                    hs.timer.doAfter(d, function()
+                        if _lCanvas then _lCanvas:alpha(a) end
+                    end)
+                end
+                hs.timer.doAfter(10 * 0.04 + 0.05, function()
+                    if _lCanvas then _lCanvas:delete(); _lCanvas = nil end
+                    -- Fire the load announcement immediately after the canvas disappears
+                    -- so there is no visible gap between the loading screen and the toasts.
+                    hs.timer.doAfter(0.1, _announceLoad)
+                end)
+            end
+
+            -- Stagger each WebView creation into its own timer tick so startup
+            -- never freezes for more than one build at a time.
+            hs.timer.doAfter(0, function()
+                ms.ui.prebuild()
+                _lUpdate(18, "Building UI state cache\xe2\x80\xa6")
             end)
-            _lCanvas:mouseCallback(function(canvas, event, id, x, y)
-                if event ~= "mouseDown" or id ~= 8 then return end
-                ms._skipDevPrewarm = not ms._skipDevPrewarm
-                pcall(ms.saveSettings)
-                canvas[9].text       = ms._skipDevPrewarm and "\xe2\x98\x91" or "\xe2\x98\x90"
-                canvas[10].textColor = ms._skipDevPrewarm and clrText or clrText2
-                if ms._skipDevPrewarm and not _lFadingOut then
-                    _lUpdate(100, "Developer tools skipped.")
+            hs.timer.doAfter(0.3, function()
+                ms.ui.prewarm()
+                _lUpdate(32, "Loading settings panel\xe2\x80\xa6")
+            end)
+            -- Each dev-panel step is split across two ticks:
+            --   tick 1 (doAfter N): update the progress label and bar, then return so
+            --                       Core Animation can flush the redraw to the screen.
+            --   tick 2 (doAfter 0): create the WebView (potentially slow) in the next
+            --                       run-loop iteration so the user sees the label update
+            --                       before any brief block.
+            hs.timer.doAfter(2.0, function()
+                if ms._skipDevPrewarm then return end
+                _lUpdate(50, "Loading console\xe2\x80\xa6")
+                hs.timer.doAfter(0, function()
+                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("console") end) end
+                end)
+            end)
+            hs.timer.doAfter(2.6, function()
+                if ms._skipDevPrewarm then return end
+                _lUpdate(62, "Loading macro monitor\xe2\x80\xa6")
+                hs.timer.doAfter(0, function()
+                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("watcher") end) end
+                end)
+            end)
+            hs.timer.doAfter(3.2, function()
+                if ms._skipDevPrewarm then return end
+                _lUpdate(75, "Loading input monitor\xe2\x80\xa6")
+                hs.timer.doAfter(0, function()
+                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("keys") end) end
+                end)
+            end)
+            hs.timer.doAfter(3.8, function()
+                if ms._skipDevPrewarm then return end
+                _lUpdate(88, "Loading window monitor\xe2\x80\xa6")
+                hs.timer.doAfter(0, function()
+                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("window") end) end
+                end)
+            end)
+            hs.timer.doAfter(4.6, function()
+                if not _lFadingOut then
+                    _lUpdate(100, "Ready.")
                     hs.timer.doAfter(0.8, _lFadeOut)
                 end
             end)
-        end
-
-        _lUpdate = function(pct, msg)
-            if not _lCanvas then return end
-            _lCanvas[4].text  = msg
-            _lCanvas[6].frame = {
-                x=16, y=_lBarY,
-                w=math.max(4, math.floor(_lBarMax * pct / 100)), h=3,
-            }
-        end
-
-        -- Plays the load-complete sounds and shows the startup toasts.  Fires once
-        -- (guarded by _loadAnnounced) — triggered from the canvas delete callback
-        -- so it runs immediately after the loading screen is gone.
-        -- doAfter(7.0) below acts as a fallback in case the canvas never fades.
-        _announceLoad = function()
-            if _loadAnnounced then return end
-            _loadAnnounced = true
-            -- Load-end sound fires the instant the canvas disappears.
-            pcall(function() ms.playSlot("load") end)
-            -- Brief pause before opening the gate so the load-end sound
-            -- has a moment before any subsequent sounds can play.
-            hs.timer.doAfter(0.4, function()
-                -- Open the sound gate for all future sounds.
+            -- Failsafe: if any prewarm step stalls and the normal fade never fires,
+            -- force-dismiss the loading screen after 8 s so startup always completes.
+            hs.timer.doAfter(8, function()
+                if _lCanvas and not _lFadingOut then _lFadeOut() end
+                -- Also open the sound gate so sounds are never permanently suppressed.
                 ms._startupSoundDone = true
-                -- Launch sound plays with the first toast.
-                pcall(function() ms.playSlot("launch") end)
-                -- 1. Settings notice (immediate)
-                ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true)
-                -- 2. Library creator \xe2\x80\x94 after first toast fades
-                hs.timer.doAfter(3, function()
-                    ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 3, true)
-                end)
-                -- 3. Macro pack creator \xe2\x80\x94 after second toast fades
-                hs.timer.doAfter(6, function()
-                    if ms.macroMeta then
-                        local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
-                        if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
-                        if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
-                        ms.alert(msg, 3, true)
-                    end
-                end)
-                -- Loading complete: allow macros to run and activate them if Roblox is already focused.
-                ms._loadComplete = true
-                if ms._robloxActive then ms.setMacros(1, true) end
-                -- 4. Integrity warning \xe2\x80\x94 after all three announce toasts have faded
-                -- (3 x 3 s = 9 s total) plus a 1 s gap so there is no overlap.
-                hs.timer.doAfter(10, function()
-                    if _needsIntegrityWarning then
-                        ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
-                    end
-                end)
             end)
-        end
-
-        _lFadeOut = function()
-            if not _lCanvas or _lFadingOut then return end
-            _lFadingOut = true
-            for i = 9, 0, -1 do
-                local a, d = i / 10, (9 - i) * 0.04
-                hs.timer.doAfter(d, function()
-                    if _lCanvas then _lCanvas:alpha(a) end
-                end)
-            end
-            hs.timer.doAfter(10 * 0.04 + 0.05, function()
-                if _lCanvas then _lCanvas:delete(); _lCanvas = nil end
-                -- Fire the load announcement immediately after the canvas disappears
-                -- so there is no visible gap between the loading screen and the toasts.
-                hs.timer.doAfter(0.1, _announceLoad)
-            end)
-        end
-
-        -- Stagger each WebView creation into its own timer tick so startup
-        -- never freezes for more than one build at a time.
-        hs.timer.doAfter(0, function()
-            ms.ui.prebuild()
-            _lUpdate(18, "Building UI state cache\xe2\x80\xa6")
-        end)
-        hs.timer.doAfter(0.3, function()
-            ms.ui.prewarm()
-            _lUpdate(32, "Loading settings panel\xe2\x80\xa6")
-        end)
-        -- Each dev-panel step is split across two ticks:
-        --   tick 1 (doAfter N): update the progress label and bar, then return so
-        --                       Core Animation can flush the redraw to the screen.
-        --   tick 2 (doAfter 0): create the WebView (potentially slow) in the next
-        --                       run-loop iteration so the user sees the label update
-        --                       before any brief block.
-        hs.timer.doAfter(2.0, function()
-            if ms._skipDevPrewarm then return end
-            _lUpdate(50, "Loading console\xe2\x80\xa6")
-            hs.timer.doAfter(0, function()
-                if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("console") end) end
-            end)
-        end)
-        hs.timer.doAfter(2.6, function()
-            if ms._skipDevPrewarm then return end
-            _lUpdate(62, "Loading macro monitor\xe2\x80\xa6")
-            hs.timer.doAfter(0, function()
-                if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("watcher") end) end
-            end)
-        end)
-        hs.timer.doAfter(3.2, function()
-            if ms._skipDevPrewarm then return end
-            _lUpdate(75, "Loading input monitor\xe2\x80\xa6")
-            hs.timer.doAfter(0, function()
-                if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("keys") end) end
-            end)
-        end)
-        hs.timer.doAfter(3.8, function()
-            if ms._skipDevPrewarm then return end
-            _lUpdate(88, "Loading window monitor\xe2\x80\xa6")
-            hs.timer.doAfter(0, function()
-                if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("window") end) end
-            end)
-        end)
-        hs.timer.doAfter(4.6, function()
-            if not _lFadingOut then
-                _lUpdate(100, "Ready.")
-                hs.timer.doAfter(0.8, _lFadeOut)
-            end
-        end)
-        -- Failsafe: if any prewarm step stalls and the normal fade never fires,
-        -- force-dismiss the loading screen after 8 s so startup always completes.
-        hs.timer.doAfter(8, function()
-            if _lCanvas and not _lFadingOut then _lFadeOut() end
-            -- Also open the sound gate so sounds are never permanently suppressed.
-            ms._startupSoundDone = true
-        end)
-        -- System integrity: mismatch is impossible here — the guardian blocked it at
-        -- load time before any ms code ran.  If no trusted hash exists yet, try to
-        -- auto-seed from MANIFEST.json before showing the manual-trust reminder.
-        -- This means a clean install cloned from GitHub is trusted silently on first
-        -- run — no "Trust Current Version" needed — as long as the developer kept
-        -- MANIFEST.json in sync (via bin/make_release.sh) before pushing.
-        hs.timer.doAfter(3, function()
-            if ms.integrity.check() ~= "uninitialized" then return end
-            -- Attempt bootstrap: read sha256 from MANIFEST.json and compare to
-            -- the live file.  Only trust if they match exactly — this prevents
-            -- a stale or tampered MANIFEST from silently seeding the wrong hash.
-            local _mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
-            local _mf    = io.open(_mPath, "r")
-            if _mf then
-                local _ok, _manifest = pcall(hs.json.decode, _mf:read("*all")); _mf:close()
-                if _ok and type(_manifest) == "table"
-                    and type(_manifest.sha256) == "string"
-                    and #_manifest.sha256 == 64 then
-                    local _cur = ms.integrity.hashFile(corePath)
-                    if _cur and _cur:lower() == _manifest.sha256:lower() then
-                        ms.integrity.writeTrustedHash(_cur)
-                        return  -- clean install — seeded silently, no alert needed
+            -- System integrity: mismatch is impossible here — the guardian blocked it at
+            -- load time before any ms code ran.  If no trusted hash exists yet, try to
+            -- auto-seed from MANIFEST.json before showing the manual-trust reminder.
+            -- This means a clean install cloned from GitHub is trusted silently on first
+            -- run — no "Trust Current Version" needed — as long as the developer kept
+            -- MANIFEST.json in sync (via bin/make_release.sh) before pushing.
+            hs.timer.doAfter(3, function()
+                if ms.integrity.check() ~= "uninitialized" then return end
+                -- Attempt bootstrap: read sha256 from MANIFEST.json and compare to
+                -- the live file.  Only trust if they match exactly — this prevents
+                -- a stale or tampered MANIFEST from silently seeding the wrong hash.
+                local _mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
+                local _mf    = io.open(_mPath, "r")
+                if _mf then
+                    local _ok, _manifest = pcall(hs.json.decode, _mf:read("*all")); _mf:close()
+                    if _ok and type(_manifest) == "table"
+                        and type(_manifest.sha256) == "string"
+                        and #_manifest.sha256 == 64 then
+                        local _cur = ms.integrity.hashFile(corePath)
+                        if _cur and _cur:lower() == _manifest.sha256:lower() then
+                            ms.integrity.writeTrustedHash(_cur)
+                            return  -- clean install — seeded silently, no alert needed
+                        end
                     end
                 end
+                -- Bootstrap failed: flag the warning so _announceLoad shows it after
+                -- the startup toasts have had time to display and fade.
+                _needsIntegrityWarning = true
+            end)
+            -- Activate Roblox so the app watcher can seed _robloxActive correctly
+            -- on first launch.
+
+            roblox:activate()
+
+            notice = 0
+            loadfinish = 0
+
+            _G._loadfinishTimer = hs.timer.doAfter(3000 / 1000, function()
+                _G._loadfinishTimer = nil
+                loadfinish = 1
+            end)
+
+            -- Periodic system integrity check — runs every 60 s once macros are fully loaded.
+            -- If ms_core.lua has been tampered with since it was trusted, the guardian seizes
+            -- control immediately without requiring a manual check.
+            _G._integrityPollTimer = hs.timer.doEvery(5, function()
+                if loadfinish ~= 1 then return end  -- skip startup grace period
+                -- Non-blocking: returns the cached value immediately and kicks off a
+                -- background hs.task hash when the 60-second window expires.
+                -- hs.reload() on mismatch is called inside the task callback.
+                ms.integrity.check()
+            end)
+
+            if notice ~= 1 then
+                -- Primary path: _announceLoad fires from the canvas delete callback (see _lFadeOut)
+                -- so toasts appear immediately after the loading screen is gone.
+                -- This doAfter(7.0) is a belt-and-suspenders fallback for edge cases where
+                -- the canvas never fades (e.g., Hammerspoon is killed mid-load and relaunched).
+                hs.timer.doAfter(7.0, _announceLoad)
+                notice = 1
             end
-            -- Bootstrap failed: flag the warning so _announceLoad shows it after
-            -- the startup toasts have had time to display and fade.
-            _needsIntegrityWarning = true
-        end)
-        -- Activate Roblox so the app watcher can seed _robloxActive correctly
-        -- on first launch.
+        -- END --
 
-        roblox:activate()
-
-        notice = 0
-        loadfinish = 0
-
-        _G._loadfinishTimer = hs.timer.doAfter(3000 / 1000, function()
-            _G._loadfinishTimer = nil
-            loadfinish = 1
-        end)
-
-        -- Periodic system integrity check — runs every 60 s once macros are fully loaded.
-        -- If ms_core.lua has been tampered with since it was trusted, the guardian seizes
-        -- control immediately without requiring a manual check.
-        _G._integrityPollTimer = hs.timer.doEvery(5, function()
-            if loadfinish ~= 1 then return end  -- skip startup grace period
-            -- Non-blocking: returns the cached value immediately and kicks off a
-            -- background hs.task hash when the 60-second window expires.
-            -- hs.reload() on mismatch is called inside the task callback.
-            ms.integrity.check()
-        end)
-
-        if notice ~= 1 then
-            -- Primary path: _announceLoad fires from the canvas delete callback (see _lFadeOut)
-            -- so toasts appear immediately after the loading screen is gone.
-            -- This doAfter(7.0) is a belt-and-suspenders fallback for edge cases where
-            -- the canvas never fades (e.g., Hammerspoon is killed mid-load and relaunched).
-            hs.timer.doAfter(7.0, _announceLoad)
-            notice = 1
-        end
     -- END Startup Executions --
 -- END Core System --
