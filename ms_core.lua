@@ -6907,12 +6907,9 @@ YQIDAQAB
                     ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
                     panel:navigationCallback(function(_, action)
                         if action == "navigating" then return end
+                        -- History is loaded in console.show() so the log read
+                        -- never blocks the startup prewarm sequence.
                         hs.timer.doAfter(0, function()
-                            _loadDevHistory(panel, function(e)
-                                return e.type == "macro" or e.type == "print"
-                                    or e.type == "result" or e.type == "error"
-                                    or e.type == "input"
-                            end)
                             local tj = _devThemeJS()
                             if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
@@ -6930,6 +6927,19 @@ YQIDAQAB
                     pcall(function() ms.dev._consolePanel:bringToFront(true) end)
                     ms.dev._consoleOpen = true
                     ms.playSlot("settingsOpen")
+                    -- Inject history and theme after the panel is visible.
+                    hs.timer.doAfter(0.1, function()
+                        if not ms.dev._consolePanel or not ms.dev._consoleOpen then return end
+                        _loadDevHistory(ms.dev._consolePanel, function(e)
+                            return e.type == "macro" or e.type == "print"
+                                or e.type == "result" or e.type == "error"
+                                or e.type == "input"
+                        end)
+                        local tj = _devThemeJS()
+                        if tj ~= "" then
+                            pcall(function() ms.dev._consolePanel:evaluateJavaScript(tj) end)
+                        end
+                    end)
                 end
                 ms.dev.console.hide   = function()
                     if ms.dev._consolePanel then
@@ -6984,10 +6994,9 @@ YQIDAQAB
                     ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
                     panel:navigationCallback(function(_, action)
                         if action == "navigating" then return end
+                        -- History is loaded in watcher.show() so the log read
+                        -- never blocks the startup prewarm sequence.
                         hs.timer.doAfter(0, function()
-                            _loadDevHistory(panel, function(e)
-                                return e.type=="macro" or e.type=="print" or e.type=="error"
-                            end)
                             local tj = _devThemeJS()
                             if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
                         end)
@@ -7005,6 +7014,17 @@ YQIDAQAB
                     pcall(function() ms.dev._watcherPanel:bringToFront(true) end)
                     ms.dev._watcherOpen = true
                     ms.playSlot("settingsOpen")
+                    -- Inject history and theme after the panel is visible.
+                    hs.timer.doAfter(0.1, function()
+                        if not ms.dev._watcherPanel or not ms.dev._watcherOpen then return end
+                        _loadDevHistory(ms.dev._watcherPanel, function(e)
+                            return e.type=="macro" or e.type=="print" or e.type=="error"
+                        end)
+                        local tj = _devThemeJS()
+                        if tj ~= "" then
+                            pcall(function() ms.dev._watcherPanel:evaluateJavaScript(tj) end)
+                        end
+                    end)
                 end
                 ms.dev.watcher.hide   = function()
                     if ms.dev._watcherPanel then
