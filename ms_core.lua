@@ -4700,15 +4700,18 @@ YQIDAQAB
             end)
 
             hs.hotkey.bind({ "alt" }, "F10", function()
+                if not ms._loadComplete then return end
                 if not ms._robloxActive then return end
                 ms.setMacros(0)
             end)
 
             hs.hotkey.bind({"alt"}, "[", function()
+                if not ms._loadComplete then return end
                 hs.reload()
             end)
 
             hs.hotkey.bind({"alt"}, "]", function()
+                if not ms._loadComplete then return end
                 ms.reloadSettings()
             end)
 
@@ -4725,6 +4728,7 @@ YQIDAQAB
             -- while a native menu is open — is no longer needed for a normal
             -- window, so a plain hotkey bind is sufficient here.
             hs.hotkey.bind({ "alt" }, "p", function()
+                if not ms._loadComplete then return end
                 if not ms._robloxActive then return end
                 ms.ui.toggle()
             end)
