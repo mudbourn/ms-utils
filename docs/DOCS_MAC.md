@@ -734,19 +734,23 @@ ms.playSlot("hover")    -- plays the menu hover sound
 
 `ms.soundAssign` maps slot names to sound names from `ms.sounds`. Configured via **Settings › Sound**. Drop a file named after the slot (e.g. `hover.wav`) into `~/.hammerspoon/sounds/` for auto-assignment without any configuration.
 
+> **Loading-sequence slots:** `startup`, `load`, and `launch` are the three loading-sequence slots. They are exempt from the startup sound gate — they can fire before the gate opens, while the loading screen is still active.
+
 | Slot | Fires when |
 |------|------------|
-| `load` | Hammerspoon finishes reloading |
-| `alert` | A dialog is opened asking for input |
+| `startup` | Loading screen appears |
+| `load` | Loading screen fades out |
+| `launch` | First toast fires after loading completes |
+| `alert` | `ms.alert()` is called without `noDefaultSound = true` and `loadfinish == 1` |
 | `enabled` | Macros are enabled |
 | `disabled` | Macros are disabled |
 | `update` | A setting is successfully changed |
-| `reset` | A reset button is confirmed |
-| `interact` | A menu item is activated (click, Space, Return, or Right arrow into a submenu) |
+| `reset` | A reset action is confirmed |
+| `interact` | A menu item is activated |
 | `hover` | The cursor or keyboard moves to a new menu item |
 | `back` | Left arrow closes a submenu |
-| `settingsOpen` | The settings menu appears (first open or reopen after an action) |
-| `settingsClose` | The settings menu is dismissed (Escape, click outside, or Alt+P close) |
+| `settingsOpen` | The settings panel or a developer panel opens |
+| `settingsClose` | The settings panel or a developer panel closes |
 
 ---
 
@@ -1097,8 +1101,9 @@ ms._updateManifestURL = "https://raw.githubusercontent.com/you/repo/main/MANIFES
 
 ### Release workflow
 
-Pushing `ms_core.lua` to `main` automatically:
-1. Computes the SHA-256
+The GitHub Actions workflow (`.github/workflows/release.yml`) triggers on any push that touches `ms_core.lua` or `ms_core.ahk` (path filter: `paths: [ms_core.lua, ms_core.ahk]`). When triggered it always stamps — there is no step-level condition gating the stamp on which file changed:
+
+1. Computes the SHA-256 of `ms_core.lua`
 2. Signs it with the RSA private key stored in GitHub Secrets (`MS_SIGNING_KEY`)
 3. Commits an updated `MANIFEST.json` with the new hash and signature
 
@@ -1120,7 +1125,7 @@ Registers a setting or visual item in the **Settings** section of the panel. Ite
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `type` | yes | `"toggle"` \| `"slider"` \| `"seg"` \| `"action"` \| `"soundSlot"` \| `"divider"` \| `"groupLabel"` |
+| `type` | yes | `"toggle"` \| `"slider"` \| `"seg"` \| `"action"` \| `"soundSlot"` \| `"group"` \| `"divider"` \| `"groupLabel"` |
 | `key` | yes (except divider/groupLabel) | Unique identifier. Used for storage and `ms.settings.get`. For `soundSlot` items the key names the sound slot; `ms.settings.get` returns the currently assigned sound name rather than a value from settings storage. |
 | `label` | — | Row label shown in the panel. |
 | `hint` | — | Optional subtitle shown below the label. |
@@ -1135,6 +1140,7 @@ Registers a setting or visual item in the **Settings** section of the panel. Ite
 | `slider` | `min`, `max`, `step`, `unit` (display string e.g. `"ms"`) |
 | `seg` | `options = { {label, value}, ... }` |
 | `action` | `btnLabel`, `danger` (bool), `onAction()` |
+| `group` | `items = { ... }` (array of nested item definitions) |
 | `groupLabel` | `label` (the heading text) |
 
 #### `type = "soundSlot"`
@@ -1158,6 +1164,27 @@ ms.playSlot("myHitSound")   -- plays whatever the user assigned
 `ms.settings.get("myHitSound")` returns the currently assigned sound name (from `ms.soundAssign`), or `default` if nothing has been assigned. `ms.settings.set` is not supported for `soundSlot` keys — use the Sound section UI to assign sounds.
 
 `soundSlot` items can also be declared inside `ms.menu.define` item lists; they appear in the custom section **and** are extracted into the Sound section automatically.
+
+---
+
+#### `type = "group"`
+
+A collapsible group of nested setting items. Requires an `items` array. The group renders as a labelled, expandable container in the settings panel. Nested items support the same types as top-level `ms.settings.define` entries.
+
+```lua
+ms.settings.define({
+    key   = "advancedGroup",
+    type  = "group",
+    label = "Advanced",
+    items = {
+        { type = "toggle", key = "debugMode",  label = "Debug Mode",  default = false,
+          onChange = function(v) end },
+        { type = "slider", key = "frameDelay", label = "Frame Delay",
+          min = 0, max = 100, step = 1, unit = "ms", default = 16,
+          onChange = function(v) end },
+    },
+})
+```
 
 **Examples:**
 
@@ -1274,21 +1301,9 @@ ms.features.hide("independentBinds")  -- Independent Binds row in Tools
 
 ---
 
-### `ms.setClickLevel(n)`
+### `ms.setClickLevel(n)` *(internal)*
 
-Updates the system `clickLevel` variable. Valid values: `1`, `2`, `3`, `4`. Typically called from a `ms.settings.define` `onChange` callback but can be called from anywhere — macro bodies, timers, etc.:
-
-```lua
-ms.settings.define({
-    key = "clickLevel", label = "Click Level", type = "seg",
-    options = {
-        { label = "1", value = 1 }, { label = "2", value = 2 },
-        { label = "3", value = 3 }, { label = "4", value = 4 },
-    },
-    default = 3,
-    onChange = function(v) ms.setClickLevel(v) end,
-})
-```
+> **Internal API.** `ms.setClickLevel` was a legacy bridge function and is not part of the public API. Do not call it from macro packs. To expose a click-level setting, use `ms.settings.define` with a `seg` type and manage the value in your own `onChange` callback.
 
 ---
 
@@ -1439,6 +1454,8 @@ end
 
 Four floating panels for live monitoring and interactive debugging. Open them from **Settings › Developer** or call the API directly. All panels share the active `data/ms_theme.json` theme — colors, font, and radius update automatically when the panel first loads.
 
+The panels open near the top-right of the screen, staggered horizontally so they don't stack exactly on top of each other: Console is at the rightmost position, Macro Monitor 30 px further left, Input Monitor 60 px further left, and Window Monitor 90 px further left. All four panels fade in when opened and fade out when closed (150 ms, 6 steps). The open/close state is set immediately so `toggle()` works correctly during the animation.
+
 > `ms.dev` is not accessible from `ms_macros.lua`. These tools are for the developer only.
 
 ---
@@ -1487,6 +1504,7 @@ ms.dev.step("done")
 
 ```lua
 ms.dev.watcher.show()
+ms.dev.watcher.hide()
 ms.dev.watcher.toggle()
 ```
 
@@ -1532,6 +1550,7 @@ Mouse button events are logged regardless of whether macros are enabled (`BindVa
 
 ```lua
 ms.dev.keys.show()
+ms.dev.keys.hide()
 ms.dev.keys.toggle()
 ```
 
@@ -1539,7 +1558,7 @@ ms.dev.keys.toggle()
 
 ### Window Monitor — `ms.dev.window`
 
-A 360×520 floating panel. Tracks the focused window in real time by polling every 400 ms.
+A 360×480 floating panel. Tracks the focused window in real time by polling every 400 ms.
 
 - **Current window** — shows the active app name, window title, and dimensions (width × height px) at the top.
 - **Log** — appends an entry each time the focused window changes: `● App › Title [W×H]` with a Unix timestamp.
@@ -1547,6 +1566,7 @@ A 360×520 floating panel. Tracks the focused window in real time by polling eve
 
 ```lua
 ms.dev.window.show()
+ms.dev.window.hide()
 ms.dev.window.toggle()
 ```
 

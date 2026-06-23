@@ -19,7 +19,6 @@
             -- END --
 
             -- One-time migration: move settings/hash files from root into data/ --
-                -- Safe to run on every reload; skips files that already exist at the new path.
                 do
                     local _h = os.getenv("HOME") .. "/.hammerspoon"
                     os.execute("mkdir -p '" .. _h .. "/data'")
@@ -286,13 +285,12 @@
                                 end)
                             end
                         end
-                        -- Watcher: macro, print, error (step entries pushed directly)
+                        -- Watcher: macro, print, error
                         if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error") then
                             pcall(function()
                                 ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
                             end)
                         end
-                        -- Input Monitor: key, mouse, scroll, mousemove
                         if ms.dev._keysPanel and ms.dev._keysReady
                             and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
                             pcall(function()
@@ -339,7 +337,6 @@
 
                 ms.dev._onMouseEvent = function(button, isDown, x, y)
                     _devWrite({ type = "mouse", button = button, down = isDown, x = x, y = y })
-                    -- Track held buttons and push the updated state to the active-button pills.
                     if isDown then ms.dev._activeButtons[button] = true
                     else            ms.dev._activeButtons[button] = nil end
                     if ms.dev._keysPanel and ms.dev._keysReady then
@@ -455,7 +452,6 @@
                             font = theme.font
                         end
 
-                        -- Semi-transparent background so the game shows through.
                         bgColor.alpha = 0.88
 
                         local c = hs.canvas.new({ x = cx, y = y, w = cw, h = ch })
@@ -533,7 +529,6 @@
                     local function redraw(newEntry)
                         local sx, sy, sw, sBottom = screenBounds()
 
-                        -- Ensure every queued entry has a height measurement.
                         for _, entry in ipairs(queue) do
                             if not entry.h then
                                 local lines = {}
@@ -595,7 +590,6 @@
                         animateEntry(entry, f.y, f.y, 1, 0, onDone)
                     end
 
-                    -- Removes an entry from the queue and fades it out.
                     dismissEntry = function(entry)
                         if entry.timer then entry.timer:stop(); entry.timer = nil end
                         for i, e in ipairs(queue) do
@@ -629,7 +623,6 @@
                         __call = function(_, msg, duration, noDefaultSound)
                             duration = duration or 5
 
-                            -- Play alert sound if loaded, post-startup, and not suppressed.
                             if loadfinish == 1 and not noDefaultSound then
                                 ms.playSlot("alert")
                             end
@@ -706,7 +699,6 @@
                         independentBinds = true,
                         sensitivity      = true,
                     }
-                    -- Returns the validated (and possibly clamped) value, or nil on failure.
                     local function _validateUserValue(def, value)
                         if def.type == "toggle" then
                             if value == true or value == false then return value end
@@ -723,7 +715,6 @@
                         return nil
                     end
 
-                    -- Applies a decoded settings table to the live runtime state.
                     ms._applySettings = function(data)
                         if not data then return end
                         if data.sensitivity ~= nil then
@@ -812,9 +803,7 @@
                                 end
                             end
                         end
-                        -- Apply user-defined settings from the "user" sub-table.
                         -- Runs last so user settings always take final effect.
-                        -- Fires onChange callbacks, which sync system bridges (e.g. ms.setClickLevel).
                         if data.user and type(data.user) == "table" then
                             for key, value in pairs(data.user) do
                                 local uDef = ms._userSettingIndex[key]
@@ -831,15 +820,12 @@
                         end
                     end
 
-                    -- Parses the old flat settings file into a settings table.
-                    -- Unknown keys are silently skipped; returns (data, skippedKeys).
                     ms._convertFlatSettings = function(file)
                         local data    = { macros = {} }
                         local skipped = {}
                         for line in file:lines() do
                             local key, val = line:match("^(.-)=(.+)$")
                             if not key then
-                                -- blank or malformed line; skip
                             elseif key == "sensitivity" then
                                 local num = tonumber(val)
                                 if num and num >= 0.1 and num <= 4 then data.sensitivity = num end
@@ -919,12 +905,10 @@
                             user             = ms._userSettingVals or {},
                             macros = {},
                         }
-                        -- Enabled state per macro
                         for id, enabled in pairs(ms.binds or {}) do
                             data.macros[id] = data.macros[id] or {}
                             data.macros[id].enabled = enabled
                         end
-                        -- Root bind overrides (only written when different from code default)
                         for id, cfg in pairs(ms.bindConfig or {}) do
                             local regEntry = ms.registry._defs and ms.registry._defs[id]
                             local def = regEntry and regEntry.default
@@ -945,17 +929,14 @@
                                 end
                             end
                         end
-                        -- Modifier key overrides
                         for id, key in pairs(ms.modConfig or {}) do
                             data.macros[id] = data.macros[id] or {}
                             data.macros[id].mod = key
                         end
-                        -- Sub-item independent binds
                         for id, cfg in pairs(ms.subBinds or {}) do
                             data.macros[id] = data.macros[id] or {}
                             data.macros[id].bind = cfg
                         end
-                        -- User cooldown overrides
                         for id, cooldown in pairs(ms.cooldowns or {}) do
                             data.macros[id] = data.macros[id] or {}
                             data.macros[id].cooldown = cooldown
@@ -969,7 +950,6 @@
 
                     ms.loadSettings = function()
                         if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
-                        -- JSON file takes priority
                         local f = io.open(jsonPath, "r")
                         if f then
                             local content = f:read("*all")
@@ -981,7 +961,6 @@
                             end
                             -- JSON present but unreadable; fall through to flat-file check.
                         end
-                        -- Auto-convert from old flat file if JSON is absent
                         local oldF = io.open(settingsPath, "r")
                         if oldF then
                             local data, skipped = ms._convertFlatSettings(oldF)
@@ -998,7 +977,6 @@
                             end)
                             return
                         end
-                        -- Fall back to shipped default settings file
                         local df = io.open(defaultPath, "r")
                         if df then
                             local content = df:read("*all")
@@ -1009,7 +987,6 @@
                                 return
                             end
                         end
-                        -- No settings file found — build default from macro declarations.
                         ms._buildDefaultSettings()
                         local df2 = io.open(defaultPath, "r")
                         if df2 then
@@ -1019,14 +996,12 @@
                         end
                     end
 
-                    -- Archives the current default and saves the current settings in its place.
                     ms.saveDefault = function()
                         ms.saveSettings()
                         local sf = io.open(jsonPath, "r")
                         if not sf then ms.alert("Could not read current settings.", 3); return end
                         local content = sf:read("*all")
                         sf:close()
-                        -- Archive the existing default if one exists.
                         local existingDf = io.open(defaultPath, "r")
                         if existingDf then
                             local oldContent = existingDf:read("*all")
@@ -1037,7 +1012,6 @@
                             local af = io.open(archiveFile, "w")
                             if af then af:write(oldContent); af:close() end
                         end
-                        -- Write the new default.
                         local df = io.open(defaultPath, "w")
                         if df then
                             df:write(content)
@@ -1046,8 +1020,6 @@
                         end
                     end
 
-                    -- Applies the saved default settings and rebinds everything.
-                    -- Returns true on success, false if no default file is found.
                     ms.resetToDefault = function()
                         local f = io.open(defaultPath, "r")
                         if not f then
@@ -1070,7 +1042,6 @@
                         ms.modConfig  = {}
                         ms.cooldowns  = {}
                         ms._applySettings(data)
-                        -- Also reset user-defined settings to their declared defaults.
                         for key, def in pairs(ms._userSettingIndex) do
                             if def.type ~= "action" and def.default ~= nil then
                                 ms._userSettingVals[key] = def.default
@@ -1087,7 +1058,6 @@
                         return true
                     end
 
-                    -- Reloads settings from disk and applies them fully.
                     -- Single source of truth called by both the menu item and the Alt+] hotkey.
                     ms.reloadSettings = function()
                         ms.loadSettings()
@@ -1100,67 +1070,19 @@
                     end
 
                     -- User Settings & Menu API --
-                    --
-                    -- These functions are called from ms_macros.lua (after ms.macroMeta, before
-                    -- macro functions) to declare custom settings, panel sections, and to hide
-                    -- unused built-in features.
-                    --
-                    -- Callbacks (onChange, onAction) defined in ms_macros.lua run inside the
-                    -- macro sandbox — they have access to ms.* functions and safe Lua builtins,
-                    -- but cannot touch hs.*, io.*, os.*, or any filesystem / shell API.
-                    --
-                    -- Quick reference:
-                    --
-                    --   ms.settings.define({ key="k", type="toggle", default=false,
-                    --       label="My Toggle", onChange=function(v) end })
-                    --
-                    --   ms.settings.define({ key="k", type="slider", min=0, max=100,
-                    --       step=1, unit="ms", default=50, label="My Slider",
-                    --       onChange=function(v) end })
-                    --
-                    --   ms.settings.define({ key="k", type="seg",
-                    --       options={{label="A",value="a"},{label="B",value="b"}},
-                    --       default="a", label="My Seg", onChange=function(v) end })
-                    --
-                    --   ms.settings.define({ key="k", type="action",
-                    --       label="Row label", btnLabel="Run", danger=false,
-                    --       onAction=function() end })
-                    --
-                    --   ms.settings.define({ type="divider" })
-                    --   ms.settings.define({ type="groupLabel", label="My Group" })
-                    --
-                    --   ms.settings.get("k")          -- read current value
-                    --   ms.settings.set("k", value)   -- write + save + fire onChange
-                    --
-                    --   ms.menu.define({ id="sec", title="My Section", icon="⚔",
-                    --       items={ {type="toggle", key="k", ...}, ... } })
-                    --
-                    --   ms.features.hide("socd")          -- hide SOCD rows in Tools
-                    --   ms.features.hide("trackpad")      -- hide Trackpad row in Tools
-                    --   ms.features.hide("sensitivity")   -- hide Sensitivity slider in Tools
-                    --   ms.features.hide("independentBinds") -- hide Ind. Binds row in Tools
-                    --
                 -- END --
 
                 -- ms.settings.define(def) --
-                    -- Registers one setting or visual item in a panel section.
-                    -- Items appear in declaration order within their target section.
-                    --
-                    -- Optional field: section = "settings" (default) | "calibration"
-                    -- Optional field (type="group" only): items = { nested defs }
-                    --
                     ms.settings.define = function(def)
                         assert(type(def) == "table",
                             "ms.settings.define: argument must be a table")
                         local t = def.type
                         assert(_SETTING_TYPES[t],
                             "ms.settings.define: unknown type '" .. tostring(t) .. "'")
-                        -- Visual-only items need no key or value.
                         if t == "divider" or t == "groupLabel" then
                             table.insert(ms._userSettingDefs, def)
                             return
                         end
-                        -- Collapsible group: register each nested item then store the group.
                         if t == "group" then
                             assert(type(def.items) == "table",
                                 "ms.settings.define: 'items' is required for type 'group'")
@@ -1210,7 +1132,6 @@
                         end
                         ms._userSettingIndex[key] = def
                         table.insert(ms._userSettingDefs, def)
-                        -- Action items carry no stored value.
                         if t == "action" then return end
                         -- Seed with declared default; _applySettings will override with the
                         -- saved value once settings load from disk (after ms_macros.lua runs).
@@ -1223,9 +1144,6 @@
                 -- END --
 
                 -- ms.settings.get(key) --
-                    -- Returns the current value of a user setting, or its declared default.
-                    -- Safe to call inside ms.fn()-wrapped macro bodies at any time.
-                    --
                     ms.settings.get = function(key)
                         assert(type(key) == "string", "ms.settings.get: key must be a string")
                         local def = ms._userSettingIndex[key]
@@ -1241,9 +1159,6 @@
                 -- END --
 
                 -- ms.settings.set(key, value) --
-                    -- Programmatically updates a user setting.
-                    -- Validates the value, persists if save ~= false, and fires onChange.
-                    --
                     ms.settings.set = function(key, value)
                         assert(type(key) == "string", "ms.settings.set: key must be a string")
                         local def = ms._userSettingIndex[key]
@@ -1277,16 +1192,6 @@
                 -- END --
 
                 -- ms.menu.define(def) --
-                    -- Registers a custom panel section that appears below the Tools section.
-                    -- Sections appear in the order ms.menu.define is called.
-                    --
-                    --   id    (required) Unique identifier string.
-                    --   title (required) Header text shown in the panel.
-                    --   icon  (optional) Emoji prepended to the title in the panel header.
-                    --   items (required) Array of item definitions (same fields as
-                    --                    ms.settings.define entries). Each item with a key
-                    --                    is automatically reachable via ms.settings.get/set.
-                    --
                     ms.menu.define = function(def)
                         assert(type(def) == "table",
                             "ms.menu.define: argument must be a table")
@@ -1296,7 +1201,6 @@
                             "ms.menu.define: 'title' is required")
                         assert(type(def.items) == "table",
                             "ms.menu.define: 'items' must be a table")
-                        -- Register each keyed item so ms.settings.get/set works for them.
                         for _, item in ipairs(def.items) do
                             if type(item) == "table"
                                 and type(item.key) == "string" and #item.key > 0
@@ -1324,18 +1228,6 @@
                 -- END --
 
                 -- ms.features.hide(name) --
-                    -- Hides a built-in panel feature for this macro pack session.
-                    -- Purely cosmetic — the underlying feature remains functional.
-                    -- The item reappears when the call is removed and Hammerspoon reloads.
-                    --
-                    -- Accepted names:
-                    --   "sensitivity"        Camera Sensitivity slider in Tools
-                    --   "socd"               SOCD Cleaning + Mode rows in Tools
-                    --   "trackpad"           Trackpad / Pen Mode row in Tools
-                    --   "independentBinds"   Independent Binds row in Tools
-                    --
-                    -- Note: "sound" and "profiles" cannot be hidden.
-                    --
                     ms.features.hide = function(name)
                         if not _HIDEABLE_FEATURES[name] then
                             print("ms.features.hide: '" .. tostring(name)
@@ -1351,12 +1243,6 @@
                 -- END User Settings & Menu API --
 
                 -- Theme System --
-                --
-                -- Loads data/ms_theme.json and validates every value.
-                -- Safe to call multiple times; always resets to _themeDefaults first.
-                -- Called at startup after loadSettings(), and on demand via the
-                -- "Reload Theme" panel action.
-                --
                 ms.loadTheme = function()
                     if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                     for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
@@ -1366,7 +1252,6 @@
                     local data = hs.json.decode(content)
                     if not data then return end
                     ms._themeLoaded = true
-                    -- Validate hex color fields.
                     local colorKeys = {
                         "bg","surface","surface2","hover",
                         "accent","accentHi","success","dangerBg",
@@ -1379,7 +1264,6 @@
                             ms._theme[k] = data[k]
                         end
                     end
-                    -- Validate radius (0–40, integer).
                     if type(data.radius) == "number" then
                         ms._theme.radius = math.max(0, math.min(40, math.floor(data.radius)))
                     end
@@ -1418,9 +1302,6 @@
 
                 -- END Theme System --
 
-                -- Reads width and height from a PNG file's IHDR chunk (bytes 16–23).
-                -- Returns w, h as integers, or nil, nil on failure.
-                -- Supported aspect ratios for UIFC: 9:16, 16:9, 1:1, 3:4, 4:3.
                 local function _readPNGDims(path)
                     local f = io.open(path, "rb")
                     if not f then return nil, nil end
@@ -1438,7 +1319,6 @@
                 -- re-read the PNG on every show/resize.
                 ms._theme._uifcW = nil
                 ms._theme._uifcH = nil
-                -- Refresh the cache whenever the theme reloads.
                 local _origLoadTheme = ms.loadTheme
                 ms.loadTheme = function()
                     _origLoadTheme()
@@ -1454,24 +1334,6 @@
                 end
 
                 -- Capability Detection --
-                --
-                -- Returns true if the named feature is present and configured.
-                -- Safe to call from ms_macros.lua at any point after ms.macroMeta.
-                -- Use this to guard optional features so packs degrade gracefully
-                -- when a user hasn't configured something or on an older install.
-                --
-                -- Flags:
-                --   "theme"        data/ms_theme.json was loaded (custom values on disk)
-                --   "uifc"         theme has a UI Frame Cosmetic path and the PNG file exists
-                --   "sound"        sound is enabled and at least one file is indexed
-                --   "socd"         SOCD engine is currently enabled
-                --   "trackpad"     trackpad mode is currently enabled
-                --   "profiles"     at least one valid profile exists in profiles/
-                --   "userSettings" ms.settings.define API is present (version compat)
-                --   "userMenu"     ms.menu.define API is present (version compat)
-                --   "integrity"    ms_core.lua matches its trusted hash (system integrity check)
-                --   "hidinject"    hidinject binary is present in bin/
-                --
                 ms.has = function(feature)
                     local home = os.getenv("HOME") .. "/.hammerspoon"
 
@@ -1479,7 +1341,6 @@
                         return ms._themeLoaded == true
 
                     elseif feature == "uifc" then
-                        -- True if any per-window UIFC path is configured and the file exists.
                         local u = ms._theme and ms._theme.uifc
                         if type(u) ~= "table" then return false end
                         for _, v in pairs(u) do
@@ -1535,9 +1396,6 @@
 
                 -- Profile Management --
 
-                -- Builds ms_settings_default.json from registry declarations + ms.macroDefaults.
-                -- Called automatically when no default file exists. macroDefaults values take
-                -- precedence over library defaults; registry entries fill per-macro enabled state.
                 ms._buildDefaultSettings = function()
                     local data = {
                         sensitivity      = 1.5,
@@ -1583,7 +1441,6 @@
                     return (name:gsub('[/\\:*?"<>|%c]', "_"):gsub("^%s+", ""):gsub("%s+$", ""))
                 end
 
-                -- Moves a file by read-copy-delete (safe across mount points).
                 local function moveFile(src, dst)
                     local f = io.open(src, "r")
                     if not f then return false, "cannot read " .. src end
@@ -1595,8 +1452,6 @@
                     return true
                 end
 
-                -- Loads an ms_macros.lua in a minimal sandbox just to read macroMeta.
-                -- Returns the macroMeta table or nil on failure.
                 local function readMacroMeta(filePath)
                     local captured = {}
                     local dummyFn  = function() end
@@ -1657,8 +1512,6 @@
                     return captured.macroMeta
                 end
 
-                -- Returns a sorted list of profile names that have a saved ms_macros.lua.
-                -- Cached with a dirty flag; set ms._profilesDirty = true when profiles change.
                 ms._profilesDirty = true
                 local _profilesCache = nil
                 local function getProfiles()
@@ -1698,8 +1551,6 @@
                 -- which is defined below in the same scope.
                 local auditMacros
 
-                -- Archives the active lua file and its settings files into profiles/<currentName>/,
-                -- activates the target profile files, then reloads after 3 seconds.
                 local function switchProfile(targetName)
                     -- Security: audit the target profile before touching any files.
                     -- A file manually dropped into profiles/ bypasses importProfile's audit,
@@ -1755,27 +1606,10 @@
                     hs.timer.doAfter(3, function() hs.reload() end)
                 end
 
-                -- Pre-execution security audit.
-                -- Scans the raw Lua source for patterns that indicate tampering
-                -- or attempts to escape the runtime sandbox.
-                -- Comments are stripped in two passes before scanning:
-                --   Pass 1: block comments --[=*[ ... ]=*] (handles multi-line)
-                --   Pass 2: line comments  -- ...
                 -- A leading space is prepended so [^%w%.]-anchored patterns also
                 -- fire at position 1 of the cleaned source.
-                -- Returns a (possibly empty) list of violation strings.
                 auditMacros = function(src)
                     -- Lexer pass: neutralize string literals and comments --
-                        -- Replaces their *contents* with spaces so deny patterns below only
-                        -- fire on actual executable code tokens.  Newlines are preserved so
-                        -- the global-function line check at the end has stable line numbers.
-                        --
-                        -- Handles all four Lua token kinds:
-                        --   "..." / '...'          short strings (with \-escape sequences)
-                        --   [=*[...]=*]            long strings of any bracket level
-                        --   -- line comment
-                        --   --[=*[...]=*]          block comments of any bracket level
-                        --
                         -- Why this replaces the old two-pass regex approach:
                         -- The old stripper searched for "--" in raw source text without
                         -- understanding string literals.  A string like "--[[" would open a
@@ -1823,7 +1657,6 @@
                                         local eq = 0
                                         while src:sub(j + 1 + eq, j + 1 + eq) == "=" do eq = eq + 1 end
                                         if src:sub(j + 1 + eq, j + 1 + eq) == "[" then
-                                            -- Block comment --[=*[...]=*]
                                             local closer = "]" .. string.rep("=", eq) .. "]"
                                             local _, ce  = src:find(closer, j + 2 + eq, true)
                                             out[#out + 1] = blank(src:sub(i, ce or n))
@@ -1832,7 +1665,6 @@
                                         end
                                     end
                                     if not isLong then
-                                        -- Line comment: blank to end of line, keep the newline.
                                         local nl = src:find("\n", j)
                                         if nl then
                                             out[#out + 1] = blank(src:sub(i, nl - 1)) .. "\n"
@@ -1960,7 +1792,6 @@
                     return errs
                 end
 
-                -- Opens a file picker and imports the selected ms_macros.lua into profiles/.
                 local function importProfile()
                     ms.playSlot("alert")
                     hs.focus()
@@ -1995,7 +1826,6 @@
                             ms.alert("Could not create profile folder.", 3)
                             return
                         end
-                        -- Read source file in binary mode (same as sound import).
                         local f = io.open(selectedPath, "rb")
                         if not f then
                             if roblox then pcall(function() roblox:activate() end) end
@@ -2003,7 +1833,6 @@
                             return
                         end
                         local content = f:read("*all"); f:close()
-                        -- Security audit before writing anything.
                         local auditErrs = auditMacros(content)
                         if #auditErrs > 0 then
                             if roblox then pcall(function() roblox:activate() end) end
@@ -2011,7 +1840,6 @@
                                 .. table.concat(auditErrs, "\n  \xe2\x80\xa2 "), 8)
                             return
                         end
-                        -- Write to profiles folder in binary mode.
                         local dst    = profilesPath .. folderName .. "/ms_macros.lua"
                         local copied = false
                         local g = io.open(dst, "wb")
@@ -2037,7 +1865,6 @@
                         end)
                     end
 
-                    -- Warn before overwriting an existing saved profile.
                     if hs.fs.attributes(profilesPath .. folderName) then
                         ms.ui.modal({
                             title   = "Overwrite Profile?",
@@ -2056,9 +1883,6 @@
                     end
                 end
 
-                -- Exports the current active profile as a .mspkg zip package.
-                -- Bundles ms_macros.lua + ms_settings.json + optional defaults/theme/sounds
-                -- into ~/Downloads/<name>.mspkg and reveals it in Finder.
                 local function exportProfilePkg()
                     local sq = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
                     local name = sanitizeName((ms.macroMeta and ms.macroMeta.name) or "unnamed")
@@ -2068,25 +1892,20 @@
                     os.execute("mkdir -p " .. sq(archivePath))
                     os.execute("rm -rf " .. sq(tmpDir))
                     os.execute("mkdir -p " .. sq(tmpDir))
-                    -- ms_macros.lua (required)
                     local _, cpOk = hs.execute("/bin/cp " .. sq(macrosPath) .. " " .. sq(tmpDir .. "ms_macros.lua"))
                     if not hs.fs.attributes(tmpDir .. "ms_macros.lua") then
                         ms.alert("Export failed: could not read ms_macros.lua.", 4)
                         os.execute("rm -rf " .. sq(tmpDir)); return
                     end
-                    -- ms_settings.json (current user settings — keybinds, mods, sensitivity, etc.)
                     if hs.fs.attributes(jsonPath) then
                         hs.execute("/bin/cp " .. sq(jsonPath) .. " " .. sq(tmpDir .. "ms_settings.json"))
                     end
-                    -- ms_settings_default.json (optional)
                     if hs.fs.attributes(defaultPath) then
                         hs.execute("/bin/cp " .. sq(defaultPath) .. " " .. sq(tmpDir .. "ms_settings_default.json"))
                     end
-                    -- ms_theme.json (optional)
                     if hs.fs.attributes(themePath) then
                         hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(tmpDir .. "ms_theme.json"))
                     end
-                    -- All sounds referenced in ms.soundAssign that exist on disk.
                     -- Includes manually-dropped files, not just UI-imported ones.
                     local soundsDir = tmpDir .. "sounds/"
                     local soundsCopied = 0
@@ -2105,7 +1924,6 @@
                             end
                         end
                     end
-                    -- Zip the staging dir with relative paths
                     hs.execute("cd " .. sq(tmpDir) .. " && zip -r " .. sq(outPath) .. " . 2>/dev/null")
                     os.execute("rm -rf " .. sq(tmpDir))
                     if hs.fs.attributes(outPath) then
@@ -2120,8 +1938,6 @@
                     end
                 end
 
-                -- Imports a .mspkg zip package into profiles/.
-                -- Validates ms_macros.lua, copies optional assets, auto-adds bundled sounds.
                 local function importProfilePkg()
                     hs.focus()
                     local result = hs.dialog.chooseFileOrFolder(
@@ -2173,7 +1989,6 @@
 
                     local function _commit()
                         hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
-                        -- ms_macros.lua
                         local dst = profilesPath .. folderName .. "/ms_macros.lua"
                         local copied = false
                         local gf = io.open(dst, "wb")
@@ -2187,22 +2002,18 @@
                             ms.alert("Import failed: could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if needed.", 5)
                             os.execute("rm -rf " .. sq(tmpDir)); return
                         end
-                        -- ms_settings.json (optional)
                         local settingsSrc = tmpDir .. "ms_settings.json"
                         if hs.fs.attributes(settingsSrc) then
                             hs.execute("/bin/cp " .. sq(settingsSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
                         end
-                        -- ms_settings_default.json (optional)
                         local defSrc = tmpDir .. "ms_settings_default.json"
                         if hs.fs.attributes(defSrc) then
                             hs.execute("/bin/cp " .. sq(defSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
                         end
-                        -- ms_theme.json (optional)
                         local themeSrc = tmpDir .. "ms_theme.json"
                         if hs.fs.attributes(themeSrc) then
                             hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
                         end
-                        -- sounds/ (optional) — copy into SoundLib, skip existing, track in importedSounds
                         local soundsDir = tmpDir .. "sounds/"
                         local soundsAdded = {}
                         if hs.fs.attributes(soundsDir) then
@@ -2250,7 +2061,6 @@
                         end)
                     end
 
-                    -- Warn before overwriting an existing saved profile.
                     if hs.fs.attributes(profilesPath .. folderName) then
                         ms.ui.modal({
                             title   = "Overwrite Profile?",
@@ -2276,8 +2086,6 @@
 
                 ms.integrity = {}
 
-                -- Synchronously compute the SHA-256 of `path` via shasum(1).
-                -- Returns the 64-char lowercase hex string, or nil on failure.
                 ms.integrity.hashFile = function(path)
                     local escaped = "'" .. path:gsub("'", "'\\'") .. "'"
                     local out = hs.execute("shasum -a 256 " .. escaped .. " 2>/dev/null")
@@ -2285,8 +2093,6 @@
                     return nil
                 end
 
-                -- Read the locally-stored trusted hash from .ms_trusted_hash.
-                -- Returns the 64-char lowercase hex string, or nil if no file exists.
                 ms.integrity.readTrustedHash = function()
                     local f = io.open(trustedHashPath, "r")
                     if not f then return nil end
@@ -2295,21 +2101,16 @@
                     return (h and #h == 64) and h:lower() or nil
                 end
 
-                -- Write `hash` to .ms_trusted_hash. Returns true on success.
                 ms.integrity.writeTrustedHash = function(hash)
                     local f = io.open(trustedHashPath, "w")
                     if f then f:write(hash .. "\n"); f:close(); return true end
                     return false
                 end
 
-                -- Delete .ms_trusted_hash, disabling tamper protection until re-trusted.
-                -- Returns true on success, false if the file didn't exist or couldn't be removed.
                 ms.integrity.deleteTrustedHash = function()
                     return os.remove(trustedHashPath) ~= nil
                 end
 
-                -- Compare the current ms_core.lua hash to the stored trusted baseline.
-                -- Returns: status ("trusted"|"mismatch"|"uninitialized"), currentHash, trustedHash
                 -- Non-blocking: always returns the last-known cached value immediately and
                 -- kicks off a background hs.task hash when the 60-second window expires.
                 -- The task callback handles mismatch reloads and UI badge refreshes so the
@@ -2319,12 +2120,9 @@
                 ms.integrity.invalidateCache = function() _intCache.t = 0 end
                 ms.integrity.check = function()
                     local now = os.time()
-                    -- Fast path: cache is fresh.
                     if _intCache.status ~= nil and (now - _intCache.t) < 60 then
                         return _intCache.status, _intCache.cur, _intCache.trusted
                     end
-                    -- Slow path: cache cold or stale. Launch an async hash task so the
-                    -- main thread never blocks. If a task is already running, skip.
                     if not _intHashInProgress then
                         _intHashInProgress = true
                         local _t = hs.task.new("/usr/bin/shasum", function(_, out, _)
@@ -2340,12 +2138,9 @@
                         end, {"-a", "256", corePath})
                         if _t then _t:start() else _intHashInProgress = false end
                     end
-                    -- Return stale value (or "uninitialized" if cache is completely cold)
-                    -- while the background task runs.
                     return _intCache.status or "uninitialized", _intCache.cur, _intCache.trusted
                 end
 
-                -- Seal the current ms_core.lua as the trusted baseline.
                 ms.integrity.trustCurrent = function()
                     local hash = ms.integrity.hashFile(corePath)
                     if not hash then
@@ -2361,9 +2156,6 @@
                     return false
                 end
 
-                -- Fetch MANIFEST.json from ms._updateManifestURL, verify the SHA-256 of the
-                -- downloaded ms_core.lua against it, back up the current file, write the new one,
-                -- update .ms_trusted_hash, then reload.  All network I/O is async.
                 ms.integrity.update = function()
                     local manifestURL = ms._updateManifestURL
                     if not manifestURL or manifestURL == "" then
@@ -2415,10 +2207,8 @@
                             if _sf then _sf:write(manifest.signature); _sf:close() end
                             hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
                             os.remove(_sigPath .. ".b64")
-                            -- Write the signed message (the sha256 hex string).
                             local _mf = io.open(_msgPath, "w")
                             if _mf then _mf:write(manifest.sha256:lower()); _mf:close() end
-                            -- Verify — capture output so errors surface in the alert.
                             local _out, _ok = hs.execute(
                                 "openssl dgst -sha256 -verify '" .. _keyPath ..
                                 "' -signature '" .. _sigPath ..
@@ -2462,7 +2252,6 @@
                                     .. (actualHash or "?"):sub(1,16) .. "…)"
                                     .. " — installing anyway and re-seeding trust from actual file.")
                             end
-                            -- Back up current ms_core.lua.
                             local timestamp  = os.date("%Y-%m-%d_%H%M")
                             local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
                             local bOk = moveFile(corePath, backupFile)
@@ -2471,7 +2260,6 @@
                                 ms.alert("Update failed: could not back up ms_core.lua.", 4)
                                 return
                             end
-                            -- Move verified temp into place.
                             local mOk = moveFile(tmpPath, corePath)
                             if not mOk then
                                 moveFile(backupFile, corePath)  -- restore
@@ -2489,9 +2277,6 @@
                 -- END System Integrity --
 
                 -- ms.showGuardian --
-                -- Shows the tamper-protection panel as a preview/test with the given
-                -- (or auto-generated placeholder) hash snippets.  Useful for verifying
-                -- theme application and panel layout without triggering a real mismatch.
                 ms.showGuardian = function(trusted, current)
                     trusted = trusted or ("a3f8" .. string.rep("0", 12))
                     current = current or ("9c1e" .. string.rep("f", 12))
@@ -2544,7 +2329,6 @@
                     end)
                 end
 
-                -- Returns the effective bind config for an id, accounting for trackpad mode overrides
                 ms.effectiveBind = function(id)
                     if ms.trackpadMode and ms.trackpadBindOverrides and ms.trackpadBindOverrides[id] then
                         return ms.trackpadBindOverrides[id]
@@ -2580,7 +2364,6 @@
 
                         -- Both held — resolve
                         if mode == "neutral" then
-                            -- Release both physically
                             local negCode = socdKeyCodes[neg]
                             local posCode = socdKeyCodes[pos]
                             local evNeg = hs.eventtap.event.newKeyEvent({}, negCode, false)
@@ -2592,7 +2375,6 @@
                         elseif mode == "lastWins" then
                             -- Already handled at keydown time — no extra action needed here
                         elseif mode == "firstWins" then
-                            -- Suppress the second key — handled at keydown time
                         end
                     end
 
@@ -2622,18 +2404,15 @@
                                     local opp = (key == "a") and "d" or "a"
                                     if ms._socdHeld[opp] then
                                         if mode == "lastWins" then
-                                            -- Release the opposite key
                                             local oppCode = socdKeyCodes[opp]
                                             local ev = hs.eventtap.event.newKeyEvent({}, oppCode, false)
                                             ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
                                             ev:post()
                                             ms.keytrack[oppCode] = false
                                         elseif mode == "firstWins" then
-                                            -- Swallow this key, first key keeps priority
                                             ms._socdHeld[key] = false
                                             return true
                                         elseif mode == "neutral" then
-                                            -- Release both
                                             local oppCode = socdKeyCodes[opp]
                                             local ev1 = hs.eventtap.event.newKeyEvent({}, oppCode, false)
                                             local ev2 = hs.eventtap.event.newKeyEvent({}, keyCode, false)
@@ -2675,7 +2454,6 @@
                                 end
 
                             else
-                                -- Key released
                                 ms._socdHeld[key] = false
 
                                 -- In lastWins: when you release the last-pressed key,
@@ -2725,7 +2503,6 @@
                 -- only. It is no longer wired to ms.menu — Section 10 (ms.ui) replaces it with
                 -- the webview Settings panel. Open it via the menu-bar icon or Alt+P.
                 local _legacyNativeMenuBuilder = function()
-                    -- Build ordered group lists from the registry.
                     local mainBindDefs, optionalBindDefs = {}, {}
                     for _, id in ipairs(ms.registry._defList or {}) do
                         local def = ms.registry._defs[id]
@@ -2754,7 +2531,6 @@
                         return bindStr(ms.effectiveBind(id))
                     end
 
-                    -- Returns a flat ordered list of {item, depth} for all sub-items of parentId.
                     local function getSubItems(parentId, depth)
                         depth = depth or 0
                         local result = {}
@@ -2829,7 +2605,6 @@
                                 end
 
                                 if parsed then
-                                    -- Interactive conflict check: block save if a sibling already uses this input.
                                     local conflictId = ms.bind.siblingConflict(bind.id, parsed)
                                     if conflictId then
                                         ms.playSlot("alert")
@@ -2910,7 +2685,6 @@
                                 end
                                 local keyStr = hs.keycodes.map[keyCode]
                                 if keyStr then
-                                    -- Interactive modifier conflict check.
                                     local conflictId = ms.bind.siblingModConflict(item.id, keyStr)
                                     if conflictId then
                                         ms.playSlot("alert")
@@ -3054,8 +2828,6 @@
                     end
 
                     -- Section builder --
-                    -- Builds a submenu for a given set of bind defs (main or optional).
-                    -- Contains: toggle+state list, separator, Rebind submenu.
 
                     local function buildBindSection(defs)
                         local section = {}
@@ -3063,7 +2835,6 @@
 
                         for _, bind in ipairs(defs) do
                             local enabled = ms.binds[bind.id]
-                            -- Toggle entry
                             table.insert(section, {
                                 title = (enabled and "✓ " or "✗ ") .. bind.label .. "  " .. currentBindStr(bind.id),
                                 fn = function()
@@ -3074,7 +2845,6 @@
                                     ms.alert(bind.label .. ": " .. (ms.binds[bind.id] and "ON" or "OFF"), 2, true)
                                 end
                             })
-                            -- Sub-items indented under each bind
                             local subs = getSubItems(bind.id)
                             if #subs > 0 then
                                 for _, entry in ipairs(subs) do
@@ -3089,7 +2859,6 @@
                                     })
                                 end
                             end
-                            -- Rebind entry for this bind
                             table.insert(rebindSub, { title = "Rebind: " .. bind.label, fn = makeRebindFn(bind) })
                             table.insert(rebindSub, {
                                 title = "Set Cooldown: " .. bind.label,
@@ -3364,7 +3133,6 @@
                             fn = function()
                                 ms.playSlot("alert")
                                 hs.focus()
-                                -- Strip trailing slash before testing attributes
                                 local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
                                 local result = hs.dialog.chooseFileOrFolder(
                                     "Select one or more sound files to add to your library",
@@ -3381,7 +3149,6 @@
                                 if #paths == 0 then return end
                                 result = paths
 
-                                -- Ensure sounds directory exists
                                 if not hs.fs.attributes(slibDir) then
                                     hs.execute("mkdir -p '" .. SoundLib .. "'")
                                 end
@@ -3399,10 +3166,7 @@
                                         table.insert(failed, srcPath); goto nextFile
                                     end
                                     local dst = SoundLib .. filename
-                                    -- Skip copy when the file is already in the sounds folder.
                                     if srcPath ~= dst then
-                                        -- Primary: io.open read+write (works for any path
-                                        -- Hammerspoon has read access to).
                                         local copied = false
                                         local f = io.open(srcPath, "rb")
                                         if f then
@@ -3464,7 +3228,6 @@
                             end
                         })
                         table.insert(sub, { title = "-" })
-                        -- Per-event sound selection
                         local slots = {
                             { id = "startup",      label = "Loading Screen Start" },
                             { id = "load",         label = "Loading Screen End"   },
@@ -3480,9 +3243,6 @@
                             { id = "settingsOpen", label = "Settings Open"        },
                             { id = "settingsClose",label = "Settings Close"       },
                         }
-                        -- Sound list from discovered + imported files.
-                        -- Reads from ms.sounds which is populated by _discoverSounds() at
-                        -- the top of this function and includes everything in ms.importedSounds.
                         local soundNames = {}
                         for name in pairs(ms.sounds or {}) do table.insert(soundNames, name) end
                         table.sort(soundNames)
@@ -3490,7 +3250,6 @@
                             local assigned = ms.soundAssign and ms.soundAssign[slot.id]
                             local display  = assigned or "off"
                             local picker   = {}
-                            -- None / off option
                             table.insert(picker, {
                                 title = (not assigned and "✓ " or "  ") .. "None",
                                 fn = function()
@@ -3685,8 +3444,6 @@
                         })
                         return sub
                     end
-
-                    -- Keybinds top-level submenu
 
                     local keybindSubmenu = {
                         { title = "Main",              menu = buildBindSection(mainBindDefs) },
@@ -4081,8 +3838,6 @@
                     ms.keytrack[61] = flags.ctrl
                     ms.keytrack[55] = flags.cmd
                     ms.keytrack[54] = flags.cmd
-                    -- Emit discrete down/up events to the input monitor for each
-                    -- modifier that changed state.
                     if ms.dev and ms.dev._onKeyEvent then
                         local now = {
                             shift = flags.shift and true or false,
@@ -4175,7 +3930,6 @@
             end):start()
 
             -- Macro Watcher tracing helpers --
-                -- Fires only when the Macro Monitor panel is open; no-op otherwise.
                 local _camMoveAccum  = 0   -- consecutive cam.move calls awaiting flush
                 local _traceSuppress = false  -- true while ms.type is dispatching internally
 
@@ -4346,7 +4100,6 @@
                             if b == 2 then ms.keytrack[998] = false end
                         end
 
-                        -- Always log to the input monitor regardless of BindValidity.
                         if ms.dev and ms.dev._onMouseEvent then
                             local _mp = hs.mouse.absolutePosition()
                             pcall(ms.dev._onMouseEvent, b, isDown,
@@ -4355,7 +4108,6 @@
 
                         if BindValidity ~= 1 then return false end
 
-                        -- Only fire macro callbacks on down events.
                         if not isDown then return false end
 
                         local callbackData = ms._mouseCallbacks[b]
@@ -4382,15 +4134,6 @@
 
 
 
-            -- Unified mouse action function. Replaces ms.click, ms.clickMP, and ms.rawMouseButton.
-            -- Window-relative coordinates are in REF space (1680×1044) and scaled to the actual
-            -- window size by default. Pass the global Unscaled flag between the reference and the
-            -- first coordinate to use raw pixel window offsets instead:
-            --
-            --   ms.Mouse(Click,  Left,  WindowTL, 900, 660)          -- REF-space (scaled)
-            --   ms.Mouse(Click,  Left,  WindowTL, Unscaled, 445, 37) -- raw pixels from TL
-            --   ms.Mouse(Drag,   Left,  Absolute, 100, 100, 300, 300)
-            --   ms.Mouse(Move,   Left,  Mouse,    0,   0)
             ms.Mouse = function(operation, button, reference, ...)
                 local OPS  = { Move=true, Click=true, DoubleClick=true,
                                TripleClick=true, Drag=true, Press=true, Release=true }
@@ -4410,8 +4153,6 @@
                 assert(BTNS[button] ~= nil, "ms.Mouse: unknown button '"      .. tostring(button)     .. "'")
                 assert(REFS[reference],    "ms.Mouse: unknown reference '"   .. tostring(reference)  .. "'")
 
-                -- Unpack trailing args: [Unscaled,] x1, y1 [, x2, y2 [, hidinject]]
-                -- The optional Unscaled boolean flag is detected by type at position 1.
                 local unscaled, x1, y1, x2, y2, hidinject
                 local _a, _b, _c, _d, _e, _f = ...
                 if type(_a) == "boolean" then
@@ -4425,7 +4166,6 @@
                 local btn  = BTNS[button]
                 local _app = hidinject and hs.application.get("Roblox") or nil
 
-                -- Resolve (x, y) to absolute screen pixel coordinates.
                 local function resolve(x, y) return ms.resolvePoint(x, y, reference, unscaled) end
 
                 local ax1, ay1 = resolve(x1, y1)
@@ -4438,7 +4178,6 @@
                 local pos1 = { x = ax1, y = ay1 }
                 local pos2 = { x = ax2, y = ay2 }
 
-                -- Event types for this button.
                 local downT, upT, dragT
                 if btn == 0 then
                     downT = hs.eventtap.event.types.leftMouseDown
