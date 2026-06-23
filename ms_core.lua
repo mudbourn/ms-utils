@@ -7629,7 +7629,13 @@ YQIDAQAB
                   frame={ x=36, y=83, w=_lBarMax-22, h=14 },
                   textFont="Helvetica Neue", textSize=11,
                   textColor=(ms._skipDevPrewarm and clrText or clrText2),
-                  textAlignment="left" }
+                  textAlignment="left" },
+                -- 11: active profile name (right-aligned in the title row)
+                { type="text",
+                  text=(ms.macroMeta and ms.macroMeta.name) or "",
+                  frame={ x=16, y=15, w=lw-32, h=18 },
+                  textFont="Helvetica Neue", textSize=10,
+                  textColor=clrText2, textAlignment="right" }
             )
             _lCanvas:show()
             ms.playSlot("startup")  -- loading sequence start sound
