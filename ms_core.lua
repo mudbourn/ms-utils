@@ -3438,6 +3438,7 @@
                         local slots = {
                             { id = "startup",      label = "Loading Screen Start" },
                             { id = "load",         label = "Loading Screen End"   },
+                            { id = "launch",       label = "Launch Announcement"  },
                             { id = "alert",        label = "Alert / Notice"       },
                             { id = "enabled",      label = "Macros Enabled"       },
                             { id = "disabled",     label = "Macros Disabled"      },
@@ -5072,6 +5073,7 @@
             local _slotDefaults = {
                 startup = { "LoadStart", "Load Start" },
                 load    = { "LoadEnd",   "Load End"   },
+                launch  = { "Launch" },
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
@@ -7932,6 +7934,8 @@
             hs.timer.doAfter(0.4, function()
                 -- Open the sound gate for all future sounds.
                 ms._startupSoundDone = true
+                -- Launch sound plays with the first toast.
+                pcall(function() ms.playSlot("launch") end)
                 -- 1. Settings notice (immediate)
                 ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true)
                 -- 2. Library creator \xe2\x80\x94 after first toast fades
