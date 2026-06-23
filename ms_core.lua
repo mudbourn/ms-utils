@@ -2335,9 +2335,15 @@
                             local _sigPath = _tmpDir .. "upd_sig.bin"
                             local _msgPath = _tmpDir .. "upd_msg.bin"
                             os.execute("mkdir -p '" .. _tmpDir .. "'")
-                            -- Write public key.
+                            -- Write public key — strip leading whitespace from each line
+                            -- because Lua long-string indentation would otherwise produce
+                            -- a PEM file with leading spaces that openssl refuses to parse.
+                            local _keyContent = ms._updatePublicKey
+                                :gsub("^[%s\n]+", "")   -- trim leading blank/space
+                                :gsub("\n[%s]+", "\n")  -- strip indent from every line
+                                :gsub("[%s]+$", "\n")   -- normalise trailing whitespace
                             local _kf = io.open(_keyPath, "w")
-                            if _kf then _kf:write(ms._updatePublicKey); _kf:close() end
+                            if _kf then _kf:write(_keyContent); _kf:close() end
                             -- Decode base64 signature to binary.
                             -- Use macOS native `base64 -D` — openssl base64 silently
                             -- fails to write its -out file on macOS LibreSSL.
