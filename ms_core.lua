@@ -7153,7 +7153,7 @@
                 local function _buildWatcherPanel()
                     local screen = hs.screen.mainScreen():frame()
                     local w, h   = 360, 640
-                    local x = screen.x + screen.w - w - 20
+                    local x = screen.x + screen.w - w - 50
                     local y = screen.y + 44
                     local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
                         { developerExtrasEnabled = true }, _ucWatcher)
@@ -7256,7 +7256,7 @@
                 local function _buildKeysPanel()
                     local screen = hs.screen.mainScreen():frame()
                     local w, h   = 360, 640
-                    local x = screen.x + screen.w - w - 20
+                    local x = screen.x + screen.w - w - 80
                     local y = screen.y + 68
                     local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
                         { developerExtrasEnabled = true }, _ucKeys)
@@ -7444,7 +7444,7 @@
                 local function _buildWindowPanel()
                     local screen = hs.screen.mainScreen():frame()
                     local w, h   = 360, 480
-                    local x = screen.x + screen.w - w - 20
+                    local x = screen.x + screen.w - w - 110
                     local y = screen.y + 68
                     local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
                         { developerExtrasEnabled = true }, _ucWindow)
