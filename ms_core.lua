@@ -769,8 +769,14 @@ YQIDAQAB
                             local num = tonumber(val)
                             if num and num >= 0.1 and num <= 4 then data.sensitivity = num end
                         elseif key == "clickLevel" or key == "frameLevel" then
+                            -- Legacy key — migrate into user settings on next save.
                             local num = tonumber(val)
-                            if num and num >= 1 and num <= 4 then data.frameLevel = num end
+                            if num and num >= 1 and num <= 4 then
+                                data.user = data.user or {}
+                                if not data.user.clickLevel then
+                                    data.user.clickLevel = num
+                                end
+                            end
                         elseif key == "binds" then
                             local decoded = hs.json.decode(val)
                             if decoded then
@@ -821,7 +827,6 @@ YQIDAQAB
                     if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                     local data = {
                         sensitivity      = CUR_CAM_SENS,
-                        frameLevel       = clickLevel,
                         trackpadMode     = ms.trackpadMode,
                         socdEnabled      = ms.socdEnabled,
                         socdMode         = ms.socdMode or "lastWins",
@@ -1255,18 +1260,6 @@ YQIDAQAB
                     ms._hiddenFeatures[name] = true
                 end
 
-                -- ── ms.setClickLevel(n) ────────────────────────────────────────────────────────
-                -- Plain setter for the system clickLevel variable. Valid values: 1, 2, 3, 4.
-                -- Typically called from a ms.settings.define onChange callback but can be
-                -- called from anywhere (ms.fn() macro bodies, timers, etc.).
-                --
-                ms.setClickLevel = function(n)
-                    n = tonumber(n)
-                    if n and (n == 1 or n == 2 or n == 3 or n == 4) then
-                        clickLevel = n
-                    end
-                end
-
                 -- ── END User Settings & Menu API ─────────────────────────────────────────────────────────────────────
 
                 -- ── Theme System ─────────────────────────────────────────────────────
@@ -1460,7 +1453,6 @@ YQIDAQAB
                 ms._buildDefaultSettings = function()
                     local data = {
                         sensitivity      = 1.5,
-                        frameLevel       = 3,
                         trackpadMode     = false,
                         socdEnabled      = false,
                         socdMode         = "lastWins",
@@ -5764,16 +5756,6 @@ YQIDAQAB
                     ms.ui.refresh()
                 end,
 
-                setClickLevel = function(data)
-                    local num = tonumber(data.value)
-                    if num and (num == 1 or num == 2 or num == 3 or num == 4) then
-                        clickLevel = num
-                        ms.saveSettings()
-                        ms.playSlot("update")
-                    end
-                    ms.ui.refresh()
-                end,
-
                 setTrackpadMode = function(data)
                     ms.trackpadMode = (data.value == true)
                     ms.saveSettings()
@@ -7482,7 +7464,6 @@ YQIDAQAB
             -- Values already saved in ms_settings.json always take priority and are never overwritten.
             ms.macroDefaults = {
                 sensitivity  = 1.5,
-                frameLevel   = 3,
                 trackpadMode = false,
                 socdEnabled  = false,
                 socdMode     = "lastWins",
