@@ -77,7 +77,6 @@
                     end
                 end
             -- END --
-
         -- END --
 
         -- 1. Prefix Variables & State Tracking --
@@ -147,13 +146,8 @@
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
 
             -- RSA-2048 public key used to verify MANIFEST.json signatures.
-            -- The matching private key lives in GitHub Secrets (MS_SIGNING_KEY) and
-            -- is never stored in this repository.  GitHub Actions signs every
-            -- MANIFEST.json automatically whenever ms_core.lua is pushed to main.
-            -- Replace this placeholder after running the one-time key generation:
-            --   openssl genrsa -out private.pem 2048
-            --   openssl rsa -in private.pem -pubout -out public.pem
-            --   → paste public.pem content here, add private.pem to GitHub Secrets
+            -- Matching private key: GitHub Secrets (MS_SIGNING_KEY). Rotation
+            -- procedure: docs/DOCS_MAC.md §20, "Rotating the signing key".
             ms._updatePublicKey = [[
             -----BEGIN PUBLIC KEY-----
             MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pyxWISHUScKsmK0fyqA
@@ -379,7 +373,6 @@
                     end
                 end)
             -- END --
-
         -- END --
 
         -- 2. Conditions, States, and UI Elements--
@@ -4040,7 +4033,6 @@
                     end}
                 end
             -- END --
-
         -- END --
 
         -- 4. Mouse Actions -
@@ -6704,7 +6696,6 @@
                     end)
                 end
             -- END --
-
         -- END --
 
         -- 12. Developer Panels --
@@ -7935,6 +7926,5 @@
                 notice = 1
             end
         -- END --
-
     -- END Startup Executions --
 -- END Core System --
