@@ -2509,6 +2509,35 @@
                     ),
                 );
 
+                // Log archive limit
+                body.appendChild(
+                    buildSlider(
+                        "Log archive limit",
+                        "Maximum number of dev log files kept in ms_dev_logs/",
+                        0,
+                        50,
+                        1,
+                        null,
+                        S.devArchiveLimit ?? 15,
+                        (v) =>
+                            sendToHost({
+                                action: "setDevArchiveLimit",
+                                value: v,
+                            }),
+                        [
+                            {
+                                icon: "\u21ba",
+                                label: "Reset to default",
+                                action: () =>
+                                    sendToHost({
+                                        action: "setDevArchiveLimit",
+                                        value: 15,
+                                    }),
+                            },
+                        ],
+                    ),
+                );
+
                 body.appendChild(divider());
 
                 // System Integrity

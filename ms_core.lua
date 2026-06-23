@@ -216,7 +216,32 @@ YQIDAQAB
                 _activeButtons   = {},  -- button number → true while held
                 _coordMode       = "screen",  -- screen | window | ref | screenCenter
             }
-            local _devLogPath = os.getenv("HOME") .. "/Documents/ms_dev.log"
+            local _devLogDir  = os.getenv("HOME") .. "/Documents/"
+            local _devLogPath = _devLogDir .. "ms_dev.log"
+            local _devArchDir = _devLogDir .. "ms_dev_logs/"
+            do
+                -- On every reload, archive the previous session's log so each
+                -- session starts clean and history never bloats the file.
+                if hs.fs.attributes(_devLogPath) then
+                    hs.fs.mkdir(_devArchDir)
+                    local _stamp = os.date("%Y-%m-%d_%H%M%S")
+                    os.rename(_devLogPath, _devArchDir .. "ms_dev_" .. _stamp .. ".log")
+                    -- Prune: keep only the 20 most recent archives.
+                    local _list = {}
+                    for _name in hs.fs.dir(_devArchDir) do
+                        if _name:match("^ms_dev_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$") then
+                            table.insert(_list, _name)
+                        end
+                    end
+                    table.sort(_list)  -- lexicographic == chronological for this format
+                    local _limit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
+                        and ms._devArchiveLimit or 15
+                    while #_list > _limit do
+                        os.remove(_devArchDir .. _list[1])
+                        table.remove(_list, 1)
+                    end
+                end
+            end
             local _devBusy = false
             local _devLastConsoleType = nil  -- last key/mouse/macro type sent; gates repeat suppression
 
@@ -727,6 +752,10 @@ YQIDAQAB
                     if data.soundAssign      then ms.soundAssign     = data.soundAssign      end
                     if data.importedSounds   then ms.importedSounds  = data.importedSounds   end
                     if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
+                    if data.devArchiveLimit ~= nil then
+                        local n = tonumber(data.devArchiveLimit)
+                        if n and n >= 0 and n <= 50 then ms._devArchiveLimit = math.floor(n) end
+                    end
                     if data.macros then
                         for id, entry in pairs(data.macros) do
                             if entry.enabled ~= nil then
@@ -854,6 +883,7 @@ YQIDAQAB
                         soundAssign      = ms.soundAssign,
                         importedSounds   = ms.importedSounds or {},
                         skipDevPrewarm   = ms._skipDevPrewarm or false,
+                        devArchiveLimit  = ms._devArchiveLimit or 15,
                         user             = ms._userSettingVals or {},
                         macros = {},
                     }
@@ -5770,6 +5800,7 @@ YQIDAQAB
                     userMenus               = userMenus,
                     hiddenFeatures          = ms._hiddenFeatures,
                     preloadDevTools         = not (ms._skipDevPrewarm or false),
+                    devArchiveLimit         = ms._devArchiveLimit or 15,
                     theme                   = themeOut,
                 }
             end
@@ -5867,6 +5898,16 @@ YQIDAQAB
                     ms._skipDevPrewarm = not (data.value and true or false)
                     ms.saveSettings()
                     ms.playSlot("update")
+                    ms.ui.refresh()
+                end,
+
+                setDevArchiveLimit = function(data)
+                    local n = tonumber(data.value)
+                    if n and n >= 0 and n <= 50 then
+                        ms._devArchiveLimit = math.floor(n)
+                        ms.saveSettings()
+                        ms.playSlot("update")
+                    end
                     ms.ui.refresh()
                 end,
 
@@ -7661,7 +7702,8 @@ YQIDAQAB
                 ms.binds[id] = def.enabled
             end
         end
-        ms._skipDevPrewarm = false  -- overridden by loadSettings() if previously saved
+        ms._skipDevPrewarm   = false  -- overridden by loadSettings() if previously saved
+        ms._devArchiveLimit   = 15     -- overridden by loadSettings() if previously saved
         ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
         ms._discoverSounds()
         ms.loadSettings()
