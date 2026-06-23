@@ -3188,6 +3188,7 @@ YQIDAQAB
                         local slots = {
                             { id = "startup",      label = "Loading Screen Start" },
                             { id = "load",         label = "Loading Screen End"   },
+                            { id = "launch",       label = "Launch Announcement"  },
                             { id = "alert",        label = "Alert / Notice"       },
                             { id = "enabled",      label = "Macros Enabled"       },
                             { id = "disabled",     label = "Macros Disabled"      },
@@ -7534,32 +7535,35 @@ YQIDAQAB
             }
         end
 
-        -- Plays the load-complete sound and shows the startup toasts.  Fires once
+        -- Plays the load-complete sounds and shows the startup toasts.  Fires once
         -- (guarded by _loadAnnounced) — triggered from the canvas delete callback
-        -- so toasts appear immediately after the loading screen is gone.
+        -- so it runs immediately after the loading screen is gone.
         -- doAfter(7.0) below acts as a fallback in case the canvas never fades.
         _announceLoad = function()
             if _loadAnnounced then return end
             _loadAnnounced = true
-            pcall(function()
-                ms.playSlot("load")
-                -- Suppress alert chimes while the toasts post so startup plays only
-                -- the single load sound.  Gate opens below after all alerts are queued.
-                ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 6)
-                if ms.macroMeta then
-                    local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
-                    if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
-                    if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
-                    ms.alert(msg, 6)
-                end
-                ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 6)
+            -- Load-end sound fires the instant the canvas disappears.
+            pcall(function() ms.playSlot("load") end)
+            -- Offset the launch sound and toasts slightly so they don't overlap
+            -- with the load-end sound.
+            hs.timer.doAfter(0.4, function()
+                -- Open the sound gate so the launch slot and all future sounds play.
+                ms._startupSoundDone = true
+                pcall(function()
+                    ms.playSlot("launch")  -- Launch.wav plays with the toasts
+                    ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 6, true)
+                    if ms.macroMeta then
+                        local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
+                        if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
+                        if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
+                        ms.alert(msg, 6, true)
+                    end
+                    ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 6, true)
+                end)
+                -- Loading complete: allow macros to run and activate them if Roblox is already focused.
+                ms._loadComplete = true
+                if ms._robloxActive then ms.setMacros(1, true) end
             end)
-            -- Open the sound gate now that the startup sequence is fully done.
-            -- All subsequent ms.alert() and ms.playSlot() calls play normally.
-            ms._startupSoundDone = true
-            -- Loading complete: allow macros to run and activate them if Roblox is already focused.
-            ms._loadComplete = true
-            if ms._robloxActive then ms.setMacros(1, true) end
         end
 
         _lFadeOut = function()
