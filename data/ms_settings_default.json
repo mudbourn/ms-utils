@@ -1,73 +1,42 @@
 {
-  "socdMode" : "lastWins",
-  "frameLevel" : 4,
-  "soundEnabled" : true,
-  "importedSounds" : {
-    "load" : "Launch",
-    "interact" : "Interact",
-    "update" : "Update",
-    "reset" : "Reset",
-    "settingsOpen" : "SettingsOpen",
-    "enabled" : "MacrosOn",
-    "settingsClose" : "SettingsClose",
-    "back" : "Back",
-    "alert" : "Alert",
-    "disabled" : "MacrosOff",
-    "hover" : "Hover"
+  "macros" : {
+    "waitAndPress" : {
+      "enabled" : true
+    },
+    "helloWorld" : {
+      "enabled" : true
+    },
+    "repeatLoop" : {
+      "enabled" : true
+    },
+    "mouseClickTest" : {
+      "enabled" : true
+    },
+    "cameraSweep" : {
+      "enabled" : true
+    },
+    "keyHoldTest" : {
+      "enabled" : true
+    },
+    "spawnAlt" : {
+      "enabled" : false
+    },
+    "stateDump" : {
+      "enabled" : true
+    }
   },
-  "sensitivity" : 1.5,
+  "independentBinds" : false,
   "soundVolume" : 100,
   "trackpadHoldKeys" : {
     "right" : "j",
     "left" : "n"
   },
+  "socdMode" : "lastWins",
+  "sensitivity" : 1.5,
+  "soundEnabled" : true,
   "trackpadMode" : false,
-  "soundAssign" : {
-    "load" : "Launch",
-    "interact" : "Interact",
-    "update" : "Update",
-    "reset" : "Reset",
-    "settingsOpen" : "SettingsOpen",
-    "enabled" : "MacrosOn",
-    "settingsClose" : "SettingsClose",
-    "back" : "Back",
-    "alert" : "Alert",
-    "disabled" : "MacrosOff",
-    "hover" : "Hover"
-  },
-  "socdEnabled" : false,
-  "independentBinds" : false,
-  "macros" : {
-    "quickSG" : {
-      "enabled" : true
-    },
-    "mousePos" : {
-      "enabled" : true
-    },
-    "quickReset" : {
-      "enabled" : true
-    },
-    "fakeSwing" : {
-      "enabled" : true
-    },
-    "superJump" : {
-      "enabled" : true
-    },
-    "frameDump" : {
-      "enabled" : true
-    },
-    "mouseEmulator" : {
-      "enabled" : true
-    },
-    "spawnAlt" : {
-      "mod" : "alt",
-      "enabled" : true
-    },
-    "sgSetup" : {
-      "enabled" : true
-    }
-  },
-  "user" : {
-    "clickLevel" : 4
-  }
+  "soundAssign" : [
+
+  ],
+  "socdEnabled" : false
 }

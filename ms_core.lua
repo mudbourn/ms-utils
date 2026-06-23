@@ -1618,12 +1618,14 @@ YQIDAQAB
                     end
                     local hadSettings = hs.fs.attributes(jsonPath)   and moveFile(jsonPath,    profilesPath .. currentName .. "/ms_settings.json")
                     local hadDefaults = hs.fs.attributes(defaultPath) and moveFile(defaultPath, profilesPath .. currentName .. "/ms_settings_default.json")
+                    local hadTheme    = hs.fs.attributes(themePath)   and moveFile(themePath,   profilesPath .. currentName .. "/ms_theme.json")
 
                     ok, err = moveFile(profilesPath .. targetName .. "/ms_macros.lua", macrosPath)
                     if not ok then
                         moveFile(profilesPath .. currentName .. "/ms_macros.lua", macrosPath)
                         if hadSettings then moveFile(profilesPath .. currentName .. "/ms_settings.json",         jsonPath)    end
                         if hadDefaults then moveFile(profilesPath .. currentName .. "/ms_settings_default.json", defaultPath) end
+                        if hadTheme    then moveFile(profilesPath .. currentName .. "/ms_theme.json",            themePath)   end
                         ms.alert("Profile switch failed: could not activate \"" .. targetName .. "\".\n" .. tostring(err), 5)
                         return
                     end
@@ -1632,6 +1634,9 @@ YQIDAQAB
                     end
                     if hs.fs.attributes(profilesPath .. targetName .. "/ms_settings_default.json") then
                         moveFile(profilesPath .. targetName .. "/ms_settings_default.json", defaultPath)
+                    end
+                    if hs.fs.attributes(profilesPath .. targetName .. "/ms_theme.json") then
+                        moveFile(profilesPath .. targetName .. "/ms_theme.json", themePath)
                     end
 
                     ms.alert("Switched to \"" .. targetName .. "\".\nReloading in 3 seconds...", 4)
