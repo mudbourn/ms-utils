@@ -1,0 +1,42 @@
+{
+  "macros" : {
+    "waitAndPress" : {
+      "enabled" : true
+    },
+    "repeatLoop" : {
+      "enabled" : true
+    },
+    "helloWorld" : {
+      "enabled" : true
+    },
+    "mouseClickTest" : {
+      "enabled" : true
+    },
+    "cameraSweep" : {
+      "enabled" : true
+    },
+    "keyHoldTest" : {
+      "enabled" : true
+    },
+    "spawnAlt" : {
+      "enabled" : false
+    },
+    "stateDump" : {
+      "enabled" : true
+    }
+  },
+  "independentBinds" : false,
+  "trackpadHoldKeys" : {
+    "right" : "j",
+    "left" : "n"
+  },
+  "soundVolume" : 100,
+  "socdMode" : "lastWins",
+  "sensitivity" : 1.5,
+  "trackpadMode" : false,
+  "soundAssign" : [
+
+  ],
+  "socdEnabled" : false,
+  "soundEnabled" : true
+}

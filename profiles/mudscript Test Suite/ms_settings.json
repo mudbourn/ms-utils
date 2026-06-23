@@ -1,0 +1,59 @@
+{
+  "socdMode" : "lastWins",
+  "soundEnabled" : true,
+  "importedSounds" : [
+
+  ],
+  "sensitivity" : 1.5,
+  "soundVolume" : 100,
+  "trackpadHoldKeys" : {
+    "right" : "j",
+    "left" : "n"
+  },
+  "trackpadMode" : false,
+  "soundAssign" : {
+    "launch" : "Launch"
+  },
+  "socdEnabled" : false,
+  "independentBinds" : false,
+  "skipDevPrewarm" : false,
+  "user" : {
+    "clickOffsetY" : 0,
+    "baseDelay" : 50,
+    "holdDuration" : 300,
+    "testTargetY" : 522,
+    "triggerMode" : "standard",
+    "repeatCount" : 3,
+    "testTargetX" : 840,
+    "fastMode" : false,
+    "clickOffsetX" : 0,
+    "verboseAlerts" : false
+  },
+  "devArchiveLimit" : 15,
+  "macros" : {
+    "stateDump" : {
+      "enabled" : true
+    },
+    "repeatLoop" : {
+      "enabled" : true
+    },
+    "waitAndPress" : {
+      "enabled" : true
+    },
+    "mouseClickTest" : {
+      "enabled" : true
+    },
+    "cameraSweep" : {
+      "enabled" : true
+    },
+    "keyHoldTest" : {
+      "enabled" : true
+    },
+    "spawnAlt" : {
+      "enabled" : false
+    },
+    "helloWorld" : {
+      "enabled" : true
+    }
+  }
+}
