@@ -1109,6 +1109,15 @@ The GitHub Actions workflow (`.github/workflows/release.yml`) triggers on any pu
 
 The public key is embedded in `ms_core.lua` (`ms._updatePublicKey`). The private key never leaves GitHub Secrets.
 
+**Rotating the signing key** — if the private key is ever compromised or needs replacing:
+
+```bash
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
+```
+
+Paste the contents of `public.pem` into `ms._updatePublicKey` in `ms_core.lua`, then replace the `MS_SIGNING_KEY` GitHub Secret with `private.pem`. The next push that touches `ms_core.lua` will sign `MANIFEST.json` with the new key automatically.
+
 ---
 
 ## 21. User Settings & Menu API
