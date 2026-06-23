@@ -1607,7 +1607,23 @@
                         print("readMacroMeta: parse error in " .. filePath .. ": " .. tostring(err))
                         return nil
                     end
-                    pcall(chunk)  -- errors are expected and harmless here
+                    -- Run the chunk with an instruction-count watchdog so a malicious
+                    -- file containing `while true do end` cannot hang Hammerspoon.
+                    -- pcall alone catches thrown errors but not spinning loops; wrapping
+                    -- in a coroutine lets us attach a debug hook that aborts after a
+                    -- generous ceiling of VM instructions (far more than any legitimate
+                    -- macroMeta block will ever use).  JIT is disabled so the count hook
+                    -- fires on every instruction on both Lua 5.x and LuaJIT.
+                    if jit then pcall(jit.off, chunk, true) end
+                    local _co = coroutine.create(chunk)
+                    local _hookFires = 0
+                    debug.sethook(_co, function()
+                        _hookFires = _hookFires + 1
+                        if _hookFires > 2000 then  -- 2000 × 1000 = ~2 M VM instructions
+                            error("readMacroMeta: instruction limit exceeded (possible infinite loop in " .. filePath .. ")")
+                        end
+                    end, "", 1000)
+                    coroutine.resume(_co)  -- errors and the watchdog error alike are harmless here
                     return captured.macroMeta
                 end
 
@@ -7550,7 +7566,7 @@
                 -- it calls ms.integrity.check() from privileged scope, not through this proxy.
                 local frozenMs = setmetatable({}, {
                     __index    = function(t, k)
-                        if k == "integrity" or k == "dev" or k == "showGuardian" then
+                        if k == "integrity" or k == "dev" or k == "showGuardian" or k == "_systemActions" then
                             error("ms_macros.lua: ms." .. k .. " is not accessible from macros.", 2)
                         end
                         return ms[k]
@@ -7629,9 +7645,21 @@
                             error("ms_macros.lua: access to '" .. tostring(k)
                                 .. "' is not permitted.", 2)
                         end
-                        -- Fall through to real globals (safe read-only bridge for any
-                        -- additional constants the macro author may define in init.lua).
-                        return rawget(_G, k)
+                        -- Primitive-only bridge to _G: allows string/number/boolean
+                        -- constants that the macro author may define in init.lua to
+                        -- remain accessible, while blocking every non-primitive type
+                        -- (functions, tables, userdata, threads).  This closes the
+                        -- open-ended _G fallthrough without breaking the init.lua
+                        -- custom-constant pattern.  Once §1.2 (ms.fn) lands and all
+                        -- coroutine use is wrapped, this can be tightened further to
+                        -- error on any unlisted global regardless of type.
+                        local v = rawget(_G, k)
+                        local vt = type(v)
+                        if vt == "string" or vt == "number" or vt == "boolean" or v == nil then
+                            return v
+                        end
+                        error("ms_macros.lua: access to '" .. tostring(k)
+                            .. "' is not permitted (non-primitive globals are not accessible from macros).", 2)
                     end,
                     -- All global writes from ms_macros.lua are forbidden.
                     -- Previously this fell through to rawset(_G, k, v), which let macro
