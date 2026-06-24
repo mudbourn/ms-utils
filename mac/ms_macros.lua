@@ -170,49 +170,49 @@
 -- END Pack Settings --
 
 -- Combat Warriors Macros --
+    -- Helper Variables & Functions --
+        local QuickSlideSound    = SoundLib .. "QuickSlide.wav"
+        local JumpLowSound       = SoundLib .. "JumpLow.wav"
+        local JumpHighSound      = SoundLib .. "JumpHigh.wav"
+        local SlideSetupSound    = SoundLib .. "SlideSetup.wav"
+        local JumpNormalSound    = SoundLib .. "JumpNormal.wav"
+        local ThrowTrickSound    = SoundLib .. "ThrowTrick.wav"
+        local SpawnAltSound      = SoundLib .. "SpawnAlt.wav"
+        local ThrowTrickEndSound = SoundLib .. "ThrowTrickEnd.wav"
+
+
+        local getD1 = function()
+            local d1  = 52
+            local lvl = ms.settings.get("clickLevel")
+            if lvl     == 4 then d1 = d1 + 30
+            elseif lvl == 3 then d1 = d1 + 20
+            elseif lvl == 2 then d1 = d1 + 10
+            end
+            return d1
+        end
+
+        local getD2 = function()
+            local d2  = 63
+            local lvl = ms.settings.get("clickLevel")
+            if lvl     == 4 then d2 = d2 + 20
+            elseif lvl == 3 then d2 = d2 + 20
+            elseif lvl == 2 then d2 = d2 + 10
+            end
+            return d2
+        end
+
+        local getD3 = function()
+            local d3  = 52
+            local lvl = ms.settings.get("clickLevel")
+            if lvl     == 4 then d3 = d3 + 30
+            elseif lvl == 3 then d3 = d3 + 30
+            elseif lvl == 2 then d3 = d3 + 10
+            end
+            return d3
+        end
+    -- END Helper Variables & Functions --
+
     -- Macro Functions --
-        -- Helper Variables & Functions --
-            local QuickSlideSound    = SoundLib .. "QuickSlide.wav"
-            local JumpLowSound       = SoundLib .. "JumpLow.wav"
-            local JumpHighSound      = SoundLib .. "JumpHigh.wav"
-            local SlideSetupSound    = SoundLib .. "SlideSetup.wav"
-            local JumpNormalSound    = SoundLib .. "JumpNormal.wav"
-            local ThrowTrickSound    = SoundLib .. "ThrowTrick.wav"
-            local SpawnAltSound      = SoundLib .. "SpawnAlt.wav"
-            local ThrowTrickEndSound = SoundLib .. "ThrowTrickEnd.wav"
-
-
-            local getD1 = function()
-                local d1  = 52
-                local lvl = ms.settings.get("clickLevel")
-                if lvl     == 4 then d1 = d1 + 30
-                elseif lvl == 3 then d1 = d1 + 20
-                elseif lvl == 2 then d1 = d1 + 10
-                end
-                return d1
-            end
-
-            local getD2 = function()
-                local d2  = 63
-                local lvl = ms.settings.get("clickLevel")
-                if lvl     == 4 then d2 = d2 + 20
-                elseif lvl == 3 then d2 = d2 + 20
-                elseif lvl == 2 then d2 = d2 + 10
-                end
-                return d2
-            end
-
-            local getD3 = function()
-                local d3  = 52
-                local lvl = ms.settings.get("clickLevel")
-                if lvl     == 4 then d3 = d3 + 30
-                elseif lvl == 3 then d3 = d3 + 30
-                elseif lvl == 2 then d3 = d3 + 10
-                end
-                return d3
-            end
-        -- END --
-
         -- High Leap Assist --
             local HighLeapAssistFunction = ms.fn(function()
                 local MovingCheck = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
