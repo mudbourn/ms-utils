@@ -1428,6 +1428,7 @@ YQIDAQAB
         _ms_running[group] := true
         SetTimer () => _ms_running.Delete(group), -cd
         _ms_active_sub := ""
+        ms._currentFlags := {alt: GetKeyState("Alt", "P"), ctrl: GetKeyState("Ctrl", "P"), shift: GetKeyState("Shift", "P"), win: GetKeyState("LWin", "P")}
         try fn()
         catch as e {
             if e.Message != "ms.cancelled"
@@ -1442,6 +1443,7 @@ YQIDAQAB
         _ms_running[group] := true
         SetTimer () => _ms_running.Delete(group), -cd
         _ms_active_sub := id
+        ms._currentFlags := {alt: GetKeyState("Alt", "P"), ctrl: GetKeyState("Ctrl", "P"), shift: GetKeyState("Shift", "P"), win: GetKeyState("LWin", "P")}
         fn()
     }
 ;; END Hotkey Fire Callbacks ;;
