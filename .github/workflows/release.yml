@@ -38,15 +38,16 @@ jobs:
           # Use manual version override if provided, otherwise read from manifest
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
+            MAC_VER="$VERSION"
           else
             VERSION=$(jq -r '.windows_version // "1.0.0"' MANIFEST.json)
+            MAC_VER=$(jq -r '.version // ""' MANIFEST.json)
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
           WIN_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.ahk"
 
-          # Preserve existing macOS fields
-          MAC_VER=$(jq -r '.version // ""' MANIFEST.json)
+          # Preserve existing macOS fields (hash, url, sig — carried from old manifest)
           MAC_SHA=$(jq -r '.sha256 // ""' MANIFEST.json)
           MAC_URL=$(jq -r '.url // ""' MANIFEST.json)
           MAC_SIG=$(jq -r '.signature // ""' MANIFEST.json)
