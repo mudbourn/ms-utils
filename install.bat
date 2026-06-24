@@ -13,6 +13,10 @@ REM To uninstall:
 REM   schtasks /delete /tn "mudscript Guardian" /f
 REM   rd /s /q "%USERPROFILE%\.hammerspoon"
 
+REM ── Remove Zone.Identifier (SmartSense mark) from this and downloaded files ──
+powershell -NoProfile -Command ^
+    "Get-ChildItem -Path '%~dp0' -Recurse -File | Unblock-File -ErrorAction SilentlyContinue" 2>nul
+
 setlocal enabledelayedexpansion
 
 set "REPO=mudbourn/ms-utils"

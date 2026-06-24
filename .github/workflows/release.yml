@@ -168,44 +168,11 @@ jobs:
           Remove-Item -Recurse "$dist\Spoons"        -ErrorAction SilentlyContinue
           Remove-Item -Recurse "$dist\*.lua"         -ErrorAction SilentlyContinue
           Remove-Item "$dist\install.sh"             -ErrorAction SilentlyContinue
+          Remove-Item "$dist\.gitignore"             -ErrorAction SilentlyContinue
 
-          # Attempt to compile init.ahk → mudscript.exe via Ahk2Exe
-          $ahk2ExeDir = "${env:ProgramFiles}\AutoHotkey\v2"
-          $ahk2ExeBin = Join-Path $ahk2ExeDir "AutoHotkey32.exe"
-          if (-not (Test-Path $ahk2ExeBin)) {
-            $ahk2ExeBin = "C:\ProgramData\chocolatey\lib\autohotkey.portable\tools\v2\AutoHotkey32.exe"
-          }
-
-          if (-not (Test-Path $ahk2ExeBin)) {
-            # Try installing AutoHotkey via choco if not present
-            choco install autohotkey.portable --version 2.0.19 -y --no-progress 2>$null
-            $ahk2ExeBin = "C:\ProgramData\chocolatey\lib\autohotkey.portable\tools\v2\AutoHotkey32.exe"
-          }
-
-          if (Test-Path $ahk2ExeBin) {
-            Write-Output "Downloading Ahk2Exe..."
-            $ahk2ExeZip = "$env:TEMP\Ahk2Exe.zip"
-            Invoke-WebRequest -Uri "https://github.com/AutoHotkey/Ahk2Exe/releases/download/v2.0.19/Ahk2Exe.zip" `
-              -OutFile $ahk2ExeZip -UseBasicParsing | Out-Null
-            $ahk2ExePath = "$env:TEMP\Ahk2Exe"
-            Expand-Archive $ahk2ExeZip $ahk2ExePath -Force
-
-            $iconFile = Resolve-Path "ui\icons\ms_icon.ico"
-            & "$ahk2ExePath\Ahk2Exe.exe" `
-              /in "$pwd\init.ahk" `
-              /out "$dist\mudscript.exe" `
-              /icon "$iconFile" `
-              /bin "$ahk2ExeBin"
-
-            if (Test-Path "$dist\mudscript.exe") {
-              Write-Output "  Compiled: mudscript.exe"
-              Remove-Item "$dist\init.ahk" -Force
-              Remove-Item "$dist\ms_core.ahk" -Force
-              Remove-Item "$dist\ms_macros.ahk" -Force
-            }
-          } else {
-            Write-Output "  AutoHotkey v2 not found — packaging source .ahk files instead."
-          }
+          # NOTE: We ship .ahk source files intentionally. The compiled EXE from
+          # Ahk2Exe would be unsigned and trigger SmartScreen warnings. Users run
+          # .ahk files through the signed AutoHotkey interpreter instead.
 
           # Create zip
           $archive = "mudscript-windows-${version}.zip"
