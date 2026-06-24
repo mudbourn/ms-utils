@@ -133,7 +133,7 @@ jobs:
           $dist = "mudscript-$version"
           mkdir $dist
           & .\bin\generate_icon.ps1
-          Copy-Item "install.bat","init.ahk","ms_core.ahk","ms_macros.ahk","MANIFEST.json","writing_style.txt","README.md" "$dist\"
+          Copy-Item "install.bat","init.ahk","ms_core.ahk","ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
           Copy-Item -Recurse "ui","lib","bin","data" "$dist\"
           Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
           Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
@@ -150,7 +150,7 @@ jobs:
           VERSION="${{ needs.stamp.outputs.version }}"
           DIST="mudscript-${VERSION}"
           mkdir -p "$DIST"
-          for f in install.sh init.lua ms_core.lua ms_macros.lua MANIFEST.json writing_style.txt README.md; do
+          for f in install.sh init.lua ms_core.lua ms_macros.lua MANIFEST.json README.md; do
             [ -f "$f" ] && cp "$f" "$DIST/"
           done
           for d in Spoons ui bin; do
