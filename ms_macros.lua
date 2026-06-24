@@ -276,7 +276,6 @@
             end, {
                 group    = "main",
                 label    = "High Leap Assist",
-                cooldown = 3200,
                 default  = {
                     type   = "mouse",
                     button = 3,
@@ -372,7 +371,7 @@
                         ms.cam.move(0, 8)
                         ms.wait(.5)
                     end
-                    for i2 = 1, 180 do
+                    for i2 = 1, 150 do
                         ms.release("x")
                         ms.cam.move(0, 10)
                         ms.wait(1)
@@ -558,10 +557,15 @@
                     ms.settings.get("spamMoveX"),
                     ms.settings.get("spamMoveY")
                 )
-                ms.wait(30)
+                ms.wait(3)
                 ms.Mouse(Click, Left, WindowTL,
                     ms.settings.get("spamMoveX"),
-                    ms.settings.get("spamMoveY"))
+                    ms.settings.get("spamMoveY")
+                )
+                ms.Mouse(Click, Left, WindowTL,
+                    ms.settings.get("spamMoveX"),
+                    ms.settings.get("spamMoveY")
+                )
                 ms.wait(100)
                 ms.Mouse(Click, Left, WindowTL,
                     ms.settings.get("spamClickX"), d3)
