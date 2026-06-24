@@ -293,8 +293,12 @@ class ms {
     ; Play a sound by path. Respects master soundEnabled and volume.
     static sound(path, async := true) {
         global _ms_soundEnabled
-        if !_ms_soundEnabled  return
-        if !path              return
+        if !_ms_soundEnabled {
+            return
+        }
+        if !path {
+            return
+        }
         if async {
             SoundPlay path, true
         } else {
@@ -307,7 +311,9 @@ class ms {
     ; Suppresses duplicate plays within 50 ms.
     static playSlot(slotId) {
         global _ms_soundEnabled, _ms_sounds, _ms_soundAssign, _ms_playSlotTimes
-        if !_ms_soundEnabled  return false
+        if !_ms_soundEnabled {
+            return false
+        }
         local now := A_TickCount
         if _ms_playSlotTimes.Has(slotId) && (now - _ms_playSlotTimes[slotId]) < 50
             return false
@@ -318,7 +324,9 @@ class ms {
             path := _ms_sounds[assigned]
         else if _ms_sounds.Has(slotId)
             path := _ms_sounds[slotId]
-        if path = ""  return false
+        if path = "" {
+            return false
+        }
         ms.sound(path, true)
         return true
     }
@@ -401,7 +409,9 @@ class ms {
 
     static modHeld(id) {
         local mod := ms.getMod(id)
-        if mod = ""  return false
+        if mod = "" {
+            return false
+        }
         return GetKeyState(ms._key(mod), "P")
     }
 
@@ -665,9 +675,13 @@ class ms {
         ; If opts.shared is set on id or its root, uses that; else "G_<rootId>".
         static group(id) {
             global _ms_registry
-            if !_ms_registry.Has(id)  return "G_" id
+            if !_ms_registry.Has(id) {
+                return "G_" id
+            }
             local def := _ms_registry[id].opts
-            if def.shared != ""  return def.shared
+            if def.shared != "" {
+                return def.shared
+            }
             local current := id, seen := Map()
             loop {
                 local d := _ms_registry.Has(current) ? _ms_registry[current].opts : ""
@@ -679,7 +693,9 @@ class ms {
             }
 
             local rootDef := _ms_registry.Has(current) ? _ms_registry[current].opts : ""
-            if rootDef != "" && rootDef.shared != ""  return rootDef.shared
+            if rootDef != "" && rootDef.shared != "" {
+                return rootDef.shared
+            }
             return "G_" current
         }
 
@@ -736,7 +752,9 @@ class ms {
 
                     ; Shared callback for sub-item binds (captures _fn, _id, group, cooldown)
                     static _fireSubBind(fn, id, group, cooldown, *) {
-                        if _ms_running.Has(group)  return
+                        if _ms_running.Has(group) {
+                            return
+                        }
                         _ms_running[group] := true
                         SetTimer () => _ms_running.Delete(group), -cooldown
                         _ms_active_sub := id
@@ -746,8 +764,12 @@ class ms {
 
                     ; Shared callback for root binds (captures _fn, _id, group, cooldown)
                     static _fireRootBind(fn, id, group, cooldown, *) {
-                        if BindValidity != 1  return
-                        if _ms_running.Has(group)  return
+                        if BindValidity != 1 {
+                            return
+                        }
+                        if _ms_running.Has(group) {
+                            return
+                        }
                         _ms_running[group] := true
                         SetTimer () => _ms_running.Delete(group), -cooldown
                         _ms_active_sub := ""
@@ -845,7 +867,9 @@ class ms {
 
         ; Returns the canonical conflict-detection key for a bind config object.
         static _bindKey(c) {
-            if c = ""  return ""
+            if c = "" {
+                return ""
+            }
             if c.HasProp("type") && c.type = "mouse"
                 return "mouse:" c.button
             if c.HasProp("type") && c.type = "key" {
@@ -867,7 +891,9 @@ class ms {
 
         ; Converts a bind config object to an AHKv2 hotkey string (no $ prefix).
         static _buildHotkey(c) {
-            if c = ""  return ""
+            if c = "" {
+                return ""
+            }
             if c.HasProp("type") && c.type = "mouse"
                 return ms.bind._mouseHotkey(c.button)
             if c.HasProp("type") && c.type = "key"
@@ -898,8 +924,12 @@ class ms {
         if _ms_trackpad_mode && _ms_trackpad_bind_ovr.Has(id)
             return _ms_trackpad_bind_ovr[id]
         local def := ms.bind._defs.Has(id) ? ms.bind._defs[id] : ""
-        if _ms_bindConfig.Has(id)  return _ms_bindConfig[id]
-        if def != "" && def.default != ""  return def.default
+        if _ms_bindConfig.Has(id) {
+            return _ms_bindConfig[id]
+        }
+        if def != "" && def.default != "" {
+            return def.default
+        }
         return ""
     }
 
@@ -972,7 +1002,9 @@ class ms {
     ; Callback for _notify timer (avoid anonymous block-body function)
     static _notifyTimer(state, *) {
         global loadfinish
-        if loadfinish != 1  return
+        if loadfinish != 1 {
+            return
+        }
         if state = 1 {
             ms.playSlot("enabled")
             ms.alert("Macros enabled!", 3, true)
@@ -1145,7 +1177,9 @@ class ms {
         global _ms_trackpad_mode, _ms_trackpad_hold_keys, _ms_independent_binds
         global _ms_user_index, _ms_user_vals, CUR_CAM_SENS, clickLevel
 
-        if !data  return
+        if !data {
+            return
+        }
         if data.Has("sensitivity") {
             local n := Number(data["sensitivity"])
             if n >= 0.1 && n <= 4 {
@@ -1166,8 +1200,8 @@ class ms {
         if data.Has("socdEnabled") {
             ms.socdEnabled           := (data["socdEnabled"]      = true)
         }
-        if data.Has("independentBinds") _ms_independent_binds {
-            := (data["independentBinds"] = true)
+        if data.Has("independentBinds") {
+            _ms_independent_binds := (data["independentBinds"] = true)
         }
         if data.Has("socdMode") {
             local m := data["socdMode"]
@@ -1306,7 +1340,9 @@ class ms {
 
     static saveDefault() {
         ms.saveSettings()
-        if !FileExist(_ms_json_path)  return
+        if !FileExist(_ms_json_path) {
+            return
+        }
         DirCreate _ms_archive_path
         local ts := FormatTime(, "yyyy-MM-dd_HHmm")
         try FileCopy _ms_default_path, _ms_archive_path "ms_settings_default_" ts ".json"
@@ -1380,7 +1416,9 @@ class ms {
 
     static socdStart() {
         global _ms_socd_active
-        if _ms_socd_active  return
+        if _ms_socd_active {
+            return
+        }
         _ms_socd_active := true
         global _ms_socd_held
         _ms_socd_held := Map("a", false, "d", false, "w", false, "s", false)
@@ -1399,16 +1437,19 @@ class ms {
 
     static socdStop() {
         global _ms_socd_active
-        if !_ms_socd_active  return
+        if !_ms_socd_active {
+            return
+        }
         _ms_socd_active := false
         HotIfWinActive _ms_target_exe
-        try { Hotkey "$a",    "Off" | Hotkey "$a Up", "Off" }
-
-        try { Hotkey "$d",    "Off" | Hotkey "$d Up", "Off" }
-
-        try { Hotkey "$w",    "Off" | Hotkey "$w Up", "Off" }
-
-        try { Hotkey "$s",    "Off" | Hotkey "$s Up", "Off" }
+        try Hotkey "$a",    "Off"
+        try Hotkey "$a Up", "Off"
+        try Hotkey "$d",    "Off"
+        try Hotkey "$d Up", "Off"
+        try Hotkey "$w",    "Off"
+        try Hotkey "$w Up", "Off"
+        try Hotkey "$s",    "Off"
+        try Hotkey "$s Up", "Off"
 
         HotIfWinActive
         global _ms_socd_held
@@ -1449,7 +1490,9 @@ class ms {
             }
             _ms_user_index[key] := def
             _ms_user_defs.Push(def)
-            if t = "action" || t = "soundSlot"  return
+            if t = "action" || t = "soundSlot" {
+                return
+            }
             local default := def.HasProp("default") ? def.default : ""
             _ms_user_vals[key] := default
             if default != "" && def.HasProp("onChange") && def.onChange is Func
@@ -1459,7 +1502,9 @@ class ms {
 
         static get(key) {
             global _ms_user_index, _ms_user_vals
-            if !_ms_user_index.Has(key)  return ""
+            if !_ms_user_index.Has(key) {
+                return ""
+            }
             local def := _ms_user_index[key]
             local v := _ms_user_vals.Has(key) ? _ms_user_vals[key] : ""
             return v != "" ? v : (def.HasProp("default") ? def.default : "")
@@ -1468,11 +1513,17 @@ class ms {
 
         static set(key, value) {
             global _ms_user_index, _ms_user_vals
-            if !_ms_user_index.Has(key)  return
+            if !_ms_user_index.Has(key) {
+                return
+            }
             local def := _ms_user_index[key]
-            if def.type = "action"  return
+            if def.type = "action" {
+                return
+            }
             local validated := ms._validateUserValue(def, value)
-            if validated = ""  return
+            if validated = "" {
+                return
+            }
             _ms_user_vals[key] := validated
             if def.save != false {
                 ms.saveSettings()
@@ -1555,15 +1606,31 @@ class ms {
 
     static has(feature) {
         global _ms_sounds, _ms_soundEnabled, _ms_theme_loaded, _ms_profiles_path
-        if feature = "theme"        return _ms_theme_loaded = true
-        if feature = "sound"        return _ms_soundEnabled = true && _ms_sounds.Count > 0
-        if feature = "socd"         return ms.socdEnabled = true
-        if feature = "trackpad"     return _ms_trackpad_mode = true
-        if feature = "profiles"     return _ms_getProfiles().Length > 0
+        if feature = "theme" {
+            return _ms_theme_loaded = true
+        }
+        if feature = "sound" {
+            return _ms_soundEnabled = true && _ms_sounds.Count > 0
+        }
+        if feature = "socd" {
+            return ms.socdEnabled = true
+        }
+        if feature = "trackpad" {
+            return _ms_trackpad_mode = true
+        }
+        if feature = "profiles" {
+            return _ms_getProfiles().Length > 0
+        }
         if feature = "userSettings" return true
-        if feature = "userMenu"     return true
-        if feature = "integrity"    return ms.integrity.check() = "trusted"
-        if feature = "hidinject"    return FileExist(A_ScriptDir "\bin\hidinject") != ""
+        if feature = "userMenu" {
+            return true
+        }
+        if feature = "integrity" {
+            return ms.integrity.check() = "trusted"
+        }
+        if feature = "hidinject" {
+            return FileExist(A_ScriptDir "\bin\hidinject") != ""
+        }
         return false
     }
 
@@ -1574,11 +1641,15 @@ class ms {
         global _ms_theme_path, _ms_theme, _ms_theme_loaded
         for k, v in Map("bg","#060402","surface","#100806","surface2","#1c100c","hover","#301610","accent","#c41a1a","accentHi","#e52424","success","#4a7820","dangerBg","#1e0608","danger","#d42020","warning","#c47820","text","#f0ddb0","radius",3,"font","Almendra")
             _ms_theme[k] := v
-        if !FileExist(_ms_theme_path)  return
+        if !FileExist(_ms_theme_path) {
+            return
+        }
         local raw := ""
         FileRead &raw, _ms_theme_path
         local data := Jxon_Load(&raw)
-        if !data  return
+        if !data {
+            return
+        }
         _ms_theme_loaded := true
         for _, k in ["bg","surface","surface2","hover","accent","accentHi","success","dangerBg","danger","warning","text"] {
             if data.Has(k) && RegExMatch(data[k], "^#[0-9a-fA-F]+$")
@@ -1615,7 +1686,9 @@ class ms {
 
         static readTrustedHash() {
             global _ms_hash_path
-            if !FileExist(_ms_hash_path)  return ""
+            if !FileExist(_ms_hash_path) {
+                return ""
+            }
             local h := ""
             FileRead &h, _ms_hash_path
             h := Trim(h)
@@ -1646,7 +1719,9 @@ class ms {
             global _ms_core_path
             local cur     := ms.integrity.hashFile(_ms_core_path)
             local trusted := ms.integrity.readTrustedHash()
-            if trusted = ""  return "uninitialized"
+            if trusted = "" {
+                return "uninitialized"
+            }
             return (cur = trusted) ? "trusted" : "mismatch"
         }
 
@@ -1808,7 +1883,9 @@ class ms {
 
     static importProfilePkg() {
         local file := FileSelect(3, A_ScriptDir, "Select a .mspkg file", "Macro Pack (*.mspkg)")
-        if file = ""  return
+        if file = "" {
+            return
+        }
         local tmpDir := A_Temp "\ms_import_" A_TickCount
         DirCreate tmpDir
         RunWait 'powershell -NoProfile -Command "Expand-Archive -Path \"' file '\" -DestinationPath \"' tmpDir '\" -Force"',, "Hide"
@@ -1852,7 +1929,9 @@ class ms {
 
     static importSounds() {
         local files := FileSelect("M3", SoundLib, "Select sound files to import")
-        if !files  return
+        if !files {
+            return
+        }
         local added := 0
         for file in files {
             if !FileExist(file) {
@@ -1942,7 +2021,9 @@ class ms {
         }
 
         static refresh() {
-            if !ms.ui._panel_wv  return
+            if !ms.ui._panel_wv {
+                return
+            }
             local json := Jxon_Dump(ms._buildUIState(), 0)
             try ms.ui._panel_wv.ExecuteScript("receiveState(" json ")")
         }
@@ -1964,7 +2045,9 @@ class ms {
         static _onMessage(self, wv, event) {
             local raw := event.TryGetWebMessageAsString()
             local data := Jxon_Load(&raw)
-            if !data || !data.Has("action")  return
+            if !data || !data.Has("action") {
+                return
+            }
             local action := data["action"]
             if ms.ui._actions.Has(action) {
                 try ms.ui._actions[action].Call(data)
@@ -1981,7 +2064,9 @@ class ms {
             "alert",        (data) => (data.Has("msg") ? ms.alert(data["msg"], data.Has("duration") ? data["duration"] : 3) : 0),
             "close",        (data) => ms.ui.hide(),
             "moveWindow",   (data) {
-                if !ms.ui._panel_gui  return
+                if !ms.ui._panel_gui {
+                    return
+                }
                 local dx := data.Has("dx") ? data["dx"] : 0
                 local dy := data.Has("dy") ? data["dy"] : 0
                 ms.ui._pos.x += dx, ms.ui._pos.y += dy
@@ -1990,7 +2075,9 @@ class ms {
             "reloadMacros", (data) => Reload(),
             "reloadSettings", (data) => (ms.reloadSettings(), ms.ui.refresh()),
             "setMacroEnabled", (data) {
-                if !data.Has("id")  return
+                if !data.Has("id") {
+                    return
+                }
                 global _ms_binds
                 _ms_binds[data["id"]] := (data.Has("value") && data["value"] = true)
                 ms.saveSettings(), ms.bind.rebind(), ms.playSlot("update"), ms.ui.refresh()
@@ -2038,7 +2125,9 @@ class ms {
                 ms.ui.refresh()
             },
             "setSoundAssign", (data) {
-                if !data.Has("slot")  return
+                if !data.Has("slot") {
+                    return
+                }
                 global _ms_soundAssign
                 local name := data.Has("name") ? data["name"] : ""
                 if name = "" {
@@ -2064,12 +2153,16 @@ class ms {
             "openKeys",          (data) => ms.dev.keys.toggle(),
             "openWindow",        (data) => ms.dev.window.toggle(),
             "startRebind",       (data) {
-                if !data.Has("id")  return
+                if !data.Has("id") {
+                    return
+                }
                 ms.ui.hide()
                 _ms_captureRebind(data["id"])
             },
             "setModifier", (data) {
-                if !data.Has("id")  return
+                if !data.Has("id") {
+                    return
+                }
                 global _ms_modConfig
                 local key := data.Has("key") ? Trim(data["key"]) : ""
                 if key = "" {
@@ -2081,14 +2174,20 @@ class ms {
                 ms.saveSettings(), ms.bind.rebind(), ms.playSlot("update"), ms.ui.refresh()
             },
             "startModRebind", (data) {
-                if !data.Has("id")  return
+                if !data.Has("id") {
+                    return
+                }
                 ms.ui.hide()
                 _ms_captureModRebind(data["id"])
             },
             "resetBind", (data) {
-                if !data.Has("id")  return
+                if !data.Has("id") {
+                    return
+                }
                 local def := ms.bind._defs.Has(data["id"]) ? ms.bind._defs[data["id"]] : ""
-                if def = ""  return
+                if def = "" {
+                    return
+                }
                 if def.sub != "" {
                     _ms_subBinds.Delete(data["id"])
                 } else {
@@ -2098,7 +2197,9 @@ class ms {
                 ms.saveSettings(), ms.bind.rebind(), ms.playSlot("reset"), ms.ui.refresh()
             },
             "clearModifier", (data) {
-                if !data.Has("id")  return
+                if !data.Has("id") {
+                    return
+                }
                 _ms_modConfig.Delete(data["id"])
                 ms.saveSettings(), ms.bind.rebind(), ms.playSlot("reset"), ms.ui.refresh()
             },
@@ -2106,12 +2207,16 @@ class ms {
             "openURL",    (data) => (data.Has("url") ? Run(data["url"]) : 0),
             "editMacros", (data) => Run(A_ScriptDir "\ms_macros.ahk"),
             "userSettingChange", (data) {
-                if !data.Has("key")  return
+                if !data.Has("key") {
+                    return
+                }
                 ms.settings.set(data["key"], data.Has("value") ? data["value"] : "")
                 ms.playSlot("update"), ms.ui.refresh()
             },
             "userSettingAction", (data) {
-                if !data.Has("key")  return
+                if !data.Has("key") {
+                    return
+                }
                 global _ms_user_index
                 if _ms_user_index.Has(data["key"]) {
                     local def := _ms_user_index[data["key"]]
@@ -2122,7 +2227,9 @@ class ms {
                 ms.ui.refresh()
             },
             "resetUserSetting", (data) {
-                if !data.Has("key")  return
+                if !data.Has("key") {
+                    return
+                }
                 global _ms_user_index
                 if _ms_user_index.Has(data["key"]) {
                     local def := _ms_user_index[data["key"]]
@@ -2142,7 +2249,9 @@ class ms {
 
             },
             "resetSetting", (data) {
-                if !data.Has("key")  return
+                if !data.Has("key") {
+                    return
+                }
                 local key := data["key"]
                 local def := ms.macroDefaults
                 if key = "sensitivity"  && def.HasProp("sensitivity") {
@@ -2168,7 +2277,9 @@ class ms {
         )
 
         static modal(data, callback) {
-            if !callback  return
+            if !callback {
+                return
+            }
             if !ms.ui._panel_wv { try callback.Call({confirmed: false}) ; return }
 
             ms.ui._modal_cb := callback
@@ -2181,7 +2292,9 @@ class ms {
 
 
         static prompt(data, callback) {
-            if !callback  return
+            if !callback {
+                return
+            }
             if !ms.ui._panel_wv { try callback.Call({confirmed: false, value: ""}) ; return }
 
             ms.ui._modal_cb := callback
@@ -2315,8 +2428,12 @@ class ms {
 
 
     static _bindDisplay(c) {
-        if c = ""  return ""
-        if c.HasProp("type") && c.type = "mouse"  return "Mouse " c.button
+        if c = "" {
+            return ""
+        }
+        if c.HasProp("type") && c.type = "mouse" {
+            return "Mouse " c.button
+        }
         if c.HasProp("type") && c.type = "key" {
             local parts := []
             if c.HasProp("mods")
@@ -2357,7 +2474,9 @@ class ms {
                     global _ms_dev_console_pos, _ms_dev_console_gui
                     local raw := evt.TryGetWebMessageAsString()
                     local data := Jxon_Load(&raw)
-                    if !data  return
+                    if !data {
+                        return
+                    }
                     local act := data.Has("action") ? data["action"] : ""
                     if act = "close" {
                         ms.dev.console.hide()
@@ -2405,7 +2524,9 @@ class ms {
                     global _ms_dev_watcher_pos, _ms_dev_watcher_gui
                     local raw := evt.TryGetWebMessageAsString()
                     local data := Jxon_Load(&raw)
-                    if !data  return
+                    if !data {
+                        return
+                    }
                     local act := data.Has("action") ? data["action"] : ""
                     if act = "close" {
                         ms.dev.watcher.hide()
@@ -2446,7 +2567,9 @@ class ms {
                     global _ms_dev_keys_pos, _ms_dev_keys_gui
                     local raw := evt.TryGetWebMessageAsString()
                     local data := Jxon_Load(&raw)
-                    if !data  return
+                    if !data {
+                        return
+                    }
                     local act := data.Has("action") ? data["action"] : ""
                     if act = "close" {
                         ms.dev.keys.hide()
@@ -2488,7 +2611,9 @@ class ms {
                     global _ms_dev_window_history, _ms_dev_window_pos, _ms_dev_window_gui
                     local raw := evt.TryGetWebMessageAsString()
                     local data := Jxon_Load(&raw)
-                    if !data  return
+                    if !data {
+                        return
+                    }
                     local act := data.Has("action") ? data["action"] : ""
                     if act = "close" {
                         ms.dev.window.hide()
@@ -2535,7 +2660,9 @@ class ms {
             static _pushCurrent() {
                 global _ms_dev_window_wv, _ms_dev_window_history
                 local hwnd := WinExist("A")
-                if !hwnd  return
+                if !hwnd {
+                    return
+                }
                 try {
                     local title := WinGetTitle("ahk_id " hwnd)
                     local proc := WinGetProcessName("ahk_id " hwnd)
@@ -2569,7 +2696,9 @@ class ms {
                 }
 
                 local hwnd := WinExist("A")
-                if !hwnd || hwnd = _ms_dev_window_last_id  return
+                if !hwnd || hwnd = _ms_dev_window_last_id {
+                    return
+                }
                 _ms_dev_window_last_id := hwnd
                 ms.dev.window._pushCurrent()
             }
@@ -2624,7 +2753,9 @@ class ms {
 _ms_getProfiles() {
     global _ms_profiles_path
     local list := []
-    if !DirExist(_ms_profiles_path)  return list
+    if !DirExist(_ms_profiles_path) {
+        return list
+    }
     Loop Files _ms_profiles_path "*", "D" {
         if FileExist(A_LoopFileFullPath "\ms_macros.ahk")
             list.Push(A_LoopFileName)
@@ -2638,7 +2769,9 @@ _ms_getProfiles() {
 ; ── Dev log writer ────────────────────────────────────────────────────────────
 _ms_devWrite(entry) {
     global _ms_dev_busy, _ms_dev_log_path, _ms_dev_console_wv, _ms_dev_watcher_wv, _ms_dev_keys_wv, _ms_dev_key_notice
-    if _ms_dev_busy  return
+    if _ms_dev_busy {
+        return
+    }
     _ms_dev_busy := true
     entry["ts"] := FormatTime(, "HH:mm:ss")
     local json := Jxon_Dump(entry, 0)
@@ -2678,7 +2811,9 @@ _ms_print(msg) {
 ; ── Dev history loader ────────────────────────────────────────────────────────
 _ms_loadDevHistory(wv, filterFn) {
     global _ms_dev_log_path
-    if !FileExist(_ms_dev_log_path)  return
+    if !FileExist(_ms_dev_log_path) {
+        return
+    }
     local entries := []
     Loop Read _ms_dev_log_path {
         local raw := A_LoopReadLine
@@ -2689,7 +2824,9 @@ _ms_loadDevHistory(wv, filterFn) {
         }
 
     }
-    if entries.Length = 0  return
+    if entries.Length = 0 {
+        return
+    }
     try wv.ExecuteScript("loadHistory(" Jxon_Dump(entries, 0) ")")
 }
 
@@ -2755,7 +2892,9 @@ global _ms_trackpad_r_held   := false
 
 _ms_trackpadStart() {
     global _ms_trackpad_mode
-    if !_ms_trackpad_mode  return
+    if !_ms_trackpad_mode {
+        return
+    }
     HotIfWinActive _ms_target_exe
     local lk := _ms_trackpad_hold_keys.left
     local rk := _ms_trackpad_hold_keys.right
@@ -2781,9 +2920,13 @@ _ms_trackpadStop() {
 
 _ms_tpLeftDown(*) {
     global _ms_trackpad_l_held, _ms_trackpad_l_active, BindValidity
-    if BindValidity != 1  return
+    if BindValidity != 1 {
+        return
+    }
     _ms_trackpad_l_held := true
-    if _ms_trackpad_l_active  return
+    if _ms_trackpad_l_active {
+        return
+    }
     _ms_trackpad_l_active := true
     SetTimer _ms_tpLeftLoop, 10
 }
@@ -2808,9 +2951,13 @@ _ms_tpLeftLoop() {
 
 _ms_tpRightDown(*) {
     global _ms_trackpad_r_held, _ms_trackpad_r_active, BindValidity
-    if BindValidity != 1  return
+    if BindValidity != 1 {
+        return
+    }
     _ms_trackpad_r_held := true
-    if _ms_trackpad_r_active  return
+    if _ms_trackpad_r_active {
+        return
+    }
     _ms_trackpad_r_active := true
     SetTimer _ms_tpRightLoop, 10
 }
@@ -2858,7 +3005,9 @@ _ms_captureRebind(id) {
 
 _ms_captureModRebind(id) {
     local def := ms.bind._defs.Has(id) ? ms.bind._defs[id] : ""
-    if def = "" || def.sub = ""  return
+    if def = "" || def.sub = "" {
+        return
+    }
     ms.alert('Modifier for "' def.label '"' "`nPress a key — Backspace to clear — Escape to cancel.", 15)
     local ih := InputHook("L1 B", "{Escape}{Backspace}")
     ih.KeyOpt("{All}", "SN")
@@ -2889,7 +3038,9 @@ _ms_captureModRebind(id) {
 ; Returns true when the target app window is active (used by #HotIf and app poll).
 _ms_targetActive() {
     global _ms_target_exe
-    if _ms_target_exe = ""  return false
+    if _ms_target_exe = "" {
+        return false
+    }
     return WinActive(_ms_target_exe) != 0
 }
 
@@ -3043,7 +3194,9 @@ _ms_loadUpdate(90, "Finalizing...")
 ; Integrity auto-seed — 3 s after load (mirrors Lua timer)
 SetTimer _ms_integrityAutoSeed, -3000
 _ms_integrityAutoSeed() {
-    if ms.integrity.check() != "uninitialized"  return
+    if ms.integrity.check() != "uninitialized" {
+        return
+    }
     ; Try to auto-trust from MANIFEST.json (clean install)
     local mPath := A_ScriptDir "\MANIFEST.json"
     if FileExist(mPath) {
@@ -3075,7 +3228,9 @@ _ms_setLoadfinish() {
 SetTimer _ms_integrityPoll, 5000
 _ms_integrityPoll() {
     global loadfinish
-    if loadfinish != 1  return
+    if loadfinish != 1 {
+        return
+    }
     if ms.integrity.check() = "mismatch"
         Reload   ; guardian will block ms_core.ahk on next load
 }
@@ -3143,7 +3298,9 @@ global _ms_last_enter  := 0
 !F10 :: ms.setMacros(0)                                    ; Alt+F10 panic/disable
 / :: {
     global _ms_last_slash
-    if (A_TickCount - _ms_last_slash) < 100  return
+    if (A_TickCount - _ms_last_slash) < 100 {
+        return
+    }
     _ms_last_slash := A_TickCount
     if BindValidity {
         ms.setMacros(0)
@@ -3152,7 +3309,9 @@ global _ms_last_enter  := 0
 }                                                          ; /  disable macros (no repeat)
 Enter :: {
     global _ms_last_enter
-    if (A_TickCount - _ms_last_enter) < 100  return
+    if (A_TickCount - _ms_last_enter) < 100 {
+        return
+    }
     _ms_last_enter := A_TickCount
     if !BindValidity {
         ms.setMacros(1)
