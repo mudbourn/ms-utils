@@ -239,12 +239,14 @@ jobs:
             gh release create "$TAG" \
               --title "mudscript v${VERSION}" \
               --notes-file release-notes.md \
+              --target main \
               $ASSETS
           else
             echo "Creating release without assets..."
             gh release create "$TAG" \
               --title "mudscript v${VERSION}" \
-              --notes-file release-notes.md
+              --notes-file release-notes.md \
+              --target main
           fi
 
           echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/$TAG"
