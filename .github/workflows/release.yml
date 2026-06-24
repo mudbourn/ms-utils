@@ -145,6 +145,13 @@ jobs:
           Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
           Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
           Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
+          # Validate ms_core.ahk is not corrupted (check line 2304 length)
+          $line2304 = (Get-Content "$dist\ms_core.ahk" -ReadCount 0)[2303]
+          if ($line2304.Length -gt 200) {
+            Write-Error "ms_core.ahk line 2304 is $($line2304.Length) chars — possible corruption!"
+            exit 1
+          }
+          Write-Output "ms_core.ahk validated: line 2304 = $($line2304.Length) chars"
           $archive = "mudscript-windows-${version}.zip"
           Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
           Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
