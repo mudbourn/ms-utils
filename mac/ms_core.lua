@@ -2237,6 +2237,21 @@
                         local cur = ms.integrity.hashFile(corePath)
                         local sameHash = cur and cur:lower() == manifest.sha256:lower()
                         local sameVer  = localVersion and manifest.version and localVersion == manifest.version
+                        -- Self-heal: if hash matches (we ARE on this version)
+                        -- but the local manifest is stale, update it silently.
+                        if sameHash and not sameVer then
+                            local mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
+                            if mf then
+                                mf:write(hs.json.encode({
+                                    version = manifest.version,
+                                    sha256  = manifest.sha256,
+                                    url     = manifest.url,
+                                    windows_url     = manifest.windows_url,
+                                    windows_sha256  = manifest.windows_sha256,
+                                })); mf:close()
+                            end
+                            sameVer = true
+                        end
                         if sameHash and sameVer then
                             if callback then pcall(callback, nil); return end
                         end
