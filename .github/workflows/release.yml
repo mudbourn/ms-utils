@@ -138,7 +138,7 @@ jobs:
           $version = "${{ needs.stamp.outputs.version }}"
           $dist = "mudscript-$version"
           mkdir $dist
-          & .\bin\generate_icon.ps1
+          & .\win\bin\generate_icon.ps1
           Copy-Item "win\install.bat","win\init.ahk","win\_ms_main.ahk","win\ms_core_v2.ahk","win\ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
           Copy-Item -Recurse "ui","win\lib","win\bin","data" "$dist\"
           Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
