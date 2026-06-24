@@ -852,7 +852,9 @@ class ms {
         local _state := state
         _ms_notify_timer := () {
             global loadfinish
-            if loadfinish != 1  return
+            if loadfinish != 1 {
+                return
+            }
             if _state = 1 {
                 ms.playSlot("enabled")
                 ms.alert("Macros enabled!", 3, true)
@@ -2554,7 +2556,9 @@ do {
     ; Dismiss function — fades out and destroys
     global _ms_loadDismiss := () {
         local gui := _lGui
-        if !gui  return
+        if !gui {
+            return
+        }
         local step := 0
         SetTimer () {
             step++
