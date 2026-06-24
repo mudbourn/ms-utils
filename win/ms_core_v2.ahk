@@ -1680,9 +1680,9 @@ YQIDAQAB
 ;; Toast System ;;
     _ms_toastQueue := []
     _ms_toastMax  := 4
-    _ms_toastBase := 150       ; px above bottom (matches macOS)
-    _ms_toastGap  := 8
-    _ms_toastFade := 225       ; 0-255, lower=more transparent
+    _ms_toastBase := 80        ; px above bottom
+    _ms_toastGap  := 6
+    _ms_toastFade := 225
 
     _ms_showToast(msg, duration := 5) {
         ; Evict oldest if queue full
@@ -1691,59 +1691,44 @@ YQIDAQAB
             try oldest.gui.Destroy()
         }
 
-        ; Theme: macOS uses surface2 (not bg) + accent stroke + 0.88 alpha
         bg  := Trim(_ms_theme["surface2"], "#")
         fg  := Trim(_ms_theme["text"], "#")
-        ac  := Trim(_ms_theme["accent"], "#")
-        font := _ms_theme.Has("font") && _ms_theme["font"] != "" ? _ms_theme["font"] : "Segoe UI"
+        font := _ms_theme.Has("font") && _ms_theme["font"] != "" ? _ms_theme["font"] : ""
 
-        ; Build toast Gui with accent-colored border via BackColor + margin trick
         hGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80000")
         hGui.BackColor := bg
-        hGui.MarginX := 16, hGui.MarginY := 12
-        ; Font size 13 to match macOS
-        hGui.SetFont("s13 c" fg, font)
+        hGui.MarginX := 14, hGui.MarginY := 8
+        if font != ""
+            hGui.SetFont("s11 c" fg, font)
+        else
+            hGui.SetFont("s11 c" fg)
 
-        ; Measure text (handle multi-line)
-        lines := StrSplit(msg, "`n")
-        maxW := 200
-        for line in lines {
-            ; rough char width estimate: 8px per char (matches macOS)
-            estW := StrLen(line) * 8 + 32
-            if estW > maxW
-                maxW := estW
-        }
-        textH := lines.Length * 22    ; line height 22px
-        guiW := Min(maxW, 600)        ; capped at 600 (matches macOS)
-        guiH := textH + 32            ; padding 32 (matches macOS)
+        ; Centered text control at full width
+        hGui.Add("Text", "Center", msg)
 
-        ; Measure actual text for each line
-        hCtrl := hGui.Add("Text", "Center x" 0 " w" guiW, msg)
-        hCtrl.GetPos(,, &tw, &th)
-        guiW := Max(200, Min(600, tw + 32))
-        guiH := Max(th + 24, guiH)
+        ; Measure by autosizing, then reposition
+        hGui.Show("AutoSize")
+        hGui.GetPos(,, &tw, &th)
+        guiW := Max(220, Min(560, tw + 12))
+        guiH := th + 4
 
-        ; Stack from bottom right-to-left (macOS uses bottom-up stack)
+        ; Stack from bottom
         MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
         x := sL + (sR - sL - guiW) // 2
 
         totalH := 0
-        for entry in _ms_toastQueue {
-            if entry.HasProp("_h")
-                totalH += entry._h + _ms_toastGap
-        }
+        for entry in _ms_toastQueue
+            totalH += entry._h + _ms_toastGap
         y := sB - _ms_toastBase - totalH - guiH
 
-        hGui.Show("w" guiW " h" guiH " x" x " y" y " NoActivate")
+        hGui.Move(x, y, guiW, guiH)
+        hGui.Show("NoActivate")
         WinSetTransparent _ms_toastFade, hGui
 
         entry := {gui: hGui, msg: msg, _h: guiH}
         _ms_toastQueue.Push(entry)
 
-        ; Auto-dismiss timer
         SetTimer () => _ms_toastDismiss(hGui), -(duration * 1000)
-
-        ; Click to dismiss
         hGui.OnEvent("Close", (*) => _ms_toastDismiss(hGui))
     }
 
@@ -2387,17 +2372,19 @@ YQIDAQAB
             ; 2. Library creator — after first toast fades (3s delay), 3s duration
             SetTimer () => ms.alert("mudscript Windows Runtime`nBy: mudbourn — https://mudbourn.info", 3, true), -3000
             ; 3. Macro pack creator — after second toast (6s delay), 3s duration
-            SetTimer () => (
-                ms.macroMeta.HasProp("name") ? (
-                    msg := """" ms.macroMeta.name """"
-                    ms.macroMeta.HasProp("author")  ? msg .= "`nBy: " ms.macroMeta.author : ""
-                    ms.macroMeta.HasProp("website") ? msg .= " — " ms.macroMeta.website : ""
-                    ms.alert(msg, 3, true)
-                ) : 0
-            ), -6000
+            SetTimer _ms_showMacroToast, -6000
             _ms_loadDone := true
             BindValidity := 1
             _ms_loadingDismiss()
+        }
+
+        _ms_showMacroToast() {
+            if !ms.macroMeta.HasProp("name")
+                return
+            msg := Chr(34) ms.macroMeta.name Chr(34)
+            ms.macroMeta.HasProp("author")  ? msg .= "`nBy: " ms.macroMeta.author : ""
+            ms.macroMeta.HasProp("website") ? msg .= " — " ms.macroMeta.website : ""
+            ms.alert(msg, 3, true)
         }
 
     ;; Tray Icon ;;
