@@ -1219,7 +1219,9 @@ class ms {
             }
 
         }
-        if data.Has("soundEnabled") _ms_soundEnabled := (data["soundEnabled"] = true)
+        if data.Has("soundEnabled") {
+            _ms_soundEnabled := (data["soundEnabled"] = true)
+        }
         if data.Has("soundVolume") {
             local v := Number(data["soundVolume"])
             if v >= 0 && v <= 100 {
@@ -1230,7 +1232,9 @@ class ms {
         if data.Has("soundAssign") {
             _ms_soundAssign    := data["soundAssign"]
         }
-        if data.Has("importedSounds") _ms_importedSounds := data["importedSounds"]
+        if data.Has("importedSounds") {
+            _ms_importedSounds := data["importedSounds"]
+        }
         if data.Has("macros") {
             for id, entry in data["macros"] {
                 if entry.Has("enabled") {
@@ -1621,7 +1625,9 @@ class ms {
         if feature = "profiles" {
             return _ms_getProfiles().Length > 0
         }
-        if feature = "userSettings" return true
+        if feature = "userSettings" {
+            return true
+        }
         if feature = "userMenu" {
             return true
         }
@@ -3054,8 +3060,8 @@ _ms_AppPoll() {
         ms.cam.updateMultiplier()
         if !_ms_loadDone {
             ; don't enable macros while loading toasts haven't fired yet
-        }
             return
+        }
         if _ms_ui_open_flag {  ; returning from panel — re-enable silently
             BindValidity := 1
         } else {
@@ -3247,7 +3253,9 @@ _ms_loadAnnounce() {
         if ms.macroMeta.HasProp("author") {
             msg .= "`nBy: " ms.macroMeta.author
         }
-        if ms.macroMeta.HasProp("website") msg .= " — " ms.macroMeta.website
+        if ms.macroMeta.HasProp("website") {
+            msg .= " — " ms.macroMeta.website
+        }
         ms.alert(msg, 6)
     }
 
