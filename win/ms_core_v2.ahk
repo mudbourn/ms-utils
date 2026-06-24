@@ -1702,7 +1702,7 @@ YQIDAQAB
         hGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80000")
         hGui.BackColor := bg
         hGui.MarginX := 16, hGui.MarginY := 10
-        hGui.SetFont("s10 c " fg, font)
+        hGui.SetFont("s10 c" fg, font)
 
         ; Measure text
         hCtrl := hGui.Add("Text",, msg)
@@ -1717,7 +1717,7 @@ YQIDAQAB
         ; Compute stacked Y from all active toasts
         totalH := 0
         for entry in _ms_toastQueue {
-            if entry.Has("_h")
+            if entry.HasProp("_h")
                 totalH += entry._h + _ms_toastGap
         }
         y := sB - _ms_toastBase - totalH - th - padH
@@ -1742,7 +1742,7 @@ YQIDAQAB
 
     _ms_toastDismiss(hGui) {
         for i, entry in _ms_toastQueue {
-            if entry.Has("gui") && entry.gui = hGui {
+            if entry.HasProp("gui") && entry.gui = hGui {
                 _ms_toastQueue.RemoveAt(i)
                 try hGui.Destroy()
                 _ms_toastRedraw()
