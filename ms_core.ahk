@@ -2594,10 +2594,12 @@ _ms_loadAnnounce() {
 }
 
 ; ── Tray icon & menu ─────────────────────────────────────────────────────────
-; Custom tray icon: place ms_icon.ico in ui/icons/.
-; Falls back to the default AutoHotkey icon if the file is missing.
+; Custom tray icon: place ms_icon.png or ms_icon.ico in ui/icons/.
+; Falls back to the default AutoHotkey icon if no file is found.
 do {
-    local iconPath := A_ScriptDir "\ui\icons\ms_icon.ico"
+    local iconPath := A_ScriptDir "\ui\icons\ms_icon.png"
+    if !FileExist(iconPath)
+        iconPath := A_ScriptDir "\ui\icons\ms_icon.ico"
     if FileExist(iconPath)
         TraySetIcon(iconPath)
     A_IconTip := "mudscript — " (ms.macroMeta.HasProp("name") ? ms.macroMeta.name : "Macro Utilities")

@@ -17,7 +17,7 @@
 $scriptDir = Split-Path -Parent $PSCommandPath
 $rootDir   = Split-Path -Parent $scriptDir
 $iconsDir  = Join-Path $rootDir "ui\icons"
-$icoPath   = Join-Path $iconsDir "ms_icon.ico"
+$iconOut   = Join-Path $iconsDir "ms_icon.png"
 
 Add-Type -AssemblyName System.Drawing
 
@@ -64,14 +64,8 @@ if (-not $source) {
     $source = New-FallbackIcon -Size 32
 }
 
-# Save as .ico
-$icoStream = New-Object System.IO.MemoryStream
-$source.Save($icoStream, [System.Drawing.Imaging.ImageFormat]::Icon)
+# Save as .png (AHK TraySetIcon supports PNG)
+$source.Save($iconOut, [System.Drawing.Imaging.ImageFormat]::Png)
 $source.Dispose()
 
-# Write to file
-$fs = [System.IO.File]::Open($icoPath, 'Create')
-$icoStream.WriteTo($fs)
-$fs.Close(); $icoStream.Dispose()
-
-Write-Output "  Created: $icoPath"
+Write-Output "  Created: $iconOut"

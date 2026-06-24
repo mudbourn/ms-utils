@@ -131,7 +131,7 @@ if exist "%COMVAR_FILE%" ( echo ComVar.ahk:      OK ) else ( echo ComVar.ahk:   
 if exist "%PROMISE_FILE%" ( echo Promise.ahk:    OK ) else ( echo Promise.ahk:    MISSING & set ALL_OK=false )
 if exist "%WV2_DIR%"  ( echo WebView2/ folder:  OK ) else ( echo WebView2/ folder:  MISSING )
 if exist "%JXON_FILE%" ( echo Jxon.ahk:          OK ) else ( echo Jxon.ahk:          MISSING & set ALL_OK=false )
-if exist "%LIB_DIR%\..\ui\icons\ms_icon.ico" ( echo ms_icon.ico:       OK ) else ( echo ms_icon.ico:       FALLBACK )
+if exist "%LIB_DIR%\..\ui\icons\ms_icon.png" ( echo ms_icon.png:       OK ) else ( echo ms_icon.png:       FALLBACK )
 echo.
 
 if "%ALL_OK%"=="false" (

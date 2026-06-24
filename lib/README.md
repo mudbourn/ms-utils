@@ -10,7 +10,7 @@ Run this from the project root — it downloads everything automatically:
 bin\install_deps.bat
 ```
 
-This also generates a tray icon (`ui/icons/ms_icon.ico`) from the source `.tiff` files.
+This also generates a tray icon (`ui/icons/ms_icon.png`) from the source `.tiff` files.
 
 ## Files
 
