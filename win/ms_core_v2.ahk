@@ -979,7 +979,7 @@ YQIDAQAB
                     _ms_ui_pos := {x:x, y:y, w:panelW, h:panelH}
                     hWv := WebView2.create(hGui.Hwnd)
                     hWvCore := hWv.CoreWebView2
-                    hWvCore.Navigate("file:///" StrReplace(A_ScriptDir "\ui\ms_settings_ui.html", "\", "/"))
+                    hWvCore.Navigate("file:///" StrReplace(A_ScriptDir "\..\ui\ms_settings_ui.html", "\", "/"))
                     hWvCore.add_WebMessageReceived(_ms_ui_onMessage)
                     _ms_ui_panel_gui := hGui
                     _ms_ui_panel_wv  := hWv
@@ -1726,7 +1726,7 @@ YQIDAQAB
 
         _ms_loadingWvReady(hWv) {
             global _ms_loadGui, _ms_loadWv, _ms_theme
-            hWv.CoreWebView2.Navigate("file:///" StrReplace(A_ScriptDir "\ui\ms_loading.html", "\", "/"))
+            hWv.CoreWebView2.Navigate("file:///" StrReplace(A_ScriptDir "\..\ui\ms_loading.html", "\", "/"))
             ; Push theme once page loads so HTML can style itself from ms_theme.json values
             hWv.CoreWebView2.add_NavigationCompleted((w, *) => (
                 w.ExecuteScript("applyTheme(" Jxon_Dump(_ms_theme, 0) ")")

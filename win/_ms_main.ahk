@@ -37,7 +37,7 @@ _ms_runGuardian(trusted, current, hashPath) {
     _ms_guardGui.OnEvent("Close", (*) => ExitApp())
 
     _ms_guardWv := WebView2.create(_ms_guardGui.hwnd)
-    local url := "file:///" StrReplace(A_ScriptDir "\ui\ms_guardian.html", "\", "/")
+    local url := "file:///" StrReplace(A_ScriptDir "\..\ui\ms_guardian.html", "\", "/")
     _ms_guardWv.Navigate(url)
 
     ; Store callbacks in statics so they are not garbage-collected.
