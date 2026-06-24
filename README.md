@@ -16,20 +16,18 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 
 ## One-shot install
 
-Each installer is fully self-contained — download the single file and run it. If the rest of the repo isn't present, it fetches the latest release from GitHub.
-
 **macOS:**
 ```bash
 curl -L https://raw.githubusercontent.com/mudbourn/ms-utils/main/install.sh | bash
 ```
+Downloads the repo, installs the Guardian Launch Agent, locks `init.lua`, and reloads Hammerspoon.
 
-**Windows (Run as Administrator):**
-```batch
-curl -LO https://raw.githubusercontent.com/mudbourn/ms-utils/main/install.bat
-install.bat
-```
+**Windows** — use the [release zip](https://github.com/mudbourn/ms-utils/releases):
+1. Install [AutoHotkey v2](https://www.autohotkey.com/) (signed — no warnings)
+2. Download `mudscript-windows-*.zip` and extract
+3. Run `init.ahk`
 
-The installer downloads dependencies, sets up the OS-level Guardian, locks the bootstrap stub, and prints next steps.
+Or if you cloned the repo, `install.bat` handles dependency downloads, guardian setup, and startup registration (run as Administrator).
 
 ---
 
@@ -65,10 +63,10 @@ The installer downloads dependencies, sets up the OS-level Guardian, locks the b
 │   ├── install_deps.bat         [Windows] Auto-download WebView2.ahk and Jxon.ahk to lib/.
 │   └── make_release.sh / .bat        Developer utility — stamp MANIFEST hash / bump version.
 │
-├── lib/                   [Windows only — dependencies]
-│   ├── WebView2.ahk       Download from thqby/ahk2_lib
+├── lib/                   [Windows only — bundled in release zip]
+│   ├── WebView2.ahk       Required by init.ahk and ms_core.ahk
 │   ├── WebView2/          Companion folder for WebView2.ahk
-│   └── Jxon.ahk           Download from TheArkive/JXON_ahk2
+│   └── Jxon.ahk           Required by init.ahk and ms_core.ahk
 │
 ├── data/                  Per-user runtime files — all gitignored.
 │   ├── ms_settings.json        Live settings (binds, sensitivity, sound, etc.)
