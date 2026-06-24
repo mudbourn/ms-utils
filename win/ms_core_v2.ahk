@@ -1897,6 +1897,23 @@ YQIDAQAB
     }
 ;; END Dev Log Archive ;;
 
+;; JSON Sanitizer Helper ;;
+    _ms_sanitizeDefs(arr) {
+        result := []
+        for def in arr {
+            clean := Map()
+            if IsObject(def) {
+                for k, v in (def is Map ? def : def.OwnProps()) {
+                    if !(v is Func) && !(v is Closure) && !(v is BoundFunc)
+                        clean[k] := v
+                }
+            }
+            result.Push(clean)
+        }
+        return result
+    }
+;; END JSON Sanitizer Helper ;;
+
 ;; UI State Builder ;;
     _ms_buildUIState() {
         global _ms_binds, _ms_bindConfig, _ms_subBinds, _ms_modConfig
@@ -1952,6 +1969,10 @@ YQIDAQAB
         status := ms.integrity.check()
         meta := ms.macroMeta
 
+        ; Strip non-serializable function callbacks from user/menu defs
+        safeUserDefs := _ms_sanitizeDefs(_ms_user_defs)
+        safeMenuDefs := _ms_sanitizeDefs(_ms_menu_defs)
+
         return Map(
             "theme",            _ms_theme,
             "sensitivity",      CUR_CAM_SENS,
@@ -1971,9 +1992,9 @@ YQIDAQAB
             "macroVersion",     meta.HasProp("version") ? meta.version : "",
             "version",          "1.2.0",
             "integrity",        status,
-            "userDefs",         _ms_user_defs,
+            "userDefs",         safeUserDefs,
             "userVals",         _ms_user_vals,
-            "menuDefs",         _ms_menu_defs,
+            "menuDefs",         safeMenuDefs,
             "hiddenFeats",      _ms_hidden_feats,
             "profiles",         _ms_getProfiles(),
             "bindValidity",     BindValidity,
