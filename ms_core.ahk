@@ -1095,8 +1095,12 @@ class ms {
     }
         if ms.macroDefaults.HasProp("macros") {
             for id, entry in ms.macroDefaults.macros {
-                if !data["macros"].Has(id)  data["macros"][id] := Map()
-                for k, v in entry  data["macros"][id][k] := v
+                if !data["macros"].Has(id) {
+                    data["macros"][id] := Map()
+                }
+                for k, v in entry {
+                    data["macros"][id][k] := v
+                }
             }
         }
         try FileOpen(_ms_default_path, "w").Write(Jxon_Dump(data, 4))
