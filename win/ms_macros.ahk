@@ -276,7 +276,7 @@
 
     ;; Swing Cancel ;;
         FakeSwingFunction() {
-            ms.Mouse(Click, Left, Mouse, 0, 0)
+            ms.Mouse("Click", "Left", "Mouse", 0, 0)
             ms.wait(99)
             ms.type("5")
             ms.wait(5)
@@ -328,14 +328,14 @@
 
     ;; Quick Slide ;;
         QuickSlideFunction() {
-            ms.Mouse(Release, Right, Mouse, 0, 0)
+            ms.Mouse("Release", "Right", "Mouse", 0, 0)
             ms.type("z")
             ms.wait(8)
             ms.press("w")
             ms.wait(8)
             ms.release("w")
             ms.wait(12)
-            ms.Mouse(Click, Left, WindowTL, 920, 680)
+            ms.Mouse("Click", "Left", "WindowTL", 920, 680)
             ms.sound(QuickSlideSound, true)
             ms.wait(200)
         }
@@ -372,21 +372,21 @@
             ms.release("space")
             ms.wait(5)
             ms.press("c")
-            ms.Mouse(Move, Left, WindowTL, 0, 0)
+            ms.Mouse("Move", "Left", "WindowTL", 0, 0)
             ms.type("z")
             ms.wait(200)
             Loop 2 {
-                ms.Mouse(Click, Left, WindowTL, 445, 37)
+                ms.Mouse("Click", "Left", "WindowTL", 445, 37)
                 ms.wait(10)
             }
             ms.wait(20)
             Loop 3 {
-                ms.Mouse(Click, Left, WindowTL, 467, d1)
+                ms.Mouse("Click", "Left", "WindowTL", 467, d1)
                 ms.wait(30)
                 ms.release("c")
             }
             Loop 15 {
-                ms.Mouse(Click, Left, WindowTL, 467, d2)
+                ms.Mouse("Click", "Left", "WindowTL", 467, d2)
                 ms.wait(30)
             }
             ms.wait(400)
@@ -406,12 +406,12 @@
             local d3 := getD3()
             ms.type("z")
             ms.wait(10)
-            ms.Mouse(Move, Left, WindowTL, 437, 34)
+            ms.Mouse("Move", "Left", "WindowTL", 437, 34)
             ms.wait(100)
-            ms.Mouse(Click, Left, WindowTL, 452, d3)
+            ms.Mouse("Click", "Left", "WindowTL", 452, d3)
             ms.wait(50)
             while ms.keystate("=") {
-                ms.Mouse(Click, Left, Mouse, 0, 0)
+                ms.Mouse("Click", "Left", "Mouse", 0, 0)
                 ms.wait(15)
             }
             ms.wait(150)
