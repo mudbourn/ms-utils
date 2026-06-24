@@ -132,37 +132,32 @@ chmod 444 ~/.hammerspoon/init.lua
 
 ## Windows install
 
-### Prerequisites
+### Quick start (no SmartScreen warnings)
 
-1. **AutoHotkey v2** — Download and install from [autohotkey.com](https://www.autohotkey.com/)
-2. **WebView2 Runtime** — Pre-installed on Windows 10 21H2+ and all Windows 11.
-   If missing, download from [Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
-3. **Dependencies** — Auto-download (fast, recommended):
-   ```batch
-   bin\install_deps.bat
-   ```
-   Or manually place in `lib\`:
-   - `WebView2.ahk` (and `WebView2/` folder) from [thqby/ahk2_lib](https://github.com/thqby/ahk2_lib/tree/master/WebView2)
-   - `Jxon.ahk` from [TheArkive/JXON_ahk2](https://github.com/TheArkive/JXON_ahk2)
+1. **Install AutoHotkey v2** — Download from [autohotkey.com](https://www.autohotkey.com/)
+   - The installer is code-signed by Lexikos — no SmartScreen warning.
+2. **Download the latest release** from [GitHub Releases](https://github.com/mudbourn/ms-utils/releases)
+   - Get `mudscript-windows-*.zip` — no warnings for `.zip` files.
+3. **Extract** the zip anywhere (%USERPROFILE%\.hammerspoon\ is recommended).
+4. **Run** `init.ahk` — runs through the signed AutoHotkey interpreter.
+   - Scripts (.ahk) are not checked by SmartScreen.
+   - Dependencies (WebView2\, Jxon) are bundled in the zip.
 
-### Setup
+**No downloaded scripts to run. No unsigned binaries. No SmartScreen.**
+
+### Optional: Guardian, startup, and hardening
+
+After confirming mudscript works, you can set up additional layers:
 
 ```batch
-REM 1. Copy repo contents to %USERPROFILE%\.hammerspoon\
-xcopy /E /I . %USERPROFILE%\.hammerspoon\
-
-REM 2. Install the OS-level Guardian Scheduled Task
-REM    (Run as Administrator)
+REM Install OS-level Guardian (Scheduled Task) — requires Admin
 %USERPROFILE%\.hammerspoon\bin\install_guardian_agent.bat
 
-REM 3. Lock the bootstrap stub (optional but recommended)
+REM Lock the bootstrap stub
 attrib +r %USERPROFILE%\.hammerspoon\init.ahk
 
-REM 4. (Optional) Auto-start on logon
-bin\install_startup.bat
-
-REM 5. Launch AutoHotkey on init.ahk
-REM    Double-click init.ahk (or restart — startup shortcut handles it)
+REM Auto-start on logon (optional)
+%USERPROFILE%\.hammerspoon\bin\install_startup.bat
 ```
 
 ### First launch

@@ -133,6 +133,35 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Download library dependencies
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          mkdir lib -Force
+
+          # WebView2.ahk
+          Write-Output "Downloading WebView2.ahk..."
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk" `
+            -OutFile "lib\WebView2.ahk" -UseBasicParsing
+
+          # WebView2/ folder
+          mkdir lib\WebView2 -Force
+          $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
+          $items = Invoke-RestMethod $github
+          foreach ($item in $items) {
+            if ($item.type -eq 'file') {
+              $out = "lib\WebView2\$($item.name)"
+              Invoke-WebRequest -Uri $item.download_url -OutFile $out -UseBasicParsing
+            }
+          }
+
+          # Jxon.ahk
+          Write-Output "Downloading Jxon.ahk..."
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/TheArkive/JXON_ahk2/main/Jxon.ahk" `
+            -OutFile "lib\Jxon.ahk" -UseBasicParsing
+
+          Write-Output "Dependencies downloaded."
+
       - name: Build Windows package
         id: win_build
         if: matrix.platform == 'windows'
@@ -155,6 +184,7 @@ jobs:
           Copy-Item "MANIFEST.json"                 "$dist\"
           Copy-Item "writing_style.txt"             "$dist\"
           Copy-Item -Recurse "ui"                   "$dist\ui\"
+          Copy-Item -Recurse "lib"                  "$dist\lib\"
           Copy-Item -Recurse "bin"                  "$dist\bin\"
           Copy-Item -Recurse "data"                 "$dist\data\"
           Copy-Item -Recurse "sounds"               "$dist\sounds\" -ErrorAction SilentlyContinue
@@ -170,9 +200,8 @@ jobs:
           Remove-Item "$dist\install.sh"             -ErrorAction SilentlyContinue
           Remove-Item "$dist\.gitignore"             -ErrorAction SilentlyContinue
 
-          # NOTE: We ship .ahk source files intentionally. The compiled EXE from
-          # Ahk2Exe would be unsigned and trigger SmartScreen warnings. Users run
-          # .ahk files through the signed AutoHotkey interpreter instead.
+          # NOTE: We ship .ahk source files — users run them through the signed
+          # AutoHotkey interpreter. No SmartScreen warnings.
 
           # Create zip
           $archive = "mudscript-windows-${version}.zip"
