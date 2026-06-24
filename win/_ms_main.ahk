@@ -3,28 +3,32 @@
 ; Keep this file read-only after install: attrib +r _ms_main.ahk
 
 #Requires AutoHotkey v2.0
-#Include lib\WebView2.ahk   ; thqby/WebView2.ahk  — install to lib\
-#Include lib\Jxon.ahk       ; thqby/Jxon.ahk      — install to lib\
+#Include lib\WebView2.ahk
+#Include lib\Jxon.ahk
 
-; ── Persistent handles (super-globals so _ms_runGuardian can assign them) ─────
-global _ms_guardGui := 0, _ms_guardWv := 0
+;; Persistent Handles ;;
+    ; Super-globals so _ms_runGuardian can assign them.
+    global _ms_guardGui := 0, _ms_guardWv := 0
+;; END Persistent Handles ;;
 
-; ── Startup hash check ────────────────────────────────────────────────────────
-_ms_corePath := A_ScriptDir "\ms_core.ahk"
-_ms_hashPath := A_ScriptDir "\data\.ms_trusted_hash"
-_ms_current  := _ms_sha256(_ms_corePath)
-_ms_trusted  := _ms_readHash(_ms_hashPath)
+;; Startup Hash Check ;;
+    _ms_corePath := A_ScriptDir "\ms_core_v2.ahk"
+    _ms_hashPath := A_ScriptDir "\data\.ms_trusted_hash"
+    _ms_current  := _ms_sha256(_ms_corePath)
+    _ms_trusted  := _ms_readHash(_ms_hashPath)
 
-if (_ms_trusted != "" && _ms_current != _ms_trusted) {
-    _ms_runGuardian(_ms_trusted, _ms_current, _ms_hashPath)
-    return              ; end auto-execute; GUI event loop keeps the script alive
-}
+    if (_ms_trusted != "" && _ms_current != _ms_trusted) {
+        _ms_runGuardian(_ms_trusted, _ms_current, _ms_hashPath)
+        return
+    }
+;; END Startup Hash Check ;;
 
-; ── Hash OK (or no trusted hash yet) — fall through to core ──────────────────
+; Hash OK (or no trusted hash yet) — fall through to core.
 #Include ms_core_v2.ahk
 
 ; ═════════════════════════════════════════════════════════════════════════════
-; Guardian helpers  (AHKv2 hoists all function defs — safe to define after #Include)
+; Guardian helpers  (AHKv2 hoists all function defs — safe to define after
+; #Include)
 ; ═════════════════════════════════════════════════════════════════════════════
 
 _ms_runGuardian(trusted, current, hashPath) {
