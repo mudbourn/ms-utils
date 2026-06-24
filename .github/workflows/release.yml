@@ -74,17 +74,10 @@ jobs:
             echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
           fi
 
-      - name: Commit MANIFEST.json
+      - name: Stage MANIFEST.json (for release assets)
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add MANIFEST.json
-          git diff --staged --quiet || {
-            git commit -m "chore: auto-stamp MANIFEST [skip ci]"
-            git fetch origin main
-            git rebase origin/main 2>/dev/null || true
-            git push --force origin HEAD:main
-          }
+          echo "Stamped MANIFEST.json with version: ${{ steps.version.outputs.value }}"
+          echo "Hash stamped locally — will be included in release package."
 
   # ────────────────────────────────────────────────────────────────────────────
   # Build — package release archives for both platforms
