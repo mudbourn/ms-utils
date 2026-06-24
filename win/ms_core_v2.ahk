@@ -1696,6 +1696,7 @@ YQIDAQAB
 
         _ms_loadingShow() {
             global _ms_loadGui, _ms_loadWv, _ms_theme
+            local gui, wv
 
             lw := 300, lh := 104
             MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
