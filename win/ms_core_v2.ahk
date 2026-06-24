@@ -1678,62 +1678,69 @@ YQIDAQAB
 ;; END Notify ;;
 
 ;; Toast System ;;
-    _ms_toastQueue := []       ; active toast entries: {gui, msg, _h}
-    _ms_toastMax  := 4         ; max visible toasts
-    _ms_toastBase := 80        ; px from bottom of screen
-    _ms_toastGap  := 8         ; px gap between toasts
-    _ms_toastFade := 220       ; transparency level (0-255, lower=more transparent)
+    _ms_toastQueue := []
+    _ms_toastMax  := 4
+    _ms_toastBase := 150       ; px above bottom (matches macOS)
+    _ms_toastGap  := 8
+    _ms_toastFade := 225       ; 0-255, lower=more transparent
 
-    _ms_showToast(msg, duration := 3) {
-        ; If queue is full, dismiss the oldest
+    _ms_showToast(msg, duration := 5) {
+        ; Evict oldest if queue full
         if _ms_toastQueue.Length >= _ms_toastMax {
             oldest := _ms_toastQueue.RemoveAt(1)
-            if oldest.Has("gui") && IsObject(oldest.gui)
-                try oldest.gui.Destroy()
+            try oldest.gui.Destroy()
         }
 
-        ; Read theme values
-        bg := Trim(_ms_theme["bg"], "#")
-        fg := Trim(_ms_theme["text"], "#")
-        radius := _ms_theme.Has("radius") ? Integer(_ms_theme["radius"]) : 3
+        ; Theme: macOS uses surface2 (not bg) + accent stroke + 0.88 alpha
+        bg  := Trim(_ms_theme["surface2"], "#")
+        fg  := Trim(_ms_theme["text"], "#")
+        ac  := Trim(_ms_theme["accent"], "#")
         font := _ms_theme.Has("font") && _ms_theme["font"] != "" ? _ms_theme["font"] : "Segoe UI"
 
-        ; Build toast Gui
+        ; Build toast Gui with accent-colored border via BackColor + margin trick
         hGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80000")
         hGui.BackColor := bg
-        hGui.MarginX := 16, hGui.MarginY := 10
-        hGui.SetFont("s10 c" fg, font)
+        hGui.MarginX := 16, hGui.MarginY := 12
+        ; Font size 13 to match macOS
+        hGui.SetFont("s13 c" fg, font)
 
-        ; Measure text
-        hCtrl := hGui.Add("Text",, msg)
+        ; Measure text (handle multi-line)
+        lines := StrSplit(msg, "`n")
+        maxW := 200
+        for line in lines {
+            ; rough char width estimate: 8px per char (matches macOS)
+            estW := StrLen(line) * 8 + 32
+            if estW > maxW
+                maxW := estW
+        }
+        textH := lines.Length * 22    ; line height 22px
+        guiW := Min(maxW, 600)        ; capped at 600 (matches macOS)
+        guiH := textH + 32            ; padding 32 (matches macOS)
+
+        ; Measure actual text for each line
+        hCtrl := hGui.Add("Text", "Center x" 0 " w" guiW, msg)
         hCtrl.GetPos(,, &tw, &th)
-        tw := Max(tw, 200), th := Max(th, 20)
-        padW := 32, padH := 20
+        guiW := Max(200, Min(600, tw + 32))
+        guiH := Max(th + 24, guiH)
 
-        ; Calculate position — stacked from bottom
+        ; Stack from bottom right-to-left (macOS uses bottom-up stack)
         MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
-        x := sL + (sR - sL - tw - padW) // 2
+        x := sL + (sR - sL - guiW) // 2
 
-        ; Compute stacked Y from all active toasts
         totalH := 0
         for entry in _ms_toastQueue {
             if entry.HasProp("_h")
                 totalH += entry._h + _ms_toastGap
         }
-        y := sB - _ms_toastBase - totalH - th - padH
+        y := sB - _ms_toastBase - totalH - guiH
 
-        guiW := tw + padW
-        guiH := th + padH
         hGui.Show("w" guiW " h" guiH " x" x " y" y " NoActivate")
-
-        ; Semi-transparent
         WinSetTransparent _ms_toastFade, hGui
 
-        ; Store entry
         entry := {gui: hGui, msg: msg, _h: guiH}
         _ms_toastQueue.Push(entry)
 
-        ; Auto-dismiss timer (one-shot, negative period)
+        ; Auto-dismiss timer
         SetTimer () => _ms_toastDismiss(hGui), -(duration * 1000)
 
         ; Click to dismiss
@@ -1751,23 +1758,14 @@ YQIDAQAB
         }
     }
 
-    _ms_toastDismissAll() {
-        for entry in _ms_toastQueue {
-            try entry.gui.Destroy()
-        }
-        _ms_toastQueue := []
-    }
-
     _ms_toastRedraw() {
-        ; Reposition remaining toasts
         MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
         totalH := 0
         for entry in _ms_toastQueue {
-            hGui := entry.gui
-            hGui.GetPos(&gx, &gy, &gw, &gh)
+            entry.gui.GetPos(&gx, &gy, &gw, &gh)
             x := sL + (sR - sL - gw) // 2
             y := sB - _ms_toastBase - totalH - gh
-            hGui.Move(x, y)
+            entry.gui.Move(x, y)
             totalH += gh + _ms_toastGap
         }
     }
@@ -2382,18 +2380,21 @@ YQIDAQAB
         SetTimer _ms_announceLoad, -500
         _ms_announceLoad() {
             global BindValidity, _ms_loadDone
-
             ms.playSlot("load")
-            ms.alert("mudscript Windows Runtime`nBy: mudbourn — https://mudbourn.info", 6)
-            if ms.macroMeta.HasProp("name") {
-                msg := '"' ms.macroMeta.name '"'
-                if ms.macroMeta.HasProp("author")
-                    msg .= "`nBy: " ms.macroMeta.author
-                if ms.macroMeta.HasProp("website")
-                    msg .= " — " ms.macroMeta.website
-                ms.alert(msg, 6)
-            }
-            ms.alert("Macros loaded. Press Alt+P to open settings.", 6)
+            ms.playSlot("launch")
+            ; 1. Settings notice — immediate, 3s duration
+            ms.alert("Macros loaded. Press Alt+P to open settings.", 3, true)
+            ; 2. Library creator — after first toast fades (3s delay), 3s duration
+            SetTimer () => ms.alert("mudscript Windows Runtime`nBy: mudbourn — https://mudbourn.info", 3, true), -3000
+            ; 3. Macro pack creator — after second toast (6s delay), 3s duration
+            SetTimer () => (
+                ms.macroMeta.HasProp("name") ? (
+                    msg := """" ms.macroMeta.name """"
+                    ms.macroMeta.HasProp("author")  ? msg .= "`nBy: " ms.macroMeta.author : ""
+                    ms.macroMeta.HasProp("website") ? msg .= " — " ms.macroMeta.website : ""
+                    ms.alert(msg, 3, true)
+                ) : 0
+            ), -6000
             _ms_loadDone := true
             BindValidity := 1
             _ms_loadingDismiss()
