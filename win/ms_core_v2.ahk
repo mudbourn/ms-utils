@@ -1012,7 +1012,7 @@ YQIDAQAB
                     global _ms_ui_panel_wv
                     if !_ms_ui_panel_wv
                         return
-                    json := Jxon_Dump(_ms_buildUIState(), 0)
+                    json := Jxon_Dump(_ms_sanitizeForJSON(_ms_buildUIState()), 0)
                     try _ms_ui_panel_wv.ExecuteScript("receiveState(" json ")")
                 }
 
@@ -1427,7 +1427,7 @@ YQIDAQAB
         if _ms_running.Has(group)
             return
         _ms_running[group] := true
-        SetTimer () => _ms_running.Delete(group), -cd
+        SetTimer () => _ms_running.Has(group) && _ms_running.Delete(group), -cd
         _ms_active_sub := ""
         ms._currentFlags := {alt: GetKeyState("Alt", "P"), ctrl: GetKeyState("Ctrl", "P"), shift: GetKeyState("Shift", "P"), win: GetKeyState("LWin", "P")}
         try fn()
@@ -1442,7 +1442,7 @@ YQIDAQAB
         if _ms_running.Has(group)
             return
         _ms_running[group] := true
-        SetTimer () => _ms_running.Delete(group), -cd
+        SetTimer () => _ms_running.Has(group) && _ms_running.Delete(group), -cd
         _ms_active_sub := id
         ms._currentFlags := {alt: GetKeyState("Alt", "P"), ctrl: GetKeyState("Ctrl", "P"), shift: GetKeyState("Shift", "P"), win: GetKeyState("LWin", "P")}
         fn()
@@ -1898,17 +1898,32 @@ YQIDAQAB
 ;; END Dev Log Archive ;;
 
 ;; JSON Sanitizer Helper ;;
-    _ms_sanitizeDefs(arr) {
-        result := []
-        for def in arr {
-            clean := Map()
-            if IsObject(def) {
-                for k, v in (def is Map ? def : def.OwnProps()) {
-                    if !(v is Func) && !(v is Closure) && !(v is BoundFunc)
-                        clean[k] := v
-                }
+    ; Recursively converts Objects to Maps so Jxon_Dump can serialize them.
+    _ms_sanitizeForJSON(val) {
+        if !IsObject(val)
+            return val
+        if val is Map {
+            result := Map()
+            for k, v in val {
+                if !(v is Func) && !(v is Closure) && !(v is BoundFunc)
+                    result[k] := _ms_sanitizeForJSON(v)
             }
-            result.Push(clean)
+            return result
+        }
+        if val is Array {
+            result := []
+            for v in val {
+                if !(v is Func) && !(v is Closure) && !(v is BoundFunc)
+                    result.Push(_ms_sanitizeForJSON(v))
+            }
+            return result
+        }
+        ; Plain Object — convert own properties to Map
+        result := Map()
+        for k in val.OwnProps() {
+            v := val.%k%
+            if !(v is Func) && !(v is Closure) && !(v is BoundFunc)
+                result[k] := _ms_sanitizeForJSON(v)
         }
         return result
     }
@@ -1969,10 +1984,6 @@ YQIDAQAB
         status := ms.integrity.check()
         meta := ms.macroMeta
 
-        ; Strip non-serializable function callbacks from user/menu defs
-        safeUserDefs := _ms_sanitizeDefs(_ms_user_defs)
-        safeMenuDefs := _ms_sanitizeDefs(_ms_menu_defs)
-
         return Map(
             "theme",            _ms_theme,
             "sensitivity",      CUR_CAM_SENS,
@@ -1992,9 +2003,9 @@ YQIDAQAB
             "macroVersion",     meta.HasProp("version") ? meta.version : "",
             "version",          "1.2.0",
             "integrity",        status,
-            "userDefs",         safeUserDefs,
+            "userDefs",         _ms_user_defs,
             "userVals",         _ms_user_vals,
-            "menuDefs",         safeMenuDefs,
+            "menuDefs",         _ms_menu_defs,
             "hiddenFeats",      _ms_hidden_feats,
             "profiles",         _ms_getProfiles(),
             "bindValidity",     BindValidity,
