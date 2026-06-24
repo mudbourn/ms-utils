@@ -825,13 +825,17 @@ class ms {
         if state = 1 && BindValidity != 1 {
             BindValidity := 1
             ms.cam.enable()
-            if !silent  ms._notify(1)
+            if !silent {
+                ms._notify(1)
+            }
         } else if state = 0 && BindValidity != 0 {
             BindValidity := 0
             ms.cancelMacros()
             _ms_running := Map()
             ms.cam.disable()
-            if !silent  ms._notify(0)
+            if !silent {
+                ms._notify(0)
+            }
         }
     }
 
@@ -903,7 +907,9 @@ class ms {
                 local cm := "", dm := ""
                 for m in cfgMods  cm .= m "+"
                 for m in defMods  dm .= m "+"
-                if cfg.key != def.key || cm != dm  isDiff := true
+                if cfg.key != def.key || cm != dm {
+                    isDiff := true
+                }
             }
             if isDiff {
                 if !macros.Has(id)  macros[id] := Map()
@@ -970,7 +976,9 @@ class ms {
             local raw3 := ""
             FileRead &raw3, _ms_default_path
             local data3 := Jxon_Load(&raw3)
-            if data3  ms._applySettings(data3)
+            if data3 {
+                ms._applySettings(data3)
+            }
         }
     }
 
@@ -983,11 +991,15 @@ class ms {
         if !data  return
         if data.Has("sensitivity") {
             local n := Number(data["sensitivity"])
-            if n >= 0.1 && n <= 4  CUR_CAM_SENS := n
+            if n >= 0.1 && n <= 4 {
+                CUR_CAM_SENS := n
+            }
         }
         if data.Has("frameLevel") {
             local n := Number(data["frameLevel"])
-            if n >= 1 && n <= 4  clickLevel := Integer(n)
+            if n >= 1 && n <= 4 {
+                clickLevel := Integer(n)
+            }
         }
         if data.Has("trackpadMode")     _ms_trackpad_mode        := (data["trackpadMode"]     = true)
         if data.Has("socdEnabled")      ms.socdEnabled           := (data["socdEnabled"]      = true)
@@ -1000,12 +1012,16 @@ class ms {
         if data.Has("trackpadHoldKeys") {
             local thk := data["trackpadHoldKeys"]
             if thk.Has("left")  _ms_trackpad_hold_keys.left  := thk["left"]
-            if thk.Has("right") _ms_trackpad_hold_keys.right := thk["right"]
+            if thk.Has("right") {
+                _ms_trackpad_hold_keys.right := thk["right"]
+            }
         }
         if data.Has("soundEnabled") _ms_soundEnabled := (data["soundEnabled"] = true)
         if data.Has("soundVolume") {
             local v := Number(data["soundVolume"])
-            if v >= 0 && v <= 100  _ms_soundVolume := Integer(v)
+            if v >= 0 && v <= 100 {
+                _ms_soundVolume := Integer(v)
+            }
         }
         if data.Has("soundAssign")    _ms_soundAssign    := data["soundAssign"]
         if data.Has("importedSounds") _ms_importedSounds := data["importedSounds"]
@@ -1025,7 +1041,9 @@ class ms {
                 if entry.Has("mod")  _ms_modConfig[id] := entry["mod"]
                 if entry.Has("cooldown") {
                     local n := Number(entry["cooldown"])
-                    if n >= 0  _ms_cooldowns[id] := Integer(n)
+                    if n >= 0 {
+                        _ms_cooldowns[id] := Integer(n)
+                    }
                 }
             }
         }
@@ -1069,8 +1087,10 @@ class ms {
             local def := ms.bind._defs[id]
             if !def || def.sub != ""  continue
             if !data["macros"].Has(id)  data["macros"][id] := Map()
-            if !data["macros"][id].Has("enabled")  data["macros"][id]["enabled"] := def.enabled
-        }
+            if !data["macros"][id].Has("enabled") {
+                data["macros"][id]["enabled"] := def.enabled
+            }
+    }
         if ms.macroDefaults.HasProp("macros") {
             for id, entry in ms.macroDefaults.macros {
                 if !data["macros"].Has(id)  data["macros"][id] := Map()
@@ -1128,7 +1148,9 @@ class ms {
         if DirExist(SoundLib) {
             Loop Files SoundLib "*.*" {
                 local name := RegExReplace(A_LoopFileName, "\.[^.]+$")
-                if name != ""  _ms_sounds[name] := A_LoopFileFullPath
+                if name != "" {
+                    _ms_sounds[name] := A_LoopFileFullPath
+                }
             }
         }
         for name, filename in _ms_importedSounds {
@@ -1262,14 +1284,20 @@ class ms {
 
     static _validateUserValue(def, value) {
         if def.type = "toggle" {
-            if value = true || value = false  return value
+            if value = true || value = false {
+                return value
+            }
         } else if def.type = "slider" {
             local n := Number(value)
-            if n != ""  return Max(def.HasProp("min") ? def.min : 0, Min(def.HasProp("max") ? def.max : 100, n))
+            if n != "" {
+                return Max(def.HasProp("min") ? def.min : 0, Min(def.HasProp("max") ? def.max : 100, n))
+            }
         } else if def.type = "seg" {
             if def.HasProp("options")
                 for opt in def.options
-                    if opt.HasProp("value") && opt.value = value  return value
+                    if opt.HasProp("value") && opt.value = value {
+                        return value
+                    }
         }
         return ""
     }
@@ -1277,7 +1305,9 @@ class ms {
     static setClickLevel(n) {
         global clickLevel
         n := Integer(n)
-        if n = 1 || n = 2 || n = 3 || n = 4  clickLevel := n
+        if n = 1 || n = 2 || n = 3 || n = 4 {
+            clickLevel := n
+        }
     }
 
     ; ── has(feature) ─────────────────────────────────────────────────────────
@@ -1316,7 +1346,9 @@ class ms {
             _ms_theme["radius"] := Max(0, Min(40, Integer(data["radius"])))
         if data.Has("font") && data["font"] != "" {
             local clean := RegExReplace(data["font"], "[;{}()<>""]", "")
-            if clean != ""  _ms_theme["font"] := clean
+            if clean != "" {
+                _ms_theme["font"] := clean
+            }
         }
     }
 
@@ -1801,7 +1833,9 @@ class ms {
                 global _ms_user_index
                 if _ms_user_index.Has(data["key"]) {
                     local def := _ms_user_index[data["key"]]
-                    if def.HasProp("default")  ms.settings.set(data["key"], def.default)
+                    if def.HasProp("default") {
+                        ms.settings.set(data["key"], def.default)
+                    }
                 }
                 ms.playSlot("reset"), ms.ui.refresh()
             },
@@ -2112,7 +2146,9 @@ class ms {
                     } else if act = "clear" {
                         _ms_dev_window_history := []
                     } else if act = "playSlot" {
-                        if data.Has("slot")  ms.playSlot(data["slot"])
+                        if data.Has("slot") {
+                            ms.playSlot(data["slot"])
+                        }
                     } else if act = "move" {
                         _ms_dev_window_pos["x"] += data.Has("dx") ? data["dx"] : 0
                         _ms_dev_window_pos["y"] += data.Has("dy") ? data["dy"] : 0
@@ -2686,12 +2722,16 @@ global _ms_last_enter  := 0
     global _ms_last_slash
     if (A_TickCount - _ms_last_slash) < 100  return
     _ms_last_slash := A_TickCount
-    if BindValidity  ms.setMacros(0)
+    if BindValidity {
+        ms.setMacros(0)
+    }
 }                                                          ; /  disable macros (no repeat)
 Enter :: {
     global _ms_last_enter
     if (A_TickCount - _ms_last_enter) < 100  return
     _ms_last_enter := A_TickCount
-    if !BindValidity  ms.setMacros(1)
+    if !BindValidity {
+        ms.setMacros(1)
+    }
 }                                                          ; Enter  enable macros (no repeat)
 #HotIf
