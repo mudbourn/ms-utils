@@ -143,8 +143,9 @@ YQIDAQAB
 ;; Section 2 — ms class (public API) ;;
     class ms {
         ; metadata set by ms_macros.ahk
-        static macroMeta     := {}
-        static macroDefaults := {}
+        static macroMeta      := {}
+        static macroDefaults  := {}
+        static _currentFlags  := {}
 
         ;; Keyboard ;;
             static press(key, mods := [], hidinject := false) {
