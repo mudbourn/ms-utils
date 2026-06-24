@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# install.sh — one-shot installer for mudscript (macOS)
+# install.sh — mudscript one-shot installer (macOS)
 #
-# Run this from the repo root after cloning:
+# Usage:
+#   curl -L https://raw.githubusercontent.com/mudbourn/ms-utils/main/install.sh | bash
+#   # or download and:
 #   bash install.sh
 #
-# It does everything the manual install docs describe:
-#   1. Copies repo contents to ~/.hammerspoon/
-#   2. Installs the OS-level Guardian Launch Agent
-#   3. Locks init.lua (chmod 444)
-#   4. Reloads Hammerspoon
+# Works whether you have the full repo or just this file.
+# Downloads the latest release from GitHub if the repo isn't local.
 #
 # To uninstall:
-#   launchctl unload ~/Library/LaunchAgents/com.mudscript.guardian.plist
-#   rm ~/Library/LaunchAgents/com.mudscript.guardian.plist
+#   launchctl unload ~/Library/LaunchAgents/com.mudscript.guardian.plist 2>/dev/null
+#   rm -f ~/Library/LaunchAgents/com.mudscript.guardian.plist
 #   rm -rf ~/.hammerspoon/
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO="mudbourn/ms-utils"
 HS="$HOME/.hammerspoon"
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || pwd)"
 
 echo ""
 echo "╔══════════════════════════════════════════════╗"
@@ -26,27 +26,51 @@ echo "║        mudscript — macOS Installer          ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 
-# ── Preflight ────────────────────────────────────────────────────────────────
+# ── Step 1: Source the files ──────────────────────────────────────────────────
 
-if [ ! -f "$SCRIPT_DIR/ms_core.lua" ]; then
-    echo "ERROR: ms_core.lua not found."
-    echo "       Run this script from the ms-utils repo root."
-    exit 1
+if [ -f "$SCRIPT_DIR/ms_core.lua" ] && [ -f "$SCRIPT_DIR/init.lua" ]; then
+    # Full repo detected — copy directly
+    echo "❶  Copying local repo to ~/.hammerspoon/ …"
+    mkdir -p "$HS"
+    cp -R "$SCRIPT_DIR"/* "$HS/"
+    rm -f "$HS/install.sh"
+    echo "   ✓ Files copied from $SCRIPT_DIR"
+else
+    # Standalone script — download latest release
+    echo "❶  Downloading latest release from GitHub …"
+    mkdir -p "$HS"
+
+    # Try to get the latest release download URL via the GitHub API
+    echo "   Checking for latest release..."
+    API="https://api.github.com/repos/$REPO/releases/latest"
+    TAR_URL=$(curl -sf "$API" | grep -o '"browser_download_url": *"[^"]*macos[^"]*"' | head -1 | sed 's/.*": *"//; s/"//')
+
+    if [ -n "$TAR_URL" ]; then
+        echo "   Downloading: $TAR_URL"
+        TMP_FILE=$(mktemp)
+        curl -sfL "$TAR_URL" -o "$TMP_FILE"
+        tar xzf "$TMP_FILE" -C "$HS" --strip-components=1
+        rm -f "$TMP_FILE"
+        echo "   ✓ Release downloaded and extracted."
+    else
+        # No release yet — download the repo archive directly
+        echo "   No release found — downloading main branch..."
+        ZIP_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+        TMP_FILE=$(mktemp)
+        curl -sfL "$ZIP_URL" -o "$TMP_FILE"
+        mkdir -p "$HS-tmp"
+        tar xzf "$TMP_FILE" -C "$HS-tmp" --strip-components=1
+        # Only copy macOS files
+        cp -R "$HS-tmp"/* "$HS/"
+        rm -rf "$HS-tmp" "$TMP_FILE"
+        rm -f "$HS/install.bat" "$HS"/*.ahk
+        rm -rf "$HS/bin"/*.bat "$HS/bin"/*.ps1
+        echo "   ✓ Repository downloaded and macOS files extracted."
+    fi
+
+    # Remove the downloaded install script from the target
+    rm -f "$HS/install.sh" 2>/dev/null || true
 fi
-
-if [ ! -f "$SCRIPT_DIR/init.lua" ]; then
-    echo "ERROR: init.lua not found."
-    exit 1
-fi
-
-# ── Step 1: Copy files ───────────────────────────────────────────────────────
-
-echo "❶  Copying to ~/.hammerspoon/ …"
-mkdir -p "$HS"
-cp -R "$SCRIPT_DIR"/* "$HS/"
-# Remove the install script itself from the target
-rm -f "$HS/install.sh"
-echo "   ✓ Files copied."
 
 # ── Step 2: Install Guardian Launch Agent ────────────────────────────────────
 
@@ -69,20 +93,23 @@ chmod 444 "$HS/init.lua" 2>/dev/null && echo "   ✓ init.lua locked." || echo "
 
 echo ""
 echo "❹  Reloading Hammerspoon …"
-open -g "hammerspoon://reload" 2>/dev/null && echo "   ✓ Hammerspoon reloaded." || echo "   ⚠  Could not trigger reload — reload manually."
+if command -v open &>/dev/null; then
+    open -g "hammerspoon://reload" 2>/dev/null && echo "   ✓ Hammerspoon reloaded." || echo "   ⚠  Reload manually (menubar icon → Reload)."
+else
+    echo "   ⚠  Reload manually (menubar icon → Reload)."
+fi
 
 # ── Done ─────────────────────────────────────────────────────────────────────
 
 echo ""
 echo "╔══════════════════════════════════════════════╗"
-echo "║            Installation complete             ║"
+echo "║          Installation complete               ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 echo "   Directory:  $HS"
 echo "   Guardian:   ~/Library/LaunchAgents/com.mudscript.guardian.plist"
 echo ""
 echo "   The trusted hash is auto-seeded from MANIFEST.json on first load."
-echo "   Macros are enabled by default when Roblox is focused."
 echo ""
 echo "   Keybindings (Roblox focused):"
 echo "     ⌥P      Toggle settings"

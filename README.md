@@ -16,17 +16,20 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 
 ## One-shot install
 
+Each installer is fully self-contained — download the single file and run it. If the rest of the repo isn't present, it fetches the latest release from GitHub.
+
 **macOS:**
 ```bash
-bash install.sh
+curl -L https://raw.githubusercontent.com/mudbourn/ms-utils/main/install.sh | bash
 ```
 
 **Windows (Run as Administrator):**
 ```batch
+curl -LO https://raw.githubusercontent.com/mudbourn/ms-utils/main/install.bat
 install.bat
 ```
 
-Each installer copies files, installs dependencies, sets up the OS-level Guardian, locks the bootstrap stub, and prints next steps.
+The installer downloads dependencies, sets up the OS-level Guardian, locks the bootstrap stub, and prints next steps.
 
 ---
 
