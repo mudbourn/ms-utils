@@ -978,8 +978,9 @@ YQIDAQAB
                     hGui.Move(x, y)
                     _ms_ui_pos := {x:x, y:y, w:panelW, h:panelH}
                     hWv := WebView2.create(hGui.Hwnd)
-                    hWv.Navigate("file:///" StrReplace(A_ScriptDir "\ui\ms_settings_ui.html", "\", "/"))
-                    hWv.OnEvent("WebMessageReceived", _ms_ui_onMessage)
+                    hWvCore := hWv.CoreWebView2
+                    hWvCore.Navigate("file:///" StrReplace(A_ScriptDir "\ui\ms_settings_ui.html", "\", "/"))
+                    hWvCore.add_WebMessageReceived(_ms_ui_onMessage)
                     _ms_ui_panel_gui := hGui
                     _ms_ui_panel_wv  := hWv
                     _ms_ui_open      := true
