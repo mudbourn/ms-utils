@@ -520,10 +520,18 @@ class ms {
         }
 
         ; Stubs for API compatibility — not required on Windows.
-        static enable()         { }
-        static disable()        { }
-        static updateAnchor()   { }
-        static scheduleUpdate() { }
+        static enable() {
+            return
+        }
+        static disable() {
+            return
+        }
+        static updateAnchor() {
+            return
+        }
+        static scheduleUpdate() {
+            return
+        }
     }
 
     ; ── Bind / registry system ────────────────────────────────────────────────
