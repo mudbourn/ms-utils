@@ -122,7 +122,6 @@ jobs:
           }
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" -OutFile "lib\ComVar.ahk" -UseBasicParsing
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" -OutFile "lib\Promise.ahk" -UseBasicParsing
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk" -OutFile "lib\WebView2.ahk" -UseBasicParsing
           Write-Output "Dependencies downloaded."
 
       - name: Build Windows package
