@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "sha256": "4ae12115932bcaaee07c52b3322b026ea1626f02581e264e11260b860caa32d2",
+  "sha256": "9ea1fc0d60d18bcfe3479addd4ed3efe762a57820dedc7eb86d05a9d7f944a78",
   "url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua",
-  "signature": "G+JggGYAPFusoAI1mSc2rDFMlK7xG6v8Pf/5yhE1CWzogOrkQAIkmQd03JR6LsaAF9ibt4F2X9e6BMVssBiXUkj9H8L8la4hb/Rmqjf/PZy4zzN04fJTs7NOfsCG+CiNKXUSxi3jzaVVcmWlvZLL1rscZ/CguKcwaUB62RN7VHiJtcyDLR2T2av+KU0RlTRtkRwpSym3pym1k1aPWfUhntX3dpPOCQsh6QfYhzbWDSZNyHj3NraMZkaT140MyUNG9IKG9qG8z9ldNC7xZXbTLv31O1PPh3dFe5Mfb61pk69p6srlyvDmeQpFUv3aYu8QRMvtpIRFGunEV8y/913+uA==",
+  "signature": "y8krs2l2KVeyCKzGnrA1z/SpVr3MLDnSEZsuwyxPMd9uwFy4giBoULt5LRThNjJerRD4Ejy4Rz3iBiHg9t8RJXLiodSaKyD1vAFlpwtvoWni1BISLzxkvLSjBmg/BO70LM7kMKo/MblOkWcI+UOIaPid9R0SJu5g75UpBXFZSZryf83MFcbixnuVv5CtKV7GEbWv1E4Tr/ABrS2Lb6YE+zRxA5mFQC7sERp0NYP9xZ3CbtCeQze4JFoktYyGdpy1I1WhGcRkN/G5r2CvLfkksUVgm1uxuU/2NXh4IaMf0oE7gEyU3uvHsZdhnFKOQTdWupe8eYFn4TnZAM5gd37I6A==",
   "windows_url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.ahk",
   "windows_sha256": "21efc40401d9bd240df147f06d23c646f26a3301aa037b07410878efde3aabf2",
   "windows_signature": "tP9pneWqc5wgEBmJhdfUWROm7QN+BTCS6wFgoPy4izVE8zW89G5hJkFFR2tKer1NtBXnkbORWVdZU4WWRbHj0KhEFzK68stScpGrPYMlFMmk9jd4M040Mt0TRWR91Afr86ZrMRFCSSWVYfSBu3zI7Zsjg721YOn4YZYpzYhDIXhP5Xdg2DtQuU2txT+BfdIwDyiBsbctNXEqRVhu9hhVJ4Ij5Hr+g6+zkBfD+TVgqdjloHLC8JRkD7jtSyXhlDqbSBmYaAg/SD7H6To0G/vih8Z65qRSDRsZgEJuCX3UTa6Y0ixcJZWm7zuUVg716VSUEHqVz1w6Cj2Fo8mH5jYIvg=="
