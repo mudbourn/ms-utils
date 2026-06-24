@@ -139,12 +139,14 @@ jobs:
         run: |
           mkdir lib -Force
 
-          # WebView2.ahk
+          # WebView2.ahk — fix #Include paths to use lib/ subdirectory
           Write-Output "Downloading WebView2.ahk..."
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk" `
-            -OutFile "lib\WebView2.ahk" -UseBasicParsing
+          $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
+          $wv2 = $wv2 -replace '#Include \.\.\\ComVar\.ahk', '#Include lib\ComVar.ahk'
+          $wv2 = $wv2 -replace '#Include \.\.\\Promise\.ahk', '#Include lib\Promise.ahk'
+          [System.IO.File]::WriteAllText("$pwd\lib\WebView2.ahk", $wv2, [System.Text.UTF8Encoding]::new($false))
 
-          # WebView2/ folder
+          # WebView2/ folder (ComVar, Promise, and WebView2Loader DLLs)
           mkdir lib\WebView2 -Force
           $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
           $items = Invoke-RestMethod $github
@@ -155,10 +157,15 @@ jobs:
             }
           }
 
-          # Jxon.ahk
-          Write-Output "Downloading Jxon.ahk..."
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/TheArkive/JXON_ahk2/main/Jxon.ahk" `
-            -OutFile "lib\Jxon.ahk" -UseBasicParsing
+          # ComVar.ahk (to lib/)
+          Write-Output "Downloading ComVar.ahk..."
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" `
+            -OutFile "lib\ComVar.ahk" -UseBasicParsing
+
+          # Promise.ahk (to lib/)
+          Write-Output "Downloading Promise.ahk..."
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" `
+            -OutFile "lib\Promise.ahk" -UseBasicParsing
 
           Write-Output "Dependencies downloaded."
 

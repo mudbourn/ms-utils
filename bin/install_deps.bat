@@ -2,8 +2,8 @@
 REM bin\install_deps.bat — downloads required AHKv2 libraries
 REM
 REM Downloads and installs the dependencies needed by mudscript:
-REM   - WebView2.ahk  (and WebView2/ folder)  from thqby/ahk2_lib
-REM   - Jxon.ahk                              from TheArkive/JXON_ahk2
+REM   - WebView2.ahk  (with ComVar.ahk, Promise.ahk, WebView2/ DLLs)  from thqby/ahk2_lib
+REM   - Jxon.ahk                                                        from TheArkive/JXON_ahk2
 REM
 REM Run once after cloning ms-utils:
 REM   bin\install_deps.bat
@@ -20,9 +20,8 @@ echo.
 REM ── Ensure lib\ exists ─────────────────────────────────────────────────────
 if not exist "%LIB_DIR%" mkdir "%LIB_DIR%"
 
-REM ── WebView2.ahk ──────────────────────────────────────────────────────────
+REM ── WebView2.ahk (fix #Include paths to use lib/ subdirectory) ───────────
 set "WV2_FILE=%LIB_DIR%\WebView2.ahk"
-set "WV2_DIR=%LIB_DIR%\WebView2"
 set "WV2_URL=https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
 
 if exist "%WV2_FILE%" (
@@ -30,7 +29,10 @@ if exist "%WV2_FILE%" (
 ) else (
     echo [DL]   Downloading WebView2.ahk...
     powershell -NoProfile -Command ^
-        "Invoke-WebRequest -Uri '%WV2_URL%' -OutFile '%WV2_FILE%' -UseBasicParsing"
+        "$wv2 = Invoke-WebRequest -Uri '%WV2_URL%' -UseBasicParsing; " ^
+        "$wv2 = $wv2.Content -replace '#Include \.\.\\ComVar\.ahk', '#Include lib\ComVar.ahk'; " ^
+        "$wv2 = $wv2 -replace '#Include \.\.\\Promise\.ahk', '#Include lib\Promise.ahk'; " ^
+        "[System.IO.File]::WriteAllText('%WV2_FILE%', $wv2, [System.Text.UTF8Encoding]::new($false))"
     if !errorlevel! equ 0 if exist "%WV2_FILE%" (
         echo [OK]   WebView2.ahk downloaded.
     ) else (
@@ -39,7 +41,8 @@ if exist "%WV2_FILE%" (
     )
 )
 
-REM ── WebView2/ folder ──────────────────────────────────────────────────────
+REM ── WebView2/ folder (WebView2Loader DLLs) ───────────────────────────────
+set "WV2_DIR=%LIB_DIR%\WebView2"
 if exist "%WV2_DIR%" (
     echo [SKIP] WebView2/ folder already exists.
 ) else (
@@ -60,6 +63,38 @@ if exist "%WV2_DIR%" (
     ) else (
         echo [FAIL] Could not download WebView2/ contents.
         echo        Try manually from: https://github.com/thqby/ahk2_lib/tree/master/WebView2
+    )
+)
+
+REM ── ComVar.ahk (needed by WebView2) ──────────────────────────────────────
+set "COMVAR_FILE=%LIB_DIR%\ComVar.ahk"
+set "COMVAR_URL=https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk"
+if exist "%COMVAR_FILE%" (
+    echo [SKIP] ComVar.ahk already exists.
+) else (
+    echo [DL]   Downloading ComVar.ahk...
+    powershell -NoProfile -Command ^
+        "Invoke-WebRequest -Uri '%COMVAR_URL%' -OutFile '%COMVAR_FILE%' -UseBasicParsing"
+    if !errorlevel! equ 0 if exist "%COMVAR_FILE%" (
+        echo [OK]   ComVar.ahk downloaded.
+    ) else (
+        echo [FAIL] Could not download ComVar.ahk.
+    )
+)
+
+REM ── Promise.ahk (needed by WebView2) ─────────────────────────────────────
+set "PROMISE_FILE=%LIB_DIR%\Promise.ahk"
+set "PROMISE_URL=https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk"
+if exist "%PROMISE_FILE%" (
+    echo [SKIP] Promise.ahk already exists.
+) else (
+    echo [DL]   Downloading Promise.ahk...
+    powershell -NoProfile -Command ^
+        "Invoke-WebRequest -Uri '%PROMISE_URL%' -OutFile '%PROMISE_FILE%' -UseBasicParsing"
+    if !errorlevel! equ 0 if exist "%PROMISE_FILE%" (
+        echo [OK]   Promise.ahk downloaded.
+    ) else (
+        echo [FAIL] Could not download Promise.ahk.
     )
 )
 
@@ -90,13 +125,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0\generate_icon.ps1"
 REM ── Summary ───────────────────────────────────────────────────────────────
 echo.
 echo === Summary ===
-if exist "%WV2_FILE%" ( echo WebView2.ahk:      OK ) else ( echo WebView2.ahk:      MISSING )
+set ALL_OK=true
+if exist "%WV2_FILE%" ( echo WebView2.ahk:      OK ) else ( echo WebView2.ahk:      MISSING & set ALL_OK=false )
+if exist "%COMVAR_FILE%" ( echo ComVar.ahk:      OK ) else ( echo ComVar.ahk:      MISSING & set ALL_OK=false )
+if exist "%PROMISE_FILE%" ( echo Promise.ahk:    OK ) else ( echo Promise.ahk:    MISSING & set ALL_OK=false )
 if exist "%WV2_DIR%"  ( echo WebView2/ folder:  OK ) else ( echo WebView2/ folder:  MISSING )
-if exist "%JXON_FILE%" ( echo Jxon.ahk:          OK ) else ( echo Jxon.ahk:          MISSING )
+if exist "%JXON_FILE%" ( echo Jxon.ahk:          OK ) else ( echo Jxon.ahk:          MISSING & set ALL_OK=false )
 if exist "%LIB_DIR%\..\ui\icons\ms_icon.ico" ( echo ms_icon.ico:       OK ) else ( echo ms_icon.ico:       FALLBACK )
 echo.
 
-if not exist "%WV2_FILE%" or not exist "%WV2_DIR%" or not exist "%JXON_FILE%" (
+if "%ALL_OK%"=="false" (
     echo Some dependencies are missing — see lib\README.md for manual install instructions.
     echo.
 )
