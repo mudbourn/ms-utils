@@ -4236,8 +4236,8 @@
                         end
                     end
                     hs.timer.doAfter(ms_time / 1000, function()
-                        -- Don't resume a coroutine whose macro has been cancelled.
-                        if ctx and ctx.cancelled then return end
+                        -- Don't resume a coroutine whose macro has been cancelled or paused.
+                        if ctx and (ctx.cancelled or ctx.paused) then return end
                         local ok, err = coroutine.resume(co)
                         if not ok then
                             print("ms.wait resume error: " .. tostring(err))
@@ -4650,7 +4650,7 @@
                     local co  = coroutine.create(fn)
                     -- Inherit the pending label set by firedFn so ms.wait step entries
                     -- can identify which macro is running without needing an id param.
-                    local ctx = { cancelled = false, label = ms._pendingLabel or "macro" }
+                    local ctx = { cancelled = false, paused = false, label = ms._pendingLabel or "macro" }
                     ms._pendingLabel = nil
                     ms._coroContext[co]    = ctx
                     ms._activeContexts[ctx] = true
@@ -4664,6 +4664,46 @@
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
                     end
+                end
+            end
+
+            -- Pauses a running macro by id (label from ms.bind.define).
+            -- The macro's current ms.wait completes but does not resume until ms.resume() is called.
+            -- Pass no argument to pause all running macros.
+            ms.pause = function(id)
+                if not id then
+                    for _, ctx in pairs(ms._activeContexts) do ctx.paused = true end
+                    return
+                end
+                for _, ctx in pairs(ms._activeContexts) do
+                    if ctx.label == id then ctx.paused = true; return end
+                end
+            end
+
+            -- Resumes a paused macro by id. If its wait timer already expired, the
+            -- coroutine resumes immediately at the next instruction.
+            -- Pass no argument to resume all paused macros.
+            ms.resume = function(id)
+                local function _resume(co)
+                    local ctx = ms._coroContext[co]
+                    if not ctx then return end
+                    ctx.paused = false
+                    if coroutine.status(co) ~= "suspended" then return end
+                    local ok, err = coroutine.resume(co)
+                    if not ok then
+                        print("ms.resume error: " .. tostring(err))
+                    end
+                    if coroutine.status(co) == "dead" then
+                        ms._coroContext[co] = nil
+                        ms._activeContexts[ctx] = nil
+                    end
+                end
+                if not id then
+                    for co in pairs(ms._coroContext) do _resume(co) end
+                    return
+                end
+                for co, ctx in pairs(ms._coroContext) do
+                    if ctx.label == id then _resume(co); return end
                 end
             end
 
