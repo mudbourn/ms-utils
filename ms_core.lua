@@ -1,21 +1,12 @@
 -- Core System ---- PLEASE EDIT CAREFULLY --
     -- Hammerspoon mudscript Utility Library --
         -- 0. Pre-Load --
-            -- hs.reload() re-runs this whole file but never tears down old native
-            -- objects (watchers, timers, hotkeys). Without this, every reload
-            -- leaves the previous ms._appWatcher running forever, stacked on top
-            -- of every watcher from every reload before it. Stop the prior
-            -- generation before this load creates a new one.
-            -- Watcher teardown (belt-and-suspenders; primary is in init.lua stub) --
+            -- hs.reload() leaves stale objects. Stop the prior generation before
+            -- this load creates a new one. The primary guard is in init.lua.
                 if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
-
             -- END --
 
-            -- Guardian tamper check moved to Spoons/MsGuardian.spoon/ --
-                -- MsGuardian.spoon hashes this file (ms_core.lua) before dofile()-ing it.
-                -- The check no longer lives here so it cannot be excised by editing this file.
-
-
+            -- Guardian moved to MsGuardian.spoon/init.lua --
             -- END --
 
             -- One-time migration: move settings/hash files from root into data/ --
@@ -36,16 +27,9 @@
                     _mvToData("ms_settings_default.json")
                     _mvToData(".ms_trusted_hash")
                 end
-
             -- END --
 
             -- Font installation --
-                -- Copies bundled fonts from ui/fonts/ into ~/Library/Fonts/ so they are
-                -- available as system fonts for hs.canvas (canvas cannot load .ttf files
-                -- directly — only installed font names work).
-                -- Runs on every reload but is a no-op once fonts are present.
-                -- If any font is newly installed, reloads immediately so the macOS font
-                -- daemon registers them before any canvas toast renders.
                 do
                     local _h       = os.getenv("HOME") .. "/.hammerspoon"
                     local _srcDir  = _h .. "/ui/fonts/"
@@ -71,8 +55,6 @@
                         end
                     end
                     if _installed then
-                        -- Reload so fonts are registered with the font daemon before
-                        -- canvas renders anything. This extra load only happens once.
                         hs.reload(); return
                     end
                 end
@@ -145,9 +127,8 @@
             ms._docsURL           = "https://docs-ms.mudbourn.info"  -- opened by Settings › Documentation
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
 
-            -- RSA-2048 public key used to verify MANIFEST.json signatures.
-            -- Matching private key: GitHub Secrets (MS_SIGNING_KEY). Rotation
-            -- procedure: docs/DOCS_MAC.md §20, "Rotating the signing key".
+            -- RSA-2048 public key for MANIFEST.json signature verification.
+            -- Matching private key: GitHub Secrets (MS_SIGNING_KEY).
             ms._updatePublicKey = [[
             -----BEGIN PUBLIC KEY-----
             MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pyxWISHUScKsmK0fyqA
@@ -390,8 +371,6 @@
                     -- secondary-monitor setups always position correctly.
                     local function screenBounds()
                         local f = hs.screen.mainScreen():frame()
-                        -- f.y is the top of the usable area in absolute coords.
-                        -- f.y + f.h is the absolute bottom (above the dock).
                         return f.x, f.y, f.w, f.y + f.h
                     end
 
@@ -416,8 +395,7 @@
                         local ch     = textH + padding * 2
                         local cx     = x + (w - cw) / 2  -- centred within the screen
 
-                        -- Read theme values at render time so every toast reflects the
-                        -- current ms_theme.json without needing a reload.
+                        -- Read theme at render time so every toast reflects the current ms_theme.json.
                         local theme = ms._theme or {}
 
                         local function hexToColor(hex, default)
@@ -610,8 +588,6 @@
                         queue = {}
                     end
 
-                    -- Return a table callable via __call so ms.alert(...) works and
-                    -- ms.alert.dismissAll() is a plain field — Lua functions can't be indexed.
                     return setmetatable({ dismissAll = dismissAll }, {
                         __call = function(_, msg, duration, noDefaultSound)
                             duration = duration or 5
@@ -684,8 +660,6 @@
                         soundSlot = true,  -- user-defined sound event slot
                         group     = true,  -- collapsible group of nested settings
                     }
-                    -- Feature names ms.features.hide() is permitted to suppress.
-                    -- "sound" and "profiles" are intentionally excluded.
                     local _HIDEABLE_FEATURES = {
                         socd             = true,
                         trackpad         = true,
@@ -4307,9 +4281,6 @@
                 return finalX, finalY
             end
 
-            -- Converts (x, y) in the given reference space to absolute screen coordinates.
-            -- Shared by ms.Mouse and ms.pixelColor so the coordinate systems are identical.
-            -- Reference constants: Absolute, Mouse, WindowTL/TR/BL/BR/Center, ScreenTL/TR/BL/BR/Center.
             ms.resolvePoint = function(x, y, reference, unscaled)
                 local win = ms.getRobloxWin() or hs.window.focusedWindow()
                 local f   = win and win:frame()
@@ -4700,9 +4671,8 @@
                 hs.pasteboard.setContents(text)
             end
 
-            -- Cancels all active ms.fn macro coroutines and releases any keys or mouse
-            -- buttons that were left held by macro presses. Called automatically on every
-            -- setMacros(0) so no held input leaks across focus changes or user-stops.
+            -- Cancels all active ms.fn macros and releases held keys/buttons.
+            -- Called automatically on every setMacros(0).
             ms.cancelMacros = function()
                 -- Mark every live coroutine as cancelled so pending ms.wait /
                 -- ms.sound callbacks don't resume it after this point.
@@ -4973,14 +4943,8 @@
 
         -- 10. Registry, Bind System & Sub-item Helpers --
 
-            -- Single entry point for declaring a macro and optionally wiring its function.
-            -- Signature: ms.bind.define(id, fn, opts)  — preferred: action first, config last
-            --        or: ms.bind.define(id, opts, fn)  — old order, still accepted
-            -- Both fn and opts are optional; types are detected automatically.
-            --
-            -- opts fields (all optional — init.lua supplies defaults for everything):
-            --   label=id  group=nil  enabled=true  cooldown=1000
-            --   sub=nil   mod=nil    info=nil       default=nil    shared=nil
+            -- ms.bind.define(id, fn|opts, opts|fn)
+            -- opts: label=id, group, enabled, cooldown, sub, mod, info, default, shared
             ms.bind.define = function(id, a, b)
                 assert(type(id) == "string", "ms.bind.define: id must be a string")
                 local fn   = type(a) == "function" and a or (type(b) == "function" and b or nil)
@@ -5062,8 +5026,6 @@
                 ms._mouseCallbacks = {}
             end
 
-            -- Rebuilds all binds from the current registry + wire table.
-            -- Replaces ms.rebindAll.
             ms.bind.rebind = function()
                 ms.bind.teardown()
 
@@ -5411,8 +5373,7 @@
                 return table.concat(parts, "+")
             end
 
-            -- Snapshots all live runtime state into the plain table the page's
-            -- receiveState(state) expects. See ms_settings_ui.html for the shape.
+            -- Snapshots runtime state for the webview panel.
             local function _buildUIState()
                 local macros = {}
 
@@ -6262,7 +6223,7 @@
                         end)
                     end,
 
-                    -- Resets a single system setting to its macro-pack default (ms.macroDefaults).
+                    -- Resets a single system setting to its macro-pack default.
                     resetSetting = function(data)
                         local key = data.key
                         local def = ms.macroDefaults or {}

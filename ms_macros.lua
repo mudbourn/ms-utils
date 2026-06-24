@@ -556,6 +556,11 @@
                 ms.wait(10)
                 ms.Mouse(Move, Left, WindowTL,
                     ms.settings.get("spamMoveX"),
+                    ms.settings.get("spamMoveY")
+                )
+                ms.wait(30)
+                ms.Mouse(Click, Left, WindowTL,
+                    ms.settings.get("spamMoveX"),
                     ms.settings.get("spamMoveY"))
                 ms.wait(100)
                 ms.Mouse(Click, Left, WindowTL,
