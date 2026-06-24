@@ -7857,7 +7857,7 @@
             -- Activate Roblox so the app watcher can seed _robloxActive correctly
             -- on first launch.
 
-            roblox:activate()
+            if roblox then roblox:activate() end
 
             notice = 0
             loadfinish = 0
