@@ -132,7 +132,7 @@ jobs:
           $dist = "mudscript-$version"
           mkdir $dist
           & .\bin\generate_icon.ps1
-          Copy-Item "install.bat","init.ahk","ms_core.ahk","ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
+          Copy-Item "install.bat","init.ahk","_ms_main.ahk","ms_core.ahk","ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
           Copy-Item -Recurse "ui","lib","bin","data" "$dist\"
           Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
           Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue

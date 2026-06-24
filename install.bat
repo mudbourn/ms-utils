@@ -34,7 +34,7 @@ REM (deferred until after download — elevation resets CWD)
 
 REM ── Step 1: Source the files ────────────────────────────────────────────────
 
-if exist "%SCRIPT_DIR%ms_core.ahk" if exist "%SCRIPT_DIR%init.ahk" (
+if exist "%SCRIPT_DIR%ms_core.ahk" if exist "%SCRIPT_DIR%init.ahk" if exist "%SCRIPT_DIR%_ms_main.ahk" (
     echo ❶  Copying local repo to %%USERPROFILE%%\.hammerspoon\ ...
     if not exist "%HS%" mkdir "%HS%"
     xcopy "%SCRIPT_DIR%*" "%HS%" /E /I /H /Y >nul 2>&1
@@ -164,11 +164,11 @@ if !errorlevel! equ 1 (
     echo    Skipped.
 )
 
-REM ── Step 6: Lock init.ahk ─────────────────────────────────────────────────
+REM ── Step 6: Lock init files ────────────────────────────────────────────────
 
 echo.
-echo ❺  Locking bootstrap stub (attrib +r) ...
-attrib +r "%HS%\init.ahk" 2>nul && echo    ✓ init.ahk locked. || echo    ⚠  Could not lock init.ahk.
+echo ❺  Locking bootstrap files (attrib +r) ...
+attrib +r "%HS%\init.ahk" 2>nul && attrib +r "%HS%\_ms_main.ahk" 2>nul && echo    ✓ init files locked. || echo    ⚠  Could not lock init files.
 
 REM ── Done ──────────────────────────────────────────────────────────────────
 
