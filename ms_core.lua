@@ -2176,14 +2176,22 @@
                 end
 
                 -- Checks if a newer version is available without downloading.
-                -- Fetches MANIFEST.json. If sha256 differs from the live file,
-                -- calls callback({ version = "...", sha256 = "..." }).
-                -- If already current or on error, calls callback(nil).
+                -- Fetches MANIFEST.json and compares both sha256 and version
+                -- against the local manifest. Notifies if either differs.
                 ms.integrity.checkForUpdate = function(callback)
                     local manifestURL = ms._updateManifestURL
                     if not manifestURL or manifestURL == "" or not manifestURL:match("^https://") then
                         if callback then pcall(callback, nil) end
                         return
+                    end
+                    -- Read local manifest for version comparison.
+                    local localVersion
+                    do
+                        local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
+                        if lf then
+                            local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                            if ok and lm and lm.version then localVersion = lm.version end
+                        end
                     end
                     hs.http.asyncGet(manifestURL, nil, function(mCode, mBody, _)
                         if mCode ~= 200 or not mBody then
@@ -2194,7 +2202,9 @@
                             if callback then pcall(callback, nil); return end
                         end
                         local cur = ms.integrity.hashFile(corePath)
-                        if cur and cur:lower() == manifest.sha256:lower() then
+                        local sameHash = cur and cur:lower() == manifest.sha256:lower()
+                        local sameVer  = localVersion and manifest.version and localVersion == manifest.version
+                        if sameHash and sameVer then
                             if callback then pcall(callback, nil); return end
                         end
                         if callback then
