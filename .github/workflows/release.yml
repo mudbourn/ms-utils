@@ -35,14 +35,13 @@ jobs:
         run: |
           WIN_SHA=$(sha256sum ms_core.ahk | awk '{print $1}')
 
-          # Read macOS version from manifest (never overridden — macOS code is unchanged)
-          MAC_VER=$(jq -r '.version // ""' MANIFEST.json)
-
           # Use manual version override if provided, otherwise read from manifest
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
+            MAC_VER="$VERSION"
           else
             VERSION=$(jq -r '.windows_version // "1.0.0"' MANIFEST.json)
+            MAC_VER=$(jq -r '.version // ""' MANIFEST.json)
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
