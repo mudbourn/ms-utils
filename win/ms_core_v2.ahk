@@ -1681,9 +1681,9 @@ YQIDAQAB
 
         ; Build a small borderless Gui
         hGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20")
-        hGui.BackColor := _ms_theme["bg"]
+        hGui.BackColor := Trim(_ms_theme["bg"], "#")
         hGui.MarginX := 12, hGui.MarginY := 8
-        hGui.SetFont("s10 c" _ms_theme["text"], _ms_theme["font"])
+        hGui.SetFont("s10 c" Trim(_ms_theme["text"], "#"), _ms_theme["font"])
 
         ; Measure text to size the gui
         hCtrl := hGui.Add("Text",, msg)
@@ -1725,9 +1725,9 @@ YQIDAQAB
 
         _ms_loadingWvReady(hWv) {
             global _ms_loadGui, _ms_loadWv, _ms_theme
-            hWv.Navigate("file:///" A_ScriptDir "\ui\ms_loading.html")
+            hWv.CoreWebView2.Navigate("file:///" A_ScriptDir "\ui\ms_loading.html")
             ; Push theme once page loads so HTML can style itself from ms_theme.json values
-            hWv.add_NavigationCompleted((w, *) => (
+            hWv.CoreWebView2.add_NavigationCompleted((w, *) => (
                 w.ExecuteScript("applyTheme(" Jxon_Dump(_ms_theme, 0) ")")
             ))
             _ms_loadWv  := hWv
