@@ -167,7 +167,6 @@
                     text     = "#f0ddb0",
                     radius   = 3,
                     font     = "Almendra",
-                    uifc     = { settings = "", guardian = "" },
                     fadeMs   = 150,
                 }
                 ms._theme = {}
@@ -1238,71 +1237,13 @@
                     if type(data.fadeMs) == "number" then
                         ms._theme.fadeMs = math.max(0, math.min(500, math.floor(data.fadeMs)))
                     end
-                    -- Validate font (strip dangerous CSS characters).
+                    -- Validate font.
                     if type(data.font) == "string" and #data.font > 0 then
                         local clean = data.font:gsub("[;{}()<>\"']", "")
                         if #clean > 0 then ms._theme.font = clean end
                     end
-                    -- Validate uifc — supports table (per-window) or legacy string.
-                    local function _sanitizeUIFCPath(p)
-                        if type(p) ~= "string" or p == "" then return "" end
-                        -- Strip .. traversal sequences in all slash-context forms.
-                        -- The old pattern "%%.%%.  was wrong: in a Lua pattern, %% matches
-                        -- a literal %, so it never matched "..".  The correct escape is %.%.
-                        p = p:gsub("%.%.[/\\]", ""):gsub("[/\\]%.%.", ""):gsub("^%.%.$", "")
-                        -- Strip leading / or ~ to block absolute-path injection.
-                        p = p:gsub("^[/~]+", "")
-                        return p
-                    end
-                    if type(data.uifc) == "string" and data.uifc ~= "" then
-                        -- Backward compat: old single-string → settings key.
-                        ms._theme.uifc = {
-                            settings = _sanitizeUIFCPath(data.uifc),
-                            guardian = "",
-                        }
-                    elseif type(data.uifc) == "table" then
-                        ms._theme.uifc = { settings = "", guardian = "" }
-                        if type(data.uifc.settings) == "string" then
-                            ms._theme.uifc.settings = _sanitizeUIFCPath(data.uifc.settings)
-                        end
-                        if type(data.uifc.guardian) == "string" then
-                            ms._theme.uifc.guardian = _sanitizeUIFCPath(data.uifc.guardian)
-                        end
-                    end
                 end
-
                 -- END Theme System --
-
-                local function _readPNGDims(path)
-                    local f = io.open(path, "rb")
-                    if not f then return nil, nil end
-                    f:seek("set", 16)        -- skip 8-byte sig + 4-byte length + 4-byte "IHDR"
-                    local wb = f:read(4)     -- width  (big-endian uint32)
-                    local hb = f:read(4)     -- height (big-endian uint32)
-                    f:close()
-                    if not wb or #wb < 4 or not hb or #hb < 4 then return nil, nil end
-                    local w = wb:byte(1)*16777216 + wb:byte(2)*65536 + wb:byte(3)*256 + wb:byte(4)
-                    local h = hb:byte(1)*16777216 + hb:byte(2)*65536 + hb:byte(3)*256 + hb:byte(4)
-                    return (w > 0 and w or nil), (h > 0 and h or nil)
-                end
-
-                -- Cache the settings-panel UIFC dimensions so _panelFrame() doesn't
-                -- re-read the PNG on every show/resize.
-                ms._theme._uifcW = nil
-                ms._theme._uifcH = nil
-                local _origLoadTheme = ms.loadTheme
-                ms.loadTheme = function()
-                    _origLoadTheme()
-                    ms._theme._uifcW = nil
-                    ms._theme._uifcH = nil
-                    local uifc = type(ms._theme.uifc) == "table" and ms._theme.uifc.settings or ""
-                    if uifc ~= "" then
-                        local wp = os.getenv("HOME") .. "/.hammerspoon/" .. uifc
-                        if hs.fs.attributes(wp) then
-                            ms._theme._uifcW, ms._theme._uifcH = _readPNGDims(wp)
-                        end
-                    end
-                end
 
                 -- Capability Detection --
                 ms.has = function(feature)
@@ -1310,17 +1251,6 @@
 
                     if feature == "theme" then
                         return ms._themeLoaded == true
-
-                    elseif feature == "uifc" then
-                        local u = ms._theme and ms._theme.uifc
-                        if type(u) ~= "table" then return false end
-                        for _, v in pairs(u) do
-                            if type(v) == "string" and v ~= ""
-                                and hs.fs.attributes(home .. "/" .. v) then
-                                return true
-                            end
-                        end
-                        return false
 
                     elseif feature == "sound" then
                         return ms.soundEnabled == true
@@ -2242,6 +2172,37 @@
                             ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
                             hs.timer.doAfter(3, function() hs.reload() end)
                         end)
+                    end)
+                end
+
+                -- Checks if a newer version is available without downloading.
+                -- Fetches MANIFEST.json. If sha256 differs from the live file,
+                -- calls callback({ version = "...", sha256 = "..." }).
+                -- If already current or on error, calls callback(nil).
+                ms.integrity.checkForUpdate = function(callback)
+                    local manifestURL = ms._updateManifestURL
+                    if not manifestURL or manifestURL == "" or not manifestURL:match("^https://") then
+                        if callback then pcall(callback, nil) end
+                        return
+                    end
+                    hs.http.asyncGet(manifestURL, nil, function(mCode, mBody, _)
+                        if mCode ~= 200 or not mBody then
+                            if callback then pcall(callback, nil); return end
+                        end
+                        local manifest = hs.json.decode(mBody)
+                        if not manifest or not manifest.sha256 then
+                            if callback then pcall(callback, nil); return end
+                        end
+                        local cur = ms.integrity.hashFile(corePath)
+                        if cur and cur:lower() == manifest.sha256:lower() then
+                            if callback then pcall(callback, nil); return end
+                        end
+                        if callback then
+                            pcall(callback, {
+                                version = manifest.version or "?",
+                                sha256  = manifest.sha256,
+                            })
+                        end
                     end)
                 end
 
@@ -5591,14 +5552,9 @@
 
                 -- Build theme state (resolve file paths to file:// URLs for the panel).
                 local themeOut = {}
-                for k, v in pairs(ms._theme) do themeOut[k] = v end
-                -- Resolve the settings-panel UIFC to a file:// URL; strip raw paths.
-                themeOut.uifcURL = nil
-                if type(themeOut.uifc) == "table" and themeOut.uifc.settings ~= "" then
-                    local wp = os.getenv("HOME") .. "/.hammerspoon/" .. themeOut.uifc.settings
-                    themeOut.uifcURL = hs.fs.attributes(wp) and ("file://" .. wp) or nil
+                for k, v in pairs(ms._theme) do
+                    if k ~= "_uifcW" and k ~= "_uifcH" then themeOut[k] = v end
                 end
-                themeOut.uifc = nil
                 -- Resolve font file to a file:// URL if it looks like a path.
                 if themeOut.font and themeOut.font:match("%.[ot]tf$")
                     or (themeOut.font and themeOut.font:match("%.woff2?$"))
@@ -6075,7 +6031,7 @@
 
                     reloadTheme = function()
                         ms.loadTheme()
-                        -- Rebuild the panel if open so uifc/size changes take effect.
+                        -- Rebuild the panel if open so theme changes take effect.
                         if ms.ui._open then
                             ms.ui.hide()
                             hs.timer.doAfter(0.1, function() ms.ui.show() end)
@@ -6521,24 +6477,6 @@
                 local function _panelFrame()
                     local screen = hs.screen.mainScreen():frame()
                     local w, h = panelW, panelH
-                    -- If a UIFC is configured, size the window to the PNG's exact dimensions.
-                    -- This allows any aspect ratio (9:16, 16:9, 1:1, 3:4, 4:3) as long as
-                    -- the PNG is designed with the 360×640 content area centered.
-                    -- Falls back to 1.25× expansion when PNG dimensions can't be read.
-                    if type(ms._theme and ms._theme.uifc) == "table"
-                        and ms._theme.uifc.settings ~= "" then
-                        local wp = os.getenv("HOME") .. "/.hammerspoon/" .. ms._theme.uifc.settings
-                        if hs.fs.attributes(wp) then
-                            local pw = ms._theme._uifcW
-                            local ph = ms._theme._uifcH
-                            if pw and ph then
-                                w, h = pw, ph
-                            else
-                                w = math.floor(w * 1.25)
-                                h = math.floor(h * 1.25)
-                            end
-                        end
-                    end
                     -- X: centred between the left screen edge and the screen midpoint.
                     local x = screen.x + math.floor((screen.w / 2 - w) / 2)
                     -- Y: vertically centred on the usable screen area.
@@ -7917,8 +7855,18 @@
                 -- the startup toasts have had time to display and fade.
                 _needsIntegrityWarning = true
             end)
-            -- Activate Roblox so the app watcher can seed _robloxActive correctly
-            -- on first launch.
+
+        -- Check for update (async, non-blocking) --
+            hs.timer.doAfter(2, function()
+                ms.integrity.checkForUpdate(function(u)
+                    if u then
+                        ms.alert("Update v" .. u.version .. " available.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Check for Update to install.", 8, true)
+                    end
+                end)
+            end)
+
+        -- Activate Roblox so the app watcher can seed _robloxActive correctly
+        -- on first launch.
 
             if roblox then roblox:activate() end
 
