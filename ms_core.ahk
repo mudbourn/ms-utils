@@ -844,25 +844,25 @@ class ms {
         _ms_cancel_gen++   ; all pending ms.wait() calls will see the change
     }
 
+    ; Callback for _notify timer (avoid anonymous block-body function)
+    static _notifyTimer(state, *) {
+        global loadfinish
+        if loadfinish != 1  return
+        if state = 1 {
+            ms.playSlot("enabled")
+            ms.alert("Macros enabled!", 3, true)
+        } else {
+            ms.playSlot("disabled")
+            ms.alert("Macros disabled.", 3, true)
+        }
+    }
+
     ; Debounced 50ms state-change toast + sound.
     static _notify(state) {
-        global _ms_notify_timer, loadfinish
+        global _ms_notify_timer
         if _ms_notify_timer
             SetTimer _ms_notify_timer, 0
-        local _state := state
-        _ms_notify_timer := () {
-            global loadfinish
-            if loadfinish != 1 {
-                return
-            }
-            if _state = 1 {
-                ms.playSlot("enabled")
-                ms.alert("Macros enabled!", 3, true)
-            } else {
-                ms.playSlot("disabled")
-                ms.alert("Macros disabled.", 3, true)
-            }
-        }
+        _ms_notify_timer := ms._notifyTimer.Bind(state)
         SetTimer _ms_notify_timer, -50
     }
 
