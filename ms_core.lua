@@ -5344,7 +5344,7 @@
             require("hs.webview")
             require("hs.webview.usercontent")
 
-            ms.ui = { _panel = nil, _open = false, _modalCallback = nil, _panelPos = nil }
+            ms.ui = { _panel = nil, _open = false, _modalCallback = nil, _panelPos = nil, _uiFadeTimer = nil }
 
             local uiHTMLPath   = os.getenv("HOME") .. "/.hammerspoon/ui/ms_settings_ui.html"
             local uiBasePath    = "file://" .. os.getenv("HOME") .. "/.hammerspoon/ui/"
@@ -6519,19 +6519,7 @@
                     pcall(function()
                         panel:windowCallback(function(action)
                             if action == "closing" then
-                                ms.ui._open     = false
-                                ms.ui._panel    = nil   -- nil out stale ref; next show() will rebuild
-                                ms.ui._panelPos = nil   -- discard tracked position; will re-seed on next show()
-                                ms._inputOpen = true -- suppress spurious "Macros: ENABLED" toast
-                                ms.playSlot("settingsClose")
-                                local roblox = hs.application.get("Roblox")
-                                if roblox then
-                                    hs.timer.doAfter(0.05, function()
-                                        local ok, win = pcall(function() return roblox:mainWindow() end)
-                                        if ok and win then pcall(function() win:focus() end) end
-                                        pcall(function() roblox:activate() end)
-                                    end)
-                                end
+                                ms.ui.hide()
                             end
                         end)
                     end)
@@ -6540,6 +6528,7 @@
                 end
 
                 ms.ui.show = function()
+                    if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
                     if not ms.ui._panel then
                         ms.ui._panel = _buildPanel()
                         if not ms.ui._panel then
@@ -6550,21 +6539,47 @@
                     local _pf = _panelFrame()
                     ms.ui._panelPos = { x = _pf.x, y = _pf.y, w = _pf.w, h = _pf.h }
                     pcall(function() ms.ui._panel:frame(_pf) end)
-                    ms.ui._panel:show()
-                    pcall(function() ms.ui._panel:bringToFront(true) end)
                     ms.ui._open = true
                     ms.playSlot("settingsOpen")
+                    pcall(function() ms.ui._panel:alpha(0) end)
+                    ms.ui._panel:show()
+                    pcall(function() ms.ui._panel:bringToFront(true) end)
                     ms.ui.refresh()
+                    local step, steps = 0, 6
+                    ms.ui._uiFadeTimer = hs.timer.doEvery(0.15 / steps, function()
+                        step = step + 1
+                        pcall(function() ms.ui._panel:alpha(step / steps) end)
+                        if step >= steps then
+                            ms.ui._uiFadeTimer:stop()
+                            ms.ui._uiFadeTimer = nil
+                        end
+                    end)
                 end
 
                 ms.ui.hide = function()
-                    if ms.ui._panel then ms.ui._panel:hide() end
+                    if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
                     if ms.ui._open then ms.playSlot("settingsClose") end
                     ms.ui._open = false
-                    -- Restore Roblox focus silently via the _inputOpen path.
+                    local panel = ms.ui._panel
+                    if panel then
+                        local step, steps = 0, 6
+                        ms.ui._uiFadeTimer = hs.timer.doEvery(0.15 / steps, function()
+                            step = step + 1
+                            pcall(function() panel:alpha(1 - (step / steps)) end)
+                            if step >= steps then
+                                ms.ui._uiFadeTimer:stop()
+                                ms.ui._uiFadeTimer = nil
+                                if ms.ui._panel == panel then
+                                    pcall(function() panel:hide() end)
+                                    ms.ui._panel    = nil
+                                    ms.ui._panelPos = nil
+                                end
+                            end
+                        end)
+                    end
+                    ms._inputOpen = true
                     local roblox = hs.application.get("Roblox")
                     if roblox then
-                        ms._inputOpen = true
                         hs.timer.doAfter(0.05, function()
                             local ok, win = pcall(function() return roblox:mainWindow() end)
                             if ok and win then pcall(function() win:focus() end) end
