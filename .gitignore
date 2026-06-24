@@ -8,6 +8,7 @@ data/ms_theme.json
 
 # Developer tool logs
 data/ms_dev.log
+data/ms_dev_logs/
 data/guardian_agent.log
 
 # Backup archives

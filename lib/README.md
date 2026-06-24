@@ -1,6 +1,20 @@
 # lib/
 
-Place the following two files here before running any `.ahk` script:
+Required libraries for the Windows version of ms-utils.
+
+## Quick install
+
+Run this from the project root — it downloads everything automatically:
+
+```batch
+bin\install_deps.bat
+```
+
+This also generates a tray icon (`ui/icons/ms_icon.ico`) from the source `.tiff` files.
+
+## Manual install
+
+Place the following files here if you prefer to download manually:
 
 | File | Source | Notes |
 |---|---|---|

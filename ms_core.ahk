@@ -17,8 +17,11 @@
 ; ═══════════════════════════════════════════════════════════════════════════
 
 #Requires AutoHotkey v2.0
-#Include lib\Jxon.ahk
-#Include lib\WebView2.ahk
+; Dependencies (WebView2.ahk, Jxon.ahk) must be loaded before this file —
+; init.ahk includes them. If including ms_core.ahk directly from your own
+; script, add these #Include directives above:
+;   #Include lib\WebView2.ahk
+;   #Include lib\Jxon.ahk
 
 ; ── Global constants (mirror ms_core.lua) ────────────────────────────────────
 global REF_W     := 1680
@@ -85,9 +88,10 @@ global _ms_soundEnabled    := true
 global _ms_soundVolume     := 100
 global _ms_playSlotTimes   := Map()  ; slotId → last-play tick (dedup)
 
-; ── App watcher state ────────────────────────────────────────────────────────
-global _ms_roblox_active := false
-global _ms_ui_open       := false   ; true while settings panel is visible
+; ── Target application ────────────────────────────────────────────────────────
+global _ms_target_exe     := "ahk_exe RobloxPlayerBeta.exe"   ; target window criteria; change via ms.setTargetApp()
+global _ms_roblox_active  := false
+global _ms_ui_open        := false   ; true while settings panel is visible
 
 ; ── Settings / profile paths (mirror macOS data/ layout) ─────────────────────
 global _ms_json_path     := A_ScriptDir "\data\ms_settings.json"
@@ -99,6 +103,25 @@ global _ms_core_path     := A_IsCompiled ? A_ScriptFullPath : A_ScriptDir "\ms_c
 global _ms_hash_path     := A_ScriptDir "\data\.ms_trusted_hash"
 global _ms_theme_path    := A_ScriptDir "\data\ms_theme.json"
 global _ms_dev_log_path  := A_ScriptDir "\data\ms_dev.log"
+global _ms_dev_arch_dir  := A_ScriptDir "\data\ms_dev_logs\"
+
+; ── Dev log archive on every reload (mirrors Lua archive+prune) ────────────
+do {
+    if FileExist(_ms_dev_log_path) {
+        DirCreate _ms_dev_arch_dir
+        local ts := FormatTime(, "yyyy-MM-dd_HHmmss")
+        FileMove _ms_dev_log_path, _ms_dev_arch_dir "ms_dev_" ts ".log", 0
+        ; Prune: keep only the 20 most recent archives.
+        local archives := []
+        Loop Files _ms_dev_arch_dir "ms_dev_*.log"
+            archives.Push(A_LoopFileName)
+        archives.Sort()
+        while archives.Length > 20 {
+            FileDelete _ms_dev_arch_dir archives[1]
+            archives.RemoveAt(1)
+        }
+    }
+}
 
 ; ── URLs ─────────────────────────────────────────────────────────────────────
 global _ms_docs_url     := "https://docs-ms.mudbourn.info"
@@ -161,14 +184,21 @@ global _ms_dev_console_gui := 0
 global _ms_dev_watcher_gui := 0
 global _ms_dev_keys_gui    := 0
 global _ms_dev_active_keys := Map()
-global _ms_dev_busy        := false
-global _ms_dev_key_notice  := false
+global _ms_dev_busy         := false
+global _ms_dev_key_notice   := false
 global _ms_dev_console_open := false
 global _ms_dev_watcher_open := false
 global _ms_dev_keys_open    := false
+global _ms_dev_window_open  := false
 global _ms_dev_console_pos  := Map()
 global _ms_dev_watcher_pos  := Map()
 global _ms_dev_keys_pos     := Map()
+global _ms_dev_window_pos   := Map()
+global _ms_dev_window_gui   := 0
+global _ms_dev_window_wv    := 0
+global _ms_dev_window_history := []
+global _ms_dev_window_last_id := 0
+global _ms_dev_window_poller := 0
 
 ; ── UI panel state ────────────────────────────────────────────────────────────
 global _ms_ui_panel_gui := 0
@@ -285,6 +315,31 @@ class ms {
         SetTimer () => ToolTip(), -(duration * 1000)
     }
 
+    ; ── Target app API (mirrors Lua ms.setTargetApp / ms.getTargetWin) ──────
+
+    ; Change the target application at runtime.
+    ; Pass the executable name (e.g. "RobloxPlayerBeta.exe") or a full window
+    ; criteria string (e.g. "ahk_exe notepad.exe").
+    ; Pass empty string to clear the target (macros won't auto-enable).
+    static setTargetApp(name) {
+        global _ms_target_exe
+        if name = "" {
+            _ms_target_exe := ""
+            return
+        }
+        ; If it already contains "ahk_" prefix, use as-is; otherwise build "ahk_exe "
+        if InStr(name, "ahk_") = 1
+            _ms_target_exe := name
+        else
+            _ms_target_exe := "ahk_exe " name
+    }
+
+    ; Returns the window criteria for the target app, or "" if unset.
+    static getTargetWin() {
+        global _ms_target_exe
+        return _ms_target_exe
+    }
+
     ; ── State queries ─────────────────────────────────────────────────────────
 
     static keystate(key, rawCode := false) {
@@ -299,7 +354,8 @@ class ms {
     static mousePos() {
         MouseGetPos &mx, &my
         local wX := 0, wY := 0, wW := REF_W, wH := REF_H
-        try WinGetPos &wX, &wY, &wW, &wH, "ahk_exe RobloxPlayerBeta.exe"
+        global _ms_target_exe
+        try WinGetPos &wX, &wY, &wW, &wH, _ms_target_exe
         local relX := (mx - wX) * (REF_W / wW)
         local relY := (my - wY) * (REF_H / wH)
         return [relX, relY]
@@ -397,7 +453,8 @@ class ms {
         }
 
         local wX := 0, wY := 0, wW := REF_W, wH := REF_H
-        try WinGetPos &wX, &wY, &wW, &wH, "ahk_exe RobloxPlayerBeta.exe"
+        global _ms_target_exe
+        try WinGetPos &wX, &wY, &wW, &wH, _ms_target_exe
 
         local sX := unscaled ? 1 : wW / REF_W
         local sY := unscaled ? 1 : wH / REF_H
@@ -620,7 +677,7 @@ class ms {
                     }
                     local hk := ms.bind._buildHotkey(c)
                     if hk = ""  continue
-                    HotIfWinActive "ahk_exe RobloxPlayerBeta.exe"
+                    HotIfWinActive _ms_target_exe
                     Hotkey "$" hk, firedFn.Bind(_fn, id, def, group, cooldown)
                     HotIfWinActive
                     ms.bind._hotkeys["$" hk] := id
@@ -645,7 +702,7 @@ class ms {
                     }
                     local hk := ms.bind._buildHotkey(c)
                     if hk = ""  continue
-                    HotIfWinActive "ahk_exe RobloxPlayerBeta.exe"
+                    HotIfWinActive _ms_target_exe
                     Hotkey "$" hk, firedFn.Bind(_fn, id, group, cooldown)
                     HotIfWinActive
                     ms.bind._hotkeys["$" hk] := id
@@ -1067,7 +1124,7 @@ class ms {
         _ms_socd_active := true
         global _ms_socd_held
         _ms_socd_held := Map("a", false, "d", false, "w", false, "s", false)
-        HotIfWinActive "ahk_exe RobloxPlayerBeta.exe"
+        HotIfWinActive _ms_target_exe
         Hotkey "$a",    _ms_socdKeyDown.Bind("a"), "On"
         Hotkey "$a Up", _ms_socdKeyUp.Bind("a"),   "On"
         Hotkey "$d",    _ms_socdKeyDown.Bind("d"), "On"
@@ -1083,7 +1140,7 @@ class ms {
         global _ms_socd_active
         if !_ms_socd_active  return
         _ms_socd_active := false
-        HotIfWinActive "ahk_exe RobloxPlayerBeta.exe"
+        HotIfWinActive _ms_target_exe
         try { Hotkey "$a",    "Off" | Hotkey "$a Up", "Off" }
         try { Hotkey "$d",    "Off" | Hotkey "$d Up", "Off" }
         try { Hotkey "$w",    "Off" | Hotkey "$w Up", "Off" }
@@ -1259,14 +1316,17 @@ class ms {
         static writeTrustedHash(hash) {
             global _ms_hash_path
             DirCreate A_ScriptDir "\data"
-            try { FileOpen(_ms_hash_path, "w").Write(hash "`n") ; return true }
+            try {
+                FileOpen(_ms_hash_path, "w").Write(hash "`n")
+                return true
+            }
             return false
         }
 
         static deleteTrustedHash() {
             global _ms_hash_path
-            try { FileDelete _ms_hash_path ; return true }
-            return false
+            try FileDelete _ms_hash_path
+            return !FileExist(_ms_hash_path)
         }
 
         static check() {
@@ -1545,8 +1605,10 @@ class ms {
             ms.ui._panel_gui := 0
             ms.ui._panel_wv  := 0
             ms.playSlot("settingsClose")
-            ; Restore Roblox focus
-            try WinActivate "ahk_exe RobloxPlayerBeta.exe"
+            ; Restore target window focus
+            global _ms_target_exe
+            if _ms_target_exe != ""
+                try WinActivate _ms_target_exe
         }
 
         static _onMessage(self, wv, event) {
@@ -1641,6 +1703,7 @@ class ms {
             "openConsole",       (data) => ms.dev.console.toggle(),
             "openWatcher",       (data) => ms.dev.watcher.toggle(),
             "openKeys",          (data) => ms.dev.keys.toggle(),
+            "openWindow",        (data) => ms.dev.window.toggle(),
             "startRebind",       (data) {
                 if !data.Has("id")  return
                 ms.ui.hide()
@@ -1880,6 +1943,7 @@ class ms {
                 local wv := WebView2.create(gui.Hwnd)
                 wv.Navigate("file:///" A_ScriptDir "\ui\ms_console.html")
                 wv.OnEvent("WebMessageReceived", (wv2, evt) {
+                    global _ms_dev_console_pos, _ms_dev_console_gui
                     local raw := evt.TryGetWebMessageAsString()
                     local data := Jxon_Load(&raw)
                     if !data  return
@@ -1919,6 +1983,7 @@ class ms {
                 local wv := WebView2.create(gui.Hwnd)
                 wv.Navigate("file:///" A_ScriptDir "\ui\ms_watcher.html")
                 wv.OnEvent("WebMessageReceived", (wv2, evt) {
+                    global _ms_dev_watcher_pos, _ms_dev_watcher_gui
                     local raw := evt.TryGetWebMessageAsString()
                     local data := Jxon_Load(&raw)
                     if !data  return
@@ -1952,6 +2017,7 @@ class ms {
                 local wv := WebView2.create(gui.Hwnd)
                 wv.Navigate("file:///" A_ScriptDir "\ui\ms_keys.html")
                 wv.OnEvent("WebMessageReceived", (wv2, evt) {
+                    global _ms_dev_keys_pos, _ms_dev_keys_gui
                     local raw := evt.TryGetWebMessageAsString()
                     local data := Jxon_Load(&raw)
                     if !data  return
@@ -1971,6 +2037,93 @@ class ms {
             }
             static hide()   { global _ms_dev_keys_open := false ; if _ms_dev_keys_gui  _ms_dev_keys_gui.Destroy(), (_ms_dev_keys_gui := 0) }
             static toggle() { if _ms_dev_keys_open  ms.dev.keys.hide() ; else  ms.dev.keys.show() }
+        }
+
+        class window {
+            static show() {
+                global _ms_dev_window_gui, _ms_dev_window_wv, _ms_dev_window_open, _ms_dev_window_pos
+                global _ms_dev_window_history, _ms_dev_window_last_id, _ms_dev_window_poller
+                if _ms_dev_window_open && _ms_dev_window_gui { WinActivate "ahk_id " _ms_dev_window_gui.Hwnd ; return }
+                local w := 360, h := 480
+                MonitorGetWorkArea , &sL, &sT, &sR, &sB
+                local x := sR - w - 110, y := sT + 20
+                local gui := Gui("+AlwaysOnTop -Caption +ToolWindow")
+                gui.Show("w" w " h" h " x" x " y" y " NoActivate")
+                local wv := WebView2.create(gui.Hwnd)
+                wv.Navigate("file:///" A_ScriptDir "\ui\ms_window.html")
+                wv.OnEvent("WebMessageReceived", (wv2, evt) {
+                    global _ms_dev_window_history, _ms_dev_window_pos, _ms_dev_window_gui
+                    local raw := evt.TryGetWebMessageAsString()
+                    local data := Jxon_Load(&raw)
+                    if !data  return
+                    local act := data.Has("action") ? data["action"] : ""
+                    if act = "close"  ms.dev.window.hide()
+                    else if act = "clear"  _ms_dev_window_history := []
+                    else if act = "playSlot" { if data.Has("slot")  ms.playSlot(data["slot"]) }
+                    else if act = "move" {
+                        _ms_dev_window_pos["x"] += data.Has("dx") ? data["dx"] : 0
+                        _ms_dev_window_pos["y"] += data.Has("dy") ? data["dy"] : 0
+                        _ms_dev_window_gui.Move(_ms_dev_window_pos["x"], _ms_dev_window_pos["y"])
+                    }
+                })
+                _ms_dev_window_gui := gui, _ms_dev_window_wv := wv
+                _ms_dev_window_pos := Map("x", x, "y", y, "w", w, "h", h)
+                _ms_dev_window_open := true
+                ; Push current focused window
+                ms.dev.window._pushCurrent()
+                ; Start polling for window changes every 400 ms
+                _ms_dev_window_poller := SetTimer ms.dev.window._poll.Bind(ms.dev.window), 400
+            }
+            static hide() {
+                global _ms_dev_window_open, _ms_dev_window_gui, _ms_dev_window_wv, _ms_dev_window_poller
+                _ms_dev_window_open := false
+                if _ms_dev_window_poller {
+                    SetTimer _ms_dev_window_poller, 0
+                    _ms_dev_window_poller := 0
+                }
+                if _ms_dev_window_gui  _ms_dev_window_gui.Destroy(), (_ms_dev_window_gui := 0)
+                _ms_dev_window_wv := 0
+            }
+            static toggle() { if _ms_dev_window_open  ms.dev.window.hide() ; else  ms.dev.window.show() }
+
+            static _pushCurrent() {
+                global _ms_dev_window_wv, _ms_dev_window_history
+                local hwnd := WinExist("A")
+                if !hwnd  return
+                try {
+                    local title := WinGetTitle("ahk_id " hwnd)
+                    local proc := WinGetProcessName("ahk_id " hwnd)
+                    WinGetPos &wx, &wy, &ww, &wh, "ahk_id " hwnd
+                    local entry := Map(
+                        "type", "focus",
+                        "ts",  A_Now,
+                        "app", proc,
+                        "title", title,
+                        "x", wx, "y", wy, "w", ww, "h", wh
+                    )
+                    _ms_dev_window_history.Push(entry)
+                    if _ms_dev_window_history.Length > 80
+                        _ms_dev_window_history.RemoveAt(1)
+                    if _ms_dev_window_wv {
+                        local json := Jxon_Dump(entry, 0)
+                        try _ms_dev_window_wv.ExecuteScript("appendEntry(" json ")")
+                        try _ms_dev_window_wv.ExecuteScript("updateCurrentWindow(" json ")")
+                    }
+                }
+            }
+
+            static _poll(self) {
+                global _ms_dev_window_open, _ms_dev_window_last_id, _ms_dev_window_poller
+                if !_ms_dev_window_open {
+                    SetTimer _ms_dev_window_poller, 0
+                    _ms_dev_window_poller := 0
+                    return
+                }
+                local hwnd := WinExist("A")
+                if !hwnd || hwnd = _ms_dev_window_last_id  return
+                _ms_dev_window_last_id := hwnd
+                ms.dev.window._pushCurrent()
+            }
         }
     }
 
@@ -2012,17 +2165,6 @@ class ms {
 ; ═══════════════════════════════════════════════════════════════════════════════
 ; Standalone helpers (outside class — needed for closures / Hotkey callbacks)
 ; ═══════════════════════════════════════════════════════════════════════════════
-
-; ── SHA-256 via PowerShell ────────────────────────────────────────────────────
-_ms_sha256(path) {
-    local out := ""
-    RunWait 'powershell -NoProfile -Command "(Get-FileHash \"' path '\" -Algorithm SHA256).Hash.ToLower()" > "' A_Temp '\ms_hash.txt"',, "Hide"
-    try {
-        FileRead &out, A_Temp "\ms_hash.txt"
-        FileDelete A_Temp "\ms_hash.txt"
-    }
-    return Trim(out)
-}
 
 ; ── Profile list helper ───────────────────────────────────────────────────────
 _ms_getProfiles() {
@@ -2145,7 +2287,7 @@ global _ms_trackpad_r_held   := false
 _ms_trackpadStart() {
     global _ms_trackpad_mode
     if !_ms_trackpad_mode  return
-    HotIfWinActive "ahk_exe RobloxPlayerBeta.exe"
+    HotIfWinActive _ms_target_exe
     local lk := _ms_trackpad_hold_keys.left
     local rk := _ms_trackpad_hold_keys.right
     Hotkey "$" lk,    _ms_tpLeftDown,   "On"
@@ -2156,7 +2298,7 @@ _ms_trackpadStart() {
 }
 
 _ms_trackpadStop() {
-    HotIfWinActive "ahk_exe RobloxPlayerBeta.exe"
+    HotIfWinActive _ms_target_exe
     local lk := _ms_trackpad_hold_keys.left
     local rk := _ms_trackpad_hold_keys.right
     try Hotkey "$" lk,       "Off"
@@ -2256,10 +2398,18 @@ _ms_captureModRebind(id) {
     ih.Start()
 }
 
+; ── Target app helper ────────────────────────────────────────────────────────
+; Returns true when the target app window is active (used by #HotIf and app poll).
+_ms_targetActive() {
+    global _ms_target_exe
+    if _ms_target_exe = ""  return false
+    return WinActive(_ms_target_exe) != 0
+}
+
 ; ── App watcher (poll every 100 ms) ──────────────────────────────────────────
 _ms_AppPoll() {
-    global _ms_roblox_active, _ms_ui_open_flag, _ms_loadDone
-    local active := WinActive("ahk_exe RobloxPlayerBeta.exe") != 0
+    global _ms_roblox_active, _ms_ui_open_flag, _ms_loadDone, _ms_target_exe
+    local active := _ms_targetActive()
     if active && !_ms_roblox_active {
         _ms_roblox_active := true
         ms.cam.updateMultiplier()
@@ -2282,9 +2432,89 @@ SetTimer _ms_AppPoll, 100
 ; ── Include macro file ────────────────────────────────────────────────────────
 #Include ms_macros.ahk
 
+; ── Loading indicator (mirrors Lua hs.canvas loading bar) ────────────────────
+do {
+    ; Build a small borderless GUI with a progress bar.
+    local lw := 300, lh := 64
+    MonitorGetWorkArea , &sL, &sT, &sR, &sB
+    local lx := sL + (sR - sL - lw) // 2
+    local ly := sB - 150 - lh
+    local _lGui := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x20")
+    _lGui.BackColor := "060402"
+    _lGui.MarginX := 0, _lGui.MarginY := 0
+    ; Title
+    _lGui.SetFont("s12 cF0DDB0", "Segoe UI")
+    _lGui.Add("Text", "x16 y8 w" (lw - 32) " h22", "mudscript")
+    ; Status text
+    _lGui.SetFont("s9 cC47820", "Segoe UI")
+    global _ms_loadStatus := _lGui.Add("Text", "x16 y30 w" (lw - 32) " h16", "Starting up...")
+    ; Progress bar background
+    _lGui.Add("Progress", "x16 y50 w" (lw - 32) " h3 c1C100C -Smooth", 0)
+    ; Progress bar fill
+    global _ms_loadProgress := _lGui.Add("Progress", "x16 y50 w" (lw - 32) " h3 Background060402 cC41A1A -Smooth Range0-100", 0)
+    _lGui.Show("w" lw " h" lh " x" lx " y" ly " NoActivate")
+    WinSetTransparent 220, _lGui
+
+    ; Update function — called at startup milestones
+    global _ms_loadUpdate := (pct, msg) => (
+        _ms_loadProgress.Value := pct,
+        _ms_loadStatus.Text := msg
+    )
+
+    ; Dismiss function — fades out and destroys
+    global _ms_loadDismiss := () {
+        local gui := _lGui
+        if !gui  return
+        local step := 0
+        SetTimer () {
+            step++
+            WinSetTransparent Max(0, 220 - step * 37), gui
+            if step >= 6 {
+                gui.Destroy()
+                _lGui := 0
+            }
+        }, 30
+    }
+
+    _ms_loadUpdate(5, "Initializing...")
+}
+
+_ms_loadUpdate(8, "Installing fonts...")
+
+; ── Font installation ─────────────────────────────────────────────────────────
+; Copy bundled fonts from ui/fonts/ to the Windows user fonts directory.
+; On Windows 10 1809+, user-installed fonts go in %LOCALAPPDATA%\Microsoft\Windows\Fonts
+; and are available without admin privileges.
+do {
+    local fontSrc := A_ScriptDir "\ui\fonts"
+    if DirExist(fontSrc) {
+        local fontDst := EnvGet("LOCALAPPDATA") "\Microsoft\Windows\Fonts"
+        DirCreate fontDst
+        local installed := false
+        Loop Files fontSrc "\*.*" {
+            local ext := ""
+            SplitPath A_LoopFileName,,, &ext
+            if ext != "ttf" && ext != "otf" && ext != "woff" && ext != "woff2"
+                continue
+            local dstFile := fontDst "\" A_LoopFileName
+            if !FileExist(dstFile) {
+                FileCopy A_LoopFileFullPath, dstFile, 0
+                installed := true
+            }
+        }
+        if installed {
+            ; Notify fonts were installed; a reload is needed for them to be recognized
+            ; by WebView2. We schedule a reload after a brief delay so the user sees the alert.
+            SetTimer () => Reload(), -500
+        }
+    }
+}
+
 ; ═══════════════════════════════════════════════════════════════════════════════
 ; Startup sequence (mirrors ms_core.lua "Startup Executions")
 ; ═══════════════════════════════════════════════════════════════════════════════
+
+_ms_loadUpdate(10, "Processing macros...")
 
 ; Seed _ms_binds from registry defaults for any id not overridden by settings
 for _, _ms_id in ms.bind._defList {
@@ -2293,12 +2523,19 @@ for _, _ms_id in ms.bind._defList {
         _ms_binds[_ms_id] := _ms_def.enabled
 }
 
+_ms_loadUpdate(25, "Loading settings...")
 ms._discoverSounds()
 ms.loadSettings()
+
+_ms_loadUpdate(50, "Applying theme...")
 ms.loadTheme()
+
+_ms_loadUpdate(65, "Configuring binds...")
 ms.cam.updateMultiplier()
 ms.bind.rebind()
 ms.socdApply()
+
+_ms_loadUpdate(90, "Finalizing...")
 
 ; Integrity auto-seed — 3 s after load (mirrors Lua timer)
 SetTimer _ms_integrityAutoSeed, -3000
@@ -2352,14 +2589,53 @@ _ms_loadAnnounce() {
     ; Unlock macros now that loading toasts have fired.
     _ms_loadDone := true
     BindValidity := 1
+    ; Dismiss loading indicator
+    try _ms_loadDismiss()
+}
+
+; ── Tray icon & menu ─────────────────────────────────────────────────────────
+; Custom tray icon: place ms_icon.ico in ui/icons/.
+; Falls back to the default AutoHotkey icon if the file is missing.
+do {
+    local iconPath := A_ScriptDir "\ui\icons\ms_icon.ico"
+    if FileExist(iconPath)
+        TraySetIcon(iconPath)
+    A_IconTip := "mudscript — " (ms.macroMeta.HasProp("name") ? ms.macroMeta.name : "Macro Utilities")
+    ; Build custom tray menu
+    local tray := A_TrayMenu
+    tray.Delete()  ; clear default items
+    tray.Add("Toggle Settings", (*) => ms.ui.toggle())
+    tray.Add()
+    tray.Add("Reload Script", (*) => Reload())
+    tray.Add("Reload Settings", (*) => ms.reloadSettings())
+    tray.Add()
+    tray.Add("Panic (Disable)", (*) => ms.setMacros(0))
+    tray.Add()
+    tray.Add("Exit", (*) => ExitApp())
+    tray.Default := "Toggle Settings"
+    tray.ClickCount := 1  ; single-click runs default
 }
 
 ; ── Global system hotkeys ─────────────────────────────────────────────────────
-#HotIf WinActive("ahk_exe RobloxPlayerBeta.exe")
+; Track last press time for / and Enter to filter auto-repeat (mirrors Lua !isRepeat)
+global _ms_last_slash  := 0
+global _ms_last_enter  := 0
+
+#HotIf _ms_targetActive()
 ![ :: Reload                                               ; Alt+[  reload script
 !] :: ms.reloadSettings()                                  ; Alt+]  reload settings
 !p :: ms.ui.toggle()                                       ; Alt+P  toggle settings panel
 !F10 :: ms.setMacros(0)                                    ; Alt+F10 panic/disable
-/ :: (BindValidity ? ms.setMacros(0) : 0)                 ; /  disable macros
-Enter :: (!BindValidity ? ms.setMacros(1) : 0)            ; Enter  enable macros
+/ :: {
+    global _ms_last_slash
+    if (A_TickCount - _ms_last_slash) < 100  return
+    _ms_last_slash := A_TickCount
+    if BindValidity  ms.setMacros(0)
+}                                                          ; /  disable macros (no repeat)
+Enter :: {
+    global _ms_last_enter
+    if (A_TickCount - _ms_last_enter) < 100  return
+    _ms_last_enter := A_TickCount
+    if !BindValidity  ms.setMacros(1)
+}                                                          ; Enter  enable macros (no repeat)
 #HotIf
