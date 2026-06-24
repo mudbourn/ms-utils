@@ -3164,6 +3164,7 @@
                             { id = "startup",      label = "Loading Screen Start" },
                             { id = "load",         label = "Loading Screen End"   },
                             { id = "launch",       label = "Launch Announcement"  },
+                            { id = "updateAvailable", label = "Update Available" },
                             { id = "alert",        label = "Alert / Notice"       },
                             { id = "enabled",      label = "Macros Enabled"       },
                             { id = "disabled",     label = "Macros Disabled"      },
@@ -4812,12 +4813,13 @@
                 startup = { "LoadStart", "Load Start" },
                 load    = { "LoadEnd",   "Load End"   },
                 launch  = { "Launch" },
+                updateAvailable = { "UpdateAvailable", "Update Available" },
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
                 -- Suppress all non-load sounds during startup so only launch.wav plays
                 -- while the loading screen is visible.  Gate opens in _announceLoad.
-                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "startup" then return false end
+                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "startup" and slotId ~= "updateAvailable" then return false end
                 -- Suppress if the same slot played within 50 ms.
                 local now = hs.timer.absoluteTime()
                 ms._playSlotTimes = ms._playSlotTimes or {}
@@ -7860,6 +7862,7 @@
             hs.timer.doAfter(2, function()
                 ms.integrity.checkForUpdate(function(u)
                     if u then
+                        ms.playSlot("updateAvailable")
                         ms.alert("Update v" .. u.version .. " available.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Check for Update to install.", 8, true)
                     end
                 end)
