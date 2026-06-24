@@ -1,3 +1,5 @@
+;@include ms_core_v2.ahk
+
 ; ms_macros.ahk — Combat Warriors macro pack (Windows / AHKv2)
 ; Direct port of ms_macros.lua. Included by ms_core.ahk after initialisation.
 ; Do NOT add #Requires or #Include at the top of this file.

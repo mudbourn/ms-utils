@@ -10,6 +10,9 @@
 ;   ; write macros using ms.bind.define(), ms.Mouse(), ms.wait(), etc.
 ; ═══════════════════════════════════════════════════════════════════════════
 
+;@include lib/Jxon.ahk
+;@include lib/WebView2.ahk
+
 #Requires AutoHotkey v2.0
 
 ;; Section 1 — Globals ;;
