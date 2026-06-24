@@ -645,8 +645,33 @@ class ms {
                     rootUsed[k] := id
             }
 
-            ; Modifier conflicts among siblings
-            local modUsed := Map()
+            ; ── Hotkey callback factories ──────────────────────────────────────────
+
+                    ; Shared callback for sub-item binds (captures _fn, _id, group, cooldown)
+                    static _fireSubBind(fn, id, group, cooldown, *) {
+                        if _ms_running.Has(group)  return
+                        _ms_running[group] := true
+                        SetTimer () => _ms_running.Delete(group), -cooldown
+                        _ms_active_sub := id
+                        fn()
+                    }
+
+                    ; Shared callback for root binds (captures _fn, _id, group, cooldown)
+                    static _fireRootBind(fn, id, group, cooldown, *) {
+                        if BindValidity != 1  return
+                        if _ms_running.Has(group)  return
+                        _ms_running[group] := true
+                        SetTimer () => _ms_running.Delete(group), -cooldown
+                        _ms_active_sub := ""
+                        try fn()
+                        catch as e {
+                            if e.Message != "ms.cancelled"
+                                ms.alert("Macro error — check OutputDebug.", 4)
+                        }
+                    }
+
+            ; ── Modifier conflicts among siblings
+                    local modUsed := Map()
             for _, id in ms.bind._defList {
                 local def := ms.bind._defs[id]
                 if !def || def.sub = ""  continue
@@ -675,20 +700,11 @@ class ms {
                     ; Sub-item: register only when independent binds is on and a bind is set
                     if !_ms_independent_binds || !_ms_subBinds.Has(id)  continue
                     local c := _ms_subBinds[id]
-                    local _fn := entry.func, _id := id, _def := def
-                    local firedFn := (_fn, _id, _def, group, cooldown) {
-                        return (*) {
-                            if _ms_running.Has(group)  return
-                            _ms_running[group] := true
-                            SetTimer () => _ms_running.Delete(group), -cooldown
-                            _ms_active_sub := _id
-                            _fn()
-                        }
-                    }
+                    local _fn := entry.func, _id := id
                     local hk := ms.bind._buildHotkey(c)
                     if hk = ""  continue
                     HotIfWinActive _ms_target_exe
-                    Hotkey "$" hk, firedFn.Bind(_fn, id, def, group, cooldown)
+                    Hotkey "$" hk, ms.bind._fireSubBind.Bind(_fn, _id, group, cooldown)
                     HotIfWinActive
                     ms.bind._hotkeys["$" hk] := id
                 } else {
@@ -698,24 +714,10 @@ class ms {
                     local c := ms._effectiveBind(id)
                     if c = ""  continue
                     local _fn := entry.func, _id := id
-                    local firedFn := (_fn, _id, group, cooldown) {
-                        return (*) {
-                            if BindValidity != 1  return
-                            if _ms_running.Has(group)  return
-                            _ms_running[group] := true
-                            SetTimer () => _ms_running.Delete(group), -cooldown
-                            _ms_active_sub := ""
-                            try _fn()
-                            catch as e {
-                                if e.Message != "ms.cancelled"
-                                    ms.alert("Macro error — check OutputDebug.", 4)
-                            }
-                        }
-                    }
                     local hk := ms.bind._buildHotkey(c)
                     if hk = ""  continue
                     HotIfWinActive _ms_target_exe
-                    Hotkey "$" hk, firedFn.Bind(_fn, id, group, cooldown)
+                    Hotkey "$" hk, ms.bind._fireRootBind.Bind(_fn, _id, group, cooldown)
                     HotIfWinActive
                     ms.bind._hotkeys["$" hk] := id
                 }
