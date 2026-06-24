@@ -1672,6 +1672,7 @@ YQIDAQAB
 
 ;; Toast System ;;
     _ms_showToast(msg, duration := 3) {
+        gui := "", ctrl := "", tw := 0, th := 0, padW := 0, padH := 0, x := 0, y := 0
         ; Build a small borderless Gui
         gui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20")
         gui.BackColor := _ms_theme["bg"]
@@ -1704,6 +1705,7 @@ YQIDAQAB
 
         _ms_loadingShow() {
             global _ms_loadGui, _ms_loadWv, _ms_theme
+            gui := "", wv := "", lw := 0, lh := 0, x := 0, y := 0
 
             lw := 300, lh := 104
             MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
