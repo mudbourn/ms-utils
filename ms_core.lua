@@ -7765,7 +7765,7 @@
                             ms.integrity.checkForUpdate(function(u)
                                 if u then
                                     ms.playSlot("updateAvailable")
-                                    ms.alert("Update v" .. u.version .. " available.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Check for Update to install.", 8, true)
+                                    ms.alert("Update v" .. u.version .. " available.\nSettings \xe2\x86\x92 Help \xe2\x86\x92 Check for Update to install.", 8, true)
                                 end
                             end)
                         end
