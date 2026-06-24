@@ -654,6 +654,26 @@ local g = ms.bind.group("superThrow")  -- → "G_superJump"
 
 ---
 
+### `ms.pause([id])` / `ms.resume([id])`
+
+Pauses and resumes a running macro by id (the first argument to `ms.bind.define`). When paused, the macro's current `ms.wait()` expires but does not resume until `ms.resume()` is called. Any already-expired wait time is consumed — the macro picks up immediately from the next instruction.
+
+Pass no argument to pause or resume all running macros.
+
+```lua
+ms.pause("throwTrick")     -- pause a specific macro
+ms.wait(500)
+ms.resume("throwTrick")    -- resume it
+
+ms.pause()                  -- pause everything
+ms.wait(100)
+ms.resume()                 -- resume everything
+```
+
+> Cancelled macros cannot be resumed. Use `ms.cancelMacros()` to abort permanently.
+
+---
+
 ### `ms.done(id)`
 
 Manually clears the cooldown for `id`'s group before the timer expires. Useful at the end of a long macro that uses time-based internal logic rather than the cooldown timer.
@@ -1339,6 +1359,7 @@ The panel UI is fully themeable via `~/.hammerspoon/data/ms_theme.json`. Edit th
     "text":     "#f0ddb0",
     "radius":   3,
     "font":     "Almendra",
+    "fadeMs":   150,
     "uifc": {
         "settings": "",
         "guardian": ""
@@ -1373,8 +1394,17 @@ All color values must be valid hex strings (`#rgb`, `#rrggbb`, or `#rrggbbaa`). 
 Integer, `0`–`40`. Controls `--radius` (and derives `--radius-s` as `radius - 1`). Default: `3`.
 
 ```json
-{ "radius": 0 }   // sharp 90° corners everywhere
-{ "radius": 8 }   // rounded
+{ "radius": 8 }
+```
+
+---
+
+### `fadeMs`
+
+Integer, `0`–`500`. Duration in milliseconds for panel fade-in / fade-out animations. Affects the settings panel, all four developer panels, and the startup loading screen. Set to `0` to disable fades completely. Default: `150`.
+
+```json
+{ "fadeMs": 300 }
 ```
 
 ---
