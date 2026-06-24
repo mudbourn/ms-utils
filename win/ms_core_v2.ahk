@@ -1680,14 +1680,14 @@ YQIDAQAB
     _ms_showToast(msg, duration := 3) {
 
         ; Build a small borderless Gui
-        gui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20")
-        gui.BackColor := _ms_theme["bg"]
-        gui.MarginX := 12, gui.MarginY := 8
-        gui.SetFont("s10 c" _ms_theme["text"], _ms_theme["font"])
+        hGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20")
+        hGui.BackColor := _ms_theme["bg"]
+        hGui.MarginX := 12, hGui.MarginY := 8
+        hGui.SetFont("s10 c" _ms_theme["text"], _ms_theme["font"])
 
         ; Measure text to size the gui
-        ctrl := gui.Add("Text",, msg)
-        ctrl.GetPos(,, &tw, &th)
+        hCtrl := hGui.Add("Text",, msg)
+        hCtrl.GetPos(,, &tw, &th)
         tw := Max(tw, 200), th := Max(th, 24)
 
         ; Size and position (top-centre)
@@ -1695,13 +1695,13 @@ YQIDAQAB
         MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
         x := sL + (sR - sL - tw - padW) // 2
         y := sT + 40
-        gui.Show("w" (tw + padW) " h" (th + padH) " x" x " y" y " NoActivate")
+        hGui.Show("w" (tw + padW) " h" (th + padH) " x" x " y" y " NoActivate")
 
         ; Semi-transparent
-        WinSetTransparent 220, gui
+        WinSetTransparent 220, hGui
 
         ; Auto-dismiss
-        SetTimer () => gui.Destroy(), -(duration * 1000)
+        SetTimer () => hGui.Destroy(), -(duration * 1000)
     }
 ;; END Toast System ;;
 
@@ -1717,16 +1717,16 @@ YQIDAQAB
             x := sL + (sR - sL - lw) // 2
             y := sB - 150 - lh
 
-            gui := Gui("+AlwaysOnTop -Caption +ToolWindow")
-            gui.Show("w" lw " h" lh " x" x " y" y " NoActivate")
-            wv := WebView2.create(gui.Hwnd)
-            wv.Navigate("file:///" A_ScriptDir "\ui\ms_loading.html")
+            hGui := Gui("+AlwaysOnTop -Caption +ToolWindow")
+            hGui.Show("w" lw " h" lh " x" x " y" y " NoActivate")
+            hWv := WebView2.create(hGui.Hwnd)
+            hWv.Navigate("file:///" A_ScriptDir "\ui\ms_loading.html")
             ; Push theme once page loads so HTML can style itself from ms_theme.json values
-            wv.add_NavigationCompleted((w, *) => (
+            hWv.add_NavigationCompleted((w, *) => (
                 w.ExecuteScript("applyTheme(" Jxon_Dump(_ms_theme, 0) ")")
             ))
-            _ms_loadGui := gui
-            _ms_loadWv  := wv
+            _ms_loadGui := hGui
+            _ms_loadWv  := hWv
         }
 
         _ms_loadingUpdate(pct, msg) {
