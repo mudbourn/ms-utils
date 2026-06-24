@@ -7746,11 +7746,18 @@
                     -- Loading complete: allow macros to run and activate them if Roblox is already focused.
                     ms._loadComplete = true
                     if ms._robloxActive then ms.setMacros(1, true) end
-                    -- 4. Integrity warning \xe2\x80\x94 after all three announce toasts have faded
-                    -- (3 x 3 s = 9 s total) plus a 1 s gap so there is no overlap.
+                    -- 4. Integrity warning / update check — after all three announce toasts
+                    -- have faded (3 x 3 s = 9 s total) plus a 1 s gap.
                     hs.timer.doAfter(10, function()
                         if _needsIntegrityWarning then
                             ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
+                        else
+                            ms.integrity.checkForUpdate(function(u)
+                                if u then
+                                    ms.playSlot("updateAvailable")
+                                    ms.alert("Update v" .. u.version .. " available.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Check for Update to install.", 8, true)
+                                end
+                            end)
                         end
                     end)
                 end)
@@ -7856,16 +7863,6 @@
                 -- Bootstrap failed: flag the warning so _announceLoad shows it after
                 -- the startup toasts have had time to display and fade.
                 _needsIntegrityWarning = true
-            end)
-
-        -- Check for update (async, non-blocking) --
-            hs.timer.doAfter(2, function()
-                ms.integrity.checkForUpdate(function(u)
-                    if u then
-                        ms.playSlot("updateAvailable")
-                        ms.alert("Update v" .. u.version .. " available.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Check for Update to install.", 8, true)
-                    end
-                end)
             end)
 
         -- Activate Roblox so the app watcher can seed _robloxActive correctly
