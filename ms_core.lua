@@ -99,6 +99,27 @@
             ms.registry              = { _defs = {}, _defList = {} }
             ms.bind                  = { _wires = {}, _autoCount = 0 }
             roblox = hs.application.get("Roblox")
+            -- ms._targetHandle is refreshed on every reload via the target app lookup.
+
+            ms._targetApp     = "Roblox"                   -- target application name; change via ms.setTargetApp()
+            ms._targetHandle  = hs.application.get(ms._targetApp)  -- cached handle, refreshed on reload
+            ms._robloxActive  = false  -- true while target app is focused
+            ms.getTargetWin = function()
+                local app = hs.application.get(ms._targetApp)
+                if not app then return nil end
+                local ok, win = pcall(function() return app:mainWindow() end)
+                return (ok and win) or nil
+            end
+
+            -- Change the target application at runtime. Refreshes the cached handle
+            -- and forces a watcher re-check. Pass nil to disable target-specific behavior.
+            ms.setTargetApp = function(name)
+                ms._targetApp    = name or nil
+                ms._targetHandle = name and hs.application.get(name) or nil
+                if ms._targetHandle then
+                    ms._robloxActive = true
+                end
+            end
             notice = 0
             loadfinish = 0
             REF_W = 1680
@@ -1701,7 +1722,7 @@
                         os.getenv("HOME") .. "/Downloads/",
                         true, false, false
                     )
-                    local roblox = hs.application.get("Roblox")
+                    local roblox = hs.application.get(ms._targetApp or "Roblox")
                     -- Normalize: chooseFileOrFolder may use string keys ("1") not integer keys (1).
                     local selectedPath
                     for _, v in pairs(result or {}) do
@@ -1846,7 +1867,7 @@
                         os.getenv("HOME") .. "/Downloads/",
                         true, false, false, { "mspkg", "zip" }
                     )
-                    local roblox = hs.application.get("Roblox")
+                    local roblox = hs.application.get(ms._targetApp or "Roblox")
                     local selectedPath
                     for _, v in pairs(result or {}) do
                         if type(v) == "string" then selectedPath = v; break end
@@ -4232,21 +4253,18 @@
 
         -- 6. Resolution & Window Scaling --
             ms.getRobloxWin = function()
-                local app = hs.application.get("Roblox")
-                if not app then return nil end
-                local ok, win = pcall(function() return app:mainWindow() end)
-                return (ok and win) or nil
+                return ms.getTargetWin()
             end
 
             ms.winCenter = function()
-                local win = ms.getRobloxWin() or hs.window.focusedWindow()
+                local win = ms.getTargetWin() or hs.window.focusedWindow()
                 if not win then return 0, 0 end
                 local f = win:frame()
                 return f.x + (f.w / 2), f.y + (f.h / 2)
             end
 
             ms.getScaled = function(targetX, targetY)
-                local win = ms.getRobloxWin() or hs.window.focusedWindow()
+                local win = ms.getTargetWin() or hs.window.focusedWindow()
                 if not win then
                     local screen = hs.screen.mainScreen():frame()
                     return targetX * (screen.w / REF_W), targetY * (screen.h / REF_H)
@@ -4258,7 +4276,7 @@
             end
 
             ms.resolvePoint = function(x, y, reference, unscaled)
-                local win = ms.getRobloxWin() or hs.window.focusedWindow()
+                local win = ms.getTargetWin() or hs.window.focusedWindow()
                 local f   = win and win:frame()
                 local s   = hs.screen.mainScreen():frame()
                 if     reference == "Absolute"     then return x, y
@@ -4463,7 +4481,7 @@
             }
 
             ms.cam._setupWatcher = function()
-                local robloxApp = hs.application.get("Roblox")
+                local robloxApp = hs.application.get("Roblox") or hs.application.get(ms._targetApp)
                 if not robloxApp then return end
                 if ms.cam._uiWatcher then ms.cam._uiWatcher:stop() end
                 ms.cam._uiWatcher = robloxApp:newWatcher(function(el, event)
@@ -4559,7 +4577,7 @@
                             ms.setMacros(0, ms._inputOpen)
                         end
                     end
-                elseif eventType == hs.application.watcher.launched and appName == "Roblox" then
+                elseif ms._targetApp and eventType == hs.application.watcher.launched and appName == ms._targetApp then
                     ms.cam._setupWatcher()
                 end
             end):start()
@@ -4567,7 +4585,7 @@
 
             _G._initTimer = hs.timer.doAfter(0.3, function()
                 local frontApp = hs.application.frontmostApplication()
-                if frontApp and frontApp:name() == "Roblox" then
+                if ms._targetApp and frontApp and frontApp:name() == ms._targetApp then
                     ms._robloxActive = true
                     ms.cam._setupWatcher()
                     ms.cam.enable()
@@ -4905,7 +4923,7 @@
             end
 
             ms.mousePos = function()
-                local win = ms.getRobloxWin() or hs.window.focusedWindow()
+                local win = ms.getTargetWin() or hs.window.focusedWindow()
                 local pos = hs.mouse.absolutePosition()
                 if not win then return pos.x, pos.y end
                 local f = win:frame()
@@ -6124,7 +6142,7 @@
                             -- then hand focus back to Roblox so the app watcher fires
                             -- the Roblox-activated path and re-enables macros properly.
                             ms.ui._open = true
-                            local roblox = hs.application.get("Roblox")
+                            local roblox = hs.application.get(ms._targetApp or "Roblox")
                             if roblox then
                                 hs.timer.doAfter(0.05, function()
                                     local ok, win = pcall(function() return roblox:mainWindow() end)
@@ -7149,7 +7167,7 @@
                         local mode = ms.dev._coordMode or "screen"
                         local tx, ty = _x, _y
                         if mode == "window" or mode == "ref" then
-                            local win = ms.getRobloxWin()
+                            local win = ms.getTargetWin()
                             if win then
                                 local f = win:frame()
                                 tx = _x - f.x
