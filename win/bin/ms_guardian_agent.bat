@@ -11,8 +11,8 @@ REM Install with:  bin\install_guardian_agent.bat
 
 setlocal enabledelayedexpansion
 
-set "CORE=%~dp0..\ms_core.ahk"
-set "TRUST=%~dp0..\data\.ms_trusted_hash"
+set "CORE=%~dp0..\ms_core_v2.ahk"
+set "TRUST=%~dp0..\..\data\.ms_trusted_hash"
 set "LOG=%LOCALAPPDATA%\mudscript\guardian_agent.log"
 
 if not exist "%LOG%\" mkdir "%LOCALAPPDATA%\mudscript" 2>nul

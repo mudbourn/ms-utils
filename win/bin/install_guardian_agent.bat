@@ -17,7 +17,7 @@ setlocal enabledelayedexpansion
 
 set "HS=%~dp0.."
 set "AGENT=%HS%\bin\ms_guardian_agent.bat"
-set "CORE=%HS%\ms_core.ahk"
+set "CORE=%HS%\ms_core_v2.ahk"
 set "TASK_NAME=mudscript Guardian"
 
 REM ── Self-elevate check ──────────────────────────────────────────────────────
