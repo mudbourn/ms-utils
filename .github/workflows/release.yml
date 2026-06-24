@@ -123,6 +123,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Windows package
+        id: win_build
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
@@ -187,25 +188,32 @@ jobs:
 
             if (Test-Path "$dist\mudscript.exe") {
               Write-Output "  Compiled: mudscript.exe"
-              # Remove source .ahk files — the EXE bundles them
               Remove-Item "$dist\init.ahk" -Force
               Remove-Item "$dist\ms_core.ahk" -Force
               Remove-Item "$dist\ms_macros.ahk" -Force
             }
           } else {
             Write-Output "  AutoHotkey v2 not found — packaging source .ahk files instead."
-            Write-Output "  Users will need AHK installed to run."
           }
 
           # Create zip
           $archive = "mudscript-windows-${version}.zip"
           Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
           Write-Output "Package: $archive"
-          Add-Content -Path $env:GITHUB_ENV -Value "archive=$archive"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
+
+      - name: Upload Windows artifact
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ needs.stamp.outputs.version }}
+          path: mudscript-windows-*.zip
 
       - name: Build macOS package
+        id: macos_build
         if: matrix.platform == 'macos'
         run: |
+          set -euo pipefail
           VERSION="${{ needs.stamp.outputs.version }}"
           DIST="mudscript-${VERSION}"
 
@@ -230,14 +238,15 @@ jobs:
 
           ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
           tar czf "$ARCHIVE" "$DIST"
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
           echo "Package: $ARCHIVE"
-          echo "archive=$ARCHIVE" >> "$GITHUB_ENV"
 
-      - name: Upload release artifact
+      - name: Upload macOS artifact
+        if: matrix.platform == 'macos'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ needs.stamp.outputs.version }}
-          path: ${{ env.archive }}
+          name: macos-${{ needs.stamp.outputs.version }}
+          path: mudscript-macos-*.tar.gz
 
   # ────────────────────────────────────────────────────────────────────────────
   # Release — create GitHub Release and attach assets
