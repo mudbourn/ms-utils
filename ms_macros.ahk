@@ -147,10 +147,11 @@ HighLeapAssistFunction() {
 }
 
 _superJump_fn() {
-    if ms.modHeld("superThrow")
+    if ms.modHeld("superThrow") {
         ThrowTrickFunction()
-    else
+    } else {
         HighLeapAssistFunction()
+    }
 }
 
 ms.bind.define("superJump", _superJump_fn, {
@@ -408,10 +409,11 @@ ActionSpammerFunction() {
 
 _frameDump_fn() {
     ; ms._currentFlags is set by the bind dispatcher with active modifier state.
-    if ms._currentFlags && ms._currentFlags.alt
+    if ms._currentFlags && ms._currentFlags.alt {
         SpawnAltFunction()
-    else
+    } else {
         ActionSpammerFunction()
+    }
 }
 
 ms.bind.define("frameDump", _frameDump_fn, {

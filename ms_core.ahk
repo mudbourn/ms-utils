@@ -267,10 +267,11 @@ class ms {
     ; ── Scroll ────────────────────────────────────────────────────────────────
 
     static scroll(direction, amount := 1) {
-        if direction = "up"
+        if direction = "up" {
             Send "{WheelUp " amount "}"
-        else
+        } else {
             Send "{WheelDown " amount "}"
+        }
     }
 
     ; ── Audio ─────────────────────────────────────────────────────────────────
@@ -280,10 +281,11 @@ class ms {
         global _ms_soundEnabled
         if !_ms_soundEnabled  return
         if !path              return
-        if async
+        if async {
             SoundPlay path, true
-        else
+        } else {
             SoundPlay path
+        }
     }
 
     ; Play the sound assigned to a named slot (e.g. "update", "enabled", "load").
@@ -328,10 +330,11 @@ class ms {
             return
         }
         ; If it already contains "ahk_" prefix, use as-is; otherwise build "ahk_exe "
-        if InStr(name, "ahk_") = 1
+        if InStr(name, "ahk_") = 1 {
             _ms_target_exe := name
-        else
+        } else {
             _ms_target_exe := "ahk_exe " name
+        }
     }
 
     ; Returns the window criteria for the target app, or "" if unset.
@@ -550,10 +553,11 @@ class ms {
             local func := ""
             local opts := {}
 
-            if fnOrOpts is Func || fnOrOpts is BoundFunc || fnOrOpts is Closure
+            if fnOrOpts is Func || fnOrOpts is BoundFunc || fnOrOpts is Closure {
                 func := fnOrOpts,  opts := (optsOrFn != "" ? optsOrFn : {})
-            else
+            } else {
                 opts := fnOrOpts,  func := (optsOrFn != "" ? optsOrFn : "")
+            }
 
             ; Build the canonical opts table (mirror Lua ms.registry._defs shape)
             local label, group
@@ -724,10 +728,11 @@ class ms {
             }
 
             ; Trackpad listeners: start/stop based on current mode
-            if _ms_trackpad_mode
+            if _ms_trackpad_mode {
                 _ms_trackpadStart()
-            else
+            } else {
                 _ms_trackpadStop()
+            }
         }
 
         ; Returns the canonical conflict-detection key for a bind config object.
@@ -1006,14 +1011,16 @@ class ms {
         if data.Has("importedSounds") _ms_importedSounds := data["importedSounds"]
         if data.Has("macros") {
             for id, entry in data["macros"] {
-                if entry.Has("enabled")
+                if entry.Has("enabled") {
                     _ms_binds[id] := (entry["enabled"] = true)
+                }
                 if entry.Has("bind") {
                     local def := ms.bind._defs.Has(id) ? ms.bind._defs[id] : ""
-                    if def != "" && def.sub != ""
+                    if def != "" && def.sub != "" {
                         _ms_subBinds[id] := entry["bind"]
-                    else
+                    } else {
                         _ms_bindConfig[id] := entry["bind"]
+                    }
                 }
                 if entry.Has("mod")  _ms_modConfig[id] := entry["mod"]
                 if entry.Has("cooldown") {
@@ -1245,10 +1252,11 @@ class ms {
         static hide(name) {
             global _ms_hidden_feats
             static allowed := Map("socd",true,"trackpad",true,"independentBinds",true,"sensitivity",true)
-            if !allowed.Has(name)
+            if !allowed.Has(name) {
                 OutputDebug "ms.features.hide: '" name "' is not a hideable feature."
-            else
+            } else {
                 _ms_hidden_feats[name] := true
+            }
         }
     }
 
@@ -1641,10 +1649,11 @@ class ms {
             local data := Jxon_Load(&raw)
             if !data || !data.Has("action")  return
             local action := data["action"]
-            if ms.ui._actions.Has(action)
+            if ms.ui._actions.Has(action) {
                 try ms.ui._actions[action].Call(data)
-            else
+            } else {
                 OutputDebug "ms.ui: unknown action: " action
+            }
         }
 
         static _actions := Map(
@@ -2459,10 +2468,11 @@ _ms_AppPoll() {
         ms.cam.updateMultiplier()
         if !_ms_loadDone  ; don't enable macros while loading toasts haven't fired yet
             return
-        if _ms_ui_open_flag   ; returning from panel — re-enable silently
+        if _ms_ui_open_flag {  ; returning from panel — re-enable silently
             BindValidity := 1
-        else
+        } else {
             ms.setMacros(1)
+        }
     } else if !active && _ms_roblox_active {
         ; Don't disable when focus moved to our own panel
         if _ms_ui_open_flag
