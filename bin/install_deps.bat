@@ -30,14 +30,16 @@ if exist "%WV2_FILE%" (
     echo [DL]   Downloading WebView2.ahk...
     powershell -NoProfile -Command ^
         "$wv2 = Invoke-WebRequest -Uri '%WV2_URL%' -UseBasicParsing; " ^
-        "$wv2 = $wv2.Content -replace '#Include \.\.\\ComVar\.ahk', '#Include lib\ComVar.ahk'; " ^
-        "$wv2 = $wv2 -replace '#Include \.\.\\Promise\.ahk', '#Include lib\Promise.ahk'; " ^
+        "$wv2 = $wv2.Content.Replace('..\ComVar.ahk', 'lib\ComVar.ahk'); " ^
+        "$wv2 = $wv2.Content.Replace('..\Promise.ahk', 'lib\Promise.ahk'); " ^
         "[System.IO.File]::WriteAllText('%WV2_FILE%', $wv2, [System.Text.UTF8Encoding]::new($false))"
     if !errorlevel! equ 0 if exist "%WV2_FILE%" (
         echo [OK]   WebView2.ahk downloaded.
     ) else (
         echo [FAIL] Could not download WebView2.ahk.
         echo        Try manually from: %WV2_URL%
+        pause
+        exit /b 1
     )
 )
 
@@ -63,6 +65,7 @@ if exist "%WV2_DIR%" (
     ) else (
         echo [FAIL] Could not download WebView2/ contents.
         echo        Try manually from: https://github.com/thqby/ahk2_lib/tree/master/WebView2
+        pause
     )
 )
 
@@ -79,6 +82,7 @@ if exist "%COMVAR_FILE%" (
         echo [OK]   ComVar.ahk downloaded.
     ) else (
         echo [FAIL] Could not download ComVar.ahk.
+        pause
     )
 )
 
@@ -95,6 +99,7 @@ if exist "%PROMISE_FILE%" (
         echo [OK]   Promise.ahk downloaded.
     ) else (
         echo [FAIL] Could not download Promise.ahk.
+        pause
     )
 )
 
@@ -113,6 +118,7 @@ if exist "%JXON_FILE%" (
     ) else (
         echo [FAIL] Could not download Jxon.ahk.
         echo        Try manually from: %JXON_URL%
+        pause
     )
 )
 
