@@ -21,7 +21,7 @@ if (_ms_trusted != "" && _ms_current != _ms_trusted) {
 }
 
 ; ── Hash OK (or no trusted hash yet) — fall through to core ──────────────────
-#Include ms_core.ahk
+#Include ms_core_v2.ahk
 
 ; ═════════════════════════════════════════════════════════════════════════════
 ; Guardian helpers  (AHKv2 hoists all function defs — safe to define after #Include)
@@ -71,17 +71,17 @@ _ms_onGuardianMsg(g, hashPath, wv, args) {
 }
 
 _ms_sha256(path) {
-    local out := ""
     RunWait 'powershell -NoProfile -Command "(Get-FileHash \"' path '\" -Algorithm SHA256).Hash.ToLower()" > "' A_Temp '\ms_hash.txt"',, "Hide"
-    FileRead &out, A_Temp "\ms_hash.txt"
+    local out := ""
+    try out := FileRead(A_Temp "\ms_hash.txt")
     try FileDelete A_Temp "\ms_hash.txt"
-    return Trim(out)
+    return Trim(out ?? "")
 }
 
 _ms_readHash(path) {
     if !FileExist(path)
         return ""
     local h := ""
-    FileRead &h, path
-    return Trim(h)
+    try h := FileRead(path)
+    return Trim(h ?? "")
 }

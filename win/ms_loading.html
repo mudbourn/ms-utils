@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>mudscript — Loading</title>
+        <style>
+            /* ── Font ───────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
+
+            /* ── Tokens — Devil May Cry 3 palette ───────────────────────────── */
+            :root {
+                --bg: #060402;
+                --surface: #100806;
+                --surface2: #1c100c;
+                --hover: #301610;
+                --accent: #c41a1a;
+                --accent-hi: #e52424;
+                --warning: #c47820;
+                --text: #f0ddb0;
+                --radius: 3px;
+            }
+
+            /* ── Reset ──────────────────────────────────────────────────────── */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            html,
+            body {
+                height: 100%;
+                overflow: hidden;
+                background: var(--bg);
+                font-family: "Almendra", Palatino, Georgia, serif;
+                font-size: 13px;
+                color: var(--text);
+                -webkit-font-smoothing: antialiased;
+            }
+
+            /* ── Panel ──────────────────────────────────────────────────────── */
+            #panel {
+                width: 300px;
+                height: 104px;
+                position: relative;
+                background: var(--surface2);
+                border: 1px solid var(--hover);
+                border-radius: var(--radius);
+                overflow: hidden;
+            }
+
+            /* Top accent strip */
+            #panel::before {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 2px;
+                background: var(--accent);
+                z-index: 2;
+            }
+
+            /* ── Title ──────────────────────────────────────────────────────── */
+            #title {
+                position: absolute;
+                top: 13px;
+                left: 16px;
+                right: 16px;
+                font-size: 15px;
+                font-weight: 700;
+                color: var(--text);
+            }
+
+            /* ── Status ─────────────────────────────────────────────────────── */
+            #status {
+                position: absolute;
+                top: 37px;
+                left: 16px;
+                right: 16px;
+                font-size: 11px;
+                font-style: italic;
+                color: var(--warning);
+            }
+
+            /* ── Progress track ─────────────────────────────────────────────── */
+            #track {
+                position: absolute;
+                left: 16px;
+                right: 16px;
+                bottom: 24px;
+                height: 3px;
+                border-radius: 1.5px;
+                background: var(--surface);
+            }
+
+            /* ── Progress fill ──────────────────────────────────────────────── */
+            #fill {
+                position: absolute;
+                left: 16px;
+                bottom: 24px;
+                width: 0;
+                height: 3px;
+                border-radius: 1.5px;
+                background: var(--accent);
+                transition: width 0.15s ease;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="panel">
+            <div id="title">mudscript</div>
+            <div id="status">Starting up…</div>
+            <div id="track"></div>
+            <div id="fill"></div>
+        </div>
+
+        <script>
+            function applyTheme(t) {
+                if (!t) return;
+                const r = document.documentElement.style;
+                if (t.bg) r.setProperty("--bg", t.bg);
+                if (t.surface) r.setProperty("--surface", t.surface);
+                if (t.surface2) r.setProperty("--surface2", t.surface2);
+                if (t.hover) r.setProperty("--hover", t.hover);
+                if (t.accent) r.setProperty("--accent", t.accent);
+                if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
+                if (t.warning) r.setProperty("--warning", t.warning);
+                if (t.text) r.setProperty("--text", t.text);
+                if (t.radius) r.setProperty("--radius", t.radius + "px");
+                if (t.font)
+                    document.body.style.fontFamily =
+                        t.font + ', "Almendra", serif';
+            }
+
+            function setProgress(pct, msg) {
+                document.getElementById("fill").style.width =
+                    Math.max(0, Math.min(100, pct)) + "%";
+                if (msg) document.getElementById("status").textContent = msg;
+            }
+        </script>
+    </body>
+</html>

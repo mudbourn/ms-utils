@@ -2190,6 +2190,18 @@
                             end
                             ms.integrity.writeTrustedHash(actualHash)
                             ms.integrity.invalidateCache()
+                            -- Update the local MANIFEST.json so checkForUpdate
+                            -- doesn't false-flag on the next startup.
+                            local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
+                            if _mf then
+                                _mf:write(hs.json.encode({
+                                    version = newVersion,
+                                    sha256  = expectedHash,
+                                    url     = manifest.url,
+                                    windows_url     = manifest.windows_url,
+                                    windows_sha256  = manifest.windows_sha256,
+                                })); _mf:close()
+                            end
                             ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
                             hs.timer.doAfter(3, function() hs.reload() end)
                         end)

@@ -10,7 +10,7 @@
 #Requires AutoHotkey v2.0
 
 ; ── Check extraction ───────────────────────────────────────────────────────────
-if !FileExist(A_ScriptDir "\ms_core.ahk") {
+if !FileExist(A_ScriptDir "\ms_core_v2.ahk") {
     MsgBox "mudscript requires the full extracted folder.`n`n"
         . "1. Right-click the ZIP file → Extract All...`n"
         . "2. Open the extracted folder`n"

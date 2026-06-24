@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths: [ms_core.lua, ms_core.ahk]
+    paths: [mac/ms_core.lua, win/ms_core_v2.ahk]
   workflow_dispatch:
     inputs:
       version:
@@ -33,7 +33,7 @@ jobs:
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
-          WIN_SHA=$(sha256sum ms_core.ahk | awk '{print $1}')
+          WIN_SHA=$(sha256sum win/ms_core_v2.ahk | awk '{print $1}')
           echo "WIN_SHA=$WIN_SHA"
 
           # Debug: check MANIFEST.json exists and is valid
@@ -52,7 +52,7 @@ jobs:
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
-          WIN_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.ahk"
+          WIN_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/win/ms_core_v2.ahk"
 
           # Preserve existing macOS fields (hash, url, sig — carried from old manifest)
           MAC_SHA=$(jq -r '.sha256 // ""' MANIFEST.json) || MAC_SHA=""
@@ -139,17 +139,17 @@ jobs:
           $dist = "mudscript-$version"
           mkdir $dist
           & .\bin\generate_icon.ps1
-          Copy-Item "install.bat","init.ahk","_ms_main.ahk","ms_core.ahk","ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
-          Copy-Item -Recurse "ui","lib","bin","data" "$dist\"
+          Copy-Item "win\install.bat","win\init.ahk","win\_ms_main.ahk","win\ms_core_v2.ahk","win\ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
+          Copy-Item -Recurse "ui","win\lib","win\bin","data" "$dist\"
           Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
           Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
           Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
           Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
           # Validate ms_core.ahk is not corrupted
-          $srcHash = (Get-FileHash "ms_core.ahk" -Algorithm SHA256).Hash
-          $dstHash = (Get-FileHash "$dist\ms_core.ahk" -Algorithm SHA256).Hash
+          $srcHash = (Get-FileHash "win\ms_core_v2.ahk" -Algorithm SHA256).Hash
+          $dstHash = (Get-FileHash "$dist\ms_core_v2.ahk" -Algorithm SHA256).Hash
           if ($srcHash -ne $dstHash) {
-            Write-Error "ms_core.ahk hash mismatch! Source: $srcHash  Dist: $dstHash"
+            Write-Error "ms_core_v2.ahk hash mismatch! Source: $srcHash  Dist: $dstHash"
             exit 1
           }
           Write-Output "ms_core.ahk validated: SHA256 matches ($srcHash)"
@@ -164,10 +164,10 @@ jobs:
           VERSION="${{ needs.stamp.outputs.version }}"
           DIST="mudscript-${VERSION}"
           mkdir -p "$DIST"
-          for f in install.sh init.lua ms_core.lua ms_macros.lua MANIFEST.json README.md; do
+          for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua MANIFEST.json README.md; do
             [ -f "$f" ] && cp "$f" "$DIST/"
           done
-          for d in Spoons ui bin; do
+          for d in mac/Spoons ui mac/bin; do
             [ -d "$d" ] && cp -R "$d" "$DIST/"
           done
           mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
