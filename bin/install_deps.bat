@@ -30,7 +30,7 @@ if exist "%WV2_FILE%" (
     echo [DL]   Downloading WebView2.ahk...
     powershell -NoProfile -Command ^
         "$wv2 = Invoke-WebRequest -Uri '%WV2_URL%' -UseBasicParsing; " ^
-        "$wv2 = $wv2.Content.Replace('..\ComVar.ahk', 'lib\ComVar.ahk').Replace('..\Promise.ahk', 'lib\Promise.ahk'); " ^
+        "$wv2 = $wv2.Content.Replace('..\ComVar.ahk', 'ComVar.ahk').Replace('..\Promise.ahk', 'Promise.ahk'); " ^
         "[System.IO.File]::WriteAllText('%WV2_FILE%', $wv2, [System.Text.UTF8Encoding]::new($false))"
     if !errorlevel! equ 0 if exist "%WV2_FILE%" (
         echo [OK]   WebView2.ahk downloaded.

@@ -108,7 +108,7 @@ jobs:
         run: |
           mkdir lib -Force
           $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
-          $wv2 = $wv2.Replace('..\ComVar.ahk', 'lib\ComVar.ahk').Replace('..\Promise.ahk', 'lib\Promise.ahk')
+          $wv2 = $wv2.Replace('..\ComVar.ahk', 'ComVar.ahk').Replace('..\Promise.ahk', 'Promise.ahk')
           [System.IO.File]::WriteAllText("$pwd\lib\WebView2.ahk", $wv2, [System.Text.UTF8Encoding]::new($false))
           mkdir lib\WebView2 -Force
           $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
