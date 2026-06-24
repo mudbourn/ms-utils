@@ -14,11 +14,29 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 
 ---
 
+## One-shot install
+
+**macOS:**
+```bash
+bash install.sh
+```
+
+**Windows (Run as Administrator):**
+```batch
+install.bat
+```
+
+Each installer copies files, installs dependencies, sets up the OS-level Guardian, locks the bootstrap stub, and prints next steps.
+
+---
+
 ## Directory layout
 
 ```
-~/.hammerspoon/
+./
 │
+│   install.sh            macOS one-shot installer
+│   install.bat           Windows one-shot installer (Run as Admin)
 │   init.lua              macOS bootstrap stub (read-only: chmod 444)
 │   init.ahk              Windows bootstrap stub (read-only: attrib +r)
 │   ms_core.lua           macOS main library. Protected by the Guardian.

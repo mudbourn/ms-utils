@@ -5,11 +5,17 @@ on:
     branches: [main]
     paths: [ms_core.lua, ms_core.ahk]
 
+permissions:
+  contents: write
+
 jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Stamp — compute hashes, sign MANIFEST.json, commit back
+  # ────────────────────────────────────────────────────────────────────────────
   stamp:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.value }}
 
     steps:
       - uses: actions/checkout@v4
@@ -17,14 +23,15 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute hash and sign macOS MANIFEST
+        id: version
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
           SHA256=$(sha256sum ms_core.lua | awk '{print $1}')
           VERSION=$(jq -r '.version // "1.0.0"' MANIFEST.json)
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua"
 
-          # Preserve existing Windows fields while updating macOS fields.
           WIN_URL=$(jq -r '.windows_url // ""' MANIFEST.json)
           WIN_SHA=$(jq -r '.windows_sha256 // ""' MANIFEST.json)
           WIN_SIG=$(jq -r '.windows_signature // ""' MANIFEST.json)
@@ -58,7 +65,6 @@ jobs:
           WIN_SHA=$(sha256sum ms_core.ahk | awk '{print $1}')
           WIN_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.ahk"
 
-          # Preserve existing macOS fields while updating Windows fields.
           VERSION=$(jq -r '.version // "1.0.0"' MANIFEST.json)
           MAC_SHA=$(jq -r '.sha256 // ""' MANIFEST.json)
           MAC_URL=$(jq -r '.url // ""' MANIFEST.json)
@@ -93,3 +99,213 @@ jobs:
           git add MANIFEST.json
           git diff --staged --quiet || git commit -m "chore: auto-stamp MANIFEST [skip ci]"
           git push
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Build — compile Windows EXE, package macOS archive
+  # ────────────────────────────────────────────────────────────────────────────
+  build:
+    needs: stamp
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows
+            ext: zip
+          - runner: ubuntu-latest # packaging only — no Ubuntu runtime
+            platform: macos
+            ext: tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Windows package
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $version = "${{ needs.stamp.outputs.version }}"
+          $dist = "mudscript-$version"
+
+          mkdir $dist
+
+          # Generate tray icon from .tiff sources
+          Write-Output "Generating tray icon..."
+          & .\bin\generate_icon.ps1
+
+          # Copy files
+          Copy-Item "install.bat"                   "$dist\"
+          Copy-Item "init.ahk"                      "$dist\"
+          Copy-Item "ms_core.ahk"                   "$dist\"
+          Copy-Item "ms_macros.ahk"                 "$dist\"
+          Copy-Item "MANIFEST.json"                 "$dist\"
+          Copy-Item "writing_style.txt"             "$dist\"
+          Copy-Item -Recurse "ui"                   "$dist\ui\"
+          Copy-Item -Recurse "bin"                  "$dist\bin\"
+          Copy-Item -Recurse "data"                 "$dist\data\"
+          Copy-Item -Recurse "sounds"               "$dist\sounds\" -ErrorAction SilentlyContinue
+          Copy-Item -Recurse "profiles"             "$dist\profiles\" -ErrorAction SilentlyContinue
+
+          # Remove macOS-specific files from Windows package
+          Remove-Item -Recurse "$dist\bin\*.sh"      -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\bin\*.plist"   -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\bin\*.swift"   -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\bin\hidinject" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\Spoons"        -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\*.lua"         -ErrorAction SilentlyContinue
+          Remove-Item "$dist\install.sh"             -ErrorAction SilentlyContinue
+
+          # Attempt to compile init.ahk → mudscript.exe via Ahk2Exe
+          $ahk2ExeDir = "${env:ProgramFiles}\AutoHotkey\v2"
+          $ahk2ExeBin = Join-Path $ahk2ExeDir "AutoHotkey32.exe"
+          if (-not (Test-Path $ahk2ExeBin)) {
+            $ahk2ExeBin = "C:\ProgramData\chocolatey\lib\autohotkey.portable\tools\v2\AutoHotkey32.exe"
+          }
+
+          if (-not (Test-Path $ahk2ExeBin)) {
+            # Try installing AutoHotkey via choco if not present
+            choco install autohotkey.portable --version 2.0.19 -y --no-progress 2>$null
+            $ahk2ExeBin = "C:\ProgramData\chocolatey\lib\autohotkey.portable\tools\v2\AutoHotkey32.exe"
+          }
+
+          if (Test-Path $ahk2ExeBin) {
+            Write-Output "Downloading Ahk2Exe..."
+            $ahk2ExeZip = "$env:TEMP\Ahk2Exe.zip"
+            Invoke-WebRequest -Uri "https://github.com/AutoHotkey/Ahk2Exe/releases/download/v2.0.19/Ahk2Exe.zip" `
+              -OutFile $ahk2ExeZip -UseBasicParsing | Out-Null
+            $ahk2ExePath = "$env:TEMP\Ahk2Exe"
+            Expand-Archive $ahk2ExeZip $ahk2ExePath -Force
+
+            $iconFile = Resolve-Path "ui\icons\ms_icon.ico"
+            & "$ahk2ExePath\Ahk2Exe.exe" `
+              /in "$pwd\init.ahk" `
+              /out "$dist\mudscript.exe" `
+              /icon "$iconFile" `
+              /bin "$ahk2ExeBin"
+
+            if (Test-Path "$dist\mudscript.exe") {
+              Write-Output "  Compiled: mudscript.exe"
+              # Remove source .ahk files — the EXE bundles them
+              Remove-Item "$dist\init.ahk" -Force
+              Remove-Item "$dist\ms_core.ahk" -Force
+              Remove-Item "$dist\ms_macros.ahk" -Force
+            }
+          } else {
+            Write-Output "  AutoHotkey v2 not found — packaging source .ahk files instead."
+            Write-Output "  Users will need AHK installed to run."
+          }
+
+          # Create zip
+          $archive = "mudscript-windows-${version}.zip"
+          Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
+          Write-Output "Package: $archive"
+          Add-Content -Path $env:GITHUB_ENV -Value "archive=$archive"
+
+      - name: Build macOS package
+        if: matrix.platform == 'macos'
+        run: |
+          VERSION="${{ needs.stamp.outputs.version }}"
+          DIST="mudscript-${VERSION}"
+
+          mkdir -p "$DIST"
+
+          cp install.sh      "$DIST/"
+          cp init.lua        "$DIST/"
+          cp ms_core.lua     "$DIST/"
+          cp ms_macros.lua   "$DIST/"
+          cp MANIFEST.json   "$DIST/"
+          cp writing_style.txt "$DIST/"
+          cp -R Spoons       "$DIST/Spoons"
+          cp -R ui           "$DIST/ui"
+          cp -R bin          "$DIST/bin"
+          mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
+
+          # Remove Windows files from macOS package
+          rm -f "$DIST"/*.ahk
+          rm -f "$DIST"/install.bat
+          rm -f "$DIST/bin"/*.bat
+          rm -f "$DIST/bin"/*.ps1
+
+          ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
+          tar czf "$ARCHIVE" "$DIST"
+          echo "Package: $ARCHIVE"
+          echo "archive=$ARCHIVE" >> "$GITHUB_ENV"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ needs.stamp.outputs.version }}
+          path: ${{ env.archive }}
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Release — create GitHub Release and attach assets
+  # ────────────────────────────────────────────────────────────────────────────
+  release:
+    needs: [stamp, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Layout release assets
+        run: |
+          VERSION="${{ needs.stamp.outputs.version }}"
+          mkdir -p assets
+          find . -name "mudscript-*-${VERSION}.*" -exec cp {} assets/ \;
+          ls -la assets/
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ needs.stamp.outputs.version }}"
+
+          cat > release-notes.md <<EOF
+          ## mudscript v${VERSION}
+
+          ### Changes
+          $(git log --oneline $(git rev-list --tags --max-count=1 2>/dev/null || HEAD~1)..HEAD 2>/dev/null || echo "Initial release.")
+
+          ### Downloads
+          | Platform | Package |
+          |---|---|
+          | macOS | \`mudscript-macos-${VERSION}.tar.gz\` |
+          | Windows | \`mudscript-windows-${VERSION}.zip\` |
+
+          ### Install
+          **macOS:** Extract and run \`bash install.sh\` or follow the README.
+          **Windows:** Extract and run \`install.bat\` (as Administrator) or follow the README.
+          EOF
+
+          echo "file=release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.stamp.outputs.version }}"
+          TAG="v${VERSION}"
+
+          # Delete tag if it already exists (re-push to same commit)
+          git tag -d "$TAG" 2>/dev/null || true
+          git push origin ":refs/tags/$TAG" 2>/dev/null || true
+
+          # Gather assets
+          ASSETS=$(ls assets/mudscript-*-${VERSION}.* 2>/dev/null | tr '\n' ' ')
+          if [ -z "$ASSETS" ]; then
+            echo "No assets found — creating release without files."
+            gh release create "$TAG" \
+              --title "mudscript v${VERSION}" \
+              --notes-file release-notes.md
+          else
+            gh release create "$TAG" \
+              --title "mudscript v${VERSION}" \
+              --notes-file release-notes.md \
+              $ASSETS
+          fi
