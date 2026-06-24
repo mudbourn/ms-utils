@@ -969,19 +969,19 @@ YQIDAQAB
                     }
                     _ms_ui_open := true
                     panelW := 360, panelH := 640
-                    gui := Gui("+AlwaysOnTop -Caption +ToolWindow")
-                    gui.OnEvent("Close", (*) => ms.ui.hide())
-                    gui.Show("w" panelW " h" panelH " NoActivate")
+                    hGui := Gui("+AlwaysOnTop -Caption +ToolWindow")
+                    hGui.OnEvent("Close", (*) => ms.ui.hide())
+                    hGui.Show("w" panelW " h" panelH " NoActivate")
                     MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
                     x := sL + Floor((sR - sL) / 4 - panelW / 2)
                     y := sT + Floor(((sB - sT) - panelH) / 2)
-                    gui.Move(x, y)
+                    hGui.Move(x, y)
                     _ms_ui_pos := {x:x, y:y, w:panelW, h:panelH}
-                    wv := WebView2.create(gui.Hwnd)
-                    wv.Navigate("file:///" A_ScriptDir "\ui\ms_settings_ui.html")
-                    wv.OnEvent("WebMessageReceived", _ms_ui_onMessage)
-                    _ms_ui_panel_gui := gui
-                    _ms_ui_panel_wv  := wv
+                    hWv := WebView2.create(hGui.Hwnd)
+                    hWv.Navigate("file:///" StrReplace(A_ScriptDir "\ui\ms_settings_ui.html", "\", "/"))
+                    hWv.OnEvent("WebMessageReceived", _ms_ui_onMessage)
+                    _ms_ui_panel_gui := hGui
+                    _ms_ui_panel_wv  := hWv
                     _ms_ui_open      := true
                     ms.playSlot("settingsOpen")
                 }
@@ -1725,7 +1725,7 @@ YQIDAQAB
 
         _ms_loadingWvReady(hWv) {
             global _ms_loadGui, _ms_loadWv, _ms_theme
-            hWv.CoreWebView2.Navigate("file:///" A_ScriptDir "\ui\ms_loading.html")
+            hWv.CoreWebView2.Navigate("file:///" StrReplace(A_ScriptDir "\ui\ms_loading.html", "\", "/"))
             ; Push theme once page loads so HTML can style itself from ms_theme.json values
             hWv.CoreWebView2.add_NavigationCompleted((w, *) => (
                 w.ExecuteScript("applyTheme(" Jxon_Dump(_ms_theme, 0) ")")
