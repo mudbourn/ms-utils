@@ -86,6 +86,7 @@ jobs:
     needs: stamp
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: windows-latest
@@ -149,10 +150,14 @@ jobs:
           VERSION="${{ needs.stamp.outputs.version }}"
           DIST="mudscript-${VERSION}"
           mkdir -p "$DIST"
-          cp install.sh init.lua ms_core.lua ms_macros.lua MANIFEST.json writing_style.txt README.md "$DIST/"
-          cp -R Spoons ui bin "$DIST/"
+          for f in install.sh init.lua ms_core.lua ms_macros.lua MANIFEST.json writing_style.txt README.md; do
+            [ -f "$f" ] && cp "$f" "$DIST/"
+          done
+          for d in Spoons ui bin; do
+            [ -d "$d" ] && cp -R "$d" "$DIST/"
+          done
           mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
-          rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore"
+          rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
           ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
           tar czf "$ARCHIVE" "$DIST"
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
