@@ -7686,7 +7686,7 @@
                     local t = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
                         step = step + 1
                         if _lCanvas then _lCanvas:alpha(step / steps) end
-                        if step >= steps then t:stop() end
+                        if step >= steps and t then t:stop() end
                     end)
                 end
                 _lfade()
