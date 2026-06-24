@@ -792,8 +792,11 @@ class ms {
         local modkeys := Map("cmd",true,"alt",true,"ctrl",true,"shift",true)
         local key := ""
         for p in parts {
-            if modkeys.Has(p)  mods.Push(p)
-            else               key := p
+            if modkeys.Has(p) {
+                mods.Push(p)
+            } else {
+                key := p
+            }
         }
         if key != ""  return {type: "key", mods: mods, key: key}
         return ""
@@ -884,9 +887,11 @@ class ms {
             local def := ms.bind._defs.Has(id) ? ms.bind._defs[id].default : ""
             if def = ""  continue
             local isDiff := false
-            if cfg.type != def.type  isDiff := true
-            else if cfg.type = "mouse" && cfg.button != def.button  isDiff := true
-            else if cfg.type = "key" {
+            if cfg.type != def.type {
+                isDiff := true
+            } else if cfg.type = "mouse" && cfg.button != def.button {
+                isDiff := true
+            } else if cfg.type = "key" {
                 local cfgMods := cfg.HasProp("mods") ? cfg.mods : []
                 local defMods := def.HasProp("mods")  ? def.mods  : []
                 cfgMods.Sort(), defMods.Sort()
@@ -1165,8 +1170,11 @@ class ms {
     }
 
     static socdApply() {
-        if ms.socdEnabled  ms.socdStart()
-        else               ms.socdStop()
+        if ms.socdEnabled {
+            ms.socdStart()
+        } else {
+            ms.socdStop()
+        }
     }
 
     ; ── User Settings API ─────────────────────────────────────────────────────
@@ -1603,8 +1611,11 @@ class ms {
         }
 
         static toggle() {
-            if ms.ui._open  ms.ui.hide()
-            else            ms.ui.show()
+            if ms.ui._open {
+                ms.ui.hide()
+            } else {
+                ms.ui.show()
+            }
         }
 
         static refresh() {
@@ -1700,8 +1711,11 @@ class ms {
                 if !data.Has("slot")  return
                 global _ms_soundAssign
                 local name := data.Has("name") ? data["name"] : ""
-                if name = ""  _ms_soundAssign.Delete(data["slot"])
-                else          _ms_soundAssign[data["slot"]] := name
+                if name = "" {
+                    _ms_soundAssign.Delete(data["slot"])
+                } else {
+                    _ms_soundAssign[data["slot"]] := name
+                }
                 ms.saveSettings(), ms.playSlot("update"), ms.ui.refresh()
             },
             "importSounds",      (data) => ms.importSounds(),
@@ -1727,8 +1741,11 @@ class ms {
                 if !data.Has("id")  return
                 global _ms_modConfig
                 local key := data.Has("key") ? Trim(data["key"]) : ""
-                if key = ""  _ms_modConfig.Delete(data["id"])
-                else         _ms_modConfig[data["id"]] := key
+                if key = "" {
+                    _ms_modConfig.Delete(data["id"])
+                } else {
+                    _ms_modConfig[data["id"]] := key
+                }
                 ms.saveSettings(), ms.bind.rebind(), ms.playSlot("update"), ms.ui.refresh()
             },
             "startModRebind", (data) {
@@ -1740,8 +1757,11 @@ class ms {
                 if !data.Has("id")  return
                 local def := ms.bind._defs.Has(data["id"]) ? ms.bind._defs[data["id"]] : ""
                 if def = ""  return
-                if def.sub != ""  _ms_subBinds.Delete(data["id"])
-                else              _ms_bindConfig.Delete(data["id"])
+                if def.sub != "" {
+                    _ms_subBinds.Delete(data["id"])
+                } else {
+                    _ms_bindConfig.Delete(data["id"])
+                }
                 ms.saveSettings(), ms.bind.rebind(), ms.playSlot("reset"), ms.ui.refresh()
             },
             "clearModifier", (data) {
@@ -1962,16 +1982,19 @@ class ms {
                     local data := Jxon_Load(&raw)
                     if !data  return
                     local act := data.Has("action") ? data["action"] : ""
-                    if act = "close"  ms.dev.console.hide()
-                    else if act = "clear"  try FileOpen(_ms_dev_log_path, "w").Write("")
-                    else if act = "openWatcher"  ms.dev.watcher.show()
-                    else if act = "openKeys"     ms.dev.keys.show()
-                    else if act = "move" {
+                    if act = "close" {
+                        ms.dev.console.hide()
+                    } else if act = "clear" {
+                        try FileOpen(_ms_dev_log_path, "w").Write("")
+                    } else if act = "openWatcher" {
+                        ms.dev.watcher.show()
+                    } else if act = "openKeys" {
+                        ms.dev.keys.show()
+                    } else if act = "move" {
                         _ms_dev_console_pos["x"] += data.Has("dx") ? data["dx"] : 0
                         _ms_dev_console_pos["y"] += data.Has("dy") ? data["dy"] : 0
                         _ms_dev_console_gui.Move(_ms_dev_console_pos["x"], _ms_dev_console_pos["y"])
                     } else if act = "execute" {
-                        ; AHKv2 has no dynamic eval — surface a message
                         _ms_devWrite(Map("type", "result", "msg", "REPL not available in AHKv2 runtime."))
                     }
                 })
@@ -2002,9 +2025,11 @@ class ms {
                     local data := Jxon_Load(&raw)
                     if !data  return
                     local act := data.Has("action") ? data["action"] : ""
-                    if act = "close"  ms.dev.watcher.hide()
-                    else if act = "clear"  try FileOpen(_ms_dev_log_path, "w").Write("")
-                    else if act = "move" {
+                    if act = "close" {
+                        ms.dev.watcher.hide()
+                    } else if act = "clear" {
+                        try FileOpen(_ms_dev_log_path, "w").Write("")
+                    } else if act = "move" {
                         _ms_dev_watcher_pos["x"] += data.Has("dx") ? data["dx"] : 0
                         _ms_dev_watcher_pos["y"] += data.Has("dy") ? data["dy"] : 0
                         _ms_dev_watcher_gui.Move(_ms_dev_watcher_pos["x"], _ms_dev_watcher_pos["y"])
@@ -2036,9 +2061,11 @@ class ms {
                     local data := Jxon_Load(&raw)
                     if !data  return
                     local act := data.Has("action") ? data["action"] : ""
-                    if act = "close"  ms.dev.keys.hide()
-                    else if act = "clear"  try FileOpen(_ms_dev_log_path, "w").Write("")
-                    else if act = "move" {
+                    if act = "close" {
+                        ms.dev.keys.hide()
+                    } else if act = "clear" {
+                        try FileOpen(_ms_dev_log_path, "w").Write("")
+                    } else if act = "move" {
                         _ms_dev_keys_pos["x"] += data.Has("dx") ? data["dx"] : 0
                         _ms_dev_keys_pos["y"] += data.Has("dy") ? data["dy"] : 0
                         _ms_dev_keys_gui.Move(_ms_dev_keys_pos["x"], _ms_dev_keys_pos["y"])
@@ -2071,10 +2098,13 @@ class ms {
                     local data := Jxon_Load(&raw)
                     if !data  return
                     local act := data.Has("action") ? data["action"] : ""
-                    if act = "close"  ms.dev.window.hide()
-                    else if act = "clear"  _ms_dev_window_history := []
-                    else if act = "playSlot" { if data.Has("slot")  ms.playSlot(data["slot"]) }
-                    else if act = "move" {
+                    if act = "close" {
+                        ms.dev.window.hide()
+                    } else if act = "clear" {
+                        _ms_dev_window_history := []
+                    } else if act = "playSlot" {
+                        if data.Has("slot")  ms.playSlot(data["slot"])
+                    } else if act = "move" {
                         _ms_dev_window_pos["x"] += data.Has("dx") ? data["dx"] : 0
                         _ms_dev_window_pos["y"] += data.Has("dy") ? data["dy"] : 0
                         _ms_dev_window_gui.Move(_ms_dev_window_pos["x"], _ms_dev_window_pos["y"])
