@@ -1674,7 +1674,6 @@ YQIDAQAB
 
 ;; Toast System ;;
     _ms_showToast(msg, duration := 3) {
-        local gui, ctrl, tw, th, padW, padH, x, y
         ; Build a small borderless Gui
         gui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20")
         gui.BackColor := _ms_theme["bg"]
