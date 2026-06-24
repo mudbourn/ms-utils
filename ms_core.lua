@@ -168,6 +168,7 @@
                     radius   = 3,
                     font     = "Almendra",
                     uifc     = { settings = "", guardian = "" },
+                    fadeMs   = 150,
                 }
                 ms._theme = {}
                 for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
@@ -1233,6 +1234,9 @@
                     end
                     if type(data.radius) == "number" then
                         ms._theme.radius = math.max(0, math.min(40, math.floor(data.radius)))
+                    end
+                    if type(data.fadeMs) == "number" then
+                        ms._theme.fadeMs = math.max(0, math.min(500, math.floor(data.fadeMs)))
                     end
                     -- Validate font (strip dangerous CSS characters).
                     if type(data.font) == "string" and #data.font > 0 then
@@ -6546,7 +6550,7 @@
                     pcall(function() ms.ui._panel:bringToFront(true) end)
                     ms.ui.refresh()
                     local step, steps = 0, 6
-                    ms.ui._uiFadeTimer = hs.timer.doEvery(0.15 / steps, function()
+                    ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
                         step = step + 1
                         pcall(function() ms.ui._panel:alpha(step / steps) end)
                         if step >= steps then
@@ -6563,7 +6567,7 @@
                     local panel = ms.ui._panel
                     if panel then
                         local step, steps = 0, 6
-                        ms.ui._uiFadeTimer = hs.timer.doEvery(0.15 / steps, function()
+                        ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
                             step = step + 1
                             pcall(function() panel:alpha(1 - (step / steps)) end)
                             if step >= steps then
@@ -6776,7 +6780,7 @@
                         end
                         pcall(function() panel:alpha(0) end)
                         local step, steps = 0, 6
-                        _devFadeTimers[key] = hs.timer.doEvery(0.15 / steps, function()
+                        _devFadeTimers[key] = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
                             step = step + 1
                             pcall(function() panel:alpha(step / steps) end)
                             if step >= steps then
@@ -6792,7 +6796,7 @@
                             _devFadeTimers[key] = nil
                         end
                         local step, steps = 0, 6
-                        _devFadeTimers[key] = hs.timer.doEvery(0.15 / steps, function()
+                        _devFadeTimers[key] = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
                             step = step + 1
                             pcall(function() panel:alpha(1 - (step / steps)) end)
                             if step >= steps then
@@ -7602,7 +7606,7 @@
             -- Lightweight hs.canvas panel that shows progress while WebViews initialise
             -- in the background.  Each WebView creation is pushed into its own timer tick
             -- so the main thread never blocks for more than ~300 ms at a stretch.
-            local _lCanvas, _lBarMax, _lBarY, _lFadingOut
+            local _lCanvas, _lBarMax, _lBarY, _lFadingOut, _lFadeTimer
             local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad
             local _needsIntegrityWarning = false  -- set by the integrity timer; shown after announce toasts
             do
@@ -7697,9 +7701,15 @@
                 )
                 _lCanvas:show()
                 ms.playSlot("startup")  -- loading sequence start sound
-                hs.timer.doAfter(0.05, function()
-                    if _lCanvas then _lCanvas:alpha(1) end
-                end)
+                local function _lfade()
+                    local step, steps = 0, 6
+                    local t = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
+                        step = step + 1
+                        if _lCanvas then _lCanvas:alpha(step / steps) end
+                        if step >= steps then t:stop() end
+                    end)
+                end
+                _lfade()
                 _lCanvas:mouseCallback(function(canvas, event, id, x, y)
                     if event ~= "mouseDown" or id ~= 8 then return end
                     ms._skipDevPrewarm = not ms._skipDevPrewarm
@@ -7769,17 +7779,15 @@
             _lFadeOut = function()
                 if not _lCanvas or _lFadingOut then return end
                 _lFadingOut = true
-                for i = 9, 0, -1 do
-                    local a, d = i / 10, (9 - i) * 0.04
-                    hs.timer.doAfter(d, function()
-                        if _lCanvas then _lCanvas:alpha(a) end
-                    end)
-                end
-                hs.timer.doAfter(10 * 0.04 + 0.05, function()
-                    if _lCanvas then _lCanvas:delete(); _lCanvas = nil end
-                    -- Fire the load announcement immediately after the canvas disappears
-                    -- so there is no visible gap between the loading screen and the toasts.
-                    hs.timer.doAfter(0.1, _announceLoad)
+                local step, steps = 0, 6
+                _lFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
+                    step = step + 1
+                    if _lCanvas then _lCanvas:alpha(1 - (step / steps)) end
+                    if step >= steps then
+                        if _lFadeTimer then _lFadeTimer:stop(); _lFadeTimer = nil end
+                        if _lCanvas then _lCanvas:delete(); _lCanvas = nil end
+                        hs.timer.doAfter(0.1, _announceLoad)
+                    end
                 end)
             end
 
