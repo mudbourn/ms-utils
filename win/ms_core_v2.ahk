@@ -968,7 +968,7 @@ YQIDAQAB
                     gui := Gui("+AlwaysOnTop -Caption +ToolWindow")
                     gui.OnEvent("Close", (*) => ms.ui.hide())
                     gui.Show("w" panelW " h" panelH " NoActivate")
-                    MonitorGetWorkArea &sL, &sT, &sR, &sB
+                    MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
                     x := sL + Floor((sR - sL) / 4 - panelW / 2)
                     y := sT + Floor(((sB - sT) - panelH) / 2)
                     gui.Move(x, y)
@@ -1292,7 +1292,7 @@ YQIDAQAB
         if reference = "WindowCenter"
             return {x:wX + wW // 2 + x * sX, y:wY + wH // 2 + y * sY}
 
-        MonitorGetWorkArea &sL, &sT, &sR, &sB
+        MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
         if reference = "ScreenTL"
             return {x:sL + x, y:sT + y}
         if reference = "ScreenTR"
@@ -1677,7 +1677,7 @@ YQIDAQAB
 
         ; Size and position (top-centre)
         padW := 24, padH := 16
-        MonitorGetWorkArea &sL, &sT, &sR, &sB
+        MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
         x := sL + (sR - sL - tw - padW) // 2
         y := sT + 40
         gui.Show("w" (tw + padW) " h" (th + padH) " x" x " y" y " NoActivate")
@@ -1698,7 +1698,7 @@ YQIDAQAB
             global _ms_loadGui, _ms_loadWv, _ms_theme
 
             lw := 300, lh := 104
-            MonitorGetWorkArea &sL, &sT, &sR, &sB
+            MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
             x := sL + (sR - sL - lw) // 2
             y := sB - 150 - lh
 
