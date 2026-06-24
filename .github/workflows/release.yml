@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
-  # Stamp — compute hashes, sign MANIFEST.json, commit back
+  # Stamp — compute hash, sign MANIFEST.json, commit back
   # ────────────────────────────────────────────────────────────────────────────
   stamp:
     runs-on: ubuntu-latest
@@ -28,71 +28,42 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute hash and sign macOS MANIFEST
+      - name: Hash and sign Windows runtime
         id: version
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
-          SHA256=$(sha256sum ms_core.lua | awk '{print $1}')
+          WIN_SHA=$(sha256sum ms_core.ahk | awk '{print $1}')
+
           # Use manual version override if provided, otherwise read from manifest
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
           else
-            VERSION=$(jq -r '.version // "1.0.0"' MANIFEST.json)
+            VERSION=$(jq -r '.windows_version // "1.0.0"' MANIFEST.json)
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
-          URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.lua"
 
-          WIN_URL=$(jq -r '.windows_url // ""' MANIFEST.json)
-          WIN_SHA=$(jq -r '.windows_sha256 // ""' MANIFEST.json)
-          WIN_SIG=$(jq -r '.windows_signature // ""' MANIFEST.json)
-
-          jq -n \
-            --arg version  "$VERSION"  \
-            --arg sha256   "$SHA256"   \
-            --arg url      "$URL"      \
-            --arg wurl     "$WIN_URL"  \
-            --arg wsha     "$WIN_SHA"  \
-            --arg wsig     "$WIN_SIG"  \
-            '{"version":$version,"sha256":$sha256,"url":$url,"windows_url":$wurl,"windows_sha256":$wsha,"windows_signature":$wsig}' > MANIFEST.json
-
-          if [ -n "$MS_SIGNING_KEY" ]; then
-            printf '%s\n' "$MS_SIGNING_KEY" > /tmp/private.pem
-            printf '%s'   "$SHA256"         > /tmp/msg.bin
-            openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
-            SIG=$(base64 -w0 /tmp/sig.bin)
-            rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
-            jq --arg sig "$SIG" '. + {"signature":$sig}' MANIFEST.json > /tmp/manifest.json
-            mv /tmp/manifest.json MANIFEST.json
-            echo "Signed macOS runtime."
-          else
-            echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
-          fi
-
-      - name: Sign Windows runtime
-        env:
-          MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
-        run: |
-          WIN_SHA=$(sha256sum ms_core.ahk | awk '{print $1}')
           WIN_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.ahk"
 
-          VERSION=$(jq -r '.version // "1.0.0"' MANIFEST.json)
+          # Preserve existing macOS fields
+          MAC_VER=$(jq -r '.version // ""' MANIFEST.json)
           MAC_SHA=$(jq -r '.sha256 // ""' MANIFEST.json)
           MAC_URL=$(jq -r '.url // ""' MANIFEST.json)
           MAC_SIG=$(jq -r '.signature // ""' MANIFEST.json)
 
           jq -n \
-            --arg version "$VERSION"  \
-            --arg sha256  "$MAC_SHA"  \
-            --arg url     "$MAC_URL"  \
-            --arg sig     "$MAC_SIG"  \
-            --arg wurl    "$WIN_URL"  \
-            --arg wsha    "$WIN_SHA"  \
-            '{"version":$version,"sha256":$sha256,"url":$url,"signature":$sig,"windows_url":$wurl,"windows_sha256":$wsha}' > MANIFEST.json
+            --arg version  "$MAC_VER"  \
+            --arg sha256   "$MAC_SHA"  \
+            --arg url      "$MAC_URL"  \
+            --arg sig      "$MAC_SIG"  \
+            --arg wversion "$VERSION"  \
+            --arg wurl     "$WIN_URL"  \
+            --arg wsha     "$WIN_SHA"  \
+            '{"version":$version,"sha256":$sha256,"url":$url,"signature":$sig,"windows_version":$wversion,"windows_url":$wurl,"windows_sha256":$wsha}' > MANIFEST.json
 
           if [ -n "$MS_SIGNING_KEY" ]; then
             printf '%s\n' "$MS_SIGNING_KEY" > /tmp/private.pem
-            printf '%s'   "$WIN_SHA"         > /tmp/msg.bin
+            printf '%s'   "$WIN_SHA"       > /tmp/msg.bin
             openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
             WIN_SIG=$(base64 -w0 /tmp/sig.bin)
             rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
@@ -100,7 +71,7 @@ jobs:
             mv /tmp/manifest.json MANIFEST.json
             echo "Signed Windows runtime."
           else
-            echo "Warning: MS_SIGNING_KEY not set — hash stamped, no Windows signature."
+            echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
           fi
 
       - name: Commit MANIFEST.json
@@ -112,7 +83,7 @@ jobs:
           git push
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Build — compile Windows EXE, package macOS archive
+  # Build — package release archives for both platforms
   # ────────────────────────────────────────────────────────────────────────────
   build:
     needs: stamp
@@ -123,7 +94,7 @@ jobs:
           - runner: windows-latest
             platform: windows
             ext: zip
-          - runner: ubuntu-latest # packaging only — no Ubuntu runtime
+          - runner: macos-latest
             platform: macos
             ext: tar.gz
 
@@ -133,20 +104,15 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download library dependencies
+      - name: Download lib dependencies (Windows only)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           mkdir lib -Force
-
-          # WebView2.ahk — fix #Include paths to use lib/ subdirectory
-          Write-Output "Downloading WebView2.ahk..."
           $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
           $wv2 = $wv2 -replace '#Include \.\.\\ComVar\.ahk', '#Include lib\ComVar.ahk'
           $wv2 = $wv2 -replace '#Include \.\.\\Promise\.ahk', '#Include lib\Promise.ahk'
           [System.IO.File]::WriteAllText("$pwd\lib\WebView2.ahk", $wv2, [System.Text.UTF8Encoding]::new($false))
-
-          # WebView2/ folder (ComVar, Promise, and WebView2Loader DLLs)
           mkdir lib\WebView2 -Force
           $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
           $items = Invoke-RestMethod $github
@@ -156,111 +122,50 @@ jobs:
               Invoke-WebRequest -Uri $item.download_url -OutFile $out -UseBasicParsing
             }
           }
-
-          # ComVar.ahk (to lib/)
-          Write-Output "Downloading ComVar.ahk..."
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" `
-            -OutFile "lib\ComVar.ahk" -UseBasicParsing
-
-          # Promise.ahk (to lib/)
-          Write-Output "Downloading Promise.ahk..."
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" `
-            -OutFile "lib\Promise.ahk" -UseBasicParsing
-
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" -OutFile "lib\ComVar.ahk" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" -OutFile "lib\Promise.ahk" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk" -OutFile "lib\WebView2.ahk" -UseBasicParsing
           Write-Output "Dependencies downloaded."
 
       - name: Build Windows package
-        id: win_build
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           $version = "${{ needs.stamp.outputs.version }}"
           $dist = "mudscript-$version"
-
           mkdir $dist
-
-          # Generate tray icon from .tiff sources
-          Write-Output "Generating tray icon..."
           & .\bin\generate_icon.ps1
-
-          # Copy files
-          Copy-Item "install.bat"                   "$dist\"
-          Copy-Item "init.ahk"                      "$dist\"
-          Copy-Item "ms_core.ahk"                   "$dist\"
-          Copy-Item "ms_macros.ahk"                 "$dist\"
-          Copy-Item "MANIFEST.json"                 "$dist\"
-          Copy-Item "writing_style.txt"             "$dist\"
-          Copy-Item -Recurse "ui"                   "$dist\ui\"
-          Copy-Item -Recurse "lib"                  "$dist\lib\"
-          Copy-Item -Recurse "bin"                  "$dist\bin\"
-          Copy-Item -Recurse "data"                 "$dist\data\"
-          Copy-Item -Recurse "sounds"               "$dist\sounds\" -ErrorAction SilentlyContinue
-          Copy-Item -Recurse "profiles"             "$dist\profiles\" -ErrorAction SilentlyContinue
-
-          # Remove macOS-specific files from Windows package
-          Remove-Item -Recurse "$dist\bin\*.sh"      -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\bin\*.plist"   -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\bin\*.swift"   -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\bin\hidinject" -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\Spoons"        -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\*.lua"         -ErrorAction SilentlyContinue
-          Remove-Item "$dist\install.sh"             -ErrorAction SilentlyContinue
-          Remove-Item "$dist\.gitignore"             -ErrorAction SilentlyContinue
-
-          # NOTE: We ship .ahk source files — users run them through the signed
-          # AutoHotkey interpreter. No SmartScreen warnings.
-
-          # Create zip
+          Copy-Item "install.bat","init.ahk","ms_core.ahk","ms_macros.ahk","MANIFEST.json","writing_style.txt","README.md" "$dist\"
+          Copy-Item -Recurse "ui","lib","bin","data" "$dist\"
+          Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
+          Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
           $archive = "mudscript-windows-${version}.zip"
           Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
-          Write-Output "Package: $archive"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
-
-      - name: Upload Windows artifact
-        if: matrix.platform == 'windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-${{ needs.stamp.outputs.version }}
-          path: mudscript-windows-*.zip
+          Write-Output "Package: $archive"
 
       - name: Build macOS package
-        id: macos_build
         if: matrix.platform == 'macos'
         run: |
-          set -euo pipefail
           VERSION="${{ needs.stamp.outputs.version }}"
           DIST="mudscript-${VERSION}"
-
           mkdir -p "$DIST"
-
-          cp install.sh      "$DIST/"
-          cp init.lua        "$DIST/"
-          cp ms_core.lua     "$DIST/"
-          cp ms_macros.lua   "$DIST/"
-          cp MANIFEST.json   "$DIST/"
-          cp writing_style.txt "$DIST/"
-          cp -R Spoons       "$DIST/Spoons"
-          cp -R ui           "$DIST/ui"
-          cp -R bin          "$DIST/bin"
+          cp install.sh init.lua ms_core.lua ms_macros.lua MANIFEST.json writing_style.txt README.md "$DIST/"
+          cp -R Spoons ui bin "$DIST/"
           mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
-
-          # Remove Windows files from macOS package
-          rm -f "$DIST"/*.ahk
-          rm -f "$DIST"/install.bat
-          rm -f "$DIST/bin"/*.bat
-          rm -f "$DIST/bin"/*.ps1
-
+          rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore"
           ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
           tar czf "$ARCHIVE" "$DIST"
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
           echo "Package: $ARCHIVE"
 
-      - name: Upload macOS artifact
-        if: matrix.platform == 'macos'
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ needs.stamp.outputs.version }}
-          path: mudscript-macos-*.tar.gz
+          name: ${{ matrix.platform }}-${{ needs.stamp.outputs.version }}
+          path: mudscript-*-${{ needs.stamp.outputs.version }}.${{ matrix.ext }}
 
   # ────────────────────────────────────────────────────────────────────────────
   # Release — create GitHub Release and attach assets
@@ -277,12 +182,10 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
-      - name: Layout release assets
+      - name: Find artifacts
         run: |
-          VERSION="${{ needs.stamp.outputs.version }}"
-          mkdir -p assets
-          find . -name "mudscript-*-${VERSION}.*" -exec cp {} assets/ \;
-          ls -la assets/
+          echo "Looking for release artifacts..."
+          find . -name "mudscript-*.*" -type f 2>/dev/null
 
       - name: Generate release notes
         id: notes
@@ -296,14 +199,12 @@ jobs:
           $(git log --oneline $(git rev-list --tags --max-count=1 2>/dev/null || HEAD~1)..HEAD 2>/dev/null || echo "Initial release.")
 
           ### Downloads
-          | Platform | Package |
-          |---|---|
-          | macOS | \`mudscript-macos-${VERSION}.tar.gz\` |
-          | Windows | \`mudscript-windows-${VERSION}.zip\` |
+          - [mudscript-windows-${VERSION}.zip](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-windows-${VERSION}.zip)
+          - [mudscript-macos-${VERSION}.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.tar.gz)
 
           ### Install
-          **macOS:** Extract and run \`bash install.sh\` or follow the README.
-          **Windows:** Extract and run \`install.bat\` (as Administrator) or follow the README.
+          **Windows:** Install [AutoHotkey v2](https://www.autohotkey.com/) (signed), extract the zip, run \`init.ahk\`
+          **macOS:** Extract the tar.gz, run \`bash install.sh\`
           EOF
 
           echo "file=release-notes.md" >> "$GITHUB_OUTPUT"
@@ -318,29 +219,20 @@ jobs:
           echo "Version: $VERSION"
           echo "Tag:     $TAG"
 
-          # Show what assets we have
-          echo "Assets in assets/:"
-          ls -la assets/ 2>/dev/null || echo "  (empty)"
-
-          # Gather asset paths
-          ASSETS=$(ls assets/mudscript-*-${VERSION}.* 2>/dev/null || true)
+          ASSETS=$(find . -name "mudscript-*-${VERSION}.*" -type f 2>/dev/null | tr '\n' ' ' || true)
           echo "Found assets:"
           echo "$ASSETS"
 
-          # Tag and release
-          echo "Creating tag $TAG..."
-          git tag "$TAG" 2>/dev/null || echo "  tag already exists"
-          git push origin "$TAG" 2>/dev/null || echo "  tag push skipped (may already exist)"
-
-          # Check if release already exists
           if gh release view "$TAG" --json name &>/dev/null; then
             echo "Release $TAG already exists — deleting..."
             gh release delete "$TAG" --yes 2>/dev/null || true
             git tag -d "$TAG" 2>/dev/null || true
             git push origin ":refs/tags/$TAG" 2>/dev/null || true
-            git tag "$TAG"
-            git push origin "$TAG"
           fi
+
+          echo "Creating tag $TAG..."
+          git tag "$TAG"
+          git push origin "$TAG"
 
           if [ -n "$ASSETS" ]; then
             echo "Creating release with assets..."
