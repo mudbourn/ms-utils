@@ -1266,7 +1266,6 @@ YQIDAQAB
 
     _ms_resolvePoint(x, y, reference, unscaled := false) {
         global REF_W, REF_H, _ms_target_exe
-        local wX, wY, wW, wH, sX, sY
 
         if reference = "Absolute"
             return {x:x, y:y}
@@ -1311,7 +1310,7 @@ YQIDAQAB
 
 ;; Mouse Button Translation ;;
     _ms_mouseButton(btn) {
-        local buttons
+
         buttons := Map(
             "Left","Left","Right","Right","Middle","Middle",
             "X1","X1","X2","X2",
@@ -1359,7 +1358,7 @@ YQIDAQAB
 
     _ms_effectiveBind(id) {
         global _ms_bindConfig, _ms_trackpad_mode, _ms_trackpad_bind_ovr
-        local def
+
         if _ms_trackpad_mode && _ms_trackpad_bind_ovr.Has(id)
             return _ms_trackpad_bind_ovr[id]
         if _ms_bindConfig.Has(id)
@@ -1374,7 +1373,7 @@ YQIDAQAB
 ;; Bind Key / Hotkey Building ;;
 
     _ms_bindKey(c) {
-        local hasType, hasMods, mods, s, hasKey
+
         if c = ""
             return ""
         hasType := (c is Map) ? c.Has("type") : c.HasProp("type")
@@ -1393,7 +1392,7 @@ YQIDAQAB
     }
 
     _ms_buildHotkey(c) {
-        local hasType, buttons, prefix, hasMods, hasKey
+
         if c = ""
             return ""
         hasType := (c is Map) ? c.Has("type") : c.HasProp("type")
@@ -1446,7 +1445,7 @@ YQIDAQAB
 ;; SOCD Key Handlers ;;
     _ms_socd_keyDown(key, *) {
         global _ms_socd_held, ms_socdMode, BindValidity
-        local opp
+
         if BindValidity != 1 {
             SendLevel 1
             Send "{" key " down}"
@@ -1491,7 +1490,6 @@ YQIDAQAB
         global _ms_soundEnabled, _ms_soundVolume, _ms_soundAssign
         global _ms_trackpad_mode, _ms_trackpad_hold_keys, _ms_independent_binds
         global _ms_user_index, _ms_user_vals, CUR_CAM_SENS, clickLevel
-        local n, m, thk, v, validated, def
 
         if !data
             return
@@ -1568,7 +1566,7 @@ YQIDAQAB
 
     _ms_buildDefaultSettings() {
         global _ms_default_path, _ms_archive_path
-        local data, def
+
         DirCreate A_ScriptDir "\data"
 
         data := Map(
@@ -1619,7 +1617,7 @@ YQIDAQAB
     }
 
     _ms_validateUserValue(def, value) {
-        local n
+
         if def.type = "toggle" {
             if value = true || value = false
                 return value
@@ -1643,7 +1641,7 @@ YQIDAQAB
 
     _ms_getProfiles() {
         global _ms_profiles_path
-        local list
+
         list := []
         if !DirExist(_ms_profiles_path)
             return list
@@ -1706,7 +1704,6 @@ YQIDAQAB
 
         _ms_loadingShow() {
             global _ms_loadGui, _ms_loadWv, _ms_theme
-            local gui, wv, lw, lh, x, y
 
             lw := 300, lh := 104
             MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
@@ -1765,7 +1762,7 @@ YQIDAQAB
 
         _ms_appPoll() {
             global _ms_robloxActive, _ms_ui_open, _ms_loadDone, _ms_target_exe
-            local active
+
             if !_ms_loadDone
                 return
             active := _ms_target_exe != "" && WinActive(_ms_target_exe) != 0
@@ -1824,7 +1821,7 @@ YQIDAQAB
 
 ;; Integrity Auto-Seed ;;
     _ms_integritySeed() {
-        local mPath, raw, manifest, cur
+
         if ms.integrity.check() != "uninitialized"
             return
         mPath := A_ScriptDir "\MANIFEST.json"
@@ -1843,7 +1840,7 @@ YQIDAQAB
 
 ;; Font Installation ;;
     _ms_installFonts() {
-        local fontSrc, fontDst, installed, ext, dstFile
+
         fontSrc := A_ScriptDir "\ui\fonts"
         if !DirExist(fontSrc)
             return
@@ -1870,7 +1867,7 @@ YQIDAQAB
 ;; Dev Log Archive ;;
     _ms_pruneLogs() {
         global _ms_dev_log_path
-        local archDir, ts, archives
+
         if !FileExist(_ms_dev_log_path)
             return
         archDir := A_ScriptDir "\data\ms_dev_logs"
@@ -1895,7 +1892,6 @@ YQIDAQAB
         global _ms_trackpad_mode, _ms_independent_binds, _ms_hidden_feats
         global _ms_user_defs, _ms_user_index, _ms_user_vals, _ms_menu_defs
         global _ms_theme, _ms_theme_loaded, CUR_CAM_SENS, clickLevel, BindValidity
-        local macros, def, enabled, subs, sdef, bindStr, hasSType, hasSKey, c, hasCType, hasCMods, hasCKey, soundNames, status, meta
 
         ms._discoverSounds()
 
@@ -1978,7 +1974,7 @@ YQIDAQAB
 
 ;; UI Panel WebView2 Message Handler ;;
     _ms_ui_onMessage(wv, event) {
-        local raw, data, action, dx, dy, n, name, key, cb, def
+
         raw := event.TryGetWebMessageAsString()
         data := Jxon_Load(&raw)
         if !data || !data.Has("action")
@@ -2164,7 +2160,7 @@ YQIDAQAB
 ;; Rebind Capture Helpers ;;
     _ms_captureRebind(id) {
         ms.alert('Rebinding: "' (ms.bind._defs.Has(id) ? ms.bind._defs[id]["label"] : id) '"`nPress new key — Escape to cancel.', 15)
-        local ih
+
         ih := InputHook("L1 B", "{Escape}")
         ih.KeyOpt("{All}", "SN")
         ih.OnChar := (ih2, char) => 0
@@ -2180,7 +2176,7 @@ YQIDAQAB
             return
         }
         global _ms_bindConfig
-        local key
+
         key := GetKeyName(Format("vk{:02X}", vk))
         _ms_bindConfig[id] := Map("type", "key", "mods", [], "key", key)
         ms.saveSettings(), ms.bind.rebind(), ms.playSlot("update")
@@ -2189,7 +2185,7 @@ YQIDAQAB
     }
 
     _ms_captureModRebind(id) {
-        local def, ih
+
         def := ms.bind._defs.Has(id) ? ms.bind._defs[id] : ""
         if def = "" || !def.Has("sub") || def["sub"] = ""
             return
@@ -2208,7 +2204,7 @@ YQIDAQAB
             return
         }
         global _ms_modConfig
-        local key
+
         if vk = 8 {
             _ms_modConfig.Delete(id)
             ms.saveSettings(), ms.bind.rebind(), ms.playSlot("reset")
@@ -2275,7 +2271,7 @@ YQIDAQAB
         SetTimer _ms_announceLoad, -500
         _ms_announceLoad() {
             global BindValidity, _ms_loadDone
-            local msg
+
             ms.playSlot("load")
             ms.alert("mudscript Windows Runtime`nBy: mudbourn — https://mudbourn.info", 6)
             if ms.macroMeta.HasProp("name") {
