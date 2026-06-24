@@ -279,7 +279,7 @@ class ms {
         global _ms_modConfig, _ms_registry
         if _ms_modConfig.Has(id)
             return _ms_modConfig[id]
-        if _ms_registry.Has(id) && _ms_registry[id].opts.HasProp("mod")
+        if _ms_registry.Has(id) && _ms_registry[id].opts.Has("mod")
             return _ms_registry[id].opts.mod
         return ""
     }
@@ -1386,7 +1386,7 @@ _ms_effectiveBind(id) {
     if _ms_bindConfig.Has(id)
         return _ms_bindConfig[id]
     def := ms.bind._defs.Has(id) ? ms.bind._defs[id] : ""
-    if def != "" && def.HasProp("default") && def["default"] != ""
+    if def != "" && def.Has("default") && def["default"] != ""
         return def["default"]
     return ""
 }
@@ -1397,15 +1397,17 @@ _ms_effectiveBind(id) {
 _ms_bindKey(c) {
     if c = ""
         return ""
-    if c.HasProp("type") && c.type = "mouse"
+    hasType := (c is Map) ? c.Has("type") : c.HasProp("type")
+    if hasType && c.type = "mouse"
         return "mouse:" c.button
-    if c.HasProp("type") && c.type = "key" {
-        mods := c.HasProp("mods") ? c.mods.Clone() : []
-        mods
+    if hasType && c.type = "key" {
+        hasMods := (c is Map) ? c.Has("mods") : c.HasProp("mods")
+        mods := hasMods ? c.mods.Clone() : []
         s := ""
         for m in mods
             s .= m ","
-        return "key:" s ":" (c.HasProp("key") ? c.key : "")
+        hasKey := (c is Map) ? c.Has("key") : c.HasProp("key")
+        return "key:" s ":" (hasKey ? c.key : "")
     }
     return ""
 }
@@ -1413,17 +1415,20 @@ _ms_bindKey(c) {
 _ms_buildHotkey(c) {
     if c = ""
         return ""
-    if c.HasProp("type") && c.type = "mouse" {
+    hasType := (c is Map) ? c.Has("type") : c.HasProp("type")
+    if hasType && c.type = "mouse" {
         buttons := Map(0,"LButton",1,"RButton",2,"MButton",3,"XButton1",4,"XButton2")
         return buttons.Has(c.button) ? buttons[c.button] : ""
     }
-    if c.HasProp("type") && c.type = "key" {
+    if hasType && c.type = "key" {
         prefix := ""
-        if c.HasProp("mods") {
+        hasMods := (c is Map) ? c.Has("mods") : c.HasProp("mods")
+        if hasMods {
             for mod in c.mods
                 prefix .= _ms_keyMod(mod)
         }
-        return prefix _ms_keyName(c.HasProp("key") ? c.key : "")
+        hasKey := (c is Map) ? c.Has("key") : c.HasProp("key")
+        return prefix _ms_keyName(hasKey ? c.key : "")
     }
     return ""
 }
@@ -1554,7 +1559,7 @@ _ms_applySettings(data) {
                 _ms_binds[id] := (entry["enabled"] = true)
             if entry.Has("bind") {
                 def := ms.bind._defs.Has(id) ? ms.bind._defs[id] : ""
-                if def != "" && def.HasProp("sub") && def["sub"] != ""
+                if def != "" && def.Has("sub") && def["sub"] != ""
                     _ms_subBinds[id] := entry["bind"]
                 else
                     _ms_bindConfig[id] := entry["bind"]
@@ -1611,7 +1616,7 @@ _ms_buildDefaultSettings() {
 
     for _, id in ms.bind._defList {
         def := ms.bind._defs[id]
-        if !def || def.HasProp("sub") && def["sub"] != ""
+        if !def || def.Has("sub") && def["sub"] != ""
             continue
         if !data["macros"].Has(id)
             data["macros"][id] := Map()
@@ -1662,7 +1667,6 @@ _ms_getProfiles() {
         if FileExist(A_LoopFileFullPath "\ms_macros.ahk")
             list.Push(A_LoopFileName)
     }
-    list
     return list
 }
 
@@ -1896,7 +1900,6 @@ _ms_pruneLogs() {
     archives := []
     Loop Files archDir "\ms_dev_*.log"
         archives.Push(A_LoopFileName)
-    archives
     while archives.Length > 20 {
         try FileDelete archDir "\" archives[1]
         archives.RemoveAt(1)
@@ -1918,18 +1921,19 @@ _ms_buildUIState() {
     macros := []
     for _, id in ms.bind._defList {
         def := ms.bind._defs[id]
-        if !def || (def.HasProp("sub") && def["sub"] != "") || (def["group"] != "main" && def["group"] != "optional")
+        if !def || (def.Has("sub") && def["sub"] != "") || (def["group"] != "main" && def["group"] != "optional")
             continue
         enabled := _ms_binds.Has(id) ? _ms_binds[id] : def["enabled"]
         subs := []
         for _, sid in ms.bind._defList {
             sdef := ms.bind._defs[sid]
-            if sdef && sdef.HasProp("sub") && sdef["sub"] = id {
-                subEnabled := (sdef.HasProp("sub") && sdef["sub"] = id)
+            if sdef && sdef.Has("sub") && sdef["sub"] = id {
                 bindStr := ""
                 if _ms_subBinds.Has(sid) {
                     c := _ms_subBinds[sid]
-                    bindStr := (c.HasProp("type") && c.type = "mouse") ? "mouse:" c.button : (c.HasProp("key") ? c.key : "")
+                    hasSType := (c is Map) ? c.Has("type") : c.HasProp("type")
+                    hasSKey := (c is Map) ? c.Has("key") : c.HasProp("key")
+                    bindStr := (hasSType && c.type = "mouse") ? "mouse:" c.button : (hasSKey ? c.key : "")
                 }
                 subs.Push(Map("id", sid, "label", sdef["label"], "bind", bindStr))
             }
@@ -1937,14 +1941,17 @@ _ms_buildUIState() {
         c := _ms_effectiveBind(id)
         bindStr := ""
         if c != "" {
-            if c.HasProp("type") && c.type = "mouse"
+            hasCType := (c is Map) ? c.Has("type") : c.HasProp("type")
+            hasCMods := (c is Map) ? c.Has("mods") : c.HasProp("mods")
+            hasCKey := (c is Map) ? c.Has("key") : c.HasProp("key")
+            if hasCType && c.type = "mouse"
                 bindStr := "mouse:" c.button
-            else if c.HasProp("mods") && c.mods.Length > 0 {
+            else if hasCMods && c.mods.Length > 0 {
                 for m in c.mods
                     bindStr .= m "+"
-                bindStr .= c.HasProp("key") ? c.key : ""
+                bindStr .= hasCKey ? c.key : ""
             } else
-                bindStr := c.HasProp("key") ? c.key : ""
+                bindStr := hasCKey ? c.key : ""
         }
         macros.Push(Map("id",id,"label",def["label"],"group",def["group"],"bind",bindStr,"enabled",enabled,"subs",subs))
     }
@@ -1952,7 +1959,6 @@ _ms_buildUIState() {
     soundNames := []
     for name, _ in _ms_sounds
         soundNames.Push(name)
-    soundNames
 
     status := ms.integrity.check()
     meta := ms.macroMeta
@@ -2014,9 +2020,10 @@ _ms_ui_onMessage(wv, event) {
     } else if action = "moveWindow" {
         dx := data.Has("dx") ? data["dx"] : 0
         dy := data.Has("dy") ? data["dy"] : 0
-        ms.ui._pos.x += dx, ms.ui._pos.y += dy
-        if ms.ui._panel_gui
-            ms.ui._panel_gui.Move(ms.ui._pos.x, ms.ui._pos.y)
+        global _ms_ui_pos, _ms_ui_panel_gui
+        _ms_ui_pos.x += dx, _ms_ui_pos.y += dy
+        if _ms_ui_panel_gui
+            _ms_ui_panel_gui.Move(_ms_ui_pos.x, _ms_ui_pos.y)
     } else if action = "reloadMacros" {
         Reload()
     } else if action = "reloadSettings" {
@@ -2106,7 +2113,7 @@ _ms_ui_onMessage(wv, event) {
         global _ms_bindConfig, _ms_subBinds
         def := ms.bind._defs.Has(data["id"]) ? ms.bind._defs[data["id"]] : ""
         if def != "" {
-            if def.HasProp("sub") && def["sub"] != ""
+            if def.Has("sub") && def["sub"] != ""
                 _ms_subBinds.Delete(data["id"])
             else
                 _ms_bindConfig.Delete(data["id"])
@@ -2142,9 +2149,10 @@ _ms_ui_onMessage(wv, event) {
         }
         ms.playSlot("reset"), ms.ui.refresh()
     } else if action = "modalResult" {
-        if IsObject(ms.ui._modal_cb) {
-            cb := ms.ui._modal_cb
-            ms.ui._modal_cb := 0
+        global _ms_ui_modal_cb
+        if IsObject(_ms_ui_modal_cb) {
+            cb := _ms_ui_modal_cb
+            _ms_ui_modal_cb := 0
             try cb.Call(Map("confirmed", data.Has("confirmed") && data["confirmed"] = true, "value", data.Has("value") ? data["value"] : ""))
         }
     } else if action = "resetSetting" && data.Has("key") {
@@ -2199,7 +2207,7 @@ _ms_onRebindKey(id, ih2, vk, sc) {
 
 _ms_captureModRebind(id) {
     def := ms.bind._defs.Has(id) ? ms.bind._defs[id] : ""
-    if def = "" || !def.HasProp("sub") || def["sub"] = ""
+    if def = "" || !def.Has("sub") || def["sub"] = ""
         return
     ms.alert('Modifier for "' def["label"] '"`nPress key — Backspace to clear — Escape to cancel.', 15)
     ih := InputHook("L1 B", "{Escape}{Backspace}")
@@ -2255,7 +2263,7 @@ _ms_loadingUpdate(10, "Processing macros...")
 ; ── Seed bind defaults ───────────────────────────────────────────────────────
 for _, id in ms.bind._defList {
     def := ms.bind._defs[id]
-    if def && (!def.HasProp("sub") || def["sub"] = "") && !_ms_binds.Has(id)
+    if def && (!def.Has("sub") || def["sub"] = "") && !_ms_binds.Has(id)
         _ms_binds[id] := def["enabled"]
 }
 
