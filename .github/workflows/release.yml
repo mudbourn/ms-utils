@@ -83,7 +83,7 @@ jobs:
             git commit -m "chore: auto-stamp MANIFEST [skip ci]"
             git fetch origin main
             git rebase origin/main 2>/dev/null || true
-            git push origin HEAD:main
+            git push --force origin HEAD:main
           }
 
   # ────────────────────────────────────────────────────────────────────────────
