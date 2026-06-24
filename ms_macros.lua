@@ -23,6 +23,7 @@
             default  = 3,
             save     = true,
         })
+
         ms.settings.define({
             type = "divider",
             section = "calibration"
@@ -35,6 +36,7 @@
             label = "Slide Setup",
             section = "calibration"
         })
+
         ms.settings.define({
             type = "slider",
             key = "sgMenuX",
@@ -47,12 +49,20 @@
             save = true,
             section = "calibration",
         })
+
         ms.settings.define({
-            type = "slider", key = "sgMenuY", label = "Menu Button Y",
+            type = "slider",
+            key = "sgMenuY",
+            label = "Menu Button Y",
             hint = "Y coord of the Z-menu button in the top bar",
-            min = 20, max = 80, step = 1, default = 37, save = true,
+            min = 20,
+            max = 80,
+            step = 1,
+            default = 37,
+            save = true,
             section = "calibration",
         })
+
         ms.settings.define({
             type = "slider",
             key = "sgItemX",
@@ -72,11 +82,13 @@
             type = "divider",
             section = "calibration"
         })
+
         ms.settings.define({
             type = "groupLabel",
             label = "Lag Simulator",
             section = "calibration"
         })
+
         ms.settings.define({
             type = "slider",
             key = "spamMoveX",
@@ -89,6 +101,7 @@
             save = true,
             section = "calibration",
         })
+
         ms.settings.define({
             type = "slider",
             key = "spamMoveY",
@@ -101,6 +114,7 @@
             save = true,
             section = "calibration",
         })
+
         ms.settings.define({
             type = "slider",
             key = "spamClickX",
@@ -120,11 +134,13 @@
             type = "divider",
             section = "calibration"
         })
+
         ms.settings.define({
             type = "groupLabel",
             label = "Quick Slide",
             section = "calibration"
         })
+
         ms.settings.define({
             type = "slider",
             key = "qsClickX",
@@ -137,6 +153,7 @@
             save = true,
             section = "calibration",
         })
+
         ms.settings.define({
             type = "slider",
             key = "qsClickY",
