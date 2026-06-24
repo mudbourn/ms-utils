@@ -17,6 +17,9 @@ ms.macroMeta = {
     website = "https://...",
 }
 
+-- 1b. Target application (optional — default "Roblox")
+ms.setTargetApp("Roblox")   -- macros enable when this app is focused; nil = global mode
+
 -- 2. Pack settings (optional — declare before macro functions)
 ms.settings.define({ key="myToggle", type="toggle", label="My Toggle",
     default=false, onChange=function(v) end })
@@ -625,17 +628,17 @@ ms.cancelMacros()
 
 ### App watcher behavior
 
+The app watcher monitors focus changes and enables/disables macros based on the **target application** set via `ms.setTargetApp()`. By default this is `"Roblox"`. Pass `nil` for global mode — macros stay enabled regardless of the focused app.
+
 | Event | Action |
 |-------|--------|
-| Roblox activated | `BindValidity = 1`, camera enabled, enable notification queued |
-| Roblox activated (returning from a settings dialog) | `BindValidity = 1`, camera enabled, notification suppressed |
+| Target app activated | `BindValidity = 1`, camera enabled (Roblox only), enable notification queued |
+| Target app activated (returning from a settings dialog) | `BindValidity = 1`, notification suppressed |
 | Any other app activated | `ms.setMacros(0)` — disables and notifies |
-| Hammerspoon activated while Roblox was in front | `ms.setMacros(0, true)` — disables silently (settings dialog cycle) |
-| Roblox launched | Camera watcher set up |
+| Hammerspoon activated while target was in front | `ms.setMacros(0, true)` — disables silently (settings dialog cycle) |
+| Target app launched | Camera watcher set up (Roblox only) |
 
-The in-game keys `/` (disable) and `Enter` (enable) also toggle macros while Roblox is focused.
-
-The **Macros: ENABLED / DISABLED** banner is debounced: only the final settled state after rapid toggling produces a notification. Banners are suppressed during settings-dialog focus-steal cycles and for the first 15 seconds after startup.
+The in-game keys `/` (disable) and `Enter` (enable) toggle macros while the target app is focused (Roblox mode only).
 
 ---
 
@@ -953,7 +956,7 @@ Prints Roblox window info (resolution, position, aspect ratio, sensitivity) to t
 
 ## 18. Global Hotkeys
 
-These hotkeys only fire when **Roblox is the focused window**. They are silently ignored in all other apps.
+These hotkeys only fire when the **target application** is focused (set via `ms.setTargetApp()`). They are silently ignored in all other apps.
 
 | Hotkey | Action |
 |--------|--------|
@@ -974,7 +977,18 @@ These hotkeys only fire when **Roblox is the focused window**. They are silently
 | `REF_H` | `1044` | Reference resolution height |
 | `REF_SENS` | `1.5` | Reference camera sensitivity (used to derive `cachedMult`) |
 | `CUR_CAM_SENS` | *(user setting)* | Current in-game sensitivity. Set via Settings › Camera Sensitivity |
-| `clickLevel` | `3` | Click position offset level (1–4). Set via Settings › Developer › Set Click Level |
+
+---
+
+### Target application
+
+| API | Description |
+|-----|-------------|
+| `ms.setTargetApp(name)` | Set the target app by bundle name (e.g. `"Roblox"`, `"Minecraft"`). Pass `nil` for global mode — macros stay enabled regardless of focused app. Default: `"Roblox"`. |
+| `ms.getTargetWin()` | Returns the target app's main window, or `nil` if the app isn't running. Fallback to `hs.window.focusedWindow()` in coordinate functions. |
+| `ms.app()` | Returns the bundle name of the currently focused app. |
+
+Call `ms.setTargetApp()` at the top of `ms_macros.lua`, right after `ms.macroMeta`. The app watcher, window lookups, focus restoration, and hidinject all follow this setting.
 
 ---
 
