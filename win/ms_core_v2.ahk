@@ -1678,31 +1678,98 @@ YQIDAQAB
 ;; END Notify ;;
 
 ;; Toast System ;;
+    _ms_toastQueue := []       ; active toast entries: {gui, msg, _h}
+    _ms_toastMax  := 4         ; max visible toasts
+    _ms_toastBase := 80        ; px from bottom of screen
+    _ms_toastGap  := 8         ; px gap between toasts
+    _ms_toastFade := 220       ; transparency level (0-255, lower=more transparent)
+
     _ms_showToast(msg, duration := 3) {
+        ; If queue is full, dismiss the oldest
+        if _ms_toastQueue.Length >= _ms_toastMax {
+            oldest := _ms_toastQueue.RemoveAt(1)
+            if oldest.Has("gui") && IsObject(oldest.gui)
+                try oldest.gui.Destroy()
+        }
 
-        ; Build a small borderless Gui
-        hGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20")
-        hGui.BackColor := Trim(_ms_theme["bg"], "#")
-        hGui.MarginX := 12, hGui.MarginY := 8
-        hGui.SetFont("s10 c" Trim(_ms_theme["text"], "#"), _ms_theme["font"])
+        ; Read theme values
+        bg := Trim(_ms_theme["bg"], "#")
+        fg := Trim(_ms_theme["text"], "#")
+        radius := _ms_theme.Has("radius") ? Integer(_ms_theme["radius"]) : 3
+        font := _ms_theme.Has("font") && _ms_theme["font"] != "" ? _ms_theme["font"] : "Segoe UI"
 
-        ; Measure text to size the gui
+        ; Build toast Gui
+        hGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80000")
+        hGui.BackColor := bg
+        hGui.MarginX := 16, hGui.MarginY := 10
+        hGui.SetFont("s10 c " fg, font)
+
+        ; Measure text
         hCtrl := hGui.Add("Text",, msg)
         hCtrl.GetPos(,, &tw, &th)
-        tw := Max(tw, 200), th := Max(th, 24)
+        tw := Max(tw, 200), th := Max(th, 20)
+        padW := 32, padH := 20
 
-        ; Size and position (top-centre)
-        padW := 24, padH := 16
+        ; Calculate position — stacked from bottom
         MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
         x := sL + (sR - sL - tw - padW) // 2
-        y := sT + 40
-        hGui.Show("w" (tw + padW) " h" (th + padH) " x" x " y" y " NoActivate")
+
+        ; Compute stacked Y from all active toasts
+        totalH := 0
+        for entry in _ms_toastQueue {
+            if entry.Has("_h")
+                totalH += entry._h + _ms_toastGap
+        }
+        y := sB - _ms_toastBase - totalH - th - padH
+
+        guiW := tw + padW
+        guiH := th + padH
+        hGui.Show("w" guiW " h" guiH " x" x " y" y " NoActivate")
 
         ; Semi-transparent
-        WinSetTransparent 220, hGui
+        WinSetTransparent _ms_toastFade, hGui
 
-        ; Auto-dismiss
-        SetTimer () => hGui.Destroy(), -(duration * 1000)
+        ; Store entry
+        entry := {gui: hGui, msg: msg, _h: guiH}
+        _ms_toastQueue.Push(entry)
+
+        ; Auto-dismiss timer (one-shot, negative period)
+        SetTimer () => _ms_toastDismiss(hGui), -(duration * 1000)
+
+        ; Click to dismiss
+        hGui.OnEvent("Close", (*) => _ms_toastDismiss(hGui))
+    }
+
+    _ms_toastDismiss(hGui) {
+        for i, entry in _ms_toastQueue {
+            if entry.Has("gui") && entry.gui = hGui {
+                _ms_toastQueue.RemoveAt(i)
+                try hGui.Destroy()
+                _ms_toastRedraw()
+                break
+            }
+        }
+    }
+
+    _ms_toastDismissAll() {
+        for entry in _ms_toastQueue {
+            try entry.gui.Destroy()
+        }
+        _ms_toastQueue := []
+    }
+
+    _ms_toastRedraw() {
+        ; Reposition remaining toasts
+        MonitorGetWorkArea 1, &sL, &sT, &sR, &sB
+        totalH := 0
+        for entry in _ms_toastQueue {
+            hGui := entry.gui
+            hGui.GetPos(&gx, &gy, &gw, &gh)
+            x := sL + (sR - sL - gw) // 2
+            y := sB - _ms_toastBase - totalH - gh
+            hGui.Move(x, y)
+            totalH += gh + _ms_toastGap
+        }
     }
 ;; END Toast System ;;
 

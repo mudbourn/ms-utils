@@ -26,6 +26,7 @@ backups/
 
 # Development planning docs — not shipped
 docs/WINDOWS_PORT_PLAN.md
+docs/WINDOWS_AHK2_DEV.md
 
 # LLM agent instructions — not shipped
 writing_style.txt
