@@ -676,12 +676,14 @@ class ms {
                     if !_ms_independent_binds || !_ms_subBinds.Has(id)  continue
                     local c := _ms_subBinds[id]
                     local _fn := entry.func, _id := id, _def := def
-                    local firedFn := (_fn, _id, _def, group, cooldown) => (*) {
-                        if _ms_running.Has(group)  return
-                        _ms_running[group] := true
-                        SetTimer () => _ms_running.Delete(group), -cooldown
-                        _ms_active_sub := _id
-                        _fn()
+                    local firedFn := (_fn, _id, _def, group, cooldown) {
+                        return (*) {
+                            if _ms_running.Has(group)  return
+                            _ms_running[group] := true
+                            SetTimer () => _ms_running.Delete(group), -cooldown
+                            _ms_active_sub := _id
+                            _fn()
+                        }
                     }
                     local hk := ms.bind._buildHotkey(c)
                     if hk = ""  continue
@@ -696,16 +698,18 @@ class ms {
                     local c := ms._effectiveBind(id)
                     if c = ""  continue
                     local _fn := entry.func, _id := id
-                    local firedFn := (_fn, _id, group, cooldown) => (*) {
-                        if BindValidity != 1  return
-                        if _ms_running.Has(group)  return
-                        _ms_running[group] := true
-                        SetTimer () => _ms_running.Delete(group), -cooldown
-                        _ms_active_sub := ""
-                        try _fn()
-                        catch as e {
-                            if e.Message != "ms.cancelled"
-                                ms.alert("Macro error — check OutputDebug.", 4)
+                    local firedFn := (_fn, _id, group, cooldown) {
+                        return (*) {
+                            if BindValidity != 1  return
+                            if _ms_running.Has(group)  return
+                            _ms_running[group] := true
+                            SetTimer () => _ms_running.Delete(group), -cooldown
+                            _ms_active_sub := ""
+                            try _fn()
+                            catch as e {
+                                if e.Message != "ms.cancelled"
+                                    ms.alert("Macro error — check OutputDebug.", 4)
+                            }
                         }
                     }
                     local hk := ms.bind._buildHotkey(c)
