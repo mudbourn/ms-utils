@@ -9,7 +9,7 @@
 #>
 
 $scriptDir = Split-Path -Parent $PSCommandPath
-$rootDir   = Split-Path -Parent $scriptDir
+$rootDir   = Split-Path -Parent (Split-Path -Parent $scriptDir)
 $iconsDir  = Join-Path $rootDir "ui\icons"
 $iconOut   = Join-Path $iconsDir "ms_icon.png"
 
