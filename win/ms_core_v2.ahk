@@ -1719,13 +1719,17 @@ YQIDAQAB
 
             hGui := Gui("+AlwaysOnTop -Caption +ToolWindow")
             hGui.Show("w" lw " h" lh " x" x " y" y " NoActivate")
-            hWv := WebView2.create(hGui.Hwnd)
+            _ms_loadGui := hGui
+            WebView2.create(hGui.Hwnd, _ms_loadingWvReady)
+        }
+
+        _ms_loadingWvReady(hWv) {
+            global _ms_loadGui, _ms_loadWv, _ms_theme
             hWv.Navigate("file:///" A_ScriptDir "\ui\ms_loading.html")
             ; Push theme once page loads so HTML can style itself from ms_theme.json values
             hWv.add_NavigationCompleted((w, *) => (
                 w.ExecuteScript("applyTheme(" Jxon_Dump(_ms_theme, 0) ")")
             ))
-            _ms_loadGui := hGui
             _ms_loadWv  := hWv
         }
 
