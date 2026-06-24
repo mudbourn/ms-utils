@@ -34,23 +34,30 @@ jobs:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
           WIN_SHA=$(sha256sum ms_core.ahk | awk '{print $1}')
+          echo "WIN_SHA=$WIN_SHA"
+
+          # Debug: check MANIFEST.json exists and is valid
+          echo "Checking MANIFEST.json..."
+          head -c 200 MANIFEST.json
+          echo ""
+          jq . MANIFEST.json || echo "jq test failed"
 
           # Use manual version override if provided, otherwise read from manifest
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
             MAC_VER="$VERSION"
           else
-            VERSION=$(jq -r '.windows_version // "1.0.0"' MANIFEST.json)
-            MAC_VER=$(jq -r '.version // ""' MANIFEST.json)
+            VERSION=$(jq -r '.windows_version // "1.0.0"' MANIFEST.json) || VERSION="1.0.0"
+            MAC_VER=$(jq -r '.version // ""' MANIFEST.json) || MAC_VER=""
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
           WIN_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/ms_core.ahk"
 
           # Preserve existing macOS fields (hash, url, sig — carried from old manifest)
-          MAC_SHA=$(jq -r '.sha256 // ""' MANIFEST.json)
-          MAC_URL=$(jq -r '.url // ""' MANIFEST.json)
-          MAC_SIG=$(jq -r '.signature // ""' MANIFEST.json)
+          MAC_SHA=$(jq -r '.sha256 // ""' MANIFEST.json) || MAC_SHA=""
+          MAC_URL=$(jq -r '.url // ""' MANIFEST.json) || MAC_URL=""
+          MAC_SIG=$(jq -r '.signature // ""' MANIFEST.json) || MAC_SIG=""
 
           jq -n \
             --arg version  "$MAC_VER"  \
