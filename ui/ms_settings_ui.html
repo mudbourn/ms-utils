@@ -2234,7 +2234,16 @@
                             "",
                             [
                                 {
-                                    icon: "↓",
+                                    icon: "\u25b6",
+                                    label: "Play",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "playSlot",
+                                            slot: slot.id,
+                                        }),
+                                },
+                                {
+                                    icon: "\u2193",
                                     label: "Import",
                                     action: () =>
                                         sendToHost({
@@ -2277,7 +2286,16 @@
                                 "",
                                 [
                                     {
-                                        icon: "↓",
+                                        icon: "\u25b6",
+                                        label: "Play",
+                                        action: () =>
+                                            sendToHost({
+                                                action: "playSlot",
+                                                slot: slot.key,
+                                            }),
+                                    },
+                                    {
+                                        icon: "\u2193",
                                         label: "Import for this slot",
                                         action: () =>
                                             sendToHost({
