@@ -2641,7 +2641,7 @@
                     local wf   = ms._testingWorkflow or "testing"
                     local apiURL = "https://api.github.com/repos/" .. repo
                         .. "/actions/workflows/" .. wf .. ".yml/runs"
-                        .. "?conclusion=success&per_page=1"
+                        .. "?per_page=1"
                     hs.http.asyncGet(apiURL, {
                         ["Accept"] = "application/vnd.github+json",
                     }, function(code, body, _)
@@ -2656,11 +2656,6 @@
                             return
                         end
                         local run = data.workflow_runs[1]
-                        -- Double-check conclusion (API filter can be inconsistent)
-                        if run.conclusion ~= "success" then
-                            if callback then pcall(callback, nil) end
-                            return
-                        end
                         if callback then pcall(callback, {
                             runId     = run.run_number or run.id,
                             sha       = run.head_sha,
