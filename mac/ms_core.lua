@@ -4618,7 +4618,7 @@
                                 if binding.mods.ctrl  and not flags.ctrl  then modsMatch = false end
                                 if binding.mods.shift and not flags.shift then modsMatch = false end
                                 if modsMatch then
-                                    if BindValidity == 1 then
+                                    if BindValidity == 1 or binding.system then
                                         if binding.pressFn then
                                             local co = coroutine.create(binding.pressFn)
                                             local ok, err = coroutine.resume(co)
@@ -4646,7 +4646,7 @@
                                 if binding.mods.ctrl  and not flags.ctrl  then modsMatch = false end
                                 if binding.mods.shift and not flags.shift then modsMatch = false end
                                 if modsMatch then
-                                    if BindValidity == 1 then
+                                    if BindValidity == 1 or binding.system then
                                         if binding.releaseFn then
                                             local co = coroutine.create(binding.releaseFn)
                                             local ok, err = coroutine.resume(co)
@@ -4746,7 +4746,7 @@
                     _traceSuppress = _saved  -- restore rather than reset; safe across cancellation
                 end
 
-                ms.key = function(mods, key, swallow, pressFn, releaseFn)
+                ms.key = function(mods, key, swallow, pressFn, releaseFn, isSystem)
                     local keyCode = getCode(key)
                     if not keyCode then
                         print("Error: Could not find keyCode for " .. tostring(key))
@@ -4762,6 +4762,7 @@
                         swallow = swallow,
                         pressFn = pressFn,
                         releaseFn = releaseFn,
+                        system = isSystem or false,
                     }
 
                     table.insert(ms._keyBindings, binding)
@@ -4797,7 +4798,7 @@
                 ev:post()
             end
 
-            ms.mouse = function(button, swallow, clickFn, hidinject)
+            ms.mouse = function(button, swallow, clickFn, hidinject, isSystem)
                 if not ms._mouseListener then
                     ms._mouseCallbacks = {}
                     local types = {
@@ -4841,7 +4842,12 @@
                                 math.floor(_mp.x), math.floor(_mp.y))
                         end
 
-                        if BindValidity ~= 1 then return false end
+                        if BindValidity ~= 1 then
+                            -- System mouse binds (e.g. macro-enable buttons) still fire
+                            -- when macros are disabled; the callback has its own
+                            -- _robloxActive guard.
+                            if not (callbackData and callbackData.system) then return false end
+                        end
 
                         if not isDown then return false end
 
@@ -4862,7 +4868,7 @@
                         return false
                     end):start()
                 end
-                ms._mouseCallbacks[button] = { fn = clickFn, swallow = swallow, hidinject = hidinject }
+                ms._mouseCallbacks[button] = { fn = clickFn, swallow = swallow, hidinject = hidinject, system = isSystem or false }
             end
 
 
@@ -6085,14 +6091,14 @@
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
-                        end)
+                        end, nil, true)
                     elseif c.type == "mouse" then
                         ms._systemBindHandles[id] = ms.mouse(c.button, false, function()
                             if not ms._robloxActive then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
-                        end)
+                        end, true)
                     end
                     ::sysContinue::
                 end
@@ -8395,6 +8401,33 @@
                     __index    = function(t, k)
                         if k == "integrity" or k == "dev" or k == "showGuardian" or k == "_systemActions" then
                             error("ms_macros.lua: ms." .. k .. " is not accessible from macros.", 2)
+                        end
+                        -- Wrap ms.key and ms.mouse to strip the internal isSystem
+                        -- flag so macro code cannot bypass BindValidity.
+                        if k == "key" then
+                            return function(mods, key, swallow, pressFn, releaseFn)
+                                return ms.key(mods, key, swallow, pressFn, releaseFn, false)
+                            end
+                        elseif k == "mouse" then
+                            return function(button, swallow, clickFn, hidinject)
+                                return ms.mouse(button, swallow, clickFn, hidinject, false)
+                            end
+                        elseif k == "bind" then
+                            -- Return a proxy that wraps define() to force system=false,
+                            -- preventing macros from registering system binds that bypass
+                            -- the BindValidity gate.
+                            return setmetatable({}, {
+                                __index = function(_, bk)
+                                    if bk == "define" then
+                                        return function(id, a, b)
+                                            local opts = type(a) == "table" and a or (type(b) == "table" and b or {})
+                                            opts.system = false
+                                            return ms.bind.define(id, a, b)
+                                        end
+                                    end
+                                    return ms.bind[bk]
+                                end,
+                            })
                         end
                         return ms[k]
                     end,
