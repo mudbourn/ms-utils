@@ -904,10 +904,10 @@
                     onmouseenter="playSlot('hover')"
                     onclick="
                         playSlot('interact');
-                        sendToHost({ action: 'reloadSettings' });
+                        sendToHost({ action: 'quickReload' });
                     "
                 >
-                    ↺ Settings
+                    ↺ Quick Reload
                 </button>
             </div>
 
@@ -2531,13 +2531,6 @@
                         ),
                         actionBtn("Input Monitor", "", () =>
                             sendToHost({ action: "openKeys" }),
-                        ),
-                    ),
-                );
-                body.appendChild(
-                    btnRow(
-                        actionBtn("Reload Theme", "", () =>
-                            sendToHost({ action: "reloadTheme" }),
                         ),
                     ),
                 );

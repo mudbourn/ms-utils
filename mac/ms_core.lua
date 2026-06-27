@@ -1046,7 +1046,7 @@
                         return true
                     end
 
-                    -- Single source of truth called by both the menu item and the Alt+] hotkey.
+                    -- Reloads settings only (no macro re-execution).
                     ms.reloadSettings = function()
                         ms.loadSettings()
                         ms.bind.rebind()
@@ -1055,6 +1055,97 @@
                         ms.socdApply()
                         ms.playSlot("update")
                         ms.alert("Settings reloaded.", 5, true)
+                    end
+
+                    -- Quick Reload: re-executes the macro sandbox, reloads settings
+                    -- and theme, then rebinds — all without a full hs.reload().
+                    ms.quickReload = function()
+                        -- 1. Tear down existing binds and clear macro/registry state.
+                        ms.bind.teardown()
+                        ms.registry       = { _defs = {}, _defList = {} }
+                        ms.bind._wires    = {}
+                        ms.bind._autoCount = 0
+                        ms.macroMeta       = nil
+                        ms._userSettingDefs  = {}
+                        ms._userSettingIndex = {}
+                        ms._userSettingVals  = {}
+
+                        -- 2. Re-read, audit, and execute ms_macros.lua in the sandbox.
+                        local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
+                        local rawSrc
+                        do
+                            local af = io.open(macrosPath, "r")
+                            if not af then
+                                ms.alert("Quick Reload failed:\nCannot open ms_macros.lua.", 6)
+                                return
+                            end
+                            rawSrc = af:read("*all"); af:close()
+                            local auditErrs = auditMacros(rawSrc)
+                            if #auditErrs > 0 then
+                                local msg = "Quick Reload blocked — ms_macros.lua failed audit ("
+                                    .. #auditErrs .. " violation"
+                                    .. (#auditErrs > 1 and "s" or "") .. "):\n"
+                                for _, e in ipairs(auditErrs) do
+                                    msg = msg .. "  \xe2\x80\xa2 " .. e .. "\n"
+                                end
+                                ms.alert(msg, 8)
+                                return
+                            end
+                        end
+
+                        local chunk, loadErr = load(rawSrc, "@ms_macros.lua", "bt", ms._macroSandbox)
+                        if not chunk then
+                            ms.alert("Quick Reload failed:\n" .. tostring(loadErr), 6)
+                            return
+                        end
+                        local ok, runErr = pcall(chunk)
+                        if not ok then
+                            ms.alert("Quick Reload failed:\n" .. tostring(runErr), 6)
+                            return
+                        end
+
+                        if not ms.macroMeta then
+                            hs.timer.doAfter(0.5, function()
+                                ms.alert("Warning: ms_macros.lua did not declare ms.macroMeta.", 6)
+                            end)
+                        end
+                        if not next(ms.registry._defs) then
+                            ms.alert("Quick Reload failed:\nNo ms.bind.define calls found.", 6)
+                            return
+                        end
+
+                        -- Seed default enabled state for any newly added macro.
+                        for _, id in ipairs(ms.registry._defList) do
+                            local def = ms.registry._defs[id]
+                            if def and not def.sub and ms.binds[id] == nil then
+                                ms.binds[id] = def.enabled
+                            end
+                        end
+
+                        -- 3. Rebuild system actions from the fresh user-setting index.
+                        ms._systemActions = {}
+                        if ms._userSettingIndex["showTamperWarning"] then
+                            ms._systemActions["showTamperWarning"] = function()
+                                ms.showGuardian()
+                            end
+                        end
+
+                        -- 4. Reload settings, theme, and rebind.
+                        ms.loadSettings()
+                        ms.loadTheme()
+                        ms.bind.rebind()
+                        ms.cam.updateAnchor()
+                        ms.cam.updateMultiplier()
+                        ms.socdApply()
+
+                        -- 5. Refresh UI if open.
+                        if ms.ui and ms.ui._open then
+                            ms.ui.hide()
+                            hs.timer.doAfter(0.1, function() ms.ui.show() end)
+                        end
+
+                        ms.playSlot("update")
+                        ms.alert("Quick Reload complete.", 5, true)
                     end
 
                     -- User Settings & Menu API --
@@ -3146,7 +3237,7 @@
                             {label = "Panic Button / Stop All",  bind = "Alt+F10"},
                             {label = "Get Roblox Window Info",   bind = "Ctrl+Shift+R"},
                             {label = "Reload Shortcuts",         bind = "Alt+["},
-                            {label = "Reload Settings",          bind = "Alt+]"},
+                            {label = "Quick Reload",              bind = "Alt+]"},
                             {label = "Open Menu",                bind = "Alt+P"},
                         }
                         for _, bind in ipairs(systemBindDefs) do
@@ -3820,7 +3911,7 @@
                             { title = "Disable Macros ( / )",     fn = function() ms.setMacros(0) end },
                             { title = "-" },
                             { title = "Reload Macros ( alt+[ )",   fn = function() hs.reload() end },
-                            { title = "Reload Settings ( alt+] )", fn = function() ms.reloadSettings() end },
+                            { title = "Quick Reload ( alt+] )",     fn = function() ms.quickReload() end },
                             { title = "-" },
                             { title = "Profiles",  menu = buildProfilesSubmenu() },
                             { title = "Settings",  menu = buildSettingsSubmenu() },
@@ -4744,7 +4835,7 @@
 
             hs.hotkey.bind({"alt"}, "]", function()
                 if not ms._loadComplete then return end
-                ms.reloadSettings()
+                ms.quickReload()
             end)
 
             -- hs.hotkey is blocked during NSMenu's modal tracking loop, so Alt+P
@@ -5847,9 +5938,8 @@
 
                     reloadMacros = function() hs.reload() end,
 
-                    reloadSettings = function()
-                        ms.reloadSettings()
-                        ms.ui.refresh()
+                    quickReload = function()
+                        ms.quickReload()
                     end,
 
                     setPreloadDevTools = function(data)
@@ -6196,17 +6286,6 @@
 
                     editTheme = function()
                         os.execute("open " .. themePath)
-                    end,
-
-                    reloadTheme = function()
-                        ms.loadTheme()
-                        -- Rebuild the panel if open so theme changes take effect.
-                        if ms.ui._open then
-                            ms.ui.hide()
-                            hs.timer.doAfter(0.1, function() ms.ui.show() end)
-                        else
-                            ms.ui.refresh()
-                        end
                     end,
 
                     trustCurrentVersion = function()
@@ -7644,6 +7723,9 @@
                             .. "' — use 'local' for all variables.", 2)
                     end,
                 })
+
+                -- Store sandbox reference so ms.quickReload() can reuse it.
+                ms._macroSandbox = sandbox
 
                 -- Security audit: scan the raw source before any code is executed.
                 -- Hard-errors on policy violations so a tampered file never reaches load().
