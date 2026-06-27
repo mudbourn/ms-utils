@@ -1133,7 +1133,7 @@
                         local qr = ms._qrOptions or { macros = true, theme = true, settings = true, ui = true }
 
                         -- 1. Reload macros.
-                        if qr.macros then ms.ui.reloadMacros() end
+                        if qr.macros then ms.ui._actions.reloadMacros() end
 
                         -- 2. Reload theme.
                         if qr.theme then ms.loadTheme() end
