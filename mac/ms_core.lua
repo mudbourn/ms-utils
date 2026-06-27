@@ -1111,6 +1111,7 @@
                         end
                         ms.loadSettings()
                         ms.loadTheme()
+                        if not ms.registry._defs["__enableMacros"] then ms.bind._registerSystemBinds() end
                         ms.bind.rebind()
                         ms.cam.updateAnchor()
                         ms.cam.updateMultiplier()
@@ -2461,8 +2462,11 @@
                                 end
                                 local timestamp = os.date("%Y-%m-%d_%H%M")
                                 ms._updateInProgress = true
+                                os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
+                                local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
+                                if _sp then _sp:close() end
                                 local ok = _applyBundleUpdate(tmpExtract, timestamp)
-                                ms._updateInProgress = false
+                                ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                                 os.execute("rm -rf '" .. tmpExtract .. "'")
                                 if not ok then
                                     ms.alert("Update failed: could not apply bundle.", 5)
@@ -2514,9 +2518,12 @@
                                 local timestamp  = os.date("%Y-%m-%d_%H%M")
                                 local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
                                 ms._updateInProgress = true
+                                os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
+                                local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
+                                if _sp then _sp:close() end
                                 local bOk = moveFile(corePath, backupFile)
                                 if not bOk then
-                                    ms._updateInProgress = false
+                                    ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                                     os.remove(tmpPath)
                                     ms.alert("Update failed: could not back up ms_core.lua.", 4)
                                     return
@@ -2524,11 +2531,11 @@
                                 local mOk = moveFile(tmpPath, corePath)
                                 if not mOk then
                                     moveFile(backupFile, corePath)
-                                    ms._updateInProgress = false
+                                    ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                                     ms.alert("Update failed: could not install new ms_core.lua.\nBackup restored.", 5)
                                     return
                                 end
-                                ms._updateInProgress = false
+                                ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                                 ms.integrity.writeTrustedHash(actualHash)
                                 ms.integrity.invalidateCache()
                                 local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
@@ -2702,9 +2709,12 @@
                                     local timestamp  = os.date("%Y-%m-%d_%H%M")
                                     local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
                                     ms._updateInProgress = true
+                                os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
+                                local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
+                                if _sp then _sp:close() end
                                     local bOk = moveFile(corePath, backupFile)
                                     if not bOk then
-                                        ms._updateInProgress = false
+                                        ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                                         os.remove(tmpPath)
                                         ms.alert("Update failed: could not back up ms_core.lua.", 4)
                                         return
@@ -2712,11 +2722,11 @@
                                     local mOk = moveFile(tmpPath, corePath)
                                     if not mOk then
                                         moveFile(backupFile, corePath)
-                                        ms._updateInProgress = false
+                                        ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                                         ms.alert("Update failed: could not install.\nBackup restored.", 5)
                                         return
                                     end
-                                    ms._updateInProgress = false
+                                    ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                                     ms.integrity.writeTrustedHash(actualHash)
                                     ms.integrity.invalidateCache()
                                     _writeTestingRun(buildNum)
@@ -2748,8 +2758,11 @@
                             end
                             local timestamp = os.date("%Y-%m-%d_%H%M")
                             ms._updateInProgress = true
+                            os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
+                            local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
+                            if _sp then _sp:close() end
                             local ok = _applyBundleUpdate(tmpExtract, timestamp)
-                            ms._updateInProgress = false
+                            ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                             os.execute("rm -rf '" .. tmpExtract .. "'")
                             if not ok then
                                 ms.alert("Update failed: could not apply bundle.", 5)
@@ -3577,8 +3590,8 @@
                             {label = "Enable/Disable Shortcuts", bind = "/  or  Return"},
                             {label = "Panic Button / Stop All",  bind = "Alt+F10"},
                             {label = "Get Roblox Window Info",   bind = "Ctrl+Shift+R"},
-                            {label = "Full Reload",               bind = "Alt+[\xe2\x86\x92 Reload Options"},
-                            {label = "Quick Reload",              bind = "Alt+]\xe2\x86\x92 Reload Options"},
+                            {label = "Quick Reload",              bind = "Alt+[→ Reload Options"},
+                            {label = "Full Reload",               bind = "Alt+]→ Reload Options"},
                             {label = "Open Menu",                bind = "Alt+P"},
                         }
                         for _, bind in ipairs(systemBindDefs) do
@@ -4280,8 +4293,8 @@
                             { title = "Disable Macros ( / )",     fn = function() ms.setMacros(0) end },
                             { title = "-" },
                             { title = "Reload Options", menu = {
-                                { title = "Quick Reload ( \xe2\x8c\xa5] )",   fn = function() ms.quickReload() end },
-                                { title = "Full Reload ( \xe2\x8c\xa5[ )",    fn = function() hs.reload() end },
+                                { title = "Quick Reload ( ⌥[ )",   fn = function() ms.quickReload() end },
+                                { title = "Full Reload ( ⌥] )",    fn = function() hs.reload() end },
                             }},
                             { title = "-" },
                             { title = "Profiles",  menu = buildProfilesSubmenu() },
@@ -4429,11 +4442,6 @@
                     ms.keytrack[keyCode] = true
                     if not isRepeat and ms.dev then
                         pcall(ms.dev._onKeyEvent, keyCode, hs.keycodes.map[keyCode], true)
-                    end
-                    -- Toggle macro state via in-game keys ( / = disable, Enter = enable ).
-                    if not isRepeat and ms._robloxActive then
-                        if     keyCode == 44 then ms.setMacros(0)
-                        elseif keyCode == 36 then ms.setMacros(1) end
                     end
                     if not isRepeat and ms._keyBindings then
                         ms._currentFlags = flags
@@ -5201,12 +5209,12 @@
 
             hs.hotkey.bind({"alt"}, "[", function()
                 if not ms._loadComplete then return end
-                hs.reload()
+                ms.quickReload()
             end)
 
             hs.hotkey.bind({"alt"}, "]", function()
                 if not ms._loadComplete then return end
-                ms.quickReload()
+                hs.reload()
             end)
 
             -- hs.hotkey is blocked during NSMenu's modal tracking loop, so Alt+P
@@ -5578,7 +5586,7 @@
         -- 10. Registry, Bind System & Sub-item Helpers --
 
             -- ms.bind.define(id, fn|opts, opts|fn)
-            -- opts: label=id, group, enabled, cooldown, sub, mod, info, default, shared
+            -- opts: label=id, group, enabled, cooldown, sub, mod, info, default, shared, system
             ms.bind.define = function(id, a, b)
                 assert(type(id) == "string", "ms.bind.define: id must be a string")
                 local fn   = type(a) == "function" and a or (type(b) == "function" and b or nil)
@@ -5610,6 +5618,7 @@
                     mod      = opts.mod,
                     info     = opts.info,
                     default  = opts.default,
+                    system   = opts.system or false,
                 }
                 table.insert(ms.registry._defList, id)
                 if fn ~= nil then
@@ -5617,6 +5626,38 @@
                         "ms.bind.define: fn must be a function for id '" .. id .. "'")
                     ms.bind._wires[id] = fn
                 end
+            end
+
+            -- Register system binds (enable/disable/toggle macros).
+            -- These are always available and fire regardless of BindValidity.
+            -- They appear in the macro list and are rebindable.
+            ms.bind._registerSystemBinds = function()
+                ms.bind.define("__enableMacros", function() ms.setMacros(1) end, {
+                    label    = "Enable Macros",
+                    group    = "system",
+                    enabled  = true,
+                    cooldown = 200,
+                    system   = true,
+                    default  = { type = "key", mods = {}, key = "return" },
+                })
+                ms.bind.define("__disableMacros", function() ms.setMacros(0) end, {
+                    label    = "Disable Macros",
+                    group    = "system",
+                    enabled  = true,
+                    cooldown = 200,
+                    system   = true,
+                    default  = { type = "key", mods = {}, key = "/" },
+                })
+                ms.bind.define("__toggleMacros", function()
+                    ms.setMacros(BindValidity == 1 and 0 or 1)
+                end, {
+                    label    = "Toggle Macros",
+                    group    = "system",
+                    enabled  = true,
+                    cooldown = 200,
+                    system   = true,
+                    default  = { type = "key", mods = {}, key = "escape" },
+                })
             end
 
             -- Returns the cooldown group key for a macro id.
@@ -5812,6 +5853,46 @@
                 else
                     if ms._trackpadLeftListener  then ms._trackpadLeftListener:stop()  end
                     if ms._trackpadRightListener then ms._trackpadRightListener:stop() end
+                end
+                -- Register system binds (always active regardless of BindValidity).
+                ms.bind.rebindSystem()
+            end
+            -- Must be called after ms.bind.rebind() and whenever _robloxActive changes.
+            ms.bind.rebindSystem = function()
+                -- Tear down previous system bind handles.
+                if ms._systemBindHandles then
+                    for _, h in pairs(ms._systemBindHandles) do
+                        if h and h.delete then h:delete() end
+                    end
+                end
+                ms._systemBindHandles = {}
+
+                for _, id in ipairs(ms.registry._defList) do
+                    local def = ms.registry._defs[id]
+                    if not def or not def.system then goto sysContinue end
+                    local enabled = ms.binds[id]
+                    if enabled == nil then enabled = def.enabled end
+                    if not enabled then goto sysContinue end
+                    local c = ms.effectiveBind(id)
+                    if not c then goto sysContinue end
+                    local fn = ms.bind._wires[id]
+                    if not fn then goto sysContinue end
+                    if c.type == "key" then
+                        ms._systemBindHandles[id] = ms.key(c.mods, c.key, false, function()
+                            if not ms._robloxActive then return end
+                            local co = coroutine.create(fn)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.systemBind error: " .. tostring(err)) end
+                        end)
+                    elseif c.type == "mouse" then
+                        ms._systemBindHandles[id] = ms.mouse(c.button, false, function()
+                            if not ms._robloxActive then return end
+                            local co = coroutine.create(fn)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.systemBind error: " .. tostring(err)) end
+                        end)
+                    end
+                    ::sysContinue::
                 end
             end
 
@@ -6359,6 +6440,7 @@
                             end
                         end
                         ms.loadSettings()
+                        if not ms.registry._defs["__enableMacros"] then ms.bind._registerSystemBinds() end
                         ms.bind.rebind()
                         ms.cam.updateAnchor()
                         ms.cam.updateMultiplier()
@@ -8314,6 +8396,9 @@
         ms.loadSettings()
         ms.loadTheme()
         ms.cam.updateMultiplier()
+        -- Clean up any stale update sentinel from a previous session.
+        os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
+        ms.bind._registerSystemBinds()
         ms.bind.rebind()
         ms.socdApply()
         BindValidity = 0  -- block macros during loading; _announceLoad re-enables when toasts fire

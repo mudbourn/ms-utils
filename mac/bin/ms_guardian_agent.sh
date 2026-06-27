@@ -16,6 +16,7 @@
 CORE="$HOME/.hammerspoon/ms_core.lua"
 TRUST="$HOME/.hammerspoon/data/.ms_trusted_hash"
 LOG="$HOME/.hammerspoon/data/guardian_agent.log"
+SENTINEL="$HOME/.hammerspoon/data/.ms_update_pending"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"
@@ -29,6 +30,14 @@ fi
 
 if [ ! -f "$CORE" ]; then
     log "ms_core.lua not found at $CORE — skipping check."
+    exit 0
+fi
+
+# Legitimate update in progress — skip this check.  The sentinel is created
+# by ms_core.lua's update paths (and by the deploy helper) before touching
+# ms_core.lua, and removed after the trusted hash is re-seeded.
+if [ -f "$SENTINEL" ]; then
+    log "Update in progress (sentinel present) — skipping check."
     exit 0
 fi
 
