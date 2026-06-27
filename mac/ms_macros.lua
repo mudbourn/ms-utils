@@ -182,7 +182,7 @@
 
 
         local getD1 = function()
-            local d1  = 52
+            local d1  = 42
             local lvl = ms.settings.get("clickLevel")
             if lvl     == 4 then d1 = d1 + 30
             elseif lvl == 3 then d1 = d1 + 20
@@ -192,7 +192,7 @@
         end
 
         local getD2 = function()
-            local d2  = 63
+            local d2  = 53
             local lvl = ms.settings.get("clickLevel")
             if lvl     == 4 then d2 = d2 + 20
             elseif lvl == 3 then d2 = d2 + 20
@@ -202,7 +202,7 @@
         end
 
         local getD3 = function()
-            local d3  = 52
+            local d3  = 42
             local lvl = ms.settings.get("clickLevel")
             if lvl     == 4 then d3 = d3 + 30
             elseif lvl == 3 then d3 = d3 + 30
