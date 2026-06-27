@@ -765,6 +765,7 @@
                             end
                             ms.importedSounds = _is
                         end
+                        if data.quickReloaded ~= nil then ms._quickReloaded = tonumber(data.quickReloaded) or 0 end
                         if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
                         if data.devArchiveLimit ~= nil then
                             local n = tonumber(data.devArchiveLimit)
@@ -897,6 +898,7 @@
                             skipDevPrewarm   = ms._skipDevPrewarm or false,
                             devArchiveLimit  = ms._devArchiveLimit or 15,
                             updateChannel    = ms._updateChannel or "stable",
+                            quickReloaded    = ms._quickReloaded or 0,
                             user             = ms._userSettingVals or {},
                             macros = {},
                         }
@@ -1067,7 +1069,17 @@
                     -- Quick Reload: re-executes the macro sandbox, reloads settings
                     -- and theme, then rebinds — all without a full hs.reload().
                     ms.quickReload = function()
-                        -- 1. Tear down existing binds and clear macro/registry state.
+                        -- 0. Mark quick reload in progress so it persists across the reload.
+                        ms._quickReloaded = 1
+                        ms.saveSettings()
+
+                        -- 1. Cancel any in-flight macros and tear down existing binds.
+                        ms.cancelMacros()
+                        ms.keytrack = {}
+                        for _, timer in pairs(ms.running) do
+                            if timer and timer.stop then timer:stop() end
+                        end
+                        ms.running = {}
                         ms.bind.teardown()
                         ms.registry       = { _defs = {}, _defList = {} }
                         ms.bind._wires    = {}
@@ -1145,21 +1157,56 @@
                         ms.cam.updateMultiplier()
                         ms.socdApply()
 
-                        -- 5. Refresh UI if open, then show confirmation.
-                        --    Alert must fire AFTER the refresh so the toast isn't wiped
-                        --    by the panel rebuilding.
-                        if ms.ui and ms.ui._open then
-                            ms.ui.hide()
-                            hs.timer.doAfter(0.15, function()
-                                ms.ui.show()
-                                hs.timer.doAfter(0.05, function()
-                                    ms.playSlot("update")
-                                    ms.alert("Quick Reload complete.", 5, true)
+                        -- 5. Check persistent quick-reload flag: if settings file
+                        --    still carries a 1, the reload succeeded — clear it
+                        --    and show the confirmation toast.
+                        local _qrDone = (ms._quickReloaded == 1)
+                        if _qrDone then
+                            ms._quickReloaded = 0
+                            ms.saveSettings()
+                        end
+
+                        -- 6. Bounce focus through another app so the app watcher
+                        --    re-evaluates _robloxActive and BindValidity on return.
+                        --    Without this, stale state from before the reload can
+                        --    leave macros silently blocked.
+                        local function _finishToast()
+                            if not _qrDone then return end
+                            -- Refresh UI if open, then show confirmation.
+                            --    Alert must fire AFTER the refresh so the toast isn't wiped
+                            --    by the panel rebuilding.
+                            if ms.ui and ms.ui._open then
+                                ms.ui.hide()
+                                hs.timer.doAfter(0.15, function()
+                                    ms.ui.show()
+                                    hs.timer.doAfter(0.05, function()
+                                        ms.playSlot("update")
+                                        ms.alert("Quick Reload complete.", 5, true)
+                                    end)
                                 end)
-                            end)
+                            else
+                                ms.playSlot("update")
+                                ms.alert("Quick Reload complete.", 5, true)
+                            end
+                        end
+
+                        if ms._targetApp then
+                            local _tgt = hs.application.get(ms._targetApp)
+                            if _tgt then
+                                local _hsApp = hs.application.get("Hammerspoon")
+                                if _hsApp then _hsApp:activate() end
+                                hs.timer.doAfter(0.2, function()
+                                    local _refocus = hs.application.get(ms._targetApp) or _tgt
+                                    pcall(function() _refocus:activate() end)
+                                    hs.timer.doAfter(0.15, function()
+                                        _finishToast()
+                                    end)
+                                end)
+                            else
+                                _finishToast()
+                            end
                         else
-                            ms.playSlot("update")
-                            ms.alert("Quick Reload complete.", 5, true)
+                            _finishToast()
                         end
                     end
 
