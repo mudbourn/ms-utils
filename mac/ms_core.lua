@@ -2460,19 +2460,21 @@
                                     return
                                 end
                                 local timestamp = os.date("%Y-%m-%d_%H%M")
+                                ms._updateInProgress = true
                                 local ok = _applyBundleUpdate(tmpExtract, timestamp)
+                                ms._updateInProgress = false
                                 os.execute("rm -rf '" .. tmpExtract .. "'")
                                 if not ok then
                                     ms.alert("Update failed: could not apply bundle.", 5)
                                     return
                                 end
-                                ms.integrity.invalidateCache()
                                 -- Re-seed trusted hash from the new ms_core.lua so the
                                 -- Guardian and auto-seed don't fire on the post-update reload.
                                 local newCoreHash = ms.integrity.hashFile(corePath)
                                 if newCoreHash then
                                     ms.integrity.writeTrustedHash(newCoreHash)
                                 end
+                                ms.integrity.invalidateCache()
                                 -- Write local MANIFEST.
                                 local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
                                 if _mf then
@@ -2511,8 +2513,10 @@
                                 end
                                 local timestamp  = os.date("%Y-%m-%d_%H%M")
                                 local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
+                                ms._updateInProgress = true
                                 local bOk = moveFile(corePath, backupFile)
                                 if not bOk then
+                                    ms._updateInProgress = false
                                     os.remove(tmpPath)
                                     ms.alert("Update failed: could not back up ms_core.lua.", 4)
                                     return
@@ -2520,9 +2524,11 @@
                                 local mOk = moveFile(tmpPath, corePath)
                                 if not mOk then
                                     moveFile(backupFile, corePath)
+                                    ms._updateInProgress = false
                                     ms.alert("Update failed: could not install new ms_core.lua.\nBackup restored.", 5)
                                     return
                                 end
+                                ms._updateInProgress = false
                                 ms.integrity.writeTrustedHash(actualHash)
                                 ms.integrity.invalidateCache()
                                 local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
@@ -2695,8 +2701,10 @@
                                     local actualHash = ms.integrity.hashFile(tmpPath)
                                     local timestamp  = os.date("%Y-%m-%d_%H%M")
                                     local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
+                                    ms._updateInProgress = true
                                     local bOk = moveFile(corePath, backupFile)
                                     if not bOk then
+                                        ms._updateInProgress = false
                                         os.remove(tmpPath)
                                         ms.alert("Update failed: could not back up ms_core.lua.", 4)
                                         return
@@ -2704,9 +2712,11 @@
                                     local mOk = moveFile(tmpPath, corePath)
                                     if not mOk then
                                         moveFile(backupFile, corePath)
+                                        ms._updateInProgress = false
                                         ms.alert("Update failed: could not install.\nBackup restored.", 5)
                                         return
                                     end
+                                    ms._updateInProgress = false
                                     ms.integrity.writeTrustedHash(actualHash)
                                     ms.integrity.invalidateCache()
                                     _writeTestingRun(buildNum)
@@ -2737,19 +2747,21 @@
                                 return
                             end
                             local timestamp = os.date("%Y-%m-%d_%H%M")
+                            ms._updateInProgress = true
                             local ok = _applyBundleUpdate(tmpExtract, timestamp)
+                            ms._updateInProgress = false
                             os.execute("rm -rf '" .. tmpExtract .. "'")
                             if not ok then
                                 ms.alert("Update failed: could not apply bundle.", 5)
                                 return
                             end
-                            ms.integrity.invalidateCache()
                             -- Re-seed trusted hash from the new ms_core.lua so the
                             -- Guardian and auto-seed don't fire on the post-update reload.
                             local newCoreHash = ms.integrity.hashFile(corePath)
                             if newCoreHash then
                                 ms.integrity.writeTrustedHash(newCoreHash)
                             end
+                            ms.integrity.invalidateCache()
                             _writeTestingRun(buildNum)
                             ms.alert("Updated to build " .. buildNum .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
                             hs.timer.doAfter(3, function() hs.reload() end)
@@ -8610,6 +8622,7 @@
             -- control immediately without requiring a manual check.
             _G._integrityPollTimer = hs.timer.doEvery(5, function()
                 if loadfinish ~= 1 then return end  -- skip startup grace period
+                if ms._updateInProgress then return end  -- skip during updates
                 -- Non-blocking: returns the cached value immediately and kicks off a
                 -- background hs.task hash when the 60-second window expires.
                 -- hs.reload() on mismatch is called inside the task callback.
