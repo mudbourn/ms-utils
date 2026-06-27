@@ -6594,6 +6594,8 @@
 
                     setMacroEnabled = function(data)
                         if not data.id then return end
+                        local def = ms.registry._defs[data.id]
+                        if def and def.system then return end  -- system binds cannot be disabled
                         ms.binds[data.id] = (data.value == true)
                         ms.saveSettings()
                         ms.bind.rebind()

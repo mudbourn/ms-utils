@@ -1744,7 +1744,7 @@
                     r.appendChild(h("div", { cls: "row-label" }, m.label));
                     if (m.bind)
                         r.appendChild(h("span", { cls: "pill" }, m.bind));
-                    if (m.rebindable !== false) {
+                    if (m.rebindable !== false && m.group !== "system") {
                         r.appendChild(
                             toggle(m.enabled, (e) => {
                                 sendToHost({
