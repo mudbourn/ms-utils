@@ -33,6 +33,8 @@ if [ -f "$SCRIPT_DIR/ms_core.lua" ] && [ -f "$SCRIPT_DIR/init.lua" ]; then
     echo "❶  Copying local repo to ~/.hammerspoon/ …"
     mkdir -p "$HS"
     cp -R "$SCRIPT_DIR"/* "$HS/"
+    # MANIFEST.json lives at the repo root (one level up from mac/)
+    [ -f "$SCRIPT_DIR/../MANIFEST.json" ] && cp "$SCRIPT_DIR/../MANIFEST.json" "$HS/"
     rm -f "$HS/install.sh"
     echo "   ✓ Files copied from $SCRIPT_DIR"
 else

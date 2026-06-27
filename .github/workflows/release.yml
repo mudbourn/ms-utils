@@ -53,21 +53,15 @@ jobs:
             cp -R profiles/Default "$DIST/profiles/"
           fi
           rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
-          ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
-          tar czf "$ARCHIVE" "$DIST"
 
-          # Legacy hash: ms_core.lua only
+          # Legacy hash: ms_core.lua only (computed before MANIFEST exists in archive)
           LEGACY_SHA=$(sha256sum mac/ms_core.lua | awk '{print $1}')
-          # Bundle hash: the tar.gz archive
-          BUNDLE_SHA=$(sha256sum "$ARCHIVE" | awk '{print $1}')
 
-          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "archive=mudscript-macos-${VERSION}.tar.gz" >> "$GITHUB_OUTPUT"
           echo "legacy_sha=$LEGACY_SHA" >> "$GITHUB_OUTPUT"
-          echo "bundle_sha=$BUNDLE_SHA" >> "$GITHUB_OUTPUT"
+          echo "dist=$DIST" >> "$GITHUB_OUTPUT"
 
-          echo "Archive: $ARCHIVE"
           echo "Legacy SHA (ms_core.lua): $LEGACY_SHA"
-          echo "Bundle SHA (tar.gz):      $BUNDLE_SHA"
 
       - name: Stamp MANIFEST.json
         id: stamp
@@ -76,9 +70,32 @@ jobs:
         run: |
           VERSION="${{ inputs.version }}"
           LEGACY_SHA="${{ steps.build.outputs.legacy_sha }}"
-          BUNDLE_SHA="${{ steps.build.outputs.bundle_sha }}"
+          DIST="${{ steps.build.outputs.dist }}"
           LEGACY_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua"
           BUNDLE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.tar.gz"
+
+          # Write a placeholder MANIFEST (no bundle hash yet) to compute the archive hash.
+          jq -n \
+            --arg version "$VERSION" \
+            --arg sha256  "$LEGACY_SHA" \
+            --arg url     "$LEGACY_URL" \
+            --arg bundle_url  "$BUNDLE_URL" \
+            '{
+              "version": $version,
+              "sha256": $sha256,
+              "url": $url,
+              "bundle": {"url": $bundle_url, "sha256": ""},
+              "signature": ""
+            }' \
+            > MANIFEST.json
+
+          # Include MANIFEST in the archive so auto-seed works on first load.
+          cp MANIFEST.json "$DIST/"
+
+          # Build archive, compute bundle hash, then re-stamp with real values.
+          ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
+          tar czf "$ARCHIVE" "$DIST"
+          BUNDLE_SHA=$(sha256sum "$ARCHIVE" | awk '{print $1}')
 
           jq -n \
             --arg version "$VERSION" \
@@ -109,8 +126,16 @@ jobs:
             echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
           fi
 
+          # Rebuild archive with the final signed MANIFEST.
+          cp MANIFEST.json "$DIST/"
+          tar czf "$ARCHIVE" "$DIST"
+
+          echo "bundle_sha=$BUNDLE_SHA" >> "$GITHUB_OUTPUT"
+
           echo "MANIFEST.json stamped for v$VERSION"
-          cat MANIFEST.json
+          echo "Archive: $ARCHIVE"
+          echo "Legacy SHA (ms_core.lua): $LEGACY_SHA"
+          echo "Bundle SHA (tar.gz):      $BUNDLE_SHA"
 
       - name: Commit MANIFEST.json
         run: |
