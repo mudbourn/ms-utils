@@ -9,6 +9,21 @@ local _obj = {
     local _home      = os.getenv("HOME")
     local _corePath  = _home .. "/.hammerspoon/ms_core.lua"
     local _trustPath = _home .. "/.hammerspoon/data/.ms_trusted_hash"
+    local _dataPath  = _home .. "/.hammerspoon/data/"
+
+    -- RSA-2048 public key for MANIFEST.json signature verification.
+    -- Must match ms._updatePublicKey in ms_core.lua.
+    local _publicKey = [[
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pyxWISHUScKsmK0fyqA
+QWUU0nzYEVpRYD+kRkZsL5AGqpjfNqfOky5bacE1jPXgu9LGz+b1pq1tuyZotvK/
+FrMeQDCmGWiu5RXAqsyg0iN1c1CHSvWAT40xi6g54u9ot9LMfzmBETlwWd4QoXOA
+OnT3KW0aia1EoyUjjNIRk6iv6pxi+BjHnGKoID6pAl9de+WASt/DETgCuKhQ7o/Y
+iGn43A9ZutKUfkV+Muu1RcTy62zbXcQrzK3cyLl0M7gfTm0YWPzaf+d3ATNnq/9j
+/952QfmXjVSGhU3EBxlEM6NWstNSNuaTWSMCcbcH+va/AMOHK1rRKQ3IOdzjYcQm
+YQIDAQAB
+-----END PUBLIC KEY-----
+]]
 -- END --
 
 -- Helpers --
@@ -34,6 +49,49 @@ local _obj = {
 
         return nil
     end
+
+    -- Verify MANIFEST.json RSA-2048 signature.  Returns true only if the
+    -- signature is present and validates against the embedded public key.
+    -- A missing or empty signature is treated as unverified (returns false)
+    -- because unsigned manifests can be forged by anyone with file access.
+    local function _verifyManifestSignature(manifest)
+        if not manifest.signature or manifest.signature == "" then
+            return false  -- unsigned manifest — not trustworthy
+        end
+        -- The release workflow signs the bundle sha256 (or legacy sha256).
+        local signTarget = (manifest.bundle and manifest.bundle.sha256 ~= "")
+            and manifest.bundle.sha256 or manifest.sha256
+        if not signTarget or signTarget == "" then return false end
+
+        local _keyPath = _dataPath .. "_guardian_pub.pem"
+        local _sigPath = _dataPath .. "_guardian_sig.bin"
+        local _msgPath = _dataPath .. "_guardian_msg.bin"
+
+        os.execute("mkdir -p '" .. _dataPath .. "'")
+
+        local _kf = io.open(_keyPath, "w")
+        if _kf then _kf:write(_publicKey); _kf:close() end
+
+        local _sf = io.open(_sigPath .. ".b64", "w")
+        if _sf then _sf:write(manifest.signature); _sf:close() end
+        hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
+        os.remove(_sigPath .. ".b64")
+
+        local _mf = io.open(_msgPath, "w")
+        if _mf then _mf:write(signTarget:lower()); _mf:close() end
+
+        local _out, _ok = hs.execute(
+            "openssl dgst -sha256 -verify '" .. _keyPath ..
+            "' -signature '" .. _sigPath ..
+            "' '" .. _msgPath .. "' 2>&1"
+        )
+
+        os.remove(_keyPath)
+        os.remove(_sigPath)
+        os.remove(_msgPath)
+
+        return _ok and _out and _out:find("Verified OK") ~= nil
+    end
 -- END --
 
 -- Integrity Check --
@@ -45,6 +103,31 @@ local _obj = {
         print("Guardian: could not hash ms_core.lua (shasum unavailable?); skipping check.")
 
     elseif _trusted and _cur ~= _trusted then
+        -- Hash mismatch. Check if MANIFEST.json confirms the current file
+        -- is a legitimate update (sha256 matches AND signature is valid).
+        -- If so, auto-seed and pass through — no user intervention needed.
+        local _manifestOk = false
+        do
+            local _mPath = _home .. "/.hammerspoon/MANIFEST.json"
+            local _mf = io.open(_mPath, "r")
+            if _mf then
+                local _raw = _mf:read("*all"); _mf:close()
+                local _ok, _manifest = pcall(hs.json.decode, _raw)
+                if _ok and type(_manifest) == "table"
+                    and type(_manifest.sha256) == "string"
+                    and #_manifest.sha256 == 64
+                    and _manifest.sha256:lower() == _cur:lower()
+                    and _verifyManifestSignature(_manifest) then
+                    -- MANIFEST confirms the current file is legit and signed. Auto-seed.
+                    local _wf = io.open(_trustPath, "w")
+                    if _wf then _wf:write(_cur .. "\n"); _wf:close() end
+                    _manifestOk = true
+                    print("Guardian: hash mismatch but signed MANIFEST.json confirms update — auto-seeded.")
+                end
+            end
+        end
+
+        if not _manifestOk then
         _blocked = true
 
         pcall(function()
@@ -224,6 +307,7 @@ local _obj = {
                 os.remove(_trustPath); hs.reload()
             end
         end
+        end -- if not _manifestOk
     end
 -- END --
 
