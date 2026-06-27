@@ -1781,6 +1781,7 @@
                         end
                         ms.playSlot("update")
                         ms._profilesDirty = true
+                        ms.ui.refresh()
                         if roblox then pcall(function() roblox:activate() end) end
                         hs.timer.doAfter(0.2, function()
                             ms.alert("Profile \"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles.", 5, true)
@@ -1803,6 +1804,89 @@
                     else
                         _commit()
                     end
+                end
+
+                local function saveAsNewProfile()
+                    local name = ms.macroMeta and ms.macroMeta.name
+                    if not name or name == "" then
+                        ms.alert("Cannot save: current profile has no name.\nSet ms.macroMeta = { name = \"...\" } in your macros file.", 5)
+                        return
+                    end
+                    local folderName = sanitizeName(name)
+                    local existing = getProfiles()
+                    for _, p in ipairs(existing) do
+                        if p == folderName then
+                            ms.alert("A profile named \"" .. name .. "\" already exists.\nRename ms.macroMeta.name first.", 4)
+                            return
+                        end
+                    end
+                    local sq = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+                    hs.fs.mkdir(profilesPath)
+                    hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
+                    if not hs.fs.attributes(profilesPath .. folderName) then
+                        ms.alert("Could not create profile folder.", 3)
+                        return
+                    end
+                    local _, st = hs.execute("/bin/cp " .. sq(macrosPath) .. " " .. sq(profilesPath .. folderName .. "/ms_macros.lua"))
+                    if st ~= true then
+                        ms.alert("Could not copy macros file.", 3)
+                        return
+                    end
+                    if hs.fs.attributes(jsonPath) then
+                        hs.execute("/bin/cp " .. sq(jsonPath) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
+                    end
+                    if hs.fs.attributes(defaultPath) then
+                        hs.execute("/bin/cp " .. sq(defaultPath) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
+                    end
+                    if hs.fs.attributes(themePath) then
+                        hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
+                    end
+                    ms.playSlot("update")
+                    ms._profilesDirty = true
+                    ms.ui.refresh()
+                    hs.timer.doAfter(0.2, function()
+                        ms.alert("Saved as \"" .. name .. "\".\nSwitch to it from Settings \xe2\x86\x92 Profiles.", 4, true)
+                    end)
+                end
+
+                local function saveCurrentProfile()
+                    local name = ms.macroMeta and ms.macroMeta.name
+                    if not name or name == "" then
+                        ms.alert("Cannot save: current profile has no name.\nSet ms.macroMeta = { name = \"...\" } in your macros file.", 5)
+                        return
+                    end
+                    local folderName = sanitizeName(name)
+                    local existing = getProfiles()
+                    local found = false
+                    for _, p in ipairs(existing) do
+                        if p == folderName then found = true; break end
+                    end
+                    if not found then
+                        ms.alert("No saved profile named \"" .. name .. "\" found.\nUse Save as New Profile instead.", 4)
+                        return
+                    end
+                    local sq = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+                    local dst = profilesPath .. folderName .. "/ms_macros.lua"
+                    local _, st = hs.execute("/bin/cp " .. sq(macrosPath) .. " " .. sq(dst))
+                    if st ~= true then
+                        ms.alert("Could not update profile.", 3)
+                        return
+                    end
+                    if hs.fs.attributes(jsonPath) then
+                        hs.execute("/bin/cp " .. sq(jsonPath) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
+                    end
+                    if hs.fs.attributes(defaultPath) then
+                        hs.execute("/bin/cp " .. sq(defaultPath) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
+                    end
+                    if hs.fs.attributes(themePath) then
+                        hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
+                    end
+                    ms.playSlot("update")
+                    ms._profilesDirty = true
+                    ms.ui.refresh()
+                    hs.timer.doAfter(0.2, function()
+                        ms.alert("Profile \"" .. name .. "\" updated.", 3, true)
+                    end)
                 end
 
                 local function exportProfilePkg()
@@ -3430,6 +3514,22 @@
                         end
                         table.insert(sub, { title = "-" })
                         table.insert(sub, {
+                            title = "Save as New Profile...",
+                            fn    = function() saveAsNewProfile() end,
+                        })
+                        -- Disable "Save Current Profile" unless the active profile name
+                        -- matches an existing saved profile.
+                        local activeFolder = currentName and sanitizeName(currentName) or ""
+                        local hasMatching = false
+                        for _, p in ipairs(profiles) do
+                            if p == activeFolder then hasMatching = true; break end
+                        end
+                        table.insert(sub, {
+                            title    = "Save Current Profile",
+                            disabled = not hasMatching,
+                            fn       = hasMatching and function() saveCurrentProfile() end or nil,
+                        })
+                        table.insert(sub, {
                             title = "Import Profile...",
                             fn    = function() importProfile() end,
                         })
@@ -3705,20 +3805,22 @@
 
                     -- Main menu --
 
-                    local _menuItems = {
-                        { title = "Macros: " .. (BindValidity == 1 and "ENABLED" or "DISABLED"), disabled = true },
-                        { title = "-" },
-                        { title = "Enable Macros ( Enter )",  fn = function() ms.setMacros(1) end },
-                        { title = "Disable Macros ( / )",     fn = function() ms.setMacros(0) end },
-                        { title = "-" },
-                        { title = "Reload Macros ( alt+[ )",   fn = function() hs.reload() end },
-                        { title = "Reload Settings ( alt+] )", fn = function() ms.reloadSettings() end },
-                        { title = "-" },
-                        { title = "Profiles",  menu = buildProfilesSubmenu() },
-                        { title = "Settings",  menu = buildSettingsSubmenu() },
-                        { title = "Developer", menu = buildDeveloperSubmenu() },
-                        { title = "Help",       menu = buildHelpSubmenu() },
-                    }
+                    local function _buildMenuItems()
+                        return {
+                            { title = "Macros: " .. (BindValidity == 1 and "ENABLED" or "DISABLED"), disabled = true },
+                            { title = "-" },
+                            { title = "Enable Macros ( Enter )",  fn = function() ms.setMacros(1) end },
+                            { title = "Disable Macros ( / )",     fn = function() ms.setMacros(0) end },
+                            { title = "-" },
+                            { title = "Reload Macros ( alt+[ )",   fn = function() hs.reload() end },
+                            { title = "Reload Settings ( alt+] )", fn = function() ms.reloadSettings() end },
+                            { title = "-" },
+                            { title = "Profiles",  menu = buildProfilesSubmenu() },
+                            { title = "Settings",  menu = buildSettingsSubmenu() },
+                            { title = "Developer", menu = buildDeveloperSubmenu() },
+                            { title = "Help",       menu = buildHelpSubmenu() },
+                        }
+                    end
                     -- Wrap every fn so selecting an item reopens the menu,
                     -- unless ms._menuOpen was cleared (Escape / Alt+P to close).
                     local function _wrapFns(items)
@@ -3757,8 +3859,9 @@
                         if ms._menuOpen then _wrapFns(soundItems) end
                         return soundItems
                     end
-                    if ms._menuOpen then _wrapFns(_menuItems) end
-                    return _menuItems
+                    local freshItems = _buildMenuItems()
+                    if ms._menuOpen then _wrapFns(freshItems) end
+                    return freshItems
                 end
             -- END Settings Menu --
 
@@ -5933,9 +6036,11 @@
                     end,
 
                     -- importProfile() drives its own native file picker / alerts.
-                    importProfile    = function() importProfile() end,
-                    importProfilePkg = function() importProfilePkg() end,
-                    exportProfilePkg = function() exportProfilePkg() end,
+                    importProfile     = function() importProfile() end,
+                    importProfilePkg  = function() importProfilePkg() end,
+                    exportProfilePkg  = function() exportProfilePkg() end,
+                    saveAsNewProfile  = function() saveAsNewProfile() end,
+                    saveCurrentProfile = function() saveCurrentProfile() end,
 
                     importSounds = function()
                         ms.playSlot("alert")

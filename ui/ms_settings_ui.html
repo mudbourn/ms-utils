@@ -513,6 +513,11 @@
             .btn-action.danger:hover {
                 background: #2a0a0a;
             }
+            .btn-action.disabled {
+                opacity: 0.35;
+                pointer-events: none;
+                cursor: default;
+            }
 
             /* ── Sound picker ────────────────────────────────────────────────── */
             .sound-picker-wrap {
@@ -2431,6 +2436,43 @@
 
                 body.appendChild(divider());
                 const hasOthers = profiles.some((n) => n !== current);
+                const nameExists = current && profiles.some((n) => n === current);
+                body.appendChild(
+                    btnRow(
+                        (() => {
+                            const b = h(
+                                "button",
+                                {
+                                    cls: "btn-action" + (nameExists ? " disabled" : ""),
+                                    onmouseenter: () => playSlot("hover"),
+                                    onclick: () => {
+                                        if (nameExists) return;
+                                        playSlot("interact");
+                                        sendToHost({ action: "saveAsNewProfile" });
+                                    },
+                                },
+                                "Save as New Profile",
+                            );
+                            return b;
+                        })(),
+                        (() => {
+                            const b = h(
+                                "button",
+                                {
+                                    cls: "btn-action" + (!nameExists ? " disabled" : ""),
+                                    onmouseenter: () => playSlot("hover"),
+                                    onclick: () => {
+                                        if (!nameExists) return;
+                                        playSlot("interact");
+                                        sendToHost({ action: "saveCurrentProfile" });
+                                    },
+                                },
+                                "Save Current Profile",
+                            );
+                            return b;
+                        })(),
+                    ),
+                );
                 body.appendChild(
                     btnRow(
                         actionBtn("Import Profile", "", () =>
