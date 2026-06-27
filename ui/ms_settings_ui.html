@@ -258,6 +258,44 @@
                 background: var(--border);
                 margin: 2px 0;
             }
+            .reload-dd-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 0 8px;
+            }
+            .reload-dd-row:hover {
+                background: var(--hover);
+            }
+            .reload-dd-row .reload-dd-item {
+                flex: 1;
+                padding: 6px 4px;
+            }
+            .reload-dd-row .reload-dd-item:hover {
+                background: transparent;
+            }
+            .qr-check {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border: 1.5px solid var(--text2);
+                font-size: 10px;
+                line-height: 1;
+                color: transparent;
+                cursor: pointer;
+                flex-shrink: 0;
+                transition: border-color 0.12s, background 0.12s, color 0.12s;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+            .qr-check.checked {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: var(--bg);
+            }
 
             /* ── Scroll area ─────────────────────────────────────────────────── */
             #scroll {
@@ -948,13 +986,25 @@
                             document.getElementById('reloadDropdown').classList.toggle('open');
                         "
                     >
-                        ↺ Full Reload ▾
+                        ↺ Reload Options ▾
                     </button>
                     <div class="reload-dd-menu" id="reloadMenu">
-                        <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
-                        <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
-                        <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
-                        <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
+                        <div class="reload-dd-row">
+                            <span class="qr-check checked" data-qr="macros" onclick="event.stopPropagation(); toggleQR(this);">✓</span>
+                            <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
+                        </div>
+                        <div class="reload-dd-row">
+                            <span class="qr-check checked" data-qr="theme" onclick="event.stopPropagation(); toggleQR(this);">✓</span>
+                            <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
+                        </div>
+                        <div class="reload-dd-row">
+                            <span class="qr-check checked" data-qr="settings" onclick="event.stopPropagation(); toggleQR(this);">✓</span>
+                            <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
+                        </div>
+                        <div class="reload-dd-row">
+                            <span class="qr-check checked" data-qr="ui" onclick="event.stopPropagation(); toggleQR(this);">✓</span>
+                            <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
+                        </div>
                         <div class="reload-dd-sep"></div>
                         <button class="reload-dd-item reload-dd-full" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadAll' }); document.getElementById('reloadDropdown').classList.remove('open');">All (hs.reload)</button>
                     </div>
@@ -1096,6 +1146,27 @@
             document.addEventListener("keydown", (e) => {
                 if (e.key === "Escape") { closeCtxMenu(); closeReloadDropdown(); }
             });
+
+            // ── Quick-Reload option checkboxes ──────────────────────────────
+            function toggleQR(el) {
+                const key = el.dataset.qr;
+                if (!key) return;
+                const now = !el.classList.contains("checked");
+                el.classList.toggle("checked", now);
+                el.textContent = now ? "✓" : "";
+                playSlot("interact");
+                sendToHost({ action: "setQROption", key: key, value: now });
+            }
+            // Sync checkbox states from the Lua state object.
+            function syncQRChecks(qr) {
+                if (!qr) return;
+                document.querySelectorAll(".qr-check[data-qr]").forEach(el => {
+                    const key = el.dataset.qr;
+                    const on = qr[key] !== false;
+                    el.classList.toggle("checked", on);
+                    el.textContent = on ? "✓" : "";
+                });
+            }
 
             // ── Bridge ─────────────────────────────────────────────────────────
             function sendToHost(msg) {
@@ -2958,6 +3029,7 @@
                 dot.className = enabled ? "" : "off";
                 text.textContent =
                     "Macros: " + (enabled ? "ENABLED" : "DISABLED");
+                syncQRChecks(S.qrOptions);
                 render();
             }
 

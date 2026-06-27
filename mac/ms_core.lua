@@ -104,6 +104,7 @@
             ms._targetApp     = "Roblox"                   -- target application name; change via ms.setTargetApp()
             ms._targetHandle  = hs.application.get(ms._targetApp)  -- cached handle, refreshed on reload
             ms._robloxActive  = false  -- true while target app is focused
+            ms._qrOptions = { macros = true, theme = true, settings = true, ui = true }
             ms.getTargetWin = function()
                 local app = hs.application.get(ms._targetApp)
                 if not app then return nil end
@@ -766,6 +767,13 @@
                             ms.importedSounds = _is
                         end
                         if data.quickReloaded ~= nil then ms._quickReloaded = tonumber(data.quickReloaded) or 0 end
+                        if data.qrOptions and type(data.qrOptions) == "table" then
+                            local qr = ms._qrOptions
+                            if data.qrOptions.macros   ~= nil then qr.macros   = (data.qrOptions.macros   == true) end
+                            if data.qrOptions.theme    ~= nil then qr.theme    = (data.qrOptions.theme    == true) end
+                            if data.qrOptions.settings ~= nil then qr.settings = (data.qrOptions.settings == true) end
+                            if data.qrOptions.ui       ~= nil then qr.ui       = (data.qrOptions.ui       == true) end
+                        end
                         if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
                         if data.devArchiveLimit ~= nil then
                             local n = tonumber(data.devArchiveLimit)
@@ -899,6 +907,7 @@
                             devArchiveLimit  = ms._devArchiveLimit or 15,
                             updateChannel    = ms._updateChannel or "stable",
                             quickReloaded    = ms._quickReloaded or 0,
+                            qrOptions        = ms._qrOptions or { macros = true, theme = true, settings = true, ui = true },
                             user             = ms._userSettingVals or {},
                             macros = {},
                         }
@@ -1062,34 +1071,105 @@
                         ms.cam.updateAnchor()
                         ms.cam.updateMultiplier()
                         ms.socdApply()
-                        ms.playSlot("update")
-                        ms.alert("Settings reloaded.", 5, true)
+                        if not ms._quickReloading then
+                            ms.playSlot("update")
+                            ms.alert("Settings reloaded.", 5, true)
+                        end
                     end
 
-                    -- Quick Reload: delegates to the same code path as the
-                    -- in-panel "Macros" reload button, plus theme and the
-                    -- persistent reload flag.
+                    -- Full UI rebuild: teardown macros, re-exec, load settings
+                    -- + theme, rebind, camera, SOCD.  Silent when called from
+                    -- ms.quickReload() via the _quickReloading flag.
+                    ms.reloadUI = function()
+                        ms.bind.teardown()
+                        ms.registry       = { _defs = {}, _defList = {} }
+                        ms.bind._wires    = {}
+                        ms.bind._autoCount = 0
+                        ms.macroMeta       = nil
+                        ms._userSettingDefs  = {}
+                        ms._userSettingIndex = {}
+                        ms._userSettingVals  = {}
+
+                        local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
+                        local af = io.open(macrosPath, "r")
+                        if af then
+                            local rawSrc = af:read("*all"); af:close()
+                            local chunk = load(rawSrc, "@ms_macros.lua", "bt", ms._macroSandbox)
+                            if chunk then pcall(chunk) end
+                        end
+                        for _, id in ipairs(ms.registry._defList) do
+                            local def = ms.registry._defs[id]
+                            if def and not def.sub and ms.binds[id] == nil then
+                                ms.binds[id] = def.enabled
+                            end
+                        end
+                        ms._systemActions = {}
+                        if ms._userSettingIndex["showTamperWarning"] then
+                            ms._systemActions["showTamperWarning"] = function()
+                                ms.showGuardian()
+                            end
+                        end
+                        ms.loadSettings()
+                        ms.loadTheme()
+                        ms.bind.rebind()
+                        ms.cam.updateAnchor()
+                        ms.cam.updateMultiplier()
+                        ms.socdApply()
+                        if not ms._quickReloading then
+                            ms.playSlot("update")
+                        end
+                        ms.ui.hide()
+                        hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                    end
+
+                    -- Quick Reload: fires selected functions sequentially (no overlap),
+                    -- then unfocuses/refocuses the target app, then toasts.
                     ms.quickReload = function()
                         -- 0. Mark quick reload in progress so it persists across the reload.
                         ms._quickReloaded = 1
+                        ms._quickReloading = true   -- suppress per-module toasts
                         ms.saveSettings()
 
-                        -- 1. Reload macros + settings + rebind (proven path).
-                        ms.ui.reloadMacros()
+                        local qr = ms._qrOptions or { macros = true, theme = true, settings = true, ui = true }
 
-                        -- 2. Reload theme on top.
-                        ms.loadTheme()
+                        -- 1. Reload macros.
+                        if qr.macros then ms.ui.reloadMacros() end
 
-                        -- 3. Clear the persistent flag on success.
+                        -- 2. Reload theme.
+                        if qr.theme then ms.loadTheme() end
+
+                        -- 3. Reload settings (rebind, camera, SOCD).
+                        if qr.settings then ms.reloadSettings() end
+
+                        -- 4. Full UI rebuild.
+                        if qr.ui then ms.reloadUI() end
+
+                        -- Done with module reloads — clear the suppression flag.
+                        ms._quickReloading = false
+
+                        -- 5. Clear the persistent flag on success.
                         if ms._quickReloaded == 1 then
                             ms._quickReloaded = 0
                             ms.saveSettings()
                         end
 
-                        -- 4. Toast (reloadMacros already did ui.hide/show).
-                        hs.timer.doAfter(0.25, function()
-                            ms.playSlot("update")
-                            ms.alert("Quick Reload complete.", 5, true)
+                        -- 6. Unfocus → refocus the target app so it picks up
+                        --    the new macro/key state, then toast.
+                        hs.timer.doAfter(0.5, function()
+                            local app = ms._targetApp and hs.application.get(ms._targetApp)
+                            if app then
+                                app:hide()
+                                hs.timer.doAfter(0.15, function()
+                                    app:activate()
+                                    hs.timer.doAfter(0.3, function()
+                                        ms.playSlot("update")
+                                        ms.alert("Quick Reload complete.", 5, true)
+                                    end)
+                                end)
+                            else
+                                ms.playSlot("update")
+                                ms.alert("Quick Reload complete.", 5, true)
+                            end
                         end)
                     end
 
@@ -5951,6 +6031,7 @@
                     preloadDevTools         = not (ms._skipDevPrewarm or false),
                     devArchiveLimit         = ms._devArchiveLimit or 15,
                     updateChannel           = ms._updateChannel or "stable",
+                    qrOptions               = ms._qrOptions or { macros = true, theme = true, settings = true, ui = true },
                     theme                   = themeOut,
                 }
             end
@@ -6091,8 +6172,13 @@
                         ms.cam.updateAnchor()
                         ms.cam.updateMultiplier()
                         ms.socdApply()
-                        ms.playSlot("update")
-                        ms.alert("Macros reloaded.", 4, true)
+                        -- When called from ms.quickReload(), suppress the
+                        -- per-module toast — quickReload shows one unified
+                        -- toast at the end instead.
+                        if not ms._quickReloading then
+                            ms.playSlot("update")
+                            ms.alert("Macros reloaded.", 4, true)
+                        end
                         ms.ui.hide()
                         hs.timer.doAfter(0.15, function() ms.ui.show() end)
                     end,
@@ -6117,53 +6203,21 @@
                     end,
 
                     reloadUI = function()
-                        -- Full rebuild hidden from view: reload macros, settings,
-                        -- and theme, then tear down and re-show the panel so the
-                        -- user never sees the intermediate build steps.
-                        ms.bind.teardown()
-                        ms.registry       = { _defs = {}, _defList = {} }
-                        ms.bind._wires    = {}
-                        ms.bind._autoCount = 0
-                        ms.macroMeta       = nil
-                        ms._userSettingDefs  = {}
-                        ms._userSettingIndex = {}
-                        ms._userSettingVals  = {}
-
-                        local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
-                        local af = io.open(macrosPath, "r")
-                        if af then
-                            local rawSrc = af:read("*all"); af:close()
-                            local chunk = load(rawSrc, "@ms_macros.lua", "bt", ms._macroSandbox)
-                            if chunk then pcall(chunk) end
-                        end
-                        for _, id in ipairs(ms.registry._defList) do
-                            local def = ms.registry._defs[id]
-                            if def and not def.sub and ms.binds[id] == nil then
-                                ms.binds[id] = def.enabled
-                            end
-                        end
-                        ms._systemActions = {}
-                        if ms._userSettingIndex["showTamperWarning"] then
-                            ms._systemActions["showTamperWarning"] = function()
-                                ms.showGuardian()
-                            end
-                        end
-                        ms.loadSettings()
-                        ms.loadTheme()
-                        ms.bind.rebind()
-                        ms.cam.updateAnchor()
-                        ms.cam.updateMultiplier()
-                        ms.socdApply()
-
-                        ms.playSlot("update")
-                        ms.ui.hide()
-                        hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                        ms.reloadUI()
                     end,
 
                     reloadAll = function() hs.reload() end,
 
                     quickReload = function()
                         ms.quickReload()
+                    end,
+
+                    setQROption = function(data)
+                        if data.key and ms._qrOptions then
+                            ms._qrOptions[data.key] = (data.value == true)
+                            ms.saveSettings()
+                            ms.playSlot("interact")
+                        end
                     end,
 
                     setPreloadDevTools = function(data)
