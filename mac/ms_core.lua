@@ -1123,7 +1123,7 @@
                     end
 
                     -- Quick Reload: fires selected functions sequentially (no overlap),
-                    -- then unfocuses/refocuses the target app, then toasts.
+                    -- closes the settings UI, unfocuses/refocuses the target app, then toasts.
                     ms.quickReload = function()
                         -- 0. Mark quick reload in progress so it persists across the reload.
                         ms._quickReloaded = 1
@@ -1153,7 +1153,10 @@
                             ms.saveSettings()
                         end
 
-                        -- 6. Unfocus → refocus the target app so it picks up
+                        -- 6. Close the settings UI if open.
+                        if ms.ui._open then ms.ui.hide() end
+
+                        -- 7. Unfocus → refocus the target app so it picks up
                         --    the new macro/key state, then toast.
                         hs.timer.doAfter(0.5, function()
                             local app = ms._targetApp and hs.application.get(ms._targetApp)
