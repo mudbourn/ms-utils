@@ -179,6 +179,7 @@
         local ThrowTrickSound    = SoundLib .. "ThrowTrick.wav"
         local SpawnAltSound      = SoundLib .. "SpawnAlt.wav"
         local ThrowTrickEndSound = SoundLib .. "ThrowTrickEnd.wav"
+        local ActionSpammerSound = SoundLib .. "TimeSlower.wav"
 
 
         local getD1 = function()
@@ -567,6 +568,7 @@
 
         -- Action Spammer --
             local ActionSpammerFunction = ms.fn(function()
+                ms.sound(ActionSpammerSound, true)
                 local d3 = getD3()
                 ms.type("z")
                 ms.wait(10)
@@ -640,22 +642,6 @@
                 sub   = "frameDump",
                 label = "Load Second Account",
                 mod   = "alt",
-            })
-        -- END --
-
-        -- Mouse Position Grabber --
-            ms.bind.define("mousePos", function()
-                local x, y = ms.mousePos()
-                ms.alert(string.format("Mouse: %.0f, %.0f", x, y), 3)
-                print(string.format("Mouse position: %.0f, %.0f", x, y))
-            end, {
-                group   = "optional",
-                label   = "Get Mouse Position",
-                default = {
-                    type = "key",
-                    mods = {},
-                    key  = "f8",
-                },
             })
         -- END --
     -- END Macro Functions --
