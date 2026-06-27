@@ -1,6 +1,6 @@
 {
-  "version": "1.2.5",
-  "sha256": "7ffc2c85d1e48443c947944021f1297de38d59fd33e08cc242d2307baeda561f",
+  "version": "1.2.6",
+  "sha256": "867bc96a3f7a49795412e621af67c890bc952c75f779cd70025ac4c78a5abd1e",
   "url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua",
-  "signature": "LAm1e+9zqXpbbmlg+ODKXf5NPthuLaSG5JPrDk7lY8nvqYz4fjf17Ex4gFLN2Tno6LrwTHzHjzTHAVLhnfcPgvcBqPDLoWXIckveXetylGmWl4jWaDMXvDslmoYtPYqlCmLDIuV+58Nto8jnw/ee9R4iLV1vTi7hyokhQsKOQUu+hqhGsUCd2IL1kEfNBWNF3L8nC/qsh5sqC8De82rYqNeJcsxcnxuXbHw6qgAUInTlfddpxs2XCoJIOCgIZ7u0H8Z901WwHIYCmw9l4BHNQcK1f6+5PJKfrTEZEnL6eohUoeC5fobhc17B+fn7U9uM27wse5+qm+h6mb/iSCBVHQ=="
+  "signature": "kLY7EJXv1+Rq5Yr368NPL/9vMlkkPbkYxt7ek6LxxRw/4eLVOqG7tc2AinHOCitpWIQ8YWFqEdg6U5VooPrQ9xKqSLBIeuCzpWQLom5HX51LRxR/l8O68YrtcI1qpC0spB5V7++r9DryyFibWx3a1m7xC70jI46lEk1769B5mqXaQOIAPxdxm3YKcQVrroDV/FvYT9TY9MHlxlNRAN1UxGQy7NgCF13AMUWn8JjP5jc7GrKbW9lDiJX9JHFeQ6rke+QefIAIjhrY0CXryqKgwp7WDKcylZrNTuIni2UNq5FPn26Ob1GO0JKAXstbwJkp9V5QjdH1/DMYApzYP6FwrA=="
 }
