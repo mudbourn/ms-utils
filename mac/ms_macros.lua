@@ -574,16 +574,7 @@
                     ms.settings.get("spamMoveX"),
                     ms.settings.get("spamMoveY")
                 )
-                ms.wait(3)
-                ms.Mouse(Click, Left, WindowTL,
-                    ms.settings.get("spamMoveX"),
-                    ms.settings.get("spamMoveY")
-                )
-                ms.Mouse(Click, Left, WindowTL,
-                    ms.settings.get("spamMoveX"),
-                    ms.settings.get("spamMoveY")
-                )
-                ms.wait(100)
+                ms.wait(45)
                 ms.Mouse(Click, Left, WindowTL,
                     ms.settings.get("spamClickX"), d3)
                 ms.wait(50)
