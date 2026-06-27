@@ -1066,109 +1066,31 @@
                         ms.alert("Settings reloaded.", 5, true)
                     end
 
-                    -- Quick Reload: re-executes the macro sandbox, reloads
-                    -- theme and settings, then rebinds — all without hs.reload().
+                    -- Quick Reload: delegates to the same code path as the
+                    -- in-panel "Macros" reload button, plus theme and the
+                    -- persistent reload flag.
                     ms.quickReload = function()
                         -- 0. Mark quick reload in progress so it persists across the reload.
                         ms._quickReloaded = 1
                         ms.saveSettings()
 
-                        -- 1. Reload macros (same path as ms.ui.reloadMacros).
-                        ms.bind.teardown()
-                        ms.registry       = { _defs = {}, _defList = {} }
-                        ms.bind._wires    = {}
-                        ms.bind._autoCount = 0
-                        ms.macroMeta       = nil
-                        ms._userSettingDefs  = {}
-                        ms._userSettingIndex = {}
-                        ms._userSettingVals  = {}
+                        -- 1. Reload macros + settings + rebind (proven path).
+                        ms.ui.reloadMacros()
 
-                        local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
-                        local af = io.open(macrosPath, "r")
-                        if not af then
-                            ms.alert("Quick Reload failed:\nCannot open ms_macros.lua.", 6)
-                            return
-                        end
-                        local rawSrc = af:read("*all"); af:close()
-                        local auditErrs = auditMacros(rawSrc)
-                        if #auditErrs > 0 then
-                            local msg = "Quick Reload blocked — ms_macros.lua failed audit ("
-                                .. #auditErrs .. " violation"
-                                .. (#auditErrs > 1 and "s" or "") .. "):\n"
-                            for _, e in ipairs(auditErrs) do
-                                msg = msg .. "  \xe2\x80\xa2 " .. e .. "\n"
-                            end
-                            ms.alert(msg, 8)
-                            return
-                        end
-
-                        local chunk, loadErr = load(rawSrc, "@ms_macros.lua", "bt", ms._macroSandbox)
-                        if not chunk then
-                            ms.alert("Quick Reload failed:\n" .. tostring(loadErr), 6)
-                            return
-                        end
-                        local ok, runErr = pcall(chunk)
-                        if not ok then
-                            ms.alert("Quick Reload failed:\n" .. tostring(runErr), 6)
-                            return
-                        end
-
-                        if not ms.macroMeta then
-                            hs.timer.doAfter(0.5, function()
-                                ms.alert("Warning: ms_macros.lua did not declare ms.macroMeta.", 6)
-                            end)
-                        end
-                        if not next(ms.registry._defs) then
-                            ms.alert("Quick Reload failed:\nNo ms.bind.define calls found.", 6)
-                            return
-                        end
-
-                        -- Seed default enabled state for any newly added macro.
-                        for _, id in ipairs(ms.registry._defList) do
-                            local def = ms.registry._defs[id]
-                            if def and not def.sub and ms.binds[id] == nil then
-                                ms.binds[id] = def.enabled
-                            end
-                        end
-
-                        -- 2. Rebuild system actions from the fresh user-setting index.
-                        ms._systemActions = {}
-                        if ms._userSettingIndex["showTamperWarning"] then
-                            ms._systemActions["showTamperWarning"] = function()
-                                ms.showGuardian()
-                            end
-                        end
-
-                        -- 3. Reload settings, theme, and rebind.
-                        ms.loadSettings()
+                        -- 2. Reload theme on top.
                         ms.loadTheme()
-                        ms.bind.rebind()
-                        ms.cam.updateAnchor()
-                        ms.cam.updateMultiplier()
-                        ms.socdApply()
 
-                        -- 4. Check persistent quick-reload flag: if settings file
-                        --    still carries a 1, the reload succeeded — clear it.
+                        -- 3. Clear the persistent flag on success.
                         if ms._quickReloaded == 1 then
                             ms._quickReloaded = 0
                             ms.saveSettings()
                         end
 
-                        -- 5. Refresh UI (hidden during rebuild so the user never
-                        --    sees the panel teardown/rebuild), then toast.
-                        if ms.ui and ms.ui._open then
-                            ms.ui.hide()
-                            hs.timer.doAfter(0.15, function()
-                                ms.ui.show()
-                                hs.timer.doAfter(0.05, function()
-                                    ms.playSlot("update")
-                                    ms.alert("Quick Reload complete.", 5, true)
-                                end)
-                            end)
-                        else
+                        -- 4. Toast (reloadMacros already did ui.hide/show).
+                        hs.timer.doAfter(0.25, function()
                             ms.playSlot("update")
                             ms.alert("Quick Reload complete.", 5, true)
-                        end
+                        end)
                     end
 
                     -- User Settings & Menu API --
@@ -3384,8 +3306,8 @@
                             {label = "Enable/Disable Shortcuts", bind = "/  or  Return"},
                             {label = "Panic Button / Stop All",  bind = "Alt+F10"},
                             {label = "Get Roblox Window Info",   bind = "Ctrl+Shift+R"},
-                            {label = "Full Reload",               bind = "Alt+["},
-                            {label = "Quick Reload",              bind = "Alt+]"},
+                            {label = "Full Reload",               bind = "Alt+[\xe2\x86\x92 Reload Options"},
+                            {label = "Quick Reload",              bind = "Alt+]\xe2\x86\x92 Reload Options"},
                             {label = "Open Menu",                bind = "Alt+P"},
                         }
                         for _, bind in ipairs(systemBindDefs) do
@@ -4086,8 +4008,10 @@
                             { title = "Enable Macros ( Enter )",  fn = function() ms.setMacros(1) end },
                             { title = "Disable Macros ( / )",     fn = function() ms.setMacros(0) end },
                             { title = "-" },
-                            { title = "Full Reload ( alt+[ )",     fn = function() hs.reload() end },
-                            { title = "Quick Reload ( alt+] )",     fn = function() ms.quickReload() end },
+                            { title = "Reload Options", menu = {
+                                { title = "Quick Reload ( \xe2\x8c\xa5] )",   fn = function() ms.quickReload() end },
+                                { title = "Full Reload ( \xe2\x8c\xa5[ )",    fn = function() hs.reload() end },
+                            }},
                             { title = "-" },
                             { title = "Profiles",  menu = buildProfilesSubmenu() },
                             { title = "Settings",  menu = buildSettingsSubmenu() },
