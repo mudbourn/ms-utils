@@ -13,9 +13,9 @@ permissions:
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
-  # Stamp — compute hash, sign MANIFEST.json, commit back
+  # Build & Stamp — package macOS archive, hash, sign, commit MANIFEST.json
   # ────────────────────────────────────────────────────────────────────────────
-  stamp:
+  build:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.value }}
@@ -25,47 +25,92 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Stamp MANIFEST.json
+      - name: Validate version
         id: version
-        env:
-          MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
           VERSION="${{ inputs.version }}"
-
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+ ]]; then
             echo "ERROR: Invalid version '$VERSION'. Expected format: X.Y.Z"
             exit 1
           fi
-
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
-          MAC_SHA=$(sha256sum mac/ms_core.lua | awk '{print $1}')
-          MAC_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua"
+      - name: Build macOS package
+        id: build
+        run: |
+          VERSION="${{ inputs.version }}"
+          DIST="mudscript-${VERSION}"
+          mkdir -p "$DIST"
+          for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua README.md; do
+            [ -f "$f" ] && cp "$f" "$DIST/"
+          done
+          for d in mac/Spoons mac/templates ui mac/bin; do
+            [ -d "$d" ] && cp -R "$d" "$DIST/"
+          done
+          mkdir -p "$DIST/data" "$DIST/sounds"
+          if [ -d "profiles/Default" ]; then
+            mkdir -p "$DIST/profiles"
+            cp -R profiles/Default "$DIST/profiles/"
+          fi
+          rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
+          ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
+          tar czf "$ARCHIVE" "$DIST"
 
-          echo "MAC_SHA=$MAC_SHA"
+          # Legacy hash: ms_core.lua only
+          LEGACY_SHA=$(sha256sum mac/ms_core.lua | awk '{print $1}')
+          # Bundle hash: the tar.gz archive
+          BUNDLE_SHA=$(sha256sum "$ARCHIVE" | awk '{print $1}')
+
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "legacy_sha=$LEGACY_SHA" >> "$GITHUB_OUTPUT"
+          echo "bundle_sha=$BUNDLE_SHA" >> "$GITHUB_OUTPUT"
+
+          echo "Archive: $ARCHIVE"
+          echo "Legacy SHA (ms_core.lua): $LEGACY_SHA"
+          echo "Bundle SHA (tar.gz):      $BUNDLE_SHA"
+
+      - name: Stamp MANIFEST.json
+        id: stamp
+        env:
+          MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          LEGACY_SHA="${{ steps.build.outputs.legacy_sha }}"
+          BUNDLE_SHA="${{ steps.build.outputs.bundle_sha }}"
+          LEGACY_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua"
+          BUNDLE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.tar.gz"
 
           jq -n \
             --arg version "$VERSION" \
-            --arg sha256  "$MAC_SHA" \
-            --arg url     "$MAC_URL" \
-            '{"version":$version,"sha256":$sha256,"url":$url,"signature":""}' \
+            --arg sha256  "$LEGACY_SHA" \
+            --arg url     "$LEGACY_URL" \
+            --arg bundle_url  "$BUNDLE_URL" \
+            --arg bundle_sha  "$BUNDLE_SHA" \
+            '{
+              "version": $version,
+              "sha256": $sha256,
+              "url": $url,
+              "bundle": {"url": $bundle_url, "sha256": $bundle_sha},
+              "signature": ""
+            }' \
             > MANIFEST.json
 
           if [ -n "$MS_SIGNING_KEY" ]; then
             printf '%s\n' "$MS_SIGNING_KEY" > /tmp/private.pem
-            printf '%s'   "$MAC_SHA"       > /tmp/msg.bin
+            printf '%s'   "$BUNDLE_SHA"   > /tmp/msg.bin
             openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
-            MAC_SIG=$(base64 -w0 /tmp/sig.bin)
+            BUNDLE_SIG=$(base64 -w0 /tmp/sig.bin)
             rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
 
-            jq --arg sig "$MAC_SIG" '.signature = $sig' MANIFEST.json > /tmp/manifest.json
+            jq --arg sig "$BUNDLE_SIG" '.signature = $sig' MANIFEST.json > /tmp/manifest.json
             mv /tmp/manifest.json MANIFEST.json
-            echo "Signed macOS runtime."
+            echo "Signed bundle sha256."
           else
             echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
           fi
 
           echo "MANIFEST.json stamped for v$VERSION"
+          cat MANIFEST.json
 
       - name: Commit MANIFEST.json
         run: |
@@ -75,48 +120,17 @@ jobs:
           git commit -m "release: v${{ inputs.version }}" || echo "Nothing to commit."
           git push
 
-  # ────────────────────────────────────────────────────────────────────────────
-  # Build — package macOS release archive
-  # ────────────────────────────────────────────────────────────────────────────
-  build:
-    needs: stamp
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build macOS package
-        run: |
-          VERSION="${{ needs.stamp.outputs.version }}"
-          DIST="mudscript-${VERSION}"
-          mkdir -p "$DIST"
-          for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua MANIFEST.json README.md; do
-            [ -f "$f" ] && cp "$f" "$DIST/"
-          done
-          for d in mac/Spoons ui mac/bin; do
-            [ -d "$d" ] && cp -R "$d" "$DIST/"
-          done
-          mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
-          rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
-          ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
-          tar czf "$ARCHIVE" "$DIST"
-          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
-          echo "Package: $ARCHIVE"
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ needs.stamp.outputs.version }}
-          path: mudscript-macos-${{ needs.stamp.outputs.version }}.tar.gz
+          name: macos-${{ inputs.version }}
+          path: mudscript-macos-${{ inputs.version }}.tar.gz
 
   # ────────────────────────────────────────────────────────────────────────────
   # Release — create GitHub Release and attach assets
   # ────────────────────────────────────────────────────────────────────────────
   release:
-    needs: [stamp, build]
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
@@ -130,7 +144,7 @@ jobs:
       - name: Generate release notes
         id: notes
         run: |
-          VERSION="${{ needs.stamp.outputs.version }}"
+          VERSION="${{ needs.build.outputs.version }}"
 
           PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | head -2 | tail -1 2>/dev/null || echo "")
 
@@ -162,7 +176,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ needs.stamp.outputs.version }}"
+          VERSION="${{ needs.build.outputs.version }}"
           TAG="v${VERSION}"
 
           ASSETS=$(find . -name "mudscript-*-${VERSION}.*" -type f 2>/dev/null | tr '\n' ' ' || true)

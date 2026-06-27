@@ -83,6 +83,8 @@ jobs:
           for d in mac/Spoons ui mac/bin; do
             [ -d "$d" ] && cp -R "$d" "$DIST/"
           done
+          [ -d mac/templates ] && cp -R mac/templates "$DIST/"
+          [ -d profiles/Default ] && cp -R profiles/Default "$DIST/profiles/"
           mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
           rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
           ARCHIVE="mudscript-macos-pre-${BUILD_NUM}.tar.gz"
@@ -136,6 +138,8 @@ jobs:
 
           > ⚠️ **Testing build** — not an official release.  
           > Switch mudscript's update channel to **Testing** to install automatically.
+
+          > Bundle includes UI files (templates, default profile).
 
           ### Changes
           $CHANGES

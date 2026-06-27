@@ -8,7 +8,7 @@ Mudscript Macro Utilities — macOS & Windows
 | Platform | Runtime | Entry Point | Macro File | Core Library |
 |---|---|---|---|---|
 | **macOS** | [Hammerspoon](https://www.hammerspoon.org/) (Lua) | `init.lua` | `ms_macros.lua` | `ms_core.lua` |
-| **Windows** | [AutoHotkey v2](https://www.autohotkey.com/) | `init.ahk` | `ms_macros.ahk` | `ms_core.ahk` |
+| **Windows** | [AutoHotkey v2](https://www.autohotkey.com/) | `init.ahk` | `ms_macros.ahk` | `ms_core_v2.ahk` |
 
 Both platforms share the same directory layout and identical `ms.*` API, so macro logic ports with minimal changes.
 
@@ -18,7 +18,7 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 
 **macOS:**
 ```bash
-curl -L https://raw.githubusercontent.com/mudbourn/ms-utils/main/install.sh | bash
+curl -L https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/install.sh | bash
 ```
 Downloads the repo, installs the Guardian Launch Agent, locks `init.lua`, and reloads Hammerspoon.
 
@@ -27,7 +27,7 @@ Downloads the repo, installs the Guardian Launch Agent, locks `init.lua`, and re
 2. Download `mudscript-windows-*.zip` and extract
 3. Run `init.ahk`
 
-Or if you cloned the repo, `install.bat` handles dependency downloads, guardian setup, and startup registration (run as Administrator).
+Or if you cloned the repo, `win/install.bat` handles dependency downloads, guardian setup, and startup registration (run as Administrator).
 
 ---
 
@@ -36,64 +36,83 @@ Or if you cloned the repo, `install.bat` handles dependency downloads, guardian 
 ```
 ./
 │
-│   install.sh            macOS one-shot installer
-│   install.bat           Windows one-shot installer (Run as Admin)
-│   init.lua              macOS bootstrap stub (read-only: chmod 444)
-│   init.ahk              Windows bootstrap stub (read-only: attrib +r)
-│   ms_core.lua           macOS main library. Protected by the Guardian.
-│   ms_core.ahk           Windows main library. Protected by the Guardian.
-│   ms_macros.lua         macOS macro pack — the file you edit.
-│   ms_macros.ahk         Windows macro pack — the file you edit.
-│   MANIFEST.json         Update manifest — version, sha256, url, signature.
-│                         Auto-stamped and signed by GitHub Actions on every push.
+├── mac/                        macOS platform files
+│   ├── install.sh              One-shot installer
+│   ├── init.lua                Bootstrap stub (read-only: chmod 444)
+│   ├── ms_core.lua             Main library. Protected by the Guardian.
+│   ├── ms_macros.lua           Macro pack — the file you edit.
+│   ├── templates/
+│   │   └── ms_macros.lua       Barebones macro template for new packs.
+│   ├── Spoons/
+│   │   └── MsGuardian.spoon/
+│   │       └── init.lua        Pre-load tamper check. Hashes ms_core.lua before loading.
+│   └── bin/
+│       ├── hidinject           Compiled HID injection binary.
+│       ├── ms_hidinject.swift  Source for hidinject.
+│       ├── ms_guardian_agent.sh   OS-level Guardian — kills Hammerspoon on mismatch.
+│       ├── com.mudscript.guardian.plist  Launch Agent plist template.
+│       ├── install_guardian_agent.sh     One-time install: registers the Launch Agent.
+│       └── make_release.sh     Developer utility — stamp MANIFEST hash / bump version.
 │
-├── Spoons/               [macOS only]
-│   └── MsGuardian.spoon/
-│       └── init.lua      Pre-load tamper check. Hashes ms_core.lua before loading.
+├── win/                        Windows platform files
+│   ├── install.bat             One-time installer (Run as Admin)
+│   ├── init.ahk                Bootstrap stub (read-only: attrib +r)
+│   ├── _ms_main.ahk            Entry point / WebView2 bootstrap
+│   ├── ms_core_v2.ahk          Main library. Protected by the Guardian.
+│   ├── ms_macros.ahk           Macro pack — the file you edit.
+│   ├── lib/
+│   │   ├── WebView2.ahk        WebView2 wrapper
+│   │   ├── WebView2/           Companion files for WebView2.ahk
+│   │   ├── Jxon.ahk            JSON parser
+│   │   ├── ComVar.ahk          COM helper
+│   │   ├── Promise.ahk         Promise/async helper
+│   │   ├── 32bit/              32-bit WebView2Loader.dll
+│   │   └── 64bit/              64-bit WebView2Loader.dll
+│   ├── bin/
+│   │   ├── ms_guardian_agent.bat   OS-level Guardian — kills AutoHotkey on mismatch.
+│   │   ├── install_guardian_agent.bat  One-time install: registers Scheduled Task.
+│   │   ├── install_startup.bat     Add init.ahk to startup folder (logon auto-start).
+│   │   ├── install_deps.bat        Auto-download WebView2 and Jxon to lib/.
+│   │   ├── make_release.bat        Developer utility — stamp MANIFEST hash / bump version.
+│   │   └── generate_icon.ps1       Build tray icon from source image.
+│   └── data/
+│       └── ms_settings_default.json  Windows default settings baseline.
 │
-├── bin/
-│   ├── hidinject                [macOS] Compiled HID injection binary.
-│   ├── ms_hidinject.swift       [macOS] Source for hidinject.
-│   ├── ms_guardian_agent.sh     [macOS] OS-level Guardian — kills Hammerspoon on mismatch.
-│   ├── ms_guardian_agent.bat    [Windows] OS-level Guardian — kills AutoHotkey on mismatch.
-│   ├── com.mudscript.guardian.plist  [macOS] Launch Agent plist template.
-│   ├── install_guardian_agent.sh     [macOS] One-time install: registers the Launch Agent.
-│   ├── install_guardian_agent.bat    [Windows] One-time install: registers Scheduled Task.
-│   ├── install_startup.bat      [Windows] Add init.ahk to startup folder (logon auto-start).
-│   ├── install_deps.bat         [Windows] Auto-download WebView2.ahk and Jxon.ahk to lib/.
-│   └── make_release.sh / .bat        Developer utility — stamp MANIFEST hash / bump version.
+├── ui/                         Shared UI assets (both platforms)
+│   ├── ms_settings_ui.html     Settings panel
+│   ├── ms_guardian.html        Tamper-detection dialog
+│   ├── ms_console.html         Developer Console
+│   ├── ms_watcher.html         Macro Monitor
+│   ├── ms_keys.html            Input Monitor
+│   ├── ms_window.html          Window Monitor
+│   ├── ms_loading.html         Loading screen
+│   ├── fonts/                  Bundled fonts — auto-installed on startup.
+│   └── icons/                  Menu bar / tray icons.
 │
-├── lib/                   [Windows only — bundled in release zip]
-│   ├── WebView2.ahk       Required by init.ahk and ms_core.ahk
-│   ├── WebView2/          Companion folder for WebView2.ahk
-│   └── Jxon.ahk           Required by init.ahk and ms_core.ahk
-│
-├── data/                  Per-user runtime files — all gitignored.
+├── data/                       Per-user runtime files — all gitignored.
 │   ├── ms_settings.json        Live settings (binds, sensitivity, sound, etc.)
 │   ├── ms_settings_default.json  Saved default — restored by Reset to Default.
-│   ├── ms_theme.json          UI theme overrides (colours, font, radius).
-│   ├── ms_dev.log             Developer log.
-│   ├── ms_dev_logs/           Archived developer logs (auto-pruned to last 20).
-│   ├── .ms_trusted_hash       SHA-256 baseline for tamper detection.
-│   └── guardian_agent.log     Guardian agent output log.
+│   ├── ms_theme.json           UI theme overrides (colours, font, radius).
+│   ├── ms_dev.log              Developer log.
+│   ├── ms_dev_logs/            Archived developer logs (auto-pruned to last 20).
+│   ├── .ms_trusted_hash        SHA-256 baseline for tamper detection.
+│   └── guardian_agent.log      Guardian agent output log.
 │
-├── ui/
-│   ├── ms_settings_ui.html   Settings panel (WebView2).
-│   ├── ms_guardian.html      Tamper-detection dialog (WebView2).
-│   ├── ms_console.html       Developer Console panel (WebView2).
-│   ├── ms_watcher.html       Macro Monitor panel (WebView2).
-│   ├── ms_keys.html          Input Monitor panel (WebView2).
-│   ├── ms_window.html        Window Monitor panel (WebView2).
-│   ├── fonts/                Bundled fonts — auto-installed on startup.
-│   └── icons/                Menu bar / tray icons.
+├── profiles/                   Saved macro profiles — gitignored.
+│   └── <name>/
+│       ├── ms_macros.lua/.ahk
+│       ├── ms_settings.json
+│       └── ms_settings_default.json
 │
-├── sounds/                User sound files — gitignored.
-├── backups/               Auto-created backups (update, settings archive) — gitignored.
-└── profiles/              Saved macro profiles — gitignored.
-    └── <name>/
-        ├── ms_macros.lua/.ahk
-        ├── ms_settings.json
-        └── ms_settings_default.json
+├── sounds/                     User sound files — gitignored.
+├── backups/                    Auto-created backups (update, settings archive) — gitignored.
+├── docs/
+│   ├── DOCS_MAC.md             macOS API reference (~1,600 lines)
+│   └── DOCS_WINDOWS.md         Windows API reference
+│
+├── MANIFEST.json               Update manifest — version, sha256, url, bundle, signature.
+│                               Auto-stamped and signed by GitHub Actions on every release.
+└── LICENSE
 ```
 
 ---
@@ -102,8 +121,8 @@ Or if you cloned the repo, `install.bat` handles dependency downloads, guardian 
 
 | Layer | macOS | Windows |
 |---|---|---|
-| **Load-time check** | `MsGuardian.spoon` hashes `ms_core.lua` at load. Mismatch → blocking dialog, nothing loads. | `init.ahk` hashes `ms_core.ahk` at load. Mismatch → blocking WebView2 dialog, script exits. |
-| **OS-level watcher** | Launch Agent watches `ms_core.lua`. Kills Hammerspoon independently. | Scheduled Task watches `ms_core.ahk`. Kills AutoHotkey independently. |
+| **Load-time check** | `MsGuardian.spoon` hashes `ms_core.lua` at load. Mismatch → blocking dialog, nothing loads. | `init.ahk` hashes `ms_core_v2.ahk` at load. Mismatch → blocking WebView2 dialog, script exits. |
+| **OS-level watcher** | Launch Agent watches `ms_core.lua`. Kills Hammerspoon independently. | Scheduled Task watches `ms_core_v2.ahk`. Kills AutoHotkey independently. |
 | **Stub lock** | `init.lua` — `chmod 444` makes silent edits observable. | `init.ahk` — `attrib +r` makes silent edits observable. |
 | **Signed MANIFEST** | GitHub Actions signs every release with RSA-2048. Invalid signature → hard abort. | Same key, separate `windows_*` fields in `MANIFEST.json`. |
 | **Macro sandbox** | `ms_macros.lua` runs in restricted env — no `hs`, `os`, `io`, shell, or `_G`. | `ms_macros.ahk` runs with no special restrictions (AHKv2 no sandbox). Audit scanner blocks dangerous patterns. |
@@ -114,7 +133,8 @@ Or if you cloned the repo, `install.bat` handles dependency downloads, guardian 
 
 ```bash
 # 1. Copy repo contents to ~/.hammerspoon/
-cp -r . ~/.hammerspoon/
+cp -r mac/* ~/.hammerspoon/
+cp -r ui ~/.hammerspoon/
 
 # 2. Install the OS-level Guardian Launch Agent
 bash ~/.hammerspoon/bin/install_guardian_agent.sh
@@ -136,10 +156,10 @@ chmod 444 ~/.hammerspoon/init.lua
    - The installer is code-signed by Lexikos — no SmartScreen warning.
 2. **Download the latest release** from [GitHub Releases](https://github.com/mudbourn/ms-utils/releases)
    - Get `mudscript-windows-*.zip` — no warnings for `.zip` files.
-3. **Extract** the zip anywhere (%USERPROFILE%\.hammerspoon\ is recommended).
+3. **Extract** the zip anywhere (`%USERPROFILE%\.hammerspoon\` is recommended).
 4. **Run** `init.ahk` — runs through the signed AutoHotkey interpreter.
    - Scripts (.ahk) are not checked by SmartScreen.
-   - Dependencies (WebView2\, Jxon) are bundled in the zip.
+   - Dependencies (WebView2, Jxon) are bundled in the zip.
 
 **No downloaded scripts to run. No unsigned binaries. No SmartScreen.**
 
@@ -187,23 +207,73 @@ ms.setTargetApp("")                     ; clear target
 
 ---
 
+## Update channels
+
+mudscript supports two update channels:
+
+| Channel | Trigger | Assets |
+|---|---|---|
+| **Stable** | Manual — maintainer runs the Release workflow | `mudscript-macos-{version}.tar.gz` bundle + single `ms_core.lua` fallback |
+| **Testing** | Auto — every push to `main` that touches `ms_core.lua` or `ms_core_v2.ahk` | Pre-release tagged `pre-{build_number}` with both platform bundles |
+
+**Bundle updates** (`tar.gz` / `.zip`) replace the full install — UI files, templates, profiles, and core library. The updater checks `MANIFEST.json` for a `bundle` field first; if absent, falls back to single-file `ms_core.lua` / `ms_core_v2.ahk` download.
+
+Switch channels from the Settings panel under **Update Channel**.
+
+---
+
+## Profiles
+
+Save and switch between macro packs without editing files:
+
+- **Profiles → Save Current** — snapshots `ms_macros.lua`, `ms_settings.json`, and `ms_settings_default.json` into `profiles/<name>/`.
+- **Profiles → Load** — restores a saved profile and reloads.
+- **Profiles → Export** — exports a profile folder for sharing.
+
+Profiles are per-user and gitignored.
+
+---
+
+## Quick Reload
+
+The reload dropdown (next to the Reload button) offers granular control over what gets reloaded:
+
+| Option | Default | What it reloads |
+|---|---|---|
+| Macros | ✓ | Re-evaluates `ms_macros.lua` |
+| Theme | ✓ | Reloads `ms_theme.json` and redraws UI |
+| Settings | ✓ | Reloads `ms_settings.json` and re-binds keys |
+| UI | ✓ | Recreates all WebView2 panels |
+
+Click the text to reload that item; click the checkbox to toggle whether it's included in full reloads. Preferences persist across sessions.
+
+---
+
 ## Release workflow (maintainer)
 
-Pushing `ms_core.lua` or `ms_core.ahk` to `main` automatically:
-1. Computes the SHA-256
-2. Signs it with the RSA private key in GitHub Secrets (`MS_SIGNING_KEY`)
-3. Commits an updated `MANIFEST.json` back to the repo
+### Stable release
 
-To bump the version number, edit `MANIFEST.json` version field before pushing, or run:
+From the GitHub Actions tab, run the **Release** workflow with a version string (e.g. `1.3.0`). It will:
+1. Package the macOS bundle (`tar.gz`) with all platform files, UI, and templates
+2. Compute SHA-256 for both the bundle and legacy single-file `ms_core.lua`
+3. Sign the bundle hash with the RSA private key (`MS_SIGNING_KEY` secret)
+4. Stamp and commit `MANIFEST.json`
+5. Create a GitHub Release with the bundle attached
 
-**macOS:**
+### Testing pre-release
+
+Every push to `main` that modifies `mac/ms_core.lua` or `win/ms_core_v2.ahk` automatically:
+1. Builds platform bundles for both macOS and Windows
+2. Creates a tagged pre-release (`pre-{build_number}`) with both archives attached
+
+### Manual version bump
+
 ```bash
-bash bin/make_release.sh 1.2.0
-```
+# macOS
+bash mac/bin/make_release.sh 1.3.0
 
-**Windows:**
-```batch
-bin\make_release.bat 1.2.0
+# Windows
+win\bin\make_release.bat 1.3.0
 ```
 
 ---

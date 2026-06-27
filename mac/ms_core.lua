@@ -2281,14 +2281,106 @@
                     return false
                 end
 
+                -- ── Bundle update helper ───────────────────────────────────────────
+                -- Applies files from an extracted release tar.gz.
+                -- Always-replace: ms_core.lua, init.lua, ui/, bin/, Spoons/
+                -- Create-if-missing: ms_macros.lua, profiles/Default/
+                local function _applyBundleUpdate(bundleDir, timestamp)
+                    local hsDir = os.getenv("HOME") .. "/.hammerspoon/"
+
+                    -- Find the top-level directory inside the bundle.
+                    -- tar.gz extracts as mudscript-macos-X.Y.Z/...
+                    local topDir = nil
+                    local dh = io.popen("ls -d '" .. bundleDir .. "'/mudscript-* 2>/dev/null | head -1")
+                    if dh then topDir = dh:read("*l"); dh:close() end
+                    if not topDir or topDir == "" then
+                        -- Fallback: maybe files are at the root of bundleDir
+                        topDir = bundleDir
+                    end
+                    -- Normalise: ensure trailing slash
+                    if not topDir:match("/$") then topDir = topDir .. "/" end
+
+                    -- Always-replace list (files and directories).
+                    local replaceList = { "ms_core.lua", "init.lua", "ui", "bin", "Spoons" }
+                    -- Create-if-missing list (files and directories).
+                    local templateList = { "ms_macros.lua", "profiles/Default" }
+
+                    os.execute("mkdir -p '" .. archivePath .. "'")
+
+                    for _, name in ipairs(replaceList) do
+                        local src = topDir .. name
+                        local dst = hsDir .. name
+                        if hs.fs.attributes(src) then
+                            -- Back up existing (files and dirs).
+                            if hs.fs.attributes(dst) then
+                                local safeName = name:gsub("/", "_")
+                                local bak = archivePath .. safeName .. "_" .. timestamp
+                                    .. (hs.fs.attributes(dst).mode == "directory" and ".d.bak" or ".bak")
+                                os.execute("rm -rf '" .. bak .. "'")
+                                os.execute("cp -R '" .. dst .. "' '" .. bak .. "'")
+                            end
+                            -- Replace: remove old, copy new.
+                            os.execute("rm -rf '" .. dst .. "'")
+                            os.execute("cp -R '" .. src .. "' '" .. dst .. "'")
+                        end
+                    end
+
+                    for _, name in ipairs(templateList) do
+                        local src = topDir .. name
+                        local dst = hsDir .. name
+                        if hs.fs.attributes(src) and not hs.fs.attributes(dst) then
+                            os.execute("mkdir -p '" .. dst:match("(.+)/[^/]+$") .. "'")
+                            os.execute("cp -R '" .. src .. "' '" .. dst .. "'")
+                        end
+                    end
+
+                    return true
+                end
+
+                -- ── Signature verification helper ───────────────────────────────
+                local function _verifySignature(manifest)
+                    if not manifest.signature or manifest.signature == ""
+                        or not ms._updatePublicKey
+                        or ms._updatePublicKey:find("PLACEHOLDER") then
+                        return true  -- no signature to verify
+                    end
+                    local _tmpDir  = archivePath
+                    local _keyPath = _tmpDir .. "upd_pub.pem"
+                    local _sigPath = _tmpDir .. "upd_sig.bin"
+                    local _msgPath = _tmpDir .. "upd_msg.bin"
+                    os.execute("mkdir -p '" .. _tmpDir .. "'")
+                    local _keyContent = ms._updatePublicKey
+                        :gsub("^[%s\n]+", "")
+                        :gsub("\n[%s]+", "\n")
+                        :gsub("[%s]+$", "\n")
+                    local _kf = io.open(_keyPath, "w")
+                    if _kf then _kf:write(_keyContent); _kf:close() end
+                    local _sf = io.open(_sigPath .. ".b64", "w")
+                    if _sf then _sf:write(manifest.signature); _sf:close() end
+                    hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
+                    os.remove(_sigPath .. ".b64")
+                    local _signTarget = manifest.bundle and manifest.bundle.sha256 or manifest.sha256
+                    local _mf = io.open(_msgPath, "w")
+                    if _mf then _mf:write(_signTarget:lower()); _mf:close() end
+                    local _out, _ok = hs.execute(
+                        "openssl dgst -sha256 -verify '" .. _keyPath ..
+                        "' -signature '" .. _sigPath ..
+                        "' '" .. _msgPath .. "' 2>&1"
+                    )
+                    os.remove(_keyPath); os.remove(_sigPath); os.remove(_msgPath)
+                    if not _ok then
+                        ms.alert("Update aborted: signature verification failed.\n" .. tostring(_out), 12)
+                        return false
+                    end
+                    return true
+                end
+
                 ms.integrity.update = function()
                     local manifestURL = ms._updateManifestURL
                     if not manifestURL or manifestURL == "" then
                         ms.alert("Update URL not configured.\nSet ms._updateManifestURL in ms_core.lua.", 6)
                         return
                     end
-                    -- Require HTTPS.  An HTTP URL would allow a network observer to serve
-                    -- a malicious manifest and file, completely bypassing hash verification.
                     if not manifestURL:match("^https://") then
                         ms.alert("Update URL must use HTTPS.\nHTTP URLs are not permitted.", 6)
                         return
@@ -2300,112 +2392,138 @@
                             return
                         end
                         local manifest = hs.json.decode(mBody)
-                        if not manifest or not manifest.sha256 or not manifest.url then
-                            ms.alert("Update failed: manifest missing 'sha256' or 'url' field.", 5)
+                        if not manifest then
+                            ms.alert("Update failed: could not parse manifest.", 5)
                             return
                         end
-                        -- Verify the manifest signature when a public key is configured.
-                        -- A missing signature field is allowed (backward-compat / unsigned
-                        -- releases during development).  An INVALID signature is a hard
-                        -- abort — it means the manifest was tampered with after signing.
-                        if manifest.signature and manifest.signature ~= ""
-                            and ms._updatePublicKey
-                            and not ms._updatePublicKey:find("PLACEHOLDER") then
-                            local _tmpDir  = archivePath
-                            local _keyPath = _tmpDir .. "upd_pub.pem"
-                            local _sigPath = _tmpDir .. "upd_sig.bin"
-                            local _msgPath = _tmpDir .. "upd_msg.bin"
-                            os.execute("mkdir -p '" .. _tmpDir .. "'")
-                            -- Write public key — strip leading whitespace from each line
-                            -- because Lua long-string indentation would otherwise produce
-                            -- a PEM file with leading spaces that openssl refuses to parse.
-                            local _keyContent = ms._updatePublicKey
-                                :gsub("^[%s\n]+", "")   -- trim leading blank/space
-                                :gsub("\n[%s]+", "\n")  -- strip indent from every line
-                                :gsub("[%s]+$", "\n")   -- normalise trailing whitespace
-                            local _kf = io.open(_keyPath, "w")
-                            if _kf then _kf:write(_keyContent); _kf:close() end
-                            -- Decode base64 signature to binary.
-                            -- Use macOS native `base64 -D` — openssl base64 silently
-                            -- fails to write its -out file on macOS LibreSSL.
-                            local _sf = io.open(_sigPath .. ".b64", "w")
-                            if _sf then _sf:write(manifest.signature); _sf:close() end
-                            hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
-                            os.remove(_sigPath .. ".b64")
-                            local _mf = io.open(_msgPath, "w")
-                            if _mf then _mf:write(manifest.sha256:lower()); _mf:close() end
-                            local _out, _ok = hs.execute(
-                                "openssl dgst -sha256 -verify '" .. _keyPath ..
-                                "' -signature '" .. _sigPath ..
-                                "' '" .. _msgPath .. "' 2>&1"
-                            )
-                            os.remove(_keyPath); os.remove(_sigPath); os.remove(_msgPath)
-                            if not _ok then
-                                ms.alert("Update aborted: signature verification failed.\n" .. tostring(_out), 12)
-                                return
-                            end
+
+                        local isBundle = manifest.bundle
+                            and manifest.bundle.url and manifest.bundle.sha256
+
+                        -- Validate required fields.
+                        if isBundle then
+                            -- ok
+                        elseif manifest.sha256 and manifest.url then
+                            -- legacy single-file manifest
+                        else
+                            ms.alert("Update failed: manifest missing required fields.", 5)
+                            return
                         end
-                        local newVersion   = manifest.version or "?"
-                        local expectedHash = manifest.sha256:lower()
-                        ms.alert("Downloading v" .. newVersion .. "\xe2\x80\xa6", 4, true)
-                        hs.http.asyncGet(manifest.url, nil, function(fCode, fBody, _)
-                            if fCode ~= 200 or not fBody then
-                                ms.alert("Update failed: file download returned " .. tostring(fCode) .. ".", 5)
-                                return
-                            end
-                            -- Write to a temp file so we can hash it before touching ms_core.lua.
-                            os.execute("mkdir -p '" .. archivePath .. "'")
-                            local tmpPath = archivePath .. "ms_core_update_tmp.lua"
-                            local tmpF = io.open(tmpPath, "w")
-                            if not tmpF then
-                                ms.alert("Update failed: could not write temp file.", 4)
-                                return
-                            end
-                            tmpF:write(fBody); tmpF:close()
-                            local actualHash = ms.integrity.hashFile(tmpPath)
-                            -- Hash check: warn on mismatch but do not abort.
-                            -- Both the manifest and the file come from the same GitHub repo
-                            -- over HTTPS, so a mismatch almost always means the developer
-                            -- forgot to run make_release.sh — not an attack.  Hard-failing
-                            -- the update in that case just leaves the user on an older
-                            -- version with no way to self-heal.  We install whatever was
-                            -- downloaded, seed the trusted hash from the actual file, and
-                            -- surface a notice so the developer can see it in the console.
-                            if actualHash ~= expectedHash then
-                                print("ms update: MANIFEST hash mismatch (expected "
-                                    .. expectedHash:sub(1,16) .. "… got "
-                                    .. (actualHash or "?"):sub(1,16) .. "…)"
-                                    .. " — installing anyway and re-seeding trust from actual file.")
-                            end
-                            local timestamp  = os.date("%Y-%m-%d_%H%M")
-                            local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
-                            local bOk = moveFile(corePath, backupFile)
-                            if not bOk then
-                                os.remove(tmpPath)
-                                ms.alert("Update failed: could not back up ms_core.lua.", 4)
-                                return
-                            end
-                            local mOk = moveFile(tmpPath, corePath)
-                            if not mOk then
-                                moveFile(backupFile, corePath)  -- restore
-                                ms.alert("Update failed: could not install new ms_core.lua.\nBackup restored.", 5)
-                                return
-                            end
-                            ms.integrity.writeTrustedHash(actualHash)
-                            ms.integrity.invalidateCache()
-                            -- Update the local MANIFEST.json so checkForUpdate
-                            -- doesn't false-flag on the next startup.
-                            local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
-                            if _mf then
-                                _mf:write(hs.json.encode({
-                                    version = newVersion,
-                                    sha256  = expectedHash,
-                                    url     = manifest.url,
-                                })); _mf:close()
-                            end
-                            ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
-                            hs.timer.doAfter(3, function() hs.reload() end)
-                        end)
+
+                        -- Signature verification (works for both formats).
+                        if not _verifySignature(manifest) then return end
+
+                        local newVersion = manifest.version or "?"
+
+                        if isBundle then
+                            -- ── Bundle update (tar.gz) ──────────────────────────────
+                            local bundleURL  = manifest.bundle.url
+                            local bundleHash = manifest.bundle.sha256:lower()
+                            ms.alert("Downloading v" .. newVersion .. " bundle\xe2\x80\xa6", 4, true)
+                            hs.http.asyncGet(bundleURL, nil, function(fCode, fBody, _)
+                                if fCode ~= 200 or not fBody then
+                                    ms.alert("Update failed: bundle download returned " .. tostring(fCode) .. ".", 5)
+                                    return
+                                end
+                                os.execute("mkdir -p '" .. archivePath .. "'")
+                                local tmpArchive = archivePath .. "ms_bundle_update.tar.gz"
+                                local tmpF = io.open(tmpArchive, "w")
+                                if not tmpF then
+                                    ms.alert("Update failed: could not write temp file.", 4)
+                                    return
+                                end
+                                tmpF:write(fBody); tmpF:close()
+                                local actualHash = ms.integrity.hashFile(tmpArchive)
+                                if actualHash ~= bundleHash then
+                                    print("ms update: bundle hash mismatch (expected "
+                                        .. bundleHash:sub(1,16) .. "… got "
+                                        .. (actualHash or "?"):sub(1,16) .. "…)"
+                                        .. " — installing anyway.")
+                                end
+                                -- Extract to temp directory.
+                                local tmpExtract = archivePath .. "ms_bundle_extract/"
+                                os.execute("rm -rf '" .. tmpExtract .. "'")
+                                os.execute("mkdir -p '" .. tmpExtract .. "'")
+                                local _, tarOk = hs.execute(
+                                    "tar xzf '" .. tmpArchive .. "' -C '" .. tmpExtract .. "' 2>&1"
+                                )
+                                os.remove(tmpArchive)
+                                if not tarOk then
+                                    os.execute("rm -rf '" .. tmpExtract .. "'")
+                                    ms.alert("Update failed: could not extract bundle.", 5)
+                                    return
+                                end
+                                local timestamp = os.date("%Y-%m-%d_%H%M")
+                                local ok = _applyBundleUpdate(tmpExtract, timestamp)
+                                os.execute("rm -rf '" .. tmpExtract .. "'")
+                                if not ok then
+                                    ms.alert("Update failed: could not apply bundle.", 5)
+                                    return
+                                end
+                                ms.integrity.invalidateCache()
+                                -- Write local MANIFEST.
+                                local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
+                                if _mf then
+                                    _mf:write(hs.json.encode({
+                                        version = newVersion,
+                                        bundle  = manifest.bundle,
+                                    })); _mf:close()
+                                end
+                                ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                                hs.timer.doAfter(3, function() hs.reload() end)
+                            end)
+                        else
+                            -- ── Legacy single-file update (ms_core.lua only) ────────
+                            local expectedHash = manifest.sha256:lower()
+                            ms.alert("Downloading v" .. newVersion .. "\xe2\x80\xa6", 4, true)
+                            hs.http.asyncGet(manifest.url, nil, function(fCode, fBody, _)
+                                if fCode ~= 200 or not fBody then
+                                    ms.alert("Update failed: file download returned " .. tostring(fCode) .. ".", 5)
+                                    return
+                                end
+                                os.execute("mkdir -p '" .. archivePath .. "'")
+                                local tmpPath = archivePath .. "ms_core_update_tmp.lua"
+                                local tmpF = io.open(tmpPath, "w")
+                                if not tmpF then
+                                    ms.alert("Update failed: could not write temp file.", 4)
+                                    return
+                                end
+                                tmpF:write(fBody); tmpF:close()
+                                local actualHash = ms.integrity.hashFile(tmpPath)
+                                if actualHash ~= expectedHash then
+                                    print("ms update: MANIFEST hash mismatch (expected "
+                                        .. expectedHash:sub(1,16) .. "… got "
+                                        .. (actualHash or "?"):sub(1,16) .. "…)"
+                                        .. " — installing anyway and re-seeding trust from actual file.")
+                                end
+                                local timestamp  = os.date("%Y-%m-%d_%H%M")
+                                local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
+                                local bOk = moveFile(corePath, backupFile)
+                                if not bOk then
+                                    os.remove(tmpPath)
+                                    ms.alert("Update failed: could not back up ms_core.lua.", 4)
+                                    return
+                                end
+                                local mOk = moveFile(tmpPath, corePath)
+                                if not mOk then
+                                    moveFile(backupFile, corePath)
+                                    ms.alert("Update failed: could not install new ms_core.lua.\nBackup restored.", 5)
+                                    return
+                                end
+                                ms.integrity.writeTrustedHash(actualHash)
+                                ms.integrity.invalidateCache()
+                                local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
+                                if _mf then
+                                    _mf:write(hs.json.encode({
+                                        version = newVersion,
+                                        sha256  = expectedHash,
+                                        url     = manifest.url,
+                                    })); _mf:close()
+                                end
+                                ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                                hs.timer.doAfter(3, function() hs.reload() end)
+                            end)
+                        end
                     end)
                 end
 
@@ -2534,45 +2652,87 @@
                     end
                     ms.alert("Fetching latest testing build\xe2\x80\xa6", 4, true)
                     _fetchLatestTestingRun(function(info)
-                        if not info or not info.sha then
+                        if not info or not info.runId then
                             ms.alert("No successful testing builds found.", 5)
                             return
                         end
-                        local fileURL = "https://raw.githubusercontent.com/" .. repo
-                            .. "/" .. info.sha .. "/mac/ms_core.lua"
-                        ms.alert("Downloading " .. info.display .. "\xe2\x80\xa6", 4, true)
-                        hs.http.asyncGet(fileURL, nil, function(fCode, fBody, _)
+                        local buildNum = info.runId
+                        local bundleURL = "https://github.com/" .. repo
+                            .. "/releases/download/pre-" .. buildNum
+                            .. "/mudscript-macos-pre-" .. buildNum .. ".tar.gz"
+                        ms.alert("Downloading build " .. buildNum .. "\xe2\x80\xa6", 4, true)
+                        hs.http.asyncGet(bundleURL, nil, function(fCode, fBody, _)
                             if fCode ~= 200 or not fBody then
-                                ms.alert("Download failed: HTTP " .. tostring(fCode) .. ".", 5)
+                                -- Fallback: try single-file download for older builds.
+                                local fileURL = "https://raw.githubusercontent.com/" .. repo
+                                    .. "/" .. info.sha .. "/mac/ms_core.lua"
+                                hs.http.asyncGet(fileURL, nil, function(fCode2, fBody2, _)
+                                    if fCode2 ~= 200 or not fBody2 then
+                                        ms.alert("Download failed: HTTP " .. tostring(fCode2) .. ".", 5)
+                                        return
+                                    end
+                                    os.execute("mkdir -p '" .. archivePath .. "'")
+                                    local tmpPath = archivePath .. "ms_core_update_tmp.lua"
+                                    local tmpF = io.open(tmpPath, "w")
+                                    if not tmpF then
+                                        ms.alert("Update failed: could not write temp file.", 4)
+                                        return
+                                    end
+                                    tmpF:write(fBody2); tmpF:close()
+                                    local actualHash = ms.integrity.hashFile(tmpPath)
+                                    local timestamp  = os.date("%Y-%m-%d_%H%M")
+                                    local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
+                                    local bOk = moveFile(corePath, backupFile)
+                                    if not bOk then
+                                        os.remove(tmpPath)
+                                        ms.alert("Update failed: could not back up ms_core.lua.", 4)
+                                        return
+                                    end
+                                    local mOk = moveFile(tmpPath, corePath)
+                                    if not mOk then
+                                        moveFile(backupFile, corePath)
+                                        ms.alert("Update failed: could not install.\nBackup restored.", 5)
+                                        return
+                                    end
+                                    ms.integrity.writeTrustedHash(actualHash)
+                                    ms.integrity.invalidateCache()
+                                    _writeTestingRun(buildNum)
+                                    ms.alert("Updated to build " .. buildNum .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                                    hs.timer.doAfter(3, function() hs.reload() end)
+                                end)
                                 return
                             end
+                            -- Bundle download succeeded — extract and apply.
                             os.execute("mkdir -p '" .. archivePath .. "'")
-                            local tmpPath = archivePath .. "ms_core_update_tmp.lua"
-                            local tmpF = io.open(tmpPath, "w")
+                            local tmpArchive = archivePath .. "ms_bundle_update.tar.gz"
+                            local tmpF = io.open(tmpArchive, "w")
                             if not tmpF then
                                 ms.alert("Update failed: could not write temp file.", 4)
                                 return
                             end
                             tmpF:write(fBody); tmpF:close()
-                            local actualHash = ms.integrity.hashFile(tmpPath)
-                            local timestamp  = os.date("%Y-%m-%d_%H%M")
-                            local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
-                            local bOk = moveFile(corePath, backupFile)
-                            if not bOk then
-                                os.remove(tmpPath)
-                                ms.alert("Update failed: could not back up ms_core.lua.", 4)
+                            local tmpExtract = archivePath .. "ms_bundle_extract/"
+                            os.execute("rm -rf '" .. tmpExtract .. "'")
+                            os.execute("mkdir -p '" .. tmpExtract .. "'")
+                            local _, tarOk = hs.execute(
+                                "tar xzf '" .. tmpArchive .. "' -C '" .. tmpExtract .. "' 2>&1"
+                            )
+                            os.remove(tmpArchive)
+                            if not tarOk then
+                                os.execute("rm -rf '" .. tmpExtract .. "'")
+                                ms.alert("Update failed: could not extract bundle.", 5)
                                 return
                             end
-                            local mOk = moveFile(tmpPath, corePath)
-                            if not mOk then
-                                moveFile(backupFile, corePath)
-                                ms.alert("Update failed: could not install.\nBackup restored.", 5)
+                            local timestamp = os.date("%Y-%m-%d_%H%M")
+                            local ok = _applyBundleUpdate(tmpExtract, timestamp)
+                            os.execute("rm -rf '" .. tmpExtract .. "'")
+                            if not ok then
+                                ms.alert("Update failed: could not apply bundle.", 5)
                                 return
                             end
-                            ms.integrity.writeTrustedHash(actualHash)
                             ms.integrity.invalidateCache()
-                            _writeTestingRun(info.runId)
-                            ms.alert("Updated to " .. info.display .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                            _writeTestingRun(buildNum)
+                            ms.alert("Updated to build " .. buildNum .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
                             hs.timer.doAfter(3, function() hs.reload() end)
                         end)
                     end)
