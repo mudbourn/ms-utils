@@ -1159,20 +1159,23 @@
                         -- 7. Unfocus → refocus the target app so it picks up
                         --    the new macro/key state, then toast.
                         hs.timer.doAfter(0.5, function()
-                            local app = ms._targetApp and hs.application.get(ms._targetApp)
-                            if app then
-                                app:hide()
-                                hs.timer.doAfter(0.15, function()
-                                    app:activate()
-                                    hs.timer.doAfter(0.3, function()
-                                        ms.playSlot("update")
-                                        ms.alert("Quick Reload complete.", 5, true)
+                            local ok, err = pcall(function()
+                                local app = ms._targetApp and hs.application.get(ms._targetApp)
+                                if app then
+                                    app:hide()
+                                    hs.timer.doAfter(0.15, function()
+                                        pcall(function() app:activate() end)
+                                        hs.timer.doAfter(0.3, function()
+                                            ms.playSlot("update")
+                                            ms.alert("Quick Reload complete.", 5, true)
+                                        end)
                                     end)
-                                end)
-                            else
-                                ms.playSlot("update")
-                                ms.alert("Quick Reload complete.", 5, true)
-                            end
+                                else
+                                    ms.playSlot("update")
+                                    ms.alert("Quick Reload complete.", 5, true)
+                                end
+                            end)
+                            if not ok then print("quickReload step 7 error: " .. tostring(err)) end
                         end)
                     end
 
