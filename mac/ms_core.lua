@@ -2386,6 +2386,30 @@
                 -- Checks if a newer version is available without downloading.
                 -- Fetches MANIFEST.json and compares both sha256 and version
                 -- against the local manifest. Notifies if either differs.
+                -- Parse a dotted version string into a table of numeric components
+                -- for comparison.  "1.2.10" → {1, 2, 10}.  Non-numeric or missing
+                -- segments default to 0 so "1.2" compares equal to "1.2.0".
+                local function _parseVersion(v)
+                    local t = {}
+                    if type(v) == "string" then
+                        for n in v:gmatch("%d+") do t[#t + 1] = tonumber(n) or 0 end
+                    end
+                    return t
+                end
+
+                -- Returns true when `remote` is strictly newer than `local`.
+                -- Compares component-by-component: 1.2.10 > 1.2.3, 2.0 > 1.99.
+                local function _remoteIsNewer(localV, remoteV)
+                    local a, b = _parseVersion(localV), _parseVersion(remoteV)
+                    local len = math.max(#a, #b)
+                    for i = 1, len do
+                        local la, ra = a[i] or 0, b[i] or 0
+                        if ra > la then return true  end
+                        if ra < la then return false end
+                    end
+                    return false  -- equal
+                end
+
                 ms.integrity.checkForUpdate = function(callback)
                     local manifestURL = ms._updateManifestURL
                     if not manifestURL or manifestURL == "" or not manifestURL:match("^https://") then
@@ -2411,32 +2435,38 @@
                         end
                         local cur = ms.integrity.hashFile(corePath)
                         local sameHash = cur and cur:lower() == manifest.sha256:lower()
-                        local sameVer  = localVersion and manifest.version and localVersion == manifest.version
-                        -- Self-heal: if hash matches (we ARE on this version)
-                        -- but the local manifest is stale, update it silently.
-                        if sameHash and not sameVer then
-                            local mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
-                            if mf then
-                                mf:write(hs.json.encode({
-                                    version = manifest.version,
-                                    sha256  = manifest.sha256,
-                                    url     = manifest.url,
-                                    windows_url     = manifest.windows_url,
-                                    windows_sha256  = manifest.windows_sha256,
-                                })); mf:close()
+                        -- Primary signal: is the remote version strictly newer?
+                        local isNewer = _remoteIsNewer(localVersion, manifest.version)
+                        -- If the file hash matches the remote manifest, we are
+                        -- already running the correct code.  Sync the local
+                        -- manifest version silently (self-heal) and report no
+                        -- update — regardless of whether the version strings
+                        -- differ, since a version-only manifest bump does not
+                        -- constitute a new release.
+                        if sameHash then
+                            if localVersion ~= manifest.version then
+                                local mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
+                                if mf then
+                                    mf:write(hs.json.encode({
+                                        version = manifest.version,
+                                        sha256  = manifest.sha256,
+                                        url     = manifest.url,
+                                        windows_url     = manifest.windows_url,
+                                        windows_sha256  = manifest.windows_sha256,
+                                    })); mf:close()
+                                end
                             end
-                            sameVer = true
-                        end
-                        if sameHash and sameVer then
                             if callback then pcall(callback, nil); return end
                         end
-                        -- If versions match but hash differs, the local file was
-                        -- edited (e.g. by the user or a local tool).  Not an update.
-                        if sameVer and not sameHash then
+                        -- Hashes differ.  If the remote version is NOT newer,
+                        -- the local file has been edited (e.g. by the user or a
+                        -- local tool) — not a genuine update.
+                        if not isNewer then
                             print("ms update: local ms_core.lua differs from manifest hash"
-                                .. " but version matches — skipping (local edits detected).")
+                                .. " but remote version is not newer — skipping (local edits detected).")
                             if callback then pcall(callback, nil); return end
                         end
+                        -- Hashes differ AND remote version is genuinely newer → update.
                         if callback then
                             pcall(callback, {
                                 version = manifest.version or "?",
