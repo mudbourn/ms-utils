@@ -1311,6 +1311,24 @@
                 .addEventListener("click", (e) => {
                     if (e.target === e.currentTarget) closeModal(false);
                 });
+            // Global Enter/Escape for all modals (including confirm-only where
+            // the input field is hidden and its own keydown handler won't fire).
+            document.addEventListener("keydown", (e) => {
+                const overlay = document.getElementById("modal-overlay");
+                if (!overlay || !overlay.classList.contains("open")) return;
+                if (e.key === "Enter") {
+                    // Don't double-fire if focus is on the input (its own handler runs).
+                    if (document.activeElement === document.getElementById("modal-input")) return;
+                    e.preventDefault();
+                    playSlot("interact");
+                    closeModal(true);
+                }
+                if (e.key === "Escape") {
+                    e.preventDefault();
+                    playSlot("back");
+                    closeModal(false);
+                }
+            });
             document
                 .getElementById("modal-input")
                 .addEventListener("keydown", (e) => {

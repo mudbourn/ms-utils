@@ -223,32 +223,75 @@
                     _activeButtons   = {},  -- button number → true while held
                     _coordMode       = "screen",  -- screen | window | ref | screenCenter
                 }
+                -- ── Dev Log Infrastructure ──────────────────────────────────
+                -- Writes to a flat combined log AND per-category files so you can
+                -- tail just system events or just errors without input noise.
+                --
+                -- Categories:  input | macro | system | error | console
+                -- Flat file:   ms_dev.log          (everything, chronological)
+                -- Cat files:   ms_dev_input.log    ms_dev_system.log
+                --              ms_dev_macro.log    ms_dev_error.log
+                --              ms_dev_console.log
+                -- Archives:    ms_dev_logs/        (pruned to limit per prefix)
                 local _devLogDir  = os.getenv("HOME") .. "/Documents/"
                 local _devLogPath = _devLogDir .. "ms_dev.log"
                 local _devArchDir = _devLogDir .. "ms_dev_logs/"
-                do
-                    -- On every reload, archive the previous session's log so each
-                    -- session starts clean and history never bloats the file.
-                    if hs.fs.attributes(_devLogPath) then
-                        hs.fs.mkdir(_devArchDir)
-                        local _stamp = os.date("%Y-%m-%d_%H%M%S")
-                        os.rename(_devLogPath, _devArchDir .. "ms_dev_" .. _stamp .. ".log")
-                        -- Prune: keep only the 20 most recent archives.
-                        local _list = {}
-                        for _name in hs.fs.dir(_devArchDir) do
-                            if _name:match("^ms_dev_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$") then
-                                table.insert(_list, _name)
-                            end
-                        end
-                        table.sort(_list)  -- lexicographic == chronological for this format
-                        local _limit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
-                            and ms._devArchiveLimit or 15
-                        while #_list > _limit do
-                            os.remove(_devArchDir .. _list[1])
-                            table.remove(_list, 1)
-                        end
+
+                -- Map entry.type → category.  Entries with an explicit .category
+                -- field are left alone; everything else goes through this table.
+                local _typeToCategory = {
+                    key       = "input",
+                    mouse     = "input",
+                    scroll    = "input",
+                    mousemove = "input",
+                    macro     = "macro",
+                    system    = "system",
+                    error     = "error",
+                    warn      = "error",
+                    print     = "console",
+                    result    = "console",
+                }
+
+                -- Category → file path (built once).
+                local _catPaths = {}
+                for _, cat in ipairs({"input", "macro", "system", "error", "console"}) do
+                    _catPaths[cat] = _devLogDir .. "ms_dev_" .. cat .. ".log"
+                end
+
+                -- Archive helper: moves a log file into ms_dev_logs/ with a timestamp.
+                local function _archiveLog(path, stamp)
+                    if not hs.fs.attributes(path) then return end
+                    hs.fs.mkdir(_devArchDir)
+                    local base = path:match("([^/]+)%.log$")  -- e.g. "ms_dev_system"
+                    os.rename(path, _devArchDir .. base .. "_" .. stamp .. ".log")
+                end
+
+                -- Prune helper: keep at most `limit` files matching a prefix pattern.
+                local function _pruneArchives(prefixPattern, limit)
+                    local list = {}
+                    for name in hs.fs.dir(_devArchDir) do
+                        if name:match(prefixPattern) then table.insert(list, name) end
+                    end
+                    table.sort(list)
+                    while #list > limit do
+                        os.remove(_devArchDir .. list[1])
+                        table.remove(list, 1)
                     end
                 end
+
+                -- On every reload, archive all log files so each session starts clean.
+                do
+                    local stamp = os.date("%Y-%m-%d_%H%M%S")
+                    _archiveLog(_devLogPath, stamp)
+                    for _, p in pairs(_catPaths) do _archiveLog(p, stamp) end
+
+                    -- Prune: flat log keeps 15, category logs keep 8 each.
+                    local flatLimit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
+                        and ms._devArchiveLimit or 15
+                    _pruneArchives("^ms_dev_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$", flatLimit)
+                    _pruneArchives("^ms_dev_%w+_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$", 8)
+                end
+
                 local _devBusy = false
                 local _devLastConsoleType = nil  -- last key/mouse/macro type sent; gates repeat suppression
 
@@ -256,50 +299,70 @@
                     if _devBusy then return end
                     _devBusy = true
                     entry.ts = os.date("%H:%M:%S")
+
+                    -- Derive category from type if not explicitly set.
+                    if not entry.category then
+                        entry.category = _typeToCategory[entry.type] or "system"
+                    end
+
+                    local ok, json = pcall(hs.json.encode, entry)
+                    if not ok then _devBusy = false; return end
+
+                    -- Write to flat combined log.
                     pcall(function()
                         local f = io.open(_devLogPath, "a")
-                        if f then f:write(hs.json.encode(entry) .. "\n"); f:close() end
+                        if f then f:write(json .. "\n"); f:close() end
                     end)
-                    local ok, json = pcall(hs.json.encode, entry)
-                    if ok then
-                        local t = entry.type
-                        -- Console routing with consecutive-repeat suppression.
-                        -- key/mouse/macro: only send when the type changes from the last sent.
-                        -- print/error/result/input: always send and reset the gate.
-                        if ms.dev._consolePanel and t ~= "mousemove" then
-                            local send = false
-                            if t == "key" or t == "mouse" or t == "macro" then
-                                if _devLastConsoleType ~= t then
-                                    _devLastConsoleType = t
-                                    send = true
-                                end
-                            else
-                                -- Non-indicator type: always show and reset gate so the
-                                -- next key/mouse/macro press shows a fresh badge.
-                                _devLastConsoleType = nil
+
+                    -- Write to category-specific log.
+                    local catPath = _catPaths[entry.category]
+                    if catPath then
+                        pcall(function()
+                            local f = io.open(catPath, "a")
+                            if f then f:write(json .. "\n"); f:close() end
+                        end)
+                    end
+
+                    -- Panel routing (unchanged logic).
+                    local t = entry.type
+                    -- Console routing with consecutive-repeat suppression.
+                    -- key/mouse/macro: only send when the type changes from the last sent.
+                    -- print/error/result/system: always send and reset the gate.
+                    if ms.dev._consolePanel and t ~= "mousemove" then
+                        local send = false
+                        if t == "key" or t == "mouse" or t == "macro" then
+                            if _devLastConsoleType ~= t then
+                                _devLastConsoleType = t
                                 send = true
                             end
-                            if send then
-                                pcall(function()
-                                    ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                                end)
-                            end
+                        else
+                            _devLastConsoleType = nil
+                            send = true
                         end
-                        -- Watcher: macro, print, error
-                        if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error") then
+                        if send then
                             pcall(function()
-                                ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                            end)
-                        end
-                        if ms.dev._keysPanel and ms.dev._keysReady
-                            and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
-                            pcall(function()
-                                ms.dev._keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                                ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
                             end)
                         end
                     end
+                    -- Watcher: macro, print, error, system
+                    if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error" or t=="system") then
+                        pcall(function()
+                            ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                        end)
+                    end
+                    if ms.dev._keysPanel and ms.dev._keysReady
+                        and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
+                        pcall(function()
+                            ms.dev._keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                        end)
+                    end
                     _devBusy = false
                 end
+
+                -- Public API: any code can call ms.dev.log({ type = "system", event = "...", ... })
+                -- .category is auto-derived from .type unless you override it.
+                ms.dev.log = function(entry) _devWrite(entry) end
 
                 local _origPrint = print
                 _G.print = function(...)
@@ -616,6 +679,22 @@
                     return setmetatable({ dismissAll = dismissAll }, {
                         __call = function(_, msg, duration, noDefaultSound)
                             duration = duration or 5
+
+                            -- Auto-log every alert to the dev log.  Heuristic:
+                            -- error-like messages get category "error", rest get "system".
+                            if ms.dev and ms.dev.log then
+                                local isError = msg and (
+                                    msg:find("[Ff]ailed") or msg:find("[Ee]rror")
+                                    or msg:find("[Cc]ould not") or msg:find("[Cc]annot")
+                                    or msg:find("[Rr]ejected") or msg:find("[Dd]enied")
+                                    or msg:find("[Aa]borted")
+                                )
+                                ms.dev.log({
+                                    type    = isError and "error" or "system",
+                                    event   = "alert",
+                                    msg     = (msg or ""):sub(1, 200),  -- truncate long messages
+                                })
+                            end
 
                             if loadfinish == 1 and not noDefaultSound then
                                 ms.playSlot("alert")
@@ -955,6 +1034,7 @@
                     end
 
                     ms.loadSettings = function()
+                        ms.dev.log({ type = "system", event = "settings_load_start" })
                         if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                         local f = io.open(jsonPath, "r")
                         if f then
@@ -963,9 +1043,11 @@
                             local data = hs.json.decode(content)
                             if data then
                                 ms._applySettings(data)
+                                ms.dev.log({ type = "system", event = "settings_loaded", source = "json" })
                                 return
                             end
                             -- JSON present but unreadable; fall through to flat-file check.
+                            ms.dev.log({ type = "error", event = "settings_parse_failed", source = "json" })
                         end
                         local oldF = io.open(settingsPath, "r")
                         if oldF then
@@ -1126,6 +1208,7 @@
                     -- Quick Reload: fires selected functions sequentially (no overlap),
                     -- closes the settings UI, unfocuses/refocuses the target app, then toasts.
                     ms.quickReload = function()
+                        ms.dev.log({ type = "system", event = "quick_reload_start" })
                         -- 0. Mark quick reload in progress so it persists across the reload.
                         ms._quickReloaded = 1
                         ms._quickReloading = true   -- suppress per-module toasts
@@ -1355,6 +1438,7 @@
 
                 -- Theme System --
                 ms.loadTheme = function()
+                    ms.dev.log({ type = "system", event = "theme_load" })
                     if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                     for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
                     local f = io.open(themePath, "r")
@@ -1597,12 +1681,14 @@
                 local auditMacros
 
                 local function switchProfile(targetName)
+                    ms.dev.log({ type = "system", event = "profile_switch_start", target = targetName })
                     -- Security: audit the target profile before touching any files.
                     -- A file manually dropped into profiles/ bypasses importProfile's audit,
                     -- so we check here as well.
                     local targetFile = profilesPath .. targetName .. "/ms_macros.lua"
                     local tf = io.open(targetFile, "r")
                     if not tf then
+                        ms.dev.log({ type = "error", event = "profile_switch_failed", reason = "cannot_read", target = targetName })
                         ms.alert("Profile switch failed: cannot read target profile.", 5)
                         return
                     end
@@ -1648,6 +1734,7 @@
                     end
 
                     ms.alert("Switched to \"" .. targetName .. "\".\nReloading in 3 seconds...", 4)
+                    ms.dev.log({ type = "system", event = "profile_switch_complete", target = targetName })
                     hs.timer.doAfter(3, function() hs.reload() end)
                 end
 
@@ -2235,7 +2322,12 @@
 
                 ms.integrity.writeTrustedHash = function(hash)
                     local f = io.open(trustedHashPath, "w")
-                    if f then f:write(hash .. "\n"); f:close(); return true end
+                    if f then
+                        f:write(hash .. "\n"); f:close()
+                        ms.dev.log({ type = "system", event = "hash_seeded", hash = hash:sub(1,16) .. "…" })
+                        return true
+                    end
+                    ms.dev.log({ type = "error", event = "hash_seed_failed" })
                     return false
                 end
 
@@ -2249,7 +2341,10 @@
                 -- Hammerspoon main thread is never stalled by shasum.
                 local _intCache         = { status = nil, cur = nil, trusted = nil, t = 0 }
                 local _intHashInProgress = false  -- guard against concurrent hs.task runs
-                ms.integrity.invalidateCache = function() _intCache.t = 0 end
+                ms.integrity.invalidateCache = function()
+                    _intCache.t = 0
+                    ms.dev.log({ type = "system", event = "integrity_cache_invalidated" })
+                end
                 ms.integrity.check = function()
                     local now = os.time()
                     if _intCache.status ~= nil and (now - _intCache.t) < 60 then
@@ -2266,6 +2361,13 @@
                             elseif cur == trusted then status = "trusted"
                             else                       status = "mismatch" end
                             _intCache = { status = status, cur = cur, trusted = trusted, t = os.time() }
+                            ms.dev.log({
+                                type    = "system",
+                                event   = "integrity_check",
+                                status  = status,
+                                cur     = cur     and cur:sub(1,16) .. "…" or nil,
+                                trusted = trusted and trusted:sub(1,16) .. "…" or nil,
+                            })
                             if status == "mismatch" then hs.reload() end
                         end, {"-a", "256", corePath})
                         if _t then _t:start() else _intHashInProgress = false end
@@ -2376,30 +2478,37 @@
                     )
                     os.remove(_keyPath); os.remove(_sigPath); os.remove(_msgPath)
                     if not _ok then
+                        ms.dev.log({ type = "error", event = "signature_failed", output = tostring(_out) })
                         ms.alert("Update aborted: signature verification failed.\n" .. tostring(_out), 12)
                         return false
                     end
+                    ms.dev.log({ type = "system", event = "signature_verified" })
                     return true
                 end
 
                 ms.integrity.update = function()
+                    ms.dev.log({ type = "system", event = "update_start", channel = "stable" })
                     local manifestURL = ms._updateManifestURL
                     if not manifestURL or manifestURL == "" then
+                        ms.dev.log({ type = "error", event = "update_failed", reason = "no_url" })
                         ms.alert("Update URL not configured.\nSet ms._updateManifestURL in ms_core.lua.", 6)
                         return
                     end
                     if not manifestURL:match("^https://") then
+                        ms.dev.log({ type = "error", event = "update_failed", reason = "not_https" })
                         ms.alert("Update URL must use HTTPS.\nHTTP URLs are not permitted.", 6)
                         return
                     end
                     ms.alert("Fetching update manifest\xe2\x80\xa6", 4, true)
                     hs.http.asyncGet(manifestURL, nil, function(mCode, mBody, _)
                         if mCode ~= 200 or not mBody then
+                            ms.dev.log({ type = "error", event = "update_failed", reason = "manifest_http", code = mCode })
                             ms.alert("Update failed: manifest request returned " .. tostring(mCode) .. ".", 5)
                             return
                         end
                         local manifest = hs.json.decode(mBody)
                         if not manifest then
+                            ms.dev.log({ type = "error", event = "update_failed", reason = "manifest_parse" })
                             ms.alert("Update failed: could not parse manifest.", 5)
                             return
                         end
@@ -2427,8 +2536,10 @@
                             local bundleURL  = manifest.bundle.url
                             local bundleHash = manifest.bundle.sha256:lower()
                             ms.alert("Downloading v" .. newVersion .. " bundle\xe2\x80\xa6", 4, true)
+                            ms.dev.log({ type = "system", event = "update_download_start", version = newVersion, format = "bundle" })
                             hs.http.asyncGet(bundleURL, nil, function(fCode, fBody, _)
                                 if fCode ~= 200 or not fBody then
+                                    ms.dev.log({ type = "error", event = "update_failed", reason = "download_http", code = fCode, version = newVersion })
                                     ms.alert("Update failed: bundle download returned " .. tostring(fCode) .. ".", 5)
                                     return
                                 end
@@ -2457,6 +2568,7 @@
                                 os.remove(tmpArchive)
                                 if not tarOk then
                                     os.execute("rm -rf '" .. tmpExtract .. "'")
+                                    ms.dev.log({ type = "error", event = "update_failed", reason = "extract_failed", version = newVersion })
                                     ms.alert("Update failed: could not extract bundle.", 5)
                                     return
                                 end
@@ -2469,9 +2581,11 @@
                                 ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                                 os.execute("rm -rf '" .. tmpExtract .. "'")
                                 if not ok then
+                                    ms.dev.log({ type = "error", event = "update_failed", reason = "apply_failed", version = newVersion })
                                     ms.alert("Update failed: could not apply bundle.", 5)
                                     return
                                 end
+                                ms.dev.log({ type = "system", event = "update_applied", version = newVersion, format = "bundle" })
                                 -- Re-seed trusted hash from the new ms_core.lua so the
                                 -- Guardian and auto-seed don't fire on the post-update reload.
                                 local newCoreHash = ms.integrity.hashFile(corePath)
@@ -2495,8 +2609,10 @@
                             -- ── Legacy single-file update (ms_core.lua only) ────────
                             local expectedHash = manifest.sha256:lower()
                             ms.alert("Downloading v" .. newVersion .. "\xe2\x80\xa6", 4, true)
+                            ms.dev.log({ type = "system", event = "update_download_start", version = newVersion, format = "single-file" })
                             hs.http.asyncGet(manifest.url, nil, function(fCode, fBody, _)
                                 if fCode ~= 200 or not fBody then
+                                    ms.dev.log({ type = "error", event = "update_failed", reason = "download_http", code = fCode, version = newVersion })
                                     ms.alert("Update failed: file download returned " .. tostring(fCode) .. ".", 5)
                                     return
                                 end
@@ -2547,6 +2663,7 @@
                                     })); _mf:close()
                                 end
                                 ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                                ms.dev.log({ type = "system", event = "update_applied", version = newVersion, format = "single-file" })
                                 hs.timer.doAfter(3, function() hs.reload() end)
                             end)
                         end
@@ -2597,15 +2714,18 @@
                     end
                     hs.http.asyncGet(manifestURL, nil, function(mCode, mBody, _)
                         if mCode ~= 200 or not mBody then
+                            ms.dev.log({ type = "error", event = "update_check_failed", reason = "manifest_http", code = mCode, channel = "stable" })
                             if callback then pcall(callback, nil); return end
                         end
                         local manifest = hs.json.decode(mBody)
                         if not manifest or not manifest.version then
+                            ms.dev.log({ type = "error", event = "update_check_failed", reason = "manifest_parse", channel = "stable" })
                             if callback then pcall(callback, nil); return end
                         end
                         local remoteVersion = manifest.version
                         -- Version mismatch → update available.
                         if _remoteIsNewer(localVersion, remoteVersion) then
+                            ms.dev.log({ type = "system", event = "update_available", local_v = localVersion, remote_v = remoteVersion, channel = "stable" })
                             if callback then
                                 pcall(callback, {
                                     version = remoteVersion or "?",
@@ -2666,6 +2786,7 @@
                 end
 
                 ms.integrity.updateBeta = function()
+                    ms.dev.log({ type = "system", event = "update_start", channel = "testing" })
                     local repo = ms._testingRepo or "mudbourn/ms-utils"
                     if not repo or repo == "" then
                         ms.alert("Testing channel: no repo configured.\nSet ms._testingRepo in ms_core.lua.", 6)
@@ -2675,6 +2796,7 @@
                     _fetchLatestTestingRun(function(info)
                         if not info or not info.runId then
                             -- No workflow run found — fall back to main branch.
+                            ms.dev.log({ type = "system", event = "update_beta_fallback", reason = "no_workflow_run", target = "main" })
                             ms.alert("Downloading latest from main branch\xe2\x80\xa6", 4, true)
                             local fileURL = "https://raw.githubusercontent.com/" .. repo
                                 .. "/main/mac/ms_core.lua"
@@ -2716,6 +2838,7 @@
                                 ms.integrity.writeTrustedHash(actualHash)
                                 ms.integrity.invalidateCache()
                                 ms.alert("Updated to latest main.\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                                ms.dev.log({ type = "system", event = "update_applied", version = "main-latest", format = "single-file" })
                                 hs.timer.doAfter(3, function() hs.reload() end)
                             end)
                             return
@@ -2724,10 +2847,12 @@
                         local bundleURL = "https://github.com/" .. repo
                             .. "/releases/download/pre-" .. buildNum
                             .. "/mudscript-macos-pre-" .. buildNum .. ".tar.gz"
+                        ms.dev.log({ type = "system", event = "update_download_start", version = "pre-" .. buildNum, format = "bundle" })
                         ms.alert("Downloading build " .. buildNum .. "\xe2\x80\xa6", 4, true)
                         hs.http.asyncGet(bundleURL, nil, function(fCode, fBody, _)
                             if fCode ~= 200 or not fBody then
                                 -- Fallback: try single-file download for older builds.
+                                ms.dev.log({ type = "system", event = "update_beta_fallback", reason = "bundle_http_" .. tostring(fCode), target = "single-file" })
                                 local fileURL = "https://raw.githubusercontent.com/" .. repo
                                     .. "/" .. info.sha .. "/mac/ms_core.lua"
                                 hs.http.asyncGet(fileURL, nil, function(fCode2, fBody2, _)
@@ -2769,6 +2894,7 @@
                                     ms.integrity.invalidateCache()
                                     _writeTestingRun(buildNum)
                                     ms.alert("Updated to build " .. buildNum .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                                    ms.dev.log({ type = "system", event = "update_applied", version = "pre-" .. buildNum, format = "single-file-fallback" })
                                     hs.timer.doAfter(3, function() hs.reload() end)
                                 end)
                                 return
@@ -2815,6 +2941,7 @@
                             ms.integrity.invalidateCache()
                             _writeTestingRun(buildNum)
                             ms.alert("Updated to build " .. buildNum .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                            ms.dev.log({ type = "system", event = "update_applied", version = "pre-" .. buildNum, format = "bundle" })
                             hs.timer.doAfter(3, function() hs.reload() end)
                         end)
                     end)
@@ -5176,6 +5303,7 @@
                 if state == 1 and BindValidity ~= 1 then
                     BindValidity = 1
                     pcall(function() ms.cam.enable() end)
+                    ms.dev.log({ type = "system", event = "macros_enabled" })
                     if not silent then _doNotify(1) end
                 elseif state == 0 and BindValidity ~= 0 then
                     BindValidity = 0
@@ -5186,6 +5314,7 @@
                     end
                     ms.running = {}
                     pcall(function() ms.cam.disable() end)
+                    ms.dev.log({ type = "system", event = "macros_disabled" })
                     if not silent then _doNotify(0) end
                 end
                 -- Repaint the panel immediately when it is open so the macro
@@ -5199,6 +5328,7 @@
                         local fromDialog = ms._inputOpen
                         ms._inputOpen = false
                         ms._robloxActive = true
+                        ms.dev.log({ type = "system", event = "roblox_focus", fromDialog = fromDialog or false })
                         ms.cam._setupWatcher()
                         -- Don't enable macros while the loading screen is still up.
                         if not ms._loadComplete then return end
@@ -5218,6 +5348,7 @@
                         if ms.ui._open and appName == "Hammerspoon" then return end
                         ms._inputOpen    = (appName == "Hammerspoon") and ms._robloxActive
                         ms._robloxActive = false
+                        ms.dev.log({ type = "system", event = "roblox_blur", to = appName })
                         if BindValidity == 1 then
                             ms.setMacros(0, ms._inputOpen)
                         end
@@ -6971,6 +7102,7 @@
                         if not data.id then return end
                         local def = ms.registry._defs[data.id]
                         if not def then return end
+                        if def.rebindable == false then return end  -- non-rebindable system binds
                         local label = def.label or data.id
 
                         local function bindDisplay(c)
@@ -8640,6 +8772,7 @@
                     end)
                     -- Loading complete: allow macros to run and activate them if Roblox is already focused.
                     ms._loadComplete = true
+                    ms.dev.log({ type = "system", event = "startup_complete" })
                     if ms._robloxActive then ms.setMacros(1, true) end
                     -- 4. Integrity warning / update check — after all three announce toasts
                     -- have faded (3 x 3 s = 9 s total) plus a 1 s gap.
