@@ -1166,11 +1166,18 @@
                             ms.saveSettings()
                         end
 
-                        -- 6. Bounce focus through another app so the app watcher
-                        --    re-evaluates _robloxActive and BindValidity on return.
-                        --    Without this, stale state from before the reload can
-                        --    leave macros silently blocked.
-                        local function _finishToast()
+                        -- 6. Unfocus then refocus the target app so the app watcher
+                        --    re-evaluates _robloxActive.  After the bounce completes,
+                        --    explicitly pin BindValidity = 1 so macros are ready
+                        --    immediately — the watcher's intermediate setMacros(0) is
+                        --    expected and harmless, but we must not rely on the
+                        --    watcher's re-activation path to restore BindValidity.
+                        local function _finishReload()
+                            -- Pin macro readiness after the focus cycle.
+                            BindValidity = 1
+                            if ms._targetApp then
+                                ms._robloxActive = true
+                            end
                             if not _qrDone then return end
                             -- Refresh UI if open, then show confirmation.
                             --    Alert must fire AFTER the refresh so the toast isn't wiped
@@ -1199,14 +1206,14 @@
                                     local _refocus = hs.application.get(ms._targetApp) or _tgt
                                     pcall(function() _refocus:activate() end)
                                     hs.timer.doAfter(0.15, function()
-                                        _finishToast()
+                                        _finishReload()
                                     end)
                                 end)
                             else
-                                _finishToast()
+                                _finishReload()
                             end
                         else
-                            _finishToast()
+                            _finishReload()
                         end
                     end
 
