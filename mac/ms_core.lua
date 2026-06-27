@@ -2464,11 +2464,18 @@
                                     return
                                 end
                                 ms.integrity.invalidateCache()
+                                -- Re-seed trusted hash from the new ms_core.lua so the
+                                -- Guardian and auto-seed don't fire on the post-update reload.
+                                local newCoreHash = ms.integrity.hashFile(corePath)
+                                if newCoreHash then
+                                    ms.integrity.writeTrustedHash(newCoreHash)
+                                end
                                 -- Write local MANIFEST.
                                 local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
                                 if _mf then
                                     _mf:write(hs.json.encode({
                                         version = newVersion,
+                                        sha256  = newCoreHash or manifest.sha256,
                                         bundle  = manifest.bundle,
                                     })); _mf:close()
                                 end
@@ -2734,6 +2741,12 @@
                                 return
                             end
                             ms.integrity.invalidateCache()
+                            -- Re-seed trusted hash from the new ms_core.lua so the
+                            -- Guardian and auto-seed don't fire on the post-update reload.
+                            local newCoreHash = ms.integrity.hashFile(corePath)
+                            if newCoreHash then
+                                ms.integrity.writeTrustedHash(newCoreHash)
+                            end
                             _writeTestingRun(buildNum)
                             ms.alert("Updated to build " .. buildNum .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
                             hs.timer.doAfter(3, function() hs.reload() end)
