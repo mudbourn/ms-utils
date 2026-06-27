@@ -2660,6 +2660,34 @@
                     ),
                 );
 
+                // Update channel selector
+                const chan = S.updateChannel || "stable";
+                body.appendChild(divider());
+                body.appendChild(
+                    row(
+                        "Update Channel",
+                        chan === "testing"
+                            ? "Checks GitHub Actions for latest testing build"
+                            : "Checks MANIFEST.json for stable releases",
+                        h(
+                            "button",
+                            {
+                                cls: "btn-macro " + (chan === "testing" ? "btn-enable" : ""),
+                                onmouseenter: () => playSlot("hover"),
+                                onclick: () => {
+                                    playSlot("interact");
+                                    const next = chan === "testing" ? "stable" : "testing";
+                                    sendToHost({
+                                        action: "setUpdateChannel",
+                                        value: next,
+                                    });
+                                },
+                            },
+                            chan === "testing" ? "Testing" : "Stable",
+                        ),
+                    ),
+                );
+
                 body.appendChild(divider());
 
                 // System Integrity
@@ -2796,14 +2824,15 @@
                 );
                 docBtn.style.flex = "1";
 
-                if (S.updateManifestURL) {
+                if (S.updateManifestURL || S.updateChannel === "testing") {
+                    const _chan = S.updateChannel || "stable";
                     const updateBtn = actionBtn(
                         "Check for Update",
                         "",
                         async () => {
                             const r = await openModal(
                                 "Check for Update",
-                                "Download and apply the latest ms_core.lua from GitHub?\n\nThe current file will be backed up to backups/ and Hammerspoon will reload.",
+                                "Channel: " + _chan + "\nDownload and apply the latest ms_core.lua from GitHub?\n\nThe current file will be backed up to backups/ and Hammerspoon will reload.",
                                 "Update",
                             );
                             if (r.confirmed)

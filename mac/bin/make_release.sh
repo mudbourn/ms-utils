@@ -2,12 +2,15 @@
 # bin/make_release.sh
 # ─────────────────────────────────────────────────────────────────────────────
 # Stamps the SHA-256 of ms_core.lua into MANIFEST.json locally.
-# Signing is handled automatically by GitHub Actions (.github/workflows/release.yml)
-# whenever ms_core.lua is pushed to main — you do not need to sign manually.
+# Signing and release creation are handled by GitHub Actions when you trigger
+# the "Release" workflow manually from the Actions tab with a version number.
 #
 # Use this script when you want to verify the hash locally before pushing,
-# or to bump the version number:
+# or to preview what MANIFEST.json will look like:
 #   bash bin/make_release.sh [version]
+#
+# NOTE: This only updates the local file. To create an official release,
+# push your changes and trigger the Release workflow from GitHub Actions.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -61,6 +64,8 @@ EOF
 
 echo "MANIFEST.json updated  (version=$NEW_VERSION)"
 echo ""
-echo "Stage and commit both files together:"
-echo "  git add ms_core.lua MANIFEST.json"
-echo "  git commit -m 'release: v$NEW_VERSION'"
+echo "To create an official release:"
+echo "  1. git add ms_core.lua MANIFEST.json"
+echo "  2. git commit -m 'release: v$NEW_VERSION'"
+echo "  3. git push"
+echo "  4. Trigger 'Release' workflow from GitHub Actions with version $NEW_VERSION"

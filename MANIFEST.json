@@ -2,9 +2,5 @@
   "version": "1.2.4",
   "sha256": "7ffc2c85d1e48443c947944021f1297de38d59fd33e08cc242d2307baeda561f",
   "url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua",
-  "signature": "LAm1e+9zqXpbbmlg+ODKXf5NPthuLaSG5JPrDk7lY8nvqYz4fjf17Ex4gFLN2Tno6LrwTHzHjzTHAVLhnfcPgvcBqPDLoWXIckveXetylGmWl4jWaDMXvDslmoYtPYqlCmLDIuV+58Nto8jnw/ee9R4iLV1vTi7hyokhQsKOQUu+hqhGsUCd2IL1kEfNBWNF3L8nC/qsh5sqC8De82rYqNeJcsxcnxuXbHw6qgAUInTlfddpxs2XCoJIOCgIZ7u0H8Z901WwHIYCmw9l4BHNQcK1f6+5PJKfrTEZEnL6eohUoeC5fobhc17B+fn7U9uM27wse5+qm+h6mb/iSCBVHQ==",
-  "windows_url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/win/ms_core_v2.ahk",
-  "windows_sha256": "9f0f400b00adf3575e34341c1ec890ff87a84a339928b55c6de90377dd325aa4",
-  "windows_version": "1.2.3",
-  "windows_signature": "o5IGcvKLyXaEX2XmqpsFmtg8aaT1tTOCnIGyd2e9w7DscdmEJHKbUHVa8Ita2Wtmy4DMR8M/1FGN59lTUp5J6isBIbGA9FzMEa9DTs+Fo8d2K73bkTCoRa4PCTwE9ehTmKTwVKdMWjxlzdCvZa6s3uhBjPffkgyCaaWFkgJzJL78aTgZjLJ2S/zhPmR8NpKJ/lC/YSGCbyP+9+TvLCdwxfBO+265MTrrBGQbrPoBJEGlbLZjc1VytxwNgTyHzeNgOFqENUbZTiJoNVKc94UTWe6332+/Z/kbjVwUIG4JBxpmuWmWrWFGgDvVvtPC9DaWfPP0E+DmD99Zw00tmweolA=="
+  "signature": "LAm1e+9zqXpbbmlg+ODKXf5NPthuLaSG5JPrDk7lY8nvqYz4fjf17Ex4gFLN2Tno6LrwTHzHjzTHAVLhnfcPgvcBqPDLoWXIckveXetylGmWl4jWaDMXvDslmoYtPYqlCmLDIuV+58Nto8jnw/ee9R4iLV1vTi7hyokhQsKOQUu+hqhGsUCd2IL1kEfNBWNF3L8nC/qsh5sqC8De82rYqNeJcsxcnxuXbHw6qgAUInTlfddpxs2XCoJIOCgIZ7u0H8Z901WwHIYCmw9l4BHNQcK1f6+5PJKfrTEZEnL6eohUoeC5fobhc17B+fn7U9uM27wse5+qm+h6mb/iSCBVHQ=="
 }

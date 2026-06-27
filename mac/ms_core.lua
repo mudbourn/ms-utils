@@ -147,6 +147,9 @@
             ms.soundAssign     = {}     -- per-slot overrides: { slotId = soundName }
             ms._docsURL           = "https://docs-ms.mudbourn.info"  -- opened by Settings › Documentation
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
+            ms._updateChannel     = "stable"  -- "stable" (MANIFEST.json) or "testing" (GitHub Actions)
+            ms._testingWorkflow   = "testing" -- workflow filename (without .yml) for the testing channel
+            ms._testingRepo       = "mudbourn/ms-utils"  -- GitHub owner/repo for Actions API
 
             -- RSA-2048 public key for MANIFEST.json signature verification.
             -- Matching private key: GitHub Secrets (MS_SIGNING_KEY).
@@ -767,6 +770,9 @@
                             local n = tonumber(data.devArchiveLimit)
                             if n and n >= 0 and n <= 50 then ms._devArchiveLimit = math.floor(n) end
                         end
+                        if data.updateChannel == "testing" or data.updateChannel == "stable" then
+                            ms._updateChannel = data.updateChannel
+                        end
                         if data.macros then
                             for id, entry in pairs(data.macros) do
                                 if entry.enabled ~= nil then
@@ -890,6 +896,7 @@
                             importedSounds   = ms.importedSounds or {},
                             skipDevPrewarm   = ms._skipDevPrewarm or false,
                             devArchiveLimit  = ms._devArchiveLimit or 15,
+                            updateChannel    = ms._updateChannel or "stable",
                             user             = ms._userSettingVals or {},
                             macros = {},
                         }
@@ -2384,8 +2391,6 @@
                                     version = newVersion,
                                     sha256  = expectedHash,
                                     url     = manifest.url,
-                                    windows_url     = manifest.windows_url,
-                                    windows_sha256  = manifest.windows_sha256,
                                 })); _mf:close()
                             end
                             ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
@@ -2394,9 +2399,6 @@
                     end)
                 end
 
-                -- Checks if a newer version is available without downloading.
-                -- Fetches MANIFEST.json and compares both sha256 and version
-                -- against the local manifest. Notifies if either differs.
                 -- Parse a dotted version string into a table of numeric components
                 -- for comparison.  "1.2.10" → {1, 2, 10}.  Non-numeric or missing
                 -- segments default to 0 so "1.2" compares equal to "1.2.0".
@@ -2421,6 +2423,9 @@
                     return false  -- equal
                 end
 
+                -- Checks if a newer version is available without downloading.
+                -- A version mismatch means the repo has changed enough to warrant
+                -- a manifest bump, so version comparison alone is the signal.
                 ms.integrity.checkForUpdate = function(callback)
                     local manifestURL = ms._updateManifestURL
                     if not manifestURL or manifestURL == "" or not manifestURL:match("^https://") then
@@ -2441,48 +2446,142 @@
                             if callback then pcall(callback, nil); return end
                         end
                         local manifest = hs.json.decode(mBody)
-                        if not manifest or not manifest.sha256 then
+                        if not manifest or not manifest.version then
                             if callback then pcall(callback, nil); return end
                         end
-                        local cur = ms.integrity.hashFile(corePath)
-                        local sameHash = cur and cur:lower() == manifest.sha256:lower()
-                        -- Primary signal: is the remote version strictly newer?
-                        local isNewer = _remoteIsNewer(localVersion, manifest.version)
-                        -- If the file hash matches the remote manifest, we are
-                        -- already running the correct code.  Sync the local
-                        -- manifest version silently (self-heal) and report no
-                        -- update — regardless of whether the version strings
-                        -- differ, since a version-only manifest bump does not
-                        -- constitute a new release.
-                        if sameHash then
-                            if localVersion ~= manifest.version then
-                                local mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
-                                if mf then
-                                    mf:write(hs.json.encode({
-                                        version = manifest.version,
-                                        sha256  = manifest.sha256,
-                                        url     = manifest.url,
-                                        windows_url     = manifest.windows_url,
-                                        windows_sha256  = manifest.windows_sha256,
-                                    })); mf:close()
-                                end
+                        local remoteVersion = manifest.version
+                        -- Version mismatch → update available.
+                        if _remoteIsNewer(localVersion, remoteVersion) then
+                            if callback then
+                                pcall(callback, {
+                                    version = remoteVersion or "?",
+                                    sha256  = manifest.sha256,
+                                })
                             end
-                            if callback then pcall(callback, nil); return end
+                            return
                         end
-                        -- Hashes differ.  If the remote version is NOT newer,
-                        -- the local file has been edited (e.g. by the user or a
-                        -- local tool) — not a genuine update.
-                        if not isNewer then
-                            print("ms update: local ms_core.lua differs from manifest hash"
-                                .. " but remote version is not newer — skipping (local edits detected).")
-                            if callback then pcall(callback, nil); return end
+                        if callback then pcall(callback, nil) end
+                    end)
+                end
+
+                -- Path for persisting the last-installed testing run ID.
+                local _testingRunPath = os.getenv("HOME")
+                    .. "/.hammerspoon/data/.ms_testing_run"
+
+                local function _readTestingRun()
+                    local f = io.open(_testingRunPath, "r")
+                    if not f then return 0 end
+                    local n = tonumber(f:read("*a")) or 0; f:close(); return n
+                end
+                local function _writeTestingRun(n)
+                    os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
+                    local f = io.open(_testingRunPath, "w")
+                    if f then f:write(tostring(n)); f:close() end
+                end
+
+                -- Fetch the latest successful testing workflow run from GitHub Actions.
+                -- Calls `callback(info)` with { runId, sha, display } on success, or
+                -- `callback(nil)` on failure / no runs found.
+                local function _fetchLatestTestingRun(callback)
+                    local repo = ms._testingRepo or "mudbourn/ms-utils"
+                    local wf   = ms._testingWorkflow or "testing"
+                    local apiURL = "https://api.github.com/repos/" .. repo
+                        .. "/actions/workflows/" .. wf .. ".yml/runs"
+                        .. "?conclusion=success&per_page=1"
+                    hs.http.asyncGet(apiURL, {
+                        ["Accept"] = "application/vnd.github+json",
+                    }, function(code, body, _)
+                        if code ~= 200 or not body then
+                            if callback then pcall(callback, nil) end
+                            return
                         end
-                        -- Hashes differ AND remote version is genuinely newer → update.
-                        if callback then
-                            pcall(callback, {
-                                version = manifest.version or "?",
-                                sha256  = manifest.sha256,
-                            })
+                        local ok, data = pcall(hs.json.decode, body)
+                        if not ok or not data or not data.workflow_runs
+                            or #data.workflow_runs == 0 then
+                            if callback then pcall(callback, nil) end
+                            return
+                        end
+                        local run = data.workflow_runs[1]
+                        -- Double-check conclusion (API filter can be inconsistent)
+                        if run.conclusion ~= "success" then
+                            if callback then pcall(callback, nil) end
+                            return
+                        end
+                        if callback then pcall(callback, {
+                            runId     = run.run_number or run.id,
+                            sha       = run.head_sha,
+                            display   = "build " .. tostring(run.run_number or run.id),
+                            createdAt = run.created_at or "",
+                        }) end
+                    end)
+                end
+
+                ms.integrity.updateBeta = function()
+                    local repo = ms._testingRepo or "mudbourn/ms-utils"
+                    if not repo or repo == "" then
+                        ms.alert("Testing channel: no repo configured.\nSet ms._testingRepo in ms_core.lua.", 6)
+                        return
+                    end
+                    ms.alert("Fetching latest testing build\xe2\x80\xa6", 4, true)
+                    _fetchLatestTestingRun(function(info)
+                        if not info or not info.sha then
+                            ms.alert("No successful testing builds found.", 5)
+                            return
+                        end
+                        local fileURL = "https://raw.githubusercontent.com/" .. repo
+                            .. "/" .. info.sha .. "/mac/ms_core.lua"
+                        ms.alert("Downloading " .. info.display .. "\xe2\x80\xa6", 4, true)
+                        hs.http.asyncGet(fileURL, nil, function(fCode, fBody, _)
+                            if fCode ~= 200 or not fBody then
+                                ms.alert("Download failed: HTTP " .. tostring(fCode) .. ".", 5)
+                                return
+                            end
+                            os.execute("mkdir -p '" .. archivePath .. "'")
+                            local tmpPath = archivePath .. "ms_core_update_tmp.lua"
+                            local tmpF = io.open(tmpPath, "w")
+                            if not tmpF then
+                                ms.alert("Update failed: could not write temp file.", 4)
+                                return
+                            end
+                            tmpF:write(fBody); tmpF:close()
+                            local actualHash = ms.integrity.hashFile(tmpPath)
+                            local timestamp  = os.date("%Y-%m-%d_%H%M")
+                            local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
+                            local bOk = moveFile(corePath, backupFile)
+                            if not bOk then
+                                os.remove(tmpPath)
+                                ms.alert("Update failed: could not back up ms_core.lua.", 4)
+                                return
+                            end
+                            local mOk = moveFile(tmpPath, corePath)
+                            if not mOk then
+                                moveFile(backupFile, corePath)
+                                ms.alert("Update failed: could not install.\nBackup restored.", 5)
+                                return
+                            end
+                            ms.integrity.writeTrustedHash(actualHash)
+                            ms.integrity.invalidateCache()
+                            _writeTestingRun(info.runId)
+                            ms.alert("Updated to " .. info.display .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                            hs.timer.doAfter(3, function() hs.reload() end)
+                        end)
+                    end)
+                end
+
+                ms.integrity.checkForUpdateBeta = function(callback)
+                    local latestRun = _readTestingRun()
+                    _fetchLatestTestingRun(function(info)
+                        if not info or not info.runId then
+                            if callback then pcall(callback, nil) end
+                            return
+                        end
+                        if info.runId > latestRun then
+                            if callback then pcall(callback, {
+                                version = info.display,
+                                runId   = info.runId,
+                            }) end
+                        else
+                            if callback then pcall(callback, nil) end
                         end
                     end)
                 end
@@ -3869,6 +3968,20 @@
                                     end)
                                 end or nil,
                             },
+                            { title = "Update Channel: " .. (ms._updateChannel == "testing" and "Testing" or "Stable"), menu = {
+                                { title = (ms._updateChannel == "stable" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Stable (MANIFEST.json)", fn = function()
+                                    ms._updateChannel = "stable"
+                                    ms.saveSettings()
+                                    ms.playSlot("update")
+                                    ms.alert("Update channel: Stable", 2, true)
+                                end },
+                                { title = (ms._updateChannel == "testing" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Testing (GitHub Actions)", fn = function()
+                                    ms._updateChannel = "testing"
+                                    ms.saveSettings()
+                                    ms.playSlot("update")
+                                    ms.alert("Update channel: Testing", 2, true)
+                                end },
+                            }},
                         }
                     end
 
@@ -3903,18 +4016,32 @@
                                 end
                             end },
                             { title = "Check for Update...", fn = function()
-                                if not ms._updateManifestURL or ms._updateManifestURL == "" then
-                                    ms.alert("No update URL configured.\nSet ms._updateManifestURL in ms_core.lua.", 5)
-                                    return
+                                if ms._updateChannel == "testing" then
+                                    if not ms._testingRepo or ms._testingRepo == "" then
+                                        ms.alert("No testing repo configured.\nSet ms._testingRepo in ms_core.lua.", 5)
+                                        return
+                                    end
+                                else
+                                    if not ms._updateManifestURL or ms._updateManifestURL == "" then
+                                        ms.alert("No update URL configured.\nSet ms._updateManifestURL in ms_core.lua.", 5)
+                                        return
+                                    end
                                 end
+                                local _chan = (ms._updateChannel == "testing") and "testing" or "stable"
                                 ms.playSlot("interact")
                                 ms.ui.modal({
                                     title   = "Check for Update",
-                                    msg     = "Download and apply the latest ms_core.lua from GitHub?\n\nThe current file will be backed up to backups/ and Hammerspoon will reload.",
+                                    msg     = "Channel: " .. _chan .. "\nDownload and apply the latest ms_core.lua from GitHub?\n\nThe current file will be backed up to backups/ and Hammerspoon will reload.",
                                     confirm = "Update",
                                     cancel  = "Cancel",
                                 }, function(r)
-                                    if r.confirmed then ms.integrity.update() end
+                                    if r.confirmed then
+                                        if ms._updateChannel == "testing" then
+                                            ms.integrity.updateBeta()
+                                        else
+                                            ms.integrity.update()
+                                        end
+                                    end
                                 end)
                             end },
                             { title = "Macro Info", fn = function()
@@ -5891,6 +6018,7 @@
                     hiddenFeatures          = ms._hiddenFeatures,
                     preloadDevTools         = not (ms._skipDevPrewarm or false),
                     devArchiveLimit         = ms._devArchiveLimit or 15,
+                    updateChannel           = ms._updateChannel or "stable",
                     theme                   = themeOut,
                 }
             end
@@ -6079,6 +6207,16 @@
                         local n = tonumber(data.value)
                         if n and n >= 0 and n <= 50 then
                             ms._devArchiveLimit = math.floor(n)
+                            ms.saveSettings()
+                            ms.playSlot("update")
+                        end
+                        ms.ui.refresh()
+                    end,
+
+                    setUpdateChannel = function(data)
+                        local ch = data.value
+                        if ch == "testing" or ch == "stable" then
+                            ms._updateChannel = ch
                             ms.saveSettings()
                             ms.playSlot("update")
                         end
@@ -6443,7 +6581,13 @@
 
                     openURL = function(data) if data.url then hs.urlevent.openURL(data.url) end end,
 
-                    checkForUpdate = function() ms.integrity.update() end,
+                    checkForUpdate = function()
+                        if ms._updateChannel == "testing" then
+                            ms.integrity.updateBeta()
+                        else
+                            ms.integrity.update()
+                        end
+                    end,
 
                     openConsole       = function() ms.dev.console.toggle()  end,
                     openWatcher       = function() ms.dev.watcher.toggle()  end,
@@ -8129,10 +8273,13 @@
                         if _needsIntegrityWarning then
                             ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
                         else
-                            ms.integrity.checkForUpdate(function(u)
+                            local _checkFn = (ms._updateChannel == "testing")
+                                and ms.integrity.checkForUpdateBeta
+                                or  ms.integrity.checkForUpdate
+                            _checkFn(function(u)
                                 if u then
                                     ms.playSlot("updateAvailable")
-                                    ms.alert("Update v" .. u.version .. " available.\nSettings \xe2\x86\x92 Help \xe2\x86\x92 Check for Update to install.", 8, true)
+                                    ms.alert("Update " .. u.version .. " available.\nSettings \xe2\x86\x92 Help \xe2\x86\x92 Check for Update to install.", 8, true)
                                 end
                             end)
                         end

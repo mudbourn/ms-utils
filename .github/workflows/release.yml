@@ -1,14 +1,11 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
-    paths: [mac/ms_core.lua, win/ms_core_v2.ahk]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version override (leave empty to read from MANIFEST.json)"
-        required: false
+        description: "Release version (e.g. 1.3.0) — stamped into MANIFEST.json"
+        required: true
         type: string
 
 permissions:
@@ -28,81 +25,62 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Hash and sign Windows runtime
+      - name: Stamp MANIFEST.json
         id: version
         env:
           MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
         run: |
-          WIN_SHA=$(sha256sum win/ms_core_v2.ahk | awk '{print $1}')
-          echo "WIN_SHA=$WIN_SHA"
+          VERSION="${{ inputs.version }}"
 
-          # Debug: check MANIFEST.json exists and is valid
-          echo "Checking MANIFEST.json..."
-          head -c 200 MANIFEST.json
-          echo ""
-          jq . MANIFEST.json || echo "jq test failed"
-
-          # Use manual version override if provided, otherwise read from manifest
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-            MAC_VER="$VERSION"
-          else
-            VERSION=$(jq -r '.windows_version // "1.0.0"' MANIFEST.json) || VERSION="1.0.0"
-            MAC_VER=$(jq -r '.version // ""' MANIFEST.json) || MAC_VER=""
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+ ]]; then
+            echo "ERROR: Invalid version '$VERSION'. Expected format: X.Y.Z"
+            exit 1
           fi
+
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
-          WIN_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/win/ms_core_v2.ahk"
+          MAC_SHA=$(sha256sum mac/ms_core.lua | awk '{print $1}')
+          MAC_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua"
 
-          # Preserve existing macOS fields (hash, url, sig — carried from old manifest)
-          MAC_SHA=$(jq -r '.sha256 // ""' MANIFEST.json) || MAC_SHA=""
-          MAC_URL=$(jq -r '.url // ""' MANIFEST.json) || MAC_URL=""
-          MAC_SIG=$(jq -r '.signature // ""' MANIFEST.json) || MAC_SIG=""
+          echo "MAC_SHA=$MAC_SHA"
 
           jq -n \
-            --arg version  "$MAC_VER"  \
-            --arg sha256   "$MAC_SHA"  \
-            --arg url      "$MAC_URL"  \
-            --arg sig      "$MAC_SIG"  \
-            --arg wversion "$VERSION"  \
-            --arg wurl     "$WIN_URL"  \
-            --arg wsha     "$WIN_SHA"  \
-            '{"version":$version,"sha256":$sha256,"url":$url,"signature":$sig,"windows_version":$wversion,"windows_url":$wurl,"windows_sha256":$wsha}' > MANIFEST.json
+            --arg version "$VERSION" \
+            --arg sha256  "$MAC_SHA" \
+            --arg url     "$MAC_URL" \
+            '{"version":$version,"sha256":$sha256,"url":$url,"signature":""}' \
+            > MANIFEST.json
 
           if [ -n "$MS_SIGNING_KEY" ]; then
             printf '%s\n' "$MS_SIGNING_KEY" > /tmp/private.pem
-            printf '%s'   "$WIN_SHA"       > /tmp/msg.bin
+            printf '%s'   "$MAC_SHA"       > /tmp/msg.bin
             openssl dgst -sha256 -sign /tmp/private.pem -out /tmp/sig.bin /tmp/msg.bin
-            WIN_SIG=$(base64 -w0 /tmp/sig.bin)
+            MAC_SIG=$(base64 -w0 /tmp/sig.bin)
             rm -f /tmp/private.pem /tmp/sig.bin /tmp/msg.bin
-            jq --arg wsig "$WIN_SIG" '. + {"windows_signature":$wsig}' MANIFEST.json > /tmp/manifest.json
+
+            jq --arg sig "$MAC_SIG" '.signature = $sig' MANIFEST.json > /tmp/manifest.json
             mv /tmp/manifest.json MANIFEST.json
-            echo "Signed Windows runtime."
+            echo "Signed macOS runtime."
           else
             echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
           fi
 
-      - name: Stage MANIFEST.json (for release assets)
+          echo "MANIFEST.json stamped for v$VERSION"
+
+      - name: Commit MANIFEST.json
         run: |
-          echo "Stamped MANIFEST.json with version: ${{ steps.version.outputs.value }}"
-          echo "Hash stamped locally — will be included in release package."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add MANIFEST.json
+          git commit -m "release: v${{ inputs.version }}" || echo "Nothing to commit."
+          git push
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Build — package release archives for both platforms
+  # Build — package macOS release archive
   # ────────────────────────────────────────────────────────────────────────────
   build:
     needs: stamp
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: windows-latest
-            platform: windows
-            ext: zip
-          - runner: macos-latest
-            platform: macos
-            ext: tar.gz
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -110,56 +88,7 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download lib dependencies (Windows only)
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          mkdir lib -Force
-          $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
-          $wv2 = $wv2.Replace('..\ComVar.ahk', 'ComVar.ahk').Replace('..\Promise.ahk', 'Promise.ahk')
-          [System.IO.File]::WriteAllText("$pwd\lib\WebView2.ahk", $wv2, [System.Text.UTF8Encoding]::new($false))
-          mkdir lib\WebView2 -Force
-          $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
-          $items = Invoke-RestMethod $github
-          foreach ($item in $items) {
-            if ($item.type -eq 'file') {
-              $out = "lib\WebView2\$($item.name)"
-              Invoke-WebRequest -Uri $item.download_url -OutFile $out -UseBasicParsing
-            }
-          }
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" -OutFile "lib\ComVar.ahk" -UseBasicParsing
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" -OutFile "lib\Promise.ahk" -UseBasicParsing
-          Write-Output "Dependencies downloaded."
-
-      - name: Build Windows package
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          $version = "${{ needs.stamp.outputs.version }}"
-          $dist = "mudscript-$version"
-          mkdir $dist
-          & .\win\bin\generate_icon.ps1
-          Copy-Item "win\install.bat","win\init.ahk","win\_ms_main.ahk","win\ms_core_v2.ahk","win\ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
-          Copy-Item -Recurse "ui","win\lib","win\bin","data" "$dist\"
-          Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
-          Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
-          # Validate ms_core.ahk is not corrupted
-          $srcHash = (Get-FileHash "win\ms_core_v2.ahk" -Algorithm SHA256).Hash
-          $dstHash = (Get-FileHash "$dist\ms_core_v2.ahk" -Algorithm SHA256).Hash
-          if ($srcHash -ne $dstHash) {
-            Write-Error "ms_core_v2.ahk hash mismatch! Source: $srcHash  Dist: $dstHash"
-            exit 1
-          }
-          Write-Output "ms_core.ahk validated: SHA256 matches ($srcHash)"
-          $archive = "mudscript-windows-${version}.zip"
-          Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
-          Write-Output "Package: $archive"
-
       - name: Build macOS package
-        if: matrix.platform == 'macos'
         run: |
           VERSION="${{ needs.stamp.outputs.version }}"
           DIST="mudscript-${VERSION}"
@@ -180,8 +109,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ needs.stamp.outputs.version }}
-          path: mudscript-*-${{ needs.stamp.outputs.version }}.${{ matrix.ext }}
+          name: macos-${{ needs.stamp.outputs.version }}
+          path: mudscript-macos-${{ needs.stamp.outputs.version }}.tar.gz
 
   # ────────────────────────────────────────────────────────────────────────────
   # Release — create GitHub Release and attach assets
@@ -198,29 +127,33 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
-      - name: Find artifacts
-        run: |
-          echo "Looking for release artifacts..."
-          find . -name "mudscript-*.*" -type f 2>/dev/null
-
       - name: Generate release notes
         id: notes
         run: |
           VERSION="${{ needs.stamp.outputs.version }}"
 
+          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | head -2 | tail -1 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log --oneline "${PREV_TAG}..HEAD" 2>/dev/null || echo "No diff available.")
+          else
+            CHANGES=$(git log --oneline -20 2>/dev/null || echo "Initial release.")
+          fi
+
           cat > release-notes.md <<EOF
-          ## mudscript v${VERSION}
+          ## mudscript v${VERSION} (macOS)
 
           ### Changes
-          $(git log --oneline $(git rev-list --tags --max-count=1 2>/dev/null || HEAD~1)..HEAD 2>/dev/null || echo "Initial release.")
+          $CHANGES
 
           ### Downloads
-          - [mudscript-windows-${VERSION}.zip](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-windows-${VERSION}.zip)
           - [mudscript-macos-${VERSION}.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.tar.gz)
 
           ### Install
-          **Windows:** Install [AutoHotkey v2](https://www.autohotkey.com/) (signed), extract the zip, run \`init.ahk\`
-          **macOS:** Extract the tar.gz, run \`bash install.sh\`
+          Extract the tar.gz, run \`bash install.sh\`
+
+          > **Windows users:** The Windows build is in early testing.
+          > Switch mudscript's update channel to **Testing** or grab a pre-release from the [Releases](https://github.com/${{ github.repository }}/releases) page.
           EOF
 
           echo "file=release-notes.md" >> "$GITHUB_OUTPUT"
@@ -232,36 +165,21 @@ jobs:
           VERSION="${{ needs.stamp.outputs.version }}"
           TAG="v${VERSION}"
 
-          echo "Version: $VERSION"
-          echo "Tag:     $TAG"
-
           ASSETS=$(find . -name "mudscript-*-${VERSION}.*" -type f 2>/dev/null | tr '\n' ' ' || true)
-          echo "Found assets:"
-          echo "$ASSETS"
+          echo "Assets: $ASSETS"
 
-          # Delete existing tag and release if present
           gh release view "$TAG" --json name &>/dev/null && gh release delete "$TAG" --yes 2>/dev/null || true
           git tag -d "$TAG" 2>/dev/null || true
           git push origin ":refs/tags/$TAG" 2>/dev/null || true
 
-          echo "Creating tag $TAG..."
           git tag "$TAG"
           git push origin "$TAG"
 
-          if [ -n "$ASSETS" ]; then
-            echo "Creating release with assets..."
-            # shellcheck disable=SC2086
-            gh release create "$TAG" \
-              --title "mudscript v${VERSION}" \
-              --notes-file release-notes.md \
-              --target main \
-              $ASSETS
-          else
-            echo "Creating release without assets..."
-            gh release create "$TAG" \
-              --title "mudscript v${VERSION}" \
-              --notes-file release-notes.md \
-              --target main
-          fi
+          # shellcheck disable=SC2086
+          gh release create "$TAG" \
+            --title "mudscript v${VERSION}" \
+            --notes-file release-notes.md \
+            --target main \
+            $ASSETS
 
-          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/$TAG"
+          echo "Release: https://github.com/${{ github.repository }}/releases/tag/$TAG"

@@ -1,0 +1,155 @@
+name: Testing
+
+on:
+  push:
+    branches: [main]
+    paths: [mac/ms_core.lua, win/ms_core_v2.ahk]
+
+permissions:
+  contents: write
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Build — package pre-release archives for both platforms
+  # ────────────────────────────────────────────────────────────────────────────
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows
+            ext: zip
+          - runner: macos-latest
+            platform: macos
+            ext: tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download lib dependencies (Windows only)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          mkdir lib -Force
+          $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
+          $wv2 = $wv2.Replace('..\ComVar.ahk', 'ComVar.ahk').Replace('..\Promise.ahk', 'Promise.ahk')
+          [System.IO.File]::WriteAllText("$pwd\lib\WebView2.ahk", $wv2, [System.Text.UTF8Encoding]::new($false))
+          mkdir lib\WebView2 -Force
+          $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
+          $items = Invoke-RestMethod $github
+          foreach ($item in $items) {
+            if ($item.type -eq 'file') {
+              $out = "lib\WebView2\$($item.name)"
+              Invoke-WebRequest -Uri $item.download_url -OutFile $out -UseBasicParsing
+            }
+          }
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" -OutFile "lib\ComVar.ahk" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" -OutFile "lib\Promise.ahk" -UseBasicParsing
+          Write-Output "Dependencies downloaded."
+
+      - name: Build Windows package
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $buildNum = "${{ github.run_number }}"
+          $dist = "mudscript-pre-$buildNum"
+          mkdir $dist
+          & .\win\bin\generate_icon.ps1
+          Copy-Item "win\install.bat","win\init.ahk","win\_ms_main.ahk","win\ms_core_v2.ahk","win\ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
+          Copy-Item -Recurse "ui","win\lib","win\bin","data" "$dist\"
+          Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
+          Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
+          $archive = "mudscript-windows-pre-$buildNum.zip"
+          Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
+          Write-Output "Package: $archive"
+
+      - name: Build macOS package
+        if: matrix.platform == 'macos'
+        run: |
+          BUILD_NUM="${{ github.run_number }}"
+          DIST="mudscript-pre-${BUILD_NUM}"
+          mkdir -p "$DIST"
+          for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua MANIFEST.json README.md; do
+            [ -f "$f" ] && cp "$f" "$DIST/"
+          done
+          for d in mac/Spoons ui mac/bin; do
+            [ -d "$d" ] && cp -R "$d" "$DIST/"
+          done
+          mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
+          rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
+          ARCHIVE="mudscript-macos-pre-${BUILD_NUM}.tar.gz"
+          tar czf "$ARCHIVE" "$DIST"
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "Package: $ARCHIVE"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-pre-${{ github.run_number }}
+          path: mudscript-${{ matrix.platform }}-pre-${{ github.run_number }}.${{ matrix.ext }}
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Pre-release — create a tagged pre-release with build artifacts
+  # ────────────────────────────────────────────────────────────────────────────
+  prerelease:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="pre-${{ github.run_number }}"
+
+          # Delete existing pre-release tag if present
+          gh release view "$TAG" --json name &>/dev/null && gh release delete "$TAG" --yes 2>/dev/null || true
+          git tag -d "$TAG" 2>/dev/null || true
+          git push origin ":refs/tags/$TAG" 2>/dev/null || true
+
+          # Re-tag current HEAD
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          ASSETS=$(find . -name "mudscript-*-pre-${{ github.run_number }}.*" -type f 2>/dev/null | tr '\n' ' ' || true)
+          echo "Assets: $ASSETS"
+
+          CHANGES=$(git log --oneline $(git rev-list --tags --max-count=1 2>/dev/null || echo HEAD~5)..HEAD 2>/dev/null | head -20 || echo "No changes.")
+
+          cat > notes.md <<EOF
+          ## Pre-release build ${{ github.run_number }}
+
+          > ⚠️ **Testing build** — not an official release.  
+          > Switch mudscript's update channel to **Testing** to install automatically.
+
+          ### Changes
+          $CHANGES
+
+          ### Commit
+          \`${{ github.sha }}\`
+          EOF
+
+          # shellcheck disable=SC2086
+          gh release create "$TAG" \
+            --title "Build ${{ github.run_number }}" \
+            --notes-file notes.md \
+            --prerelease \
+            --target main \
+            $ASSETS
+
+          echo "Pre-release: https://github.com/${{ github.repository }}/releases/tag/$TAG"
