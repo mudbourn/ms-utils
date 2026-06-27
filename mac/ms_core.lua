@@ -1066,20 +1066,14 @@
                         ms.alert("Settings reloaded.", 5, true)
                     end
 
-                    -- Quick Reload: re-executes the macro sandbox, reloads settings
-                    -- and theme, then rebinds — all without a full hs.reload().
+                    -- Quick Reload: re-executes the macro sandbox, reloads
+                    -- theme and settings, then rebinds — all without hs.reload().
                     ms.quickReload = function()
                         -- 0. Mark quick reload in progress so it persists across the reload.
                         ms._quickReloaded = 1
                         ms.saveSettings()
 
-                        -- 1. Cancel any in-flight macros and tear down existing binds.
-                        ms.cancelMacros()
-                        ms.keytrack = {}
-                        for _, timer in pairs(ms.running) do
-                            if timer and timer.stop then timer:stop() end
-                        end
-                        ms.running = {}
+                        -- 1. Reload macros (same path as ms.ui.reloadMacros).
                         ms.bind.teardown()
                         ms.registry       = { _defs = {}, _defList = {} }
                         ms.bind._wires    = {}
@@ -1089,27 +1083,23 @@
                         ms._userSettingIndex = {}
                         ms._userSettingVals  = {}
 
-                        -- 2. Re-read, audit, and execute ms_macros.lua in the sandbox.
                         local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
-                        local rawSrc
-                        do
-                            local af = io.open(macrosPath, "r")
-                            if not af then
-                                ms.alert("Quick Reload failed:\nCannot open ms_macros.lua.", 6)
-                                return
+                        local af = io.open(macrosPath, "r")
+                        if not af then
+                            ms.alert("Quick Reload failed:\nCannot open ms_macros.lua.", 6)
+                            return
+                        end
+                        local rawSrc = af:read("*all"); af:close()
+                        local auditErrs = auditMacros(rawSrc)
+                        if #auditErrs > 0 then
+                            local msg = "Quick Reload blocked — ms_macros.lua failed audit ("
+                                .. #auditErrs .. " violation"
+                                .. (#auditErrs > 1 and "s" or "") .. "):\n"
+                            for _, e in ipairs(auditErrs) do
+                                msg = msg .. "  \xe2\x80\xa2 " .. e .. "\n"
                             end
-                            rawSrc = af:read("*all"); af:close()
-                            local auditErrs = auditMacros(rawSrc)
-                            if #auditErrs > 0 then
-                                local msg = "Quick Reload blocked — ms_macros.lua failed audit ("
-                                    .. #auditErrs .. " violation"
-                                    .. (#auditErrs > 1 and "s" or "") .. "):\n"
-                                for _, e in ipairs(auditErrs) do
-                                    msg = msg .. "  \xe2\x80\xa2 " .. e .. "\n"
-                                end
-                                ms.alert(msg, 8)
-                                return
-                            end
+                            ms.alert(msg, 8)
+                            return
                         end
 
                         local chunk, loadErr = load(rawSrc, "@ms_macros.lua", "bt", ms._macroSandbox)
@@ -1141,7 +1131,7 @@
                             end
                         end
 
-                        -- 3. Rebuild system actions from the fresh user-setting index.
+                        -- 2. Rebuild system actions from the fresh user-setting index.
                         ms._systemActions = {}
                         if ms._userSettingIndex["showTamperWarning"] then
                             ms._systemActions["showTamperWarning"] = function()
@@ -1149,7 +1139,7 @@
                             end
                         end
 
-                        -- 4. Reload settings, theme, and rebind.
+                        -- 3. Reload settings, theme, and rebind.
                         ms.loadSettings()
                         ms.loadTheme()
                         ms.bind.rebind()
@@ -1157,63 +1147,27 @@
                         ms.cam.updateMultiplier()
                         ms.socdApply()
 
-                        -- 5. Check persistent quick-reload flag: if settings file
-                        --    still carries a 1, the reload succeeded — clear it
-                        --    and show the confirmation toast.
-                        local _qrDone = (ms._quickReloaded == 1)
-                        if _qrDone then
+                        -- 4. Check persistent quick-reload flag: if settings file
+                        --    still carries a 1, the reload succeeded — clear it.
+                        if ms._quickReloaded == 1 then
                             ms._quickReloaded = 0
                             ms.saveSettings()
                         end
 
-                        -- 6. Unfocus then refocus the target app so the app watcher
-                        --    re-evaluates _robloxActive.  After the bounce completes,
-                        --    explicitly pin BindValidity = 1 so macros are ready
-                        --    immediately — the watcher's intermediate setMacros(0) is
-                        --    expected and harmless, but we must not rely on the
-                        --    watcher's re-activation path to restore BindValidity.
-                        local function _finishReload()
-                            -- Pin macro readiness after the focus cycle.
-                            BindValidity = 1
-                            if ms._targetApp then
-                                ms._robloxActive = true
-                            end
-                            if not _qrDone then return end
-                            -- Refresh UI if open, then show confirmation.
-                            --    Alert must fire AFTER the refresh so the toast isn't wiped
-                            --    by the panel rebuilding.
-                            if ms.ui and ms.ui._open then
-                                ms.ui.hide()
-                                hs.timer.doAfter(0.15, function()
-                                    ms.ui.show()
-                                    hs.timer.doAfter(0.05, function()
-                                        ms.playSlot("update")
-                                        ms.alert("Quick Reload complete.", 5, true)
-                                    end)
+                        -- 5. Refresh UI (hidden during rebuild so the user never
+                        --    sees the panel teardown/rebuild), then toast.
+                        if ms.ui and ms.ui._open then
+                            ms.ui.hide()
+                            hs.timer.doAfter(0.15, function()
+                                ms.ui.show()
+                                hs.timer.doAfter(0.05, function()
+                                    ms.playSlot("update")
+                                    ms.alert("Quick Reload complete.", 5, true)
                                 end)
-                            else
-                                ms.playSlot("update")
-                                ms.alert("Quick Reload complete.", 5, true)
-                            end
-                        end
-
-                        if ms._targetApp then
-                            local _tgt = hs.application.get(ms._targetApp)
-                            if _tgt then
-                                local _hsApp = hs.application.get("Hammerspoon")
-                                if _hsApp then _hsApp:activate() end
-                                hs.timer.doAfter(0.2, function()
-                                    local _refocus = hs.application.get(ms._targetApp) or _tgt
-                                    pcall(function() _refocus:activate() end)
-                                    hs.timer.doAfter(0.15, function()
-                                        _finishReload()
-                                    end)
-                                end)
-                            else
-                                _finishReload()
-                            end
+                            end)
                         else
-                            _finishReload()
+                            ms.playSlot("update")
+                            ms.alert("Quick Reload complete.", 5, true)
                         end
                     end
 
@@ -6239,6 +6193,44 @@
                     end,
 
                     reloadUI = function()
+                        -- Full rebuild hidden from view: reload macros, settings,
+                        -- and theme, then tear down and re-show the panel so the
+                        -- user never sees the intermediate build steps.
+                        ms.bind.teardown()
+                        ms.registry       = { _defs = {}, _defList = {} }
+                        ms.bind._wires    = {}
+                        ms.bind._autoCount = 0
+                        ms.macroMeta       = nil
+                        ms._userSettingDefs  = {}
+                        ms._userSettingIndex = {}
+                        ms._userSettingVals  = {}
+
+                        local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
+                        local af = io.open(macrosPath, "r")
+                        if af then
+                            local rawSrc = af:read("*all"); af:close()
+                            local chunk = load(rawSrc, "@ms_macros.lua", "bt", ms._macroSandbox)
+                            if chunk then pcall(chunk) end
+                        end
+                        for _, id in ipairs(ms.registry._defList) do
+                            local def = ms.registry._defs[id]
+                            if def and not def.sub and ms.binds[id] == nil then
+                                ms.binds[id] = def.enabled
+                            end
+                        end
+                        ms._systemActions = {}
+                        if ms._userSettingIndex["showTamperWarning"] then
+                            ms._systemActions["showTamperWarning"] = function()
+                                ms.showGuardian()
+                            end
+                        end
+                        ms.loadSettings()
+                        ms.loadTheme()
+                        ms.bind.rebind()
+                        ms.cam.updateAnchor()
+                        ms.cam.updateMultiplier()
+                        ms.socdApply()
+
                         ms.playSlot("update")
                         ms.ui.hide()
                         hs.timer.doAfter(0.15, function() ms.ui.show() end)
