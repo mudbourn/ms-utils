@@ -4620,6 +4620,7 @@
                                 if modsMatch then
                                     if BindValidity == 1 or binding.system then
                                         if binding.pressFn then
+                                            print("ms.key dispatch: firing " .. (binding.system and "SYSTEM" or "normal") .. " bind, BindValidity=" .. BindValidity)
                                             local co = coroutine.create(binding.pressFn)
                                             local ok, err = coroutine.resume(co)
                                             if not ok then print("ms.key error: " .. tostring(err)) end
@@ -6085,6 +6086,7 @@
                     if not c then goto sysContinue end
                     local fn = ms.bind._wires[id]
                     if not fn then goto sysContinue end
+                    print("rebindSystem: registering " .. id .. " as system bind")
                     if c.type == "key" then
                         ms._systemBindHandles[id] = ms.key(c.mods, c.key, false, function()
                             if not ms._robloxActive then return end
