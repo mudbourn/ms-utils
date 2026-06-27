@@ -2339,6 +2339,13 @@
                         if sameHash and sameVer then
                             if callback then pcall(callback, nil); return end
                         end
+                        -- If versions match but hash differs, the local file was
+                        -- edited (e.g. by the user or a local tool).  Not an update.
+                        if sameVer and not sameHash then
+                            print("ms update: local ms_core.lua differs from manifest hash"
+                                .. " but version matches — skipping (local edits detected).")
+                            if callback then pcall(callback, nil); return end
+                        end
                         if callback then
                             pcall(callback, {
                                 version = manifest.version or "?",
