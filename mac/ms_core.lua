@@ -5658,6 +5658,39 @@
                     system   = true,
                     default  = { type = "key", mods = {}, key = "escape" },
                 })
+                -- Non-rebindable system binds (display-only, handled by hs.hotkey.bind).
+                ms.bind.define("__panicButton", nil, {
+                    label      = "Panic Button / Stop All",
+                    group      = "system",
+                    enabled    = true,
+                    system     = true,
+                    rebindable = false,
+                    default    = { type = "key", mods = {"alt"}, key = "F10" },
+                })
+                ms.bind.define("__quickReload", nil, {
+                    label      = "Quick Reload",
+                    group      = "system",
+                    enabled    = true,
+                    system     = true,
+                    rebindable = false,
+                    default    = { type = "key", mods = {"alt"}, key = "[" },
+                })
+                ms.bind.define("__fullReload", nil, {
+                    label      = "Full Reload",
+                    group      = "system",
+                    enabled    = true,
+                    system     = true,
+                    rebindable = false,
+                    default    = { type = "key", mods = {"alt"}, key = "]" },
+                })
+                ms.bind.define("__openMenu", nil, {
+                    label      = "Open Menu",
+                    group      = "system",
+                    enabled    = true,
+                    system     = true,
+                    rebindable = false,
+                    default    = { type = "key", mods = {"alt"}, key = "p" },
+                })
             end
 
             -- Returns the cooldown group key for a macro id.
@@ -6105,7 +6138,7 @@
 
                 for _, id in ipairs(ms.registry._defList or {}) do
                     local def = ms.registry._defs[id]
-                    if def and not def.sub and (def.group == "main" or def.group == "optional") then
+                    if def and not def.sub and (def.group == "main" or def.group == "optional" or def.group == "system") then
                         local enabled = ms.binds[id]
                         if enabled == nil then enabled = def.enabled end
                         local subs = {}
@@ -6134,12 +6167,13 @@
                             end
                         end
                         table.insert(macros, {
-                            id      = id,
-                            label   = def.label,
-                            group   = def.group,
-                            bind    = _bindDisplay(ms.effectiveBind(id)),
-                            enabled = enabled and true or false,
-                            subs    = subs,
+                            id        = id,
+                            label     = def.label,
+                            group     = def.group,
+                            bind      = _bindDisplay(ms.effectiveBind(id)),
+                            enabled   = enabled and true or false,
+                            rebindable = (def.rebindable ~= false),
+                            subs      = subs,
                         })
                     end
                 end

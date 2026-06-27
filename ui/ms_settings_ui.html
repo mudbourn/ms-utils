@@ -1576,6 +1576,9 @@
                 const optional = (S.macros || []).filter(
                     (m) => m.group === "optional",
                 );
+                const system = (S.macros || []).filter(
+                    (m) => m.group === "system",
+                );
 
                 function subRow(sub) {
                     const r = h("div", {
@@ -1741,47 +1744,51 @@
                     r.appendChild(h("div", { cls: "row-label" }, m.label));
                     if (m.bind)
                         r.appendChild(h("span", { cls: "pill" }, m.bind));
-                    r.appendChild(
-                        toggle(m.enabled, (e) => {
-                            sendToHost({
-                                action: "setMacroEnabled",
-                                id: m.id,
-                                value: e.target.checked,
-                            });
-                        }),
-                    );
+                    if (m.rebindable !== false) {
+                        r.appendChild(
+                            toggle(m.enabled, (e) => {
+                                sendToHost({
+                                    action: "setMacroEnabled",
+                                    id: m.id,
+                                    value: e.target.checked,
+                                });
+                            }),
+                        );
+                    }
 
-                    // Right-click context menu
-                    r.addEventListener("contextmenu", (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        playSlot("interact");
-                        const items = [
-                            {
-                                icon: "⌨",
-                                label: "Rebind\u2026",
-                                action: () =>
-                                    sendToHost({
-                                        action: "startRebind",
-                                        id: m.id,
-                                    }),
-                            },
-                        ];
-                        if (m.bind) {
-                            items.push("divider");
-                            items.push({
-                                icon: "↺",
-                                label: "Reset Bind",
-                                danger: true,
-                                action: () =>
-                                    sendToHost({
-                                        action: "resetBind",
-                                        id: m.id,
-                                    }),
-                            });
-                        }
-                        showCtxMenu(e.clientX, e.clientY, items, m.label);
-                    });
+                    // Right-click context menu (only for rebindable macros)
+                    if (m.rebindable !== false) {
+                        r.addEventListener("contextmenu", (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            playSlot("interact");
+                            const items = [
+                                {
+                                    icon: "\u2328",
+                                    label: "Rebind\u2026",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "startRebind",
+                                            id: m.id,
+                                        }),
+                                },
+                            ];
+                            if (m.bind) {
+                                items.push("divider");
+                                items.push({
+                                    icon: "\u21ba",
+                                    label: "Reset Bind",
+                                    danger: true,
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetBind",
+                                            id: m.id,
+                                        }),
+                                });
+                            }
+                            showCtxMenu(e.clientX, e.clientY, items, m.label);
+                        });
+                    }
 
                     return r;
                 }
@@ -1800,6 +1807,10 @@
                 if (optional.length) {
                     body.appendChild(groupLabel("Optional"));
                     optional.forEach(appendMacro);
+                }
+                if (system.length) {
+                    body.appendChild(groupLabel("System"));
+                    system.forEach(appendMacro);
                 }
             }
 
