@@ -2,7 +2,7 @@
   "version": "1.2.3",
   "sha256": "7ffc2c85d1e48443c947944021f1297de38d59fd33e08cc242d2307baeda561f",
   "url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua",
-  "signature": "2x3/Du/d/QqpPd4/AuYZpBdfCQOaEHZq50AQ5bjTsy3FOsPPRwU4eCCHgtaXb2tZlnZ0W4HX8yPL2NbnVM4nCG2ktEbVBp7r/3e6obGXO0KLjqtBEO9J/ScIeLCdHD0fkxwE/6AIeVfHA08qqmq7VBAld7cHwCIzWepvt1qN0zN16HWNby/JPEEmSFRA7Nr7zFSjSoIKY4yhPVMSoh8OzENYrXYjVtLtA+4U8g7kEzXIj2M4y1WF6FHQuIxIZX4rz2O5NViaJjw7FMkobKBvtVMdn2+rorRtA6IztfDKkygBHGEcSyFUXHCT1Tgpg+xuvV4KK0iko5fqO9eZRJb8pQ==",
+  "signature": "LAm1e+9zqXpbbmlg+ODKXf5NPthuLaSG5JPrDk7lY8nvqYz4fjf17Ex4gFLN2Tno6LrwTHzHjzTHAVLhnfcPgvcBqPDLoWXIckveXetylGmWl4jWaDMXvDslmoYtPYqlCmLDIuV+58Nto8jnw/ee9R4iLV1vTi7hyokhQsKOQUu+hqhGsUCd2IL1kEfNBWNF3L8nC/qsh5sqC8De82rYqNeJcsxcnxuXbHw6qgAUInTlfddpxs2XCoJIOCgIZ7u0H8Z901WwHIYCmw9l4BHNQcK1f6+5PJKfrTEZEnL6eohUoeC5fobhc17B+fn7U9uM27wse5+qm+h6mb/iSCBVHQ==",
   "windows_url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/win/ms_core_v2.ahk",
   "windows_sha256": "9f0f400b00adf3575e34341c1ec890ff87a84a339928b55c6de90377dd325aa4",
   "windows_version": "1.2.3",
