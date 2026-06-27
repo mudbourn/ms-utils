@@ -209,6 +209,56 @@
                 color: var(--text);
             }
 
+            /* ── Reload dropdown ──────────────────────────────────────────────── */
+            .reload-dropdown {
+                position: relative;
+                flex: 1;
+            }
+            .reload-dd-btn {
+                width: 100%;
+            }
+            .reload-dd-menu {
+                display: none;
+                position: absolute;
+                top: calc(100% + 3px);
+                left: 0;
+                right: 0;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                z-index: 100;
+                overflow: hidden;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+            }
+            .reload-dropdown.open .reload-dd-menu {
+                display: block;
+            }
+            .reload-dd-item {
+                display: block;
+                width: 100%;
+                padding: 6px 12px;
+                font-size: 11px;
+                font-weight: 500;
+                color: var(--text2);
+                text-align: left;
+                transition: background 0.12s, color 0.12s;
+            }
+            .reload-dd-item:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+            .reload-dd-full {
+                color: var(--accent);
+            }
+            .reload-dd-full:hover {
+                color: var(--accent-hi);
+            }
+            .reload-dd-sep {
+                height: 1px;
+                background: var(--border);
+                margin: 2px 0;
+            }
+
             /* ── Scroll area ─────────────────────────────────────────────────── */
             #scroll {
                 flex: 1;
@@ -889,16 +939,26 @@
 
             <!-- Quick row -->
             <div id="quick-row">
-                <button
-                    class="btn-ghost"
-                    onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('interact');
-                        sendToHost({ action: 'reloadMacros' });
-                    "
-                >
-                    ↺ Macros
-                </button>
+                <div class="reload-dropdown" id="reloadDropdown">
+                    <button
+                        class="btn-ghost reload-dd-btn"
+                        onmouseenter="playSlot('hover')"
+                        onclick="
+                            playSlot('interact');
+                            document.getElementById('reloadDropdown').classList.toggle('open');
+                        "
+                    >
+                        ↺ Full Reload ▾
+                    </button>
+                    <div class="reload-dd-menu" id="reloadMenu">
+                        <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
+                        <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
+                        <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
+                        <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
+                        <div class="reload-dd-sep"></div>
+                        <button class="reload-dd-item reload-dd-full" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadAll' }); document.getElementById('reloadDropdown').classList.remove('open');">All (hs.reload)</button>
+                    </div>
+                </div>
                 <button
                     class="btn-ghost"
                     onmouseenter="playSlot('hover')"
@@ -1018,15 +1078,23 @@
                 el.style.top = Math.min(y, vh - mh - 4) + "px";
             }
 
-            // Close ctx menu on any left-click or Escape.
+            // Close ctx menu and reload dropdown on any left-click or Escape.
             // preventDefault on contextmenu suppresses the native WebKit menu everywhere.
-            document.addEventListener("click", () => closeCtxMenu());
+            function closeReloadDropdown() {
+                const el = document.getElementById("reloadDropdown");
+                if (el) el.classList.remove("open");
+            }
+            document.addEventListener("click", (e) => {
+                closeCtxMenu();
+                if (!e.target.closest(".reload-dropdown")) closeReloadDropdown();
+            });
             document.addEventListener("contextmenu", (e) => {
                 e.preventDefault();
                 closeCtxMenu();
+                closeReloadDropdown();
             });
             document.addEventListener("keydown", (e) => {
-                if (e.key === "Escape") closeCtxMenu();
+                if (e.key === "Escape") { closeCtxMenu(); closeReloadDropdown(); }
             });
 
             // ── Bridge ─────────────────────────────────────────────────────────

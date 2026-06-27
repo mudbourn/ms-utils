@@ -1138,14 +1138,22 @@
                         ms.cam.updateMultiplier()
                         ms.socdApply()
 
-                        -- 5. Refresh UI if open.
+                        -- 5. Refresh UI if open, then show confirmation.
+                        --    Alert must fire AFTER the refresh so the toast isn't wiped
+                        --    by the panel rebuilding.
                         if ms.ui and ms.ui._open then
                             ms.ui.hide()
-                            hs.timer.doAfter(0.1, function() ms.ui.show() end)
+                            hs.timer.doAfter(0.15, function()
+                                ms.ui.show()
+                                hs.timer.doAfter(0.05, function()
+                                    ms.playSlot("update")
+                                    ms.alert("Quick Reload complete.", 5, true)
+                                end)
+                            end)
+                        else
+                            ms.playSlot("update")
+                            ms.alert("Quick Reload complete.", 5, true)
                         end
-
-                        ms.playSlot("update")
-                        ms.alert("Quick Reload complete.", 5, true)
                     end
 
                     -- User Settings & Menu API --
@@ -1934,6 +1942,7 @@
                     end
                     ms.playSlot("update")
                     ms._profilesDirty = true
+                    ms.ui.markDirty()
                     ms.ui.refresh()
                     hs.timer.doAfter(0.2, function()
                         ms.alert("Saved as \"" .. name .. "\".\nSwitch to it from Settings \xe2\x86\x92 Profiles.", 4, true)
@@ -1974,6 +1983,7 @@
                     end
                     ms.playSlot("update")
                     ms._profilesDirty = true
+                    ms.ui.markDirty()
                     ms.ui.refresh()
                     hs.timer.doAfter(0.2, function()
                         ms.alert("Profile \"" .. name .. "\" updated.", 3, true)
@@ -2154,6 +2164,7 @@
                             end
                             ms.alert(msg, 6, true)
                             ms._profilesDirty = true
+                            ms.ui.markDirty()
                             ms.ui.refresh()
                         end)
                     end
@@ -3266,7 +3277,7 @@
                             {label = "Enable/Disable Shortcuts", bind = "/  or  Return"},
                             {label = "Panic Button / Stop All",  bind = "Alt+F10"},
                             {label = "Get Roblox Window Info",   bind = "Ctrl+Shift+R"},
-                            {label = "Reload Shortcuts",         bind = "Alt+["},
+                            {label = "Full Reload",               bind = "Alt+["},
                             {label = "Quick Reload",              bind = "Alt+]"},
                             {label = "Open Menu",                bind = "Alt+P"},
                         }
@@ -3940,7 +3951,7 @@
                             { title = "Enable Macros ( Enter )",  fn = function() ms.setMacros(1) end },
                             { title = "Disable Macros ( / )",     fn = function() ms.setMacros(0) end },
                             { title = "-" },
-                            { title = "Reload Macros ( alt+[ )",   fn = function() hs.reload() end },
+                            { title = "Full Reload ( alt+[ )",     fn = function() hs.reload() end },
                             { title = "Quick Reload ( alt+] )",     fn = function() ms.quickReload() end },
                             { title = "-" },
                             { title = "Profiles",  menu = buildProfilesSubmenu() },
@@ -5966,7 +5977,92 @@
                         end)
                     end,
 
-                    reloadMacros = function() hs.reload() end,
+                    reloadMacros = function()
+                        -- Re-run just the macro sandbox (no settings/theme reload).
+                        ms.bind.teardown()
+                        ms.registry       = { _defs = {}, _defList = {} }
+                        ms.bind._wires    = {}
+                        ms.bind._autoCount = 0
+                        ms.macroMeta       = nil
+                        ms._userSettingDefs  = {}
+                        ms._userSettingIndex = {}
+                        ms._userSettingVals  = {}
+
+                        local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
+                        local af = io.open(macrosPath, "r")
+                        if not af then
+                            ms.alert("Reload failed:\nCannot open ms_macros.lua.", 6)
+                            return
+                        end
+                        local rawSrc = af:read("*all"); af:close()
+                        local auditErrs = auditMacros(rawSrc)
+                        if #auditErrs > 0 then
+                            ms.alert("Reload blocked — audit failed.", 6)
+                            return
+                        end
+                        local chunk, loadErr = load(rawSrc, "@ms_macros.lua", "bt", ms._macroSandbox)
+                        if not chunk then
+                            ms.alert("Reload failed:\n" .. tostring(loadErr), 6)
+                            return
+                        end
+                        local ok, runErr = pcall(chunk)
+                        if not ok then
+                            ms.alert("Reload failed:\n" .. tostring(runErr), 6)
+                            return
+                        end
+                        if not next(ms.registry._defs) then
+                            ms.alert("Reload failed:\nNo ms.bind.define calls found.", 6)
+                            return
+                        end
+                        for _, id in ipairs(ms.registry._defList) do
+                            local def = ms.registry._defs[id]
+                            if def and not def.sub and ms.binds[id] == nil then
+                                ms.binds[id] = def.enabled
+                            end
+                        end
+                        ms._systemActions = {}
+                        if ms._userSettingIndex["showTamperWarning"] then
+                            ms._systemActions["showTamperWarning"] = function()
+                                ms.showGuardian()
+                            end
+                        end
+                        ms.loadSettings()
+                        ms.bind.rebind()
+                        ms.cam.updateAnchor()
+                        ms.cam.updateMultiplier()
+                        ms.socdApply()
+                        ms.playSlot("update")
+                        ms.alert("Macros reloaded.", 4, true)
+                        ms.ui.hide()
+                        hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                    end,
+
+                    reloadSettings = function()
+                        ms.loadSettings()
+                        ms.bind.rebind()
+                        ms.cam.updateAnchor()
+                        ms.cam.updateMultiplier()
+                        ms.socdApply()
+                        ms.playSlot("update")
+                        ms.alert("Settings reloaded.", 4, true)
+                        ms.ui.refresh()
+                    end,
+
+                    reloadTheme = function()
+                        ms.loadTheme()
+                        ms.playSlot("update")
+                        ms.alert("Theme reloaded.", 4, true)
+                        ms.ui.hide()
+                        hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                    end,
+
+                    reloadUI = function()
+                        ms.playSlot("update")
+                        ms.ui.hide()
+                        hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                    end,
+
+                    reloadAll = function() hs.reload() end,
 
                     quickReload = function()
                         ms.quickReload()
@@ -6125,6 +6221,7 @@
                         local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                         os.execute("rm -rf " .. sq(dir))
                         ms._profilesDirty = true
+                        ms.ui.markDirty()
                         ms.playSlot("reset")
                         hs.timer.doAfter(0.05, function()
                             ms.alert("Profile \"" .. data.name .. "\" deleted.", 2, true)
@@ -6155,6 +6252,7 @@
                             end
                         end
                         ms._profilesDirty = true
+                        ms.ui.markDirty()
                         ms.playSlot("reset")
                         hs.timer.doAfter(0.05, function()
                             ms.alert(deleted .. " profile" .. (deleted == 1 and "" or "s") .. " deleted.", 3, true)
