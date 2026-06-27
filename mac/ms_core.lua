@@ -2674,7 +2674,50 @@
                     ms.alert("Fetching latest testing build\xe2\x80\xa6", 4, true)
                     _fetchLatestTestingRun(function(info)
                         if not info or not info.runId then
-                            ms.alert("No successful testing builds found.", 5)
+                            -- No workflow run found — fall back to main branch.
+                            ms.alert("Downloading latest from main branch\xe2\x80\xa6", 4, true)
+                            local fileURL = "https://raw.githubusercontent.com/" .. repo
+                                .. "/main/mac/ms_core.lua"
+                            hs.http.asyncGet(fileURL, nil, function(fCode, fBody, _)
+                                if fCode ~= 200 or not fBody then
+                                    ms.alert("Download failed: HTTP " .. tostring(fCode) .. ".", 5)
+                                    return
+                                end
+                                os.execute("mkdir -p '" .. archivePath .. "'")
+                                local tmpPath = archivePath .. "ms_core_update_tmp.lua"
+                                local tmpF = io.open(tmpPath, "w")
+                                if not tmpF then
+                                    ms.alert("Update failed: could not write temp file.", 4)
+                                    return
+                                end
+                                tmpF:write(fBody); tmpF:close()
+                                local actualHash = ms.integrity.hashFile(tmpPath)
+                                local timestamp  = os.date("%Y-%m-%d_%H%M")
+                                local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
+                                ms._updateInProgress = true
+                                os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
+                                local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
+                                if _sp then _sp:close() end
+                                local bOk = moveFile(corePath, backupFile)
+                                if not bOk then
+                                    ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
+                                    os.remove(tmpPath)
+                                    ms.alert("Update failed: could not back up ms_core.lua.", 4)
+                                    return
+                                end
+                                local mOk = moveFile(tmpPath, corePath)
+                                if not mOk then
+                                    moveFile(backupFile, corePath)
+                                    ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
+                                    ms.alert("Update failed: could not install.\nBackup restored.", 5)
+                                    return
+                                end
+                                ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
+                                ms.integrity.writeTrustedHash(actualHash)
+                                ms.integrity.invalidateCache()
+                                ms.alert("Updated to latest main.\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                                hs.timer.doAfter(3, function() hs.reload() end)
+                            end)
                             return
                         end
                         local buildNum = info.runId
