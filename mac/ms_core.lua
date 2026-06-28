@@ -268,6 +268,7 @@
 
                 -- Prune helper: keep at most `limit` files matching a prefix pattern.
                 local function _pruneArchives(prefixPattern, limit)
+                    if not hs.fs.attributes(_devArchDir) then return end
                     local list = {}
                     for name in hs.fs.dir(_devArchDir) do
                         if name:match(prefixPattern) then table.insert(list, name) end
