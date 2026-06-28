@@ -5410,6 +5410,24 @@
                 if not ms._robloxActive then return end
                 ms.ui.toggle()
             end)
+
+            hs.hotkey.bind({}, "return", function()
+                if not ms._loadComplete then return end
+                if not ms._robloxActive then return end
+                ms.setMacros(1)
+            end)
+
+            hs.hotkey.bind({}, "/", function()
+                if not ms._loadComplete then return end
+                if not ms._robloxActive then return end
+                ms.setMacros(0)
+            end)
+
+            hs.hotkey.bind({}, "escape", function()
+                if not ms._loadComplete then return end
+                if not ms._robloxActive then return end
+                ms.setMacros(BindValidity == 1 and 0 or 1)
+            end)
         -- END --
 
         -- 9. Misc --
@@ -5806,9 +5824,9 @@
 
             -- Register system binds (enable/disable/toggle macros).
             -- These are always available and fire regardless of BindValidity.
-            -- They appear in the macro list and are rebindable.
+            -- They appear in the macro list as display-only entries.
             ms.bind._registerSystemBinds = function()
-                ms.bind.define("__enableMacros", function() ms.setMacros(1) end, {
+                ms.bind.define("__enableMacros", nil, {
                     label    = "Enable Macros",
                     group    = "system",
                     enabled  = true,
@@ -5816,7 +5834,7 @@
                     system   = true,
                     default  = { type = "key", mods = {}, key = "return" },
                 })
-                ms.bind.define("__disableMacros", function() ms.setMacros(0) end, {
+                ms.bind.define("__disableMacros", nil, {
                     label    = "Disable Macros",
                     group    = "system",
                     enabled  = true,
@@ -5824,9 +5842,7 @@
                     system   = true,
                     default  = { type = "key", mods = {}, key = "/" },
                 })
-                ms.bind.define("__toggleMacros", function()
-                    ms.setMacros(BindValidity == 1 and 0 or 1)
-                end, {
+                ms.bind.define("__toggleMacros", nil, {
                     label    = "Toggle Macros",
                     group    = "system",
                     enabled  = true,
@@ -5834,13 +5850,12 @@
                     system   = true,
                     default  = { type = "key", mods = {}, key = "escape" },
                 })
-                -- Non-rebindable system binds (display-only, handled by hs.hotkey.bind).
+                -- Display-only system binds (handled by hs.hotkey.bind).
                 ms.bind.define("__panicButton", nil, {
                     label      = "Panic Button / Stop All",
                     group      = "system",
                     enabled    = true,
                     system     = true,
-                    rebindable = false,
                     default    = { type = "key", mods = {"alt"}, key = "F10" },
                 })
                 ms.bind.define("__quickReload", nil, {
@@ -5848,7 +5863,6 @@
                     group      = "system",
                     enabled    = true,
                     system     = true,
-                    rebindable = false,
                     default    = { type = "key", mods = {"alt"}, key = "[" },
                 })
                 ms.bind.define("__fullReload", nil, {
@@ -5856,7 +5870,6 @@
                     group      = "system",
                     enabled    = true,
                     system     = true,
-                    rebindable = false,
                     default    = { type = "key", mods = {"alt"}, key = "]" },
                 })
                 ms.bind.define("__openMenu", nil, {
@@ -5864,7 +5877,6 @@
                     group      = "system",
                     enabled    = true,
                     system     = true,
-                    rebindable = false,
                     default    = { type = "key", mods = {"alt"}, key = "p" },
                 })
             end
@@ -6349,7 +6361,6 @@
                             group     = def.group,
                             bind      = _bindDisplay(ms.effectiveBind(id)),
                             enabled   = enabled and true or false,
-                            rebindable = (def.rebindable ~= false),
                             subs      = subs,
                         })
                     end
@@ -7110,7 +7121,6 @@
                         if not data.id then return end
                         local def = ms.registry._defs[data.id]
                         if not def then return end
-                        if def.rebindable == false then return end  -- non-rebindable system binds
                         local label = def.label or data.id
 
                         local function bindDisplay(c)
