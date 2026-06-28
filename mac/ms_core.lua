@@ -229,13 +229,13 @@
                 -- events or just errors without input noise.
                 --
                 -- Categories:  input | macro | system | error | console
-                -- Cat files:   ms_dev_input.log    ms_dev_system.log
-                --              ms_dev_macro.log    ms_dev_error.log
-                --              ms_dev_console.log
-                -- Archives:    ms_dev_logs/        (pruned to limit per prefix)
+                -- Cat files:   ms_dev_logs/ms_dev_input.log    ms_dev_logs/ms_dev_system.log
+                --              ms_dev_logs/ms_dev_macro.log    ms_dev_logs/ms_dev_error.log
+                --              ms_dev_logs/ms_dev_console.log
+                -- Archives:    ms_dev_logs/backups/  (pruned to limit per category)
                 local _devLogDir  = os.getenv("HOME") .. "/Documents/"
-                local _devArchDir = _devLogDir .. "ms_dev_logs/"
-
+                local _devBaseDir = _devLogDir .. "ms_dev_logs/"
+                local _devArchDir = _devBaseDir .. "backups/"
                 -- Map entry.type → category.  Entries with an explicit .category
                 -- field are left alone; everything else goes through this table.
                 local _typeToCategory = {
@@ -254,12 +254,13 @@
                 -- Category → file path (built once).
                 local _catPaths = {}
                 for _, cat in ipairs({"input", "macro", "system", "error", "console"}) do
-                    _catPaths[cat] = _devLogDir .. "ms_dev_" .. cat .. ".log"
+                    _catPaths[cat] = _devBaseDir .. "ms_dev_" .. cat .. ".log"
                 end
 
-                -- Archive helper: moves a log file into ms_dev_logs/ with a timestamp.
+                -- Archive helper: moves a log file into backups/ with a timestamp.
                 local function _archiveLog(path, stamp)
                     if not hs.fs.attributes(path) then return end
+                    hs.fs.mkdir(_devBaseDir)
                     hs.fs.mkdir(_devArchDir)
                     local base = path:match("([^/]+)%.log$")  -- e.g. "ms_dev_system"
                     os.rename(path, _devArchDir .. base .. "_" .. stamp .. ".log")
@@ -283,8 +284,10 @@
                     local stamp = os.date("%Y-%m-%d_%H%M%S")
                     for _, p in pairs(_catPaths) do _archiveLog(p, stamp) end
 
-                    -- Prune: category logs keep 8 each.
-                    _pruneArchives("^ms_dev_%w+_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$", 8)
+                    -- Prune: category logs use the configurable archive limit.
+                    local catLimit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
+                        and ms._devArchiveLimit or 15
+                    _pruneArchives("^ms_dev_%w+_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$", catLimit)
                 end
 
                 local _devBusy = false
@@ -307,6 +310,7 @@
                     local catPath = _catPaths[entry.category]
                     if catPath then
                         pcall(function()
+                            hs.fs.mkdir(_devBaseDir)
                             local f = io.open(catPath, "a")
                             if f then f:write(json .. "\n"); f:close() end
                         end)
