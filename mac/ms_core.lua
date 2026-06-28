@@ -69,6 +69,7 @@
             ms.bindConfig = {}
             ms.bindHandles = {}
             ms._activeSub = nil
+            ms.systemBinds             = { _config = {}, _handles = {} }
             ms.modConfig             = {}
             ms.subBinds              = {}
             ms.independentBindsEnabled = false
@@ -224,17 +225,15 @@
                     _coordMode       = "screen",  -- screen | window | ref | screenCenter
                 }
                 -- ── Dev Log Infrastructure ──────────────────────────────────
-                -- Writes to a flat combined log AND per-category files so you can
-                -- tail just system events or just errors without input noise.
+                -- Writes to per-category log files so you can tail just system
+                -- events or just errors without input noise.
                 --
                 -- Categories:  input | macro | system | error | console
-                -- Flat file:   ms_dev.log          (everything, chronological)
                 -- Cat files:   ms_dev_input.log    ms_dev_system.log
                 --              ms_dev_macro.log    ms_dev_error.log
                 --              ms_dev_console.log
                 -- Archives:    ms_dev_logs/        (pruned to limit per prefix)
                 local _devLogDir  = os.getenv("HOME") .. "/Documents/"
-                local _devLogPath = _devLogDir .. "ms_dev.log"
                 local _devArchDir = _devLogDir .. "ms_dev_logs/"
 
                 -- Map entry.type → category.  Entries with an explicit .category
@@ -282,13 +281,9 @@
                 -- On every reload, archive all log files so each session starts clean.
                 do
                     local stamp = os.date("%Y-%m-%d_%H%M%S")
-                    _archiveLog(_devLogPath, stamp)
                     for _, p in pairs(_catPaths) do _archiveLog(p, stamp) end
 
-                    -- Prune: flat log keeps 15, category logs keep 8 each.
-                    local flatLimit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
-                        and ms._devArchiveLimit or 15
-                    _pruneArchives("^ms_dev_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$", flatLimit)
+                    -- Prune: category logs keep 8 each.
                     _pruneArchives("^ms_dev_%w+_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$", 8)
                 end
 
@@ -307,12 +302,6 @@
 
                     local ok, json = pcall(hs.json.encode, entry)
                     if not ok then _devBusy = false; return end
-
-                    -- Write to flat combined log.
-                    pcall(function()
-                        local f = io.open(_devLogPath, "a")
-                        if f then f:write(json .. "\n"); f:close() end
-                    end)
 
                     -- Write to category-specific log.
                     local catPath = _catPaths[entry.category]
@@ -885,6 +874,15 @@
                                 end
                             end
                         end
+                        -- System bind overrides (enable/disable/toggle macros).
+                        if data.systemBinds and type(data.systemBinds) == "table" then
+                            ms.systemBinds._config = {}
+                            for id, cfg in pairs(data.systemBinds) do
+                                if cfg.type and (cfg.key or cfg.button) then
+                                    ms.systemBinds._config[id] = cfg
+                                end
+                            end
+                        end
                         -- Runs last so user settings always take final effect.
                         if data.user and type(data.user) == "table" then
                             for key, value in pairs(data.user) do
@@ -988,8 +986,13 @@
                             quickReloaded    = ms._quickReloaded or 0,
                             qrOptions        = ms._qrOptions or { macros = true, theme = true, settings = true, ui = true },
                             user             = ms._userSettingVals or {},
+                            systemBinds      = {},
                             macros = {},
                         }
+                        -- Save system bind overrides (only non-default values).
+                        for id, cfg in pairs(ms.systemBinds._config or {}) do
+                            data.systemBinds[id] = cfg
+                        end
                         for id, enabled in pairs(ms.binds or {}) do
                             data.macros[id] = data.macros[id] or {}
                             data.macros[id].enabled = enabled
@@ -1193,7 +1196,7 @@
                         end
                         ms.loadSettings()
                         ms.loadTheme()
-                        if not ms.registry._defs["__enableMacros"] then ms.bind._registerSystemBinds() end
+                        if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
                         ms.bind.rebind()
                         ms.cam.updateAnchor()
                         ms.cam.updateMultiplier()
@@ -2016,21 +2019,16 @@
                     end
                 end
 
-                local function saveAsNewProfile()
+                local function createNewProfile()
                     local name = ms.macroMeta and ms.macroMeta.name
                     if not name or name == "" then
-                        ms.alert("Cannot save: current profile has no name.\nSet ms.macroMeta = { name = \"...\" } in your macros file.", 5)
+                        ms.alert("Cannot create: current profile has no name.\nSet ms.macroMeta = { name = \"...\" } in your macros file.", 5)
                         return
                     end
                     local folderName = sanitizeName(name)
-                    local existing = getProfiles()
-                    for _, p in ipairs(existing) do
-                        if p == folderName then
-                            ms.alert("A profile named \"" .. name .. "\" already exists.\nRename ms.macroMeta.name first.", 4)
-                            return
-                        end
-                    end
                     local sq = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+
+                    -- Archive current profile (same as switchProfile archiving).
                     hs.fs.mkdir(profilesPath)
                     hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
                     if not hs.fs.attributes(profilesPath .. folderName) then
@@ -2039,7 +2037,7 @@
                     end
                     local _, st = hs.execute("/bin/cp " .. sq(macrosPath) .. " " .. sq(profilesPath .. folderName .. "/ms_macros.lua"))
                     if st ~= true then
-                        ms.alert("Could not copy macros file.", 3)
+                        ms.alert("Could not archive current macros.", 3)
                         return
                     end
                     if hs.fs.attributes(jsonPath) then
@@ -2051,13 +2049,33 @@
                     if hs.fs.attributes(themePath) then
                         hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
                     end
+
+                    -- Write blank template ms_macros.lua.
+                    local templatePath = home .. "/templates/ms_macros.lua"
+                    local tpl = io.open(templatePath, "r")
+                    local blankSrc
+                    if tpl then
+                        blankSrc = tpl:read("*a"); tpl:close()
+                    else
+                        blankSrc = 'ms.macroMeta = {\n    name    = "My Macros",\n    author  = "",\n    website = "",\n}\n'
+                    end
+                    local mf = io.open(macrosPath, "w")
+                    if mf then
+                        mf:write(blankSrc); mf:close()
+                    else
+                        ms.alert("Could not write blank macros file.", 3)
+                        return
+                    end
+
+                    -- Remove active settings/defaults/theme so the new profile starts clean.
+                    os.remove(jsonPath)
+                    os.remove(defaultPath)
+                    os.remove(themePath)
+
                     ms.playSlot("update")
                     ms._profilesDirty = true
-                    ms.ui.markDirty()
-                    ms.ui.refresh()
-                    hs.timer.doAfter(0.2, function()
-                        ms.alert("Saved as \"" .. name .. "\".\nSwitch to it from Settings \xe2\x86\x92 Profiles.", 4, true)
-                    end)
+                    ms.alert("Profile \"" .. name .. "\" archived.\nNew blank profile active.\nReloading in 3 seconds...", 4)
+                    hs.timer.doAfter(3, function() hs.reload() end)
                 end
 
                 local function saveCurrentProfile()
@@ -3733,6 +3751,7 @@
                                     ms.bindConfig = {}
                                     ms.subBinds   = {}
                                     ms.modConfig  = {}
+                                    ms.systemBinds._config = {}
                                     ms.saveSettings()
                                     ms.bind.rebind()
                                     ms.playSlot("reset")
@@ -3751,15 +3770,110 @@
 
                     local function buildSystemSubmenu()
                         local sub = {}
-                        local systemBindDefs = {
-                            {label = "Enable/Disable Shortcuts", bind = "/  or  Return"},
+                        -- Rebindable system binds (enable/disable/toggle).
+                        for _, id in ipairs({"enable", "disable", "toggle"}) do
+                            local def = ms.systemBinds._defs[id]
+                            if def then
+                                local bindStr = ms.systemBinds.bindStr(id)
+                                table.insert(sub, { title = def.label .. "  " .. bindStr, disabled = true })
+                                table.insert(sub, {
+                                    title = "  Rebind: " .. def.label,
+                                    fn = function()
+                                        ms.alert("Rebinding: " .. def.label
+                                            .. "\nCurrent: " .. bindStr
+                                            .. "\nPress your new key or mouse button.\nEscape to cancel.", 15)
+                                        local capture
+                                        local cancelTimer
+                                        capture = hs.eventtap.new({
+                                            hs.eventtap.event.types.keyDown,
+                                            hs.eventtap.event.types.leftMouseDown,
+                                            hs.eventtap.event.types.rightMouseDown,
+                                            hs.eventtap.event.types.otherMouseDown,
+                                        }, function(event)
+                                            capture:stop(); capture = nil; cancelTimer:stop()
+                                            local parsed, newBindStr
+                                            local t = event:getType()
+                                            if t == hs.eventtap.event.types.keyDown then
+                                                local keyCode = event:getKeyCode()
+                                                local flags = event:getFlags()
+                                                if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
+                                                    ms.alert("Rebind cancelled.", 2)
+                                                    return true
+                                                end
+                                                local mods = {}
+                                                if flags.cmd   then table.insert(mods, "cmd")   end
+                                                if flags.alt   then table.insert(mods, "alt")   end
+                                                if flags.ctrl  then table.insert(mods, "ctrl")  end
+                                                if flags.shift then table.insert(mods, "shift") end
+                                                local keyStr = hs.keycodes.map[keyCode]
+                                                if keyStr then
+                                                    parsed = {type="key", mods=mods, key=keyStr}
+                                                    local parts = {}
+                                                    for _, m in ipairs(mods) do table.insert(parts, m) end
+                                                    table.insert(parts, keyStr)
+                                                    newBindStr = table.concat(parts, "+")
+                                                end
+                                            else
+                                                local btn
+                                                if t == hs.eventtap.event.types.leftMouseDown then btn = 0
+                                                elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
+                                                else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
+                                                parsed = {type="mouse", button=btn}
+                                                newBindStr = "Mouse " .. btn
+                                            end
+                                            if parsed then
+                                                ms.playSlot("interact")
+                                                ms.ui.modal({
+                                                    title   = "Confirm Rebind",
+                                                    msg     = "Set \"" .. def.label .. "\" to:  " .. newBindStr,
+                                                    confirm = "Confirm",
+                                                    cancel  = "Cancel",
+                                                }, function(r)
+                                                    if r.confirmed then
+                                                        ms.systemBinds._config[id] = parsed
+                                                        ms.saveSettings()
+                                                        ms.systemBinds.rebind()
+                                                        ms.playSlot("update")
+                                                        hs.timer.doAfter(0.2, function()
+                                                            ms.alert(def.label .. " rebound to: " .. newBindStr, 3, true)
+                                                        end)
+                                                    else
+                                                        ms.alert("Rebind cancelled.", 2, true)
+                                                    end
+                                                end)
+                                            else
+                                                ms.alert("Could not read input. Try again.", 2)
+                                            end
+                                            return true
+                                        end)
+                                        capture:start()
+                                        cancelTimer = hs.timer.doAfter(15, function()
+                                            if capture then capture:stop(); capture = nil; ms.alert("Rebind timed out.", 2) end
+                                        end)
+                                    end
+                                })
+                                table.insert(sub, {
+                                    title = "  Reset: " .. def.label,
+                                    fn = function()
+                                        ms.systemBinds._config[id] = nil
+                                        ms.saveSettings()
+                                        ms.systemBinds.rebind()
+                                        ms.playSlot("reset")
+                                        ms.alert(def.label .. " reset to default.", 2, true)
+                                    end
+                                })
+                            end
+                        end
+                        table.insert(sub, { title = "-" })
+                        -- Display-only system binds (hardcoded hs.hotkey.bind).
+                        local displayBinds = {
                             {label = "Panic Button / Stop All",  bind = "Alt+F10"},
                             {label = "Get Roblox Window Info",   bind = "Ctrl+Shift+R"},
                             {label = "Quick Reload",              bind = "Alt+[→ Reload Options"},
                             {label = "Full Reload",               bind = "Alt+]→ Reload Options"},
                             {label = "Open Menu",                bind = "Alt+P"},
                         }
-                        for _, bind in ipairs(systemBindDefs) do
+                        for _, bind in ipairs(displayBinds) do
                             table.insert(sub, { title = bind.label .. "  " .. bind.bind, disabled = true })
                         end
                         return sub
@@ -4131,8 +4245,8 @@
                         end
                         table.insert(sub, { title = "-" })
                         table.insert(sub, {
-                            title = "Save as New Profile...",
-                            fn    = function() saveAsNewProfile() end,
+                            title = "Create New Profile...",
+                            fn    = function() createNewProfile() end,
                         })
                         -- Disable "Save Current Profile" unless the active profile name
                         -- matches an existing saved profile.
@@ -5411,23 +5525,6 @@
                 ms.ui.toggle()
             end)
 
-            hs.hotkey.bind({}, "return", function()
-                if not ms._loadComplete then return end
-                if not ms._robloxActive then return end
-                ms.setMacros(1)
-            end)
-
-            hs.hotkey.bind({}, "/", function()
-                if not ms._loadComplete then return end
-                if not ms._robloxActive then return end
-                ms.setMacros(0)
-            end)
-
-            hs.hotkey.bind({}, "escape", function()
-                if not ms._loadComplete then return end
-                if not ms._robloxActive then return end
-                ms.setMacros(BindValidity == 1 and 0 or 1)
-            end)
         -- END --
 
         -- 9. Misc --
@@ -5822,35 +5919,9 @@
                 end
             end
 
-            -- Register system binds (enable/disable/toggle macros).
-            -- These are always available and fire regardless of BindValidity.
-            -- They appear in the macro list as display-only entries.
+            -- Register display-only system binds (handled by hs.hotkey.bind).
+            -- Enable/Disable/Toggle are handled separately by ms.systemBinds.
             ms.bind._registerSystemBinds = function()
-                ms.bind.define("__enableMacros", nil, {
-                    label    = "Enable Macros",
-                    group    = "system",
-                    enabled  = true,
-                    cooldown = 200,
-                    system   = true,
-                    default  = { type = "key", mods = {}, key = "return" },
-                })
-                ms.bind.define("__disableMacros", nil, {
-                    label    = "Disable Macros",
-                    group    = "system",
-                    enabled  = true,
-                    cooldown = 200,
-                    system   = true,
-                    default  = { type = "key", mods = {}, key = "/" },
-                })
-                ms.bind.define("__toggleMacros", nil, {
-                    label    = "Toggle Macros",
-                    group    = "system",
-                    enabled  = true,
-                    cooldown = 200,
-                    system   = true,
-                    default  = { type = "key", mods = {}, key = "escape" },
-                })
-                -- Display-only system binds (handled by hs.hotkey.bind).
                 ms.bind.define("__panicButton", nil, {
                     label      = "Panic Button / Stop All",
                     group      = "system",
@@ -5879,6 +5950,64 @@
                     system     = true,
                     default    = { type = "key", mods = {"alt"}, key = "p" },
                 })
+            end
+
+            -- System binds: hardware key listeners that bypass the registry/bind
+            -- pipeline entirely. Uses ms.key() (eventtap) with swallow=false so
+            -- keys pass through to the active app. User-configurable via settings.
+            ms.systemBinds._defs = {
+                enable  = { label = "Enable Macros",  default = { type = "key", mods = {}, key = "return" } },
+                disable = { label = "Disable Macros", default = { type = "key", mods = {}, key = "/" } },
+                toggle  = { label = "Toggle Macros",  default = { type = "key", mods = {}, key = "escape" } },
+            }
+            ms.systemBinds._actions = {
+                enable  = function() ms.setMacros(1) end,
+                disable = function() ms.setMacros(0) end,
+                toggle  = function() ms.setMacros(BindValidity == 1 and 0 or 1) end,
+            }
+
+            ms.systemBinds.effective = function(id)
+                return ms.systemBinds._config[id]
+                    or (ms.systemBinds._defs[id] and ms.systemBinds._defs[id].default)
+            end
+
+            ms.systemBinds.bindStr = function(id)
+                local c = ms.systemBinds.effective(id)
+                if not c then return "( unset )" end
+                if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
+                local parts = {}
+                for _, m in ipairs(c.mods or {}) do table.insert(parts, m:sub(1, 1):upper() .. m:sub(2)) end
+                table.insert(parts, (c.key or ""):upper())
+                return table.concat(parts, "+")
+            end
+
+            ms.systemBinds.rebind = function()
+                -- Tear down previous handles.
+                for _, h in pairs(ms.systemBinds._handles) do
+                    if h and h.delete then h:delete() end
+                end
+                ms.systemBinds._handles = {}
+
+                for id, action in pairs(ms.systemBinds._actions) do
+                    local c = ms.systemBinds.effective(id)
+                    if not c then goto sysBindContinue end
+                    if c.type == "key" then
+                        ms.systemBinds._handles[id] = ms.key(c.mods, c.key, false, function()
+                            if not ms._robloxActive then return end
+                            local co = coroutine.create(action)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.systemBind error: " .. tostring(err)) end
+                        end, nil, true)
+                    elseif c.type == "mouse" then
+                        ms.systemBinds._handles[id] = ms.mouse(c.button, false, function()
+                            if not ms._robloxActive then return end
+                            local co = coroutine.create(action)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.systemBind error: " .. tostring(err)) end
+                        end, true)
+                    end
+                    ::sysBindContinue::
+                end
             end
 
             -- Returns the cooldown group key for a macro id.
@@ -6116,6 +6245,8 @@
                     end
                     ::sysContinue::
                 end
+                -- Also refresh the standalone system binds (enable/disable/toggle).
+                ms.systemBinds.rebind()
             end
 
             -- Returns the id of a sibling root bind that already uses the given bind config,
@@ -6362,6 +6493,19 @@
                             bind      = _bindDisplay(ms.effectiveBind(id)),
                             enabled   = enabled and true or false,
                             subs      = subs,
+                        })
+                    end
+                end
+                -- Inject system binds (enable/disable/toggle) as virtual entries.
+                for _, id in ipairs({"enable", "disable", "toggle"}) do
+                    local def = ms.systemBinds._defs[id]
+                    if def then
+                        table.insert(macros, {
+                            id         = id,
+                            label      = def.label,
+                            group      = "system",
+                            bind       = _bindDisplay(ms.systemBinds.effective(id)),
+                            systemBind = true,
                         })
                     end
                 end
@@ -6662,7 +6806,7 @@
                             end
                         end
                         ms.loadSettings()
-                        if not ms.registry._defs["__enableMacros"] then ms.bind._registerSystemBinds() end
+                        if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
                         ms.bind.rebind()
                         ms.cam.updateAnchor()
                         ms.cam.updateMultiplier()
@@ -6923,7 +7067,7 @@
                     importProfile     = function() importProfile() end,
                     importProfilePkg  = function() importProfilePkg() end,
                     exportProfilePkg  = function() exportProfilePkg() end,
-                    saveAsNewProfile  = function() saveAsNewProfile() end,
+                    createNewProfile  = function() createNewProfile() end,
                     saveCurrentProfile = function() saveCurrentProfile() end,
 
                     importSounds = function()
@@ -7075,6 +7219,12 @@
                         os.execute("open " .. themePath)
                     end,
 
+                    openDevLogs = function()
+                        local logDir = os.getenv("HOME") .. "/Documents/ms_dev_logs/"
+                        hs.fs.mkdir(logDir)
+                        os.execute("open " .. logDir)
+                    end,
+
                     trustCurrentVersion = function()
                         ms.integrity.trustCurrent()
                         ms.ui.refresh()
@@ -7119,6 +7269,134 @@
                     -- Runs the same eventtap capture used by the native menu rebind flow.
                     startRebind = function(data)
                         if not data.id then return end
+
+                        -- System bind rebind (enable/disable/toggle macros).
+                        if data.systemBind then
+                            local sysDef = ms.systemBinds._defs[data.id]
+                            if not sysDef then return end
+                            local label = sysDef.label
+                            local curBind = ms.systemBinds.effective(data.id)
+
+                            local function bindDisplay(c)
+                                if not c then return "unset" end
+                                if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
+                                local parts = {}
+                                for _, m in ipairs(c.mods or {}) do table.insert(parts, m) end
+                                table.insert(parts, c.key or "")
+                                return table.concat(parts, "+")
+                            end
+
+                            ms.alert("Rebinding: " .. label
+                                .. "\nCurrent: " .. bindDisplay(curBind)
+                                .. "\nPress your new key or mouse button.\nEscape to cancel.", 15)
+
+                            ms._inputOpen = true
+                            ms.ui._open   = false
+
+                            local capture
+                            local cancelTimer
+
+                            local function restorePanel()
+                                ms.ui._open = true
+                                local roblox = hs.application.get(ms._targetApp or "Roblox")
+                                if roblox then
+                                    hs.timer.doAfter(0.05, function()
+                                        local ok, win = pcall(function() return roblox:mainWindow() end)
+                                        if ok and win then pcall(function() win:focus() end) end
+                                        pcall(function() roblox:activate() end)
+                                    end)
+                                end
+                            end
+
+                            capture = hs.eventtap.new({
+                                hs.eventtap.event.types.keyDown,
+                                hs.eventtap.event.types.leftMouseDown,
+                                hs.eventtap.event.types.rightMouseDown,
+                                hs.eventtap.event.types.otherMouseDown,
+                            }, function(event)
+                                capture:stop(); capture = nil; cancelTimer:stop()
+
+                                local parsed, bindStr2
+                                local t = event:getType()
+
+                                if t == hs.eventtap.event.types.keyDown then
+                                    local keyCode = event:getKeyCode()
+                                    local flags = event:getFlags()
+                                    if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
+                                        ms._inputOpen = false
+                                        ms.alert("Rebind cancelled.", 2)
+                                        restorePanel()
+                                        return true
+                                    end
+                                    local mods = {}
+                                    if flags.cmd   then table.insert(mods, "cmd")   end
+                                    if flags.alt   then table.insert(mods, "alt")   end
+                                    if flags.ctrl  then table.insert(mods, "ctrl")  end
+                                    if flags.shift then table.insert(mods, "shift") end
+                                    local keyStr = hs.keycodes.map[keyCode]
+                                    if keyStr then
+                                        parsed   = { type="key", mods=mods, key=keyStr }
+                                        local parts = {}
+                                        for _, m in ipairs(mods) do table.insert(parts, m) end
+                                        table.insert(parts, keyStr)
+                                        bindStr2 = table.concat(parts, "+")
+                                    end
+                                else
+                                    local btn
+                                    if     t == hs.eventtap.event.types.leftMouseDown  then btn = 0
+                                    elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
+                                    else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
+                                    parsed   = { type="mouse", button=btn }
+                                    bindStr2 = "Mouse " .. btn
+                                end
+
+                                if parsed then
+                                    ms.playSlot("interact")
+                                    ms._inputOpen = false
+                                    ms.ui.modal({
+                                        title   = "Confirm Rebind",
+                                        msg     = "Set \"" .. label .. "\" to:  " .. bindStr2,
+                                        confirm = "Confirm",
+                                        cancel  = "Cancel",
+                                    }, function(r)
+                                        if r.confirmed then
+                                            ms.systemBinds._config[data.id] = parsed
+                                            ms.saveSettings()
+                                            ms.playSlot("update")
+                                            ms.systemBinds.rebind()
+                                            restorePanel()
+                                            hs.timer.doAfter(0.2, function()
+                                                ms.alert(label .. " rebound to: " .. bindStr2, 3, true)
+                                                ms.ui.refresh()
+                                            end)
+                                        else
+                                            ms.alert("Rebind cancelled.", 2)
+                                            restorePanel()
+                                            ms.ui.refresh()
+                                        end
+                                    end)
+                                else
+                                    ms._inputOpen = false
+                                    ms.alert("Could not read input. Try again.", 2)
+                                    restorePanel()
+                                end
+                                return true
+                            end)
+
+                            capture:start()
+                            cancelTimer = hs.timer.doAfter(15, function()
+                                if capture then
+                                    capture:stop(); capture = nil
+                                    ms._inputOpen = false
+                                    ms.alert("Rebind timed out.", 2)
+                                    restorePanel()
+                                    ms.ui.refresh()
+                                end
+                            end)
+                            return
+                        end
+
+                        -- Regular macro rebind (registry-based).
                         local def = ms.registry._defs[data.id]
                         if not def then return end
                         local label = def.label or data.id
@@ -7344,6 +7622,22 @@
                     -- Resets a macro's bind back to its defined default.
                     resetBind = function(data)
                         if not data.id then return end
+
+                        -- System bind reset.
+                        if data.systemBind then
+                            ms.systemBinds._config[data.id] = nil
+                            ms.saveSettings()
+                            ms.systemBinds.rebind()
+                            ms.playSlot("reset")
+                            local def = ms.systemBinds._defs[data.id]
+                            hs.timer.doAfter(0.1, function()
+                                ms.alert((def and def.label or data.id) .. " reset to default.", 2, true)
+                                ms.ui.refresh()
+                            end)
+                            return
+                        end
+
+                        -- Regular macro bind reset.
                         local def = ms.registry._defs[data.id]
                         if not def then return end
                         -- Sub-items use subBinds; root binds use bindConfig.
@@ -7702,26 +7996,30 @@
                 local _devBase = "file://" .. os.getenv("HOME") .. "/.hammerspoon/ui/"
                 local _home    = os.getenv("HOME")
 
-                -- Helper: read the dev log and push history to a panel.
+                -- Helper: read category-specific dev logs and push history to a panel.
                 local _HIST_MAX = 300  -- mirrors MAX_ENTRIES in the panel JS
-                local function _loadDevHistory(panel, filter)
-                    local f = io.open(_devLogPath, "r")
-                    if not f then return end
-                    -- Ring-buffer: read the whole file but only keep the last
-                    -- _HIST_MAX matching entries so the JSON payload stays small
-                    -- and the evaluateJavaScript call doesn't block the run loop.
+                local function _loadDevHistory(panel, categories)
                     local entries = {}
-                    for line in f:lines() do
-                        local ok, entry = pcall(hs.json.decode, line)
-                        if ok and entry and (not filter or filter(entry)) then
-                            entries[#entries + 1] = entry
-                            if #entries > _HIST_MAX then
-                                table.remove(entries, 1)
+                    for _, cat in ipairs(categories) do
+                        local path = _catPaths[cat]
+                        if path then
+                            local f = io.open(path, "r")
+                            if f then
+                                for line in f:lines() do
+                                    local ok, entry = pcall(hs.json.decode, line)
+                                    if ok and entry then
+                                        entries[#entries + 1] = entry
+                                    end
+                                end
+                                f:close()
                             end
                         end
                     end
-                    f:close()
                     if #entries == 0 then return end
+                    -- Sort by timestamp so entries from different files interleave correctly.
+                    table.sort(entries, function(a, b) return (a.ts or "") < (b.ts or "") end)
+                    -- Keep only the last _HIST_MAX after merging.
+                    while #entries > _HIST_MAX do table.remove(entries, 1) end
                     local ok, json = pcall(hs.json.encode, entries)
                     if ok then
                         pcall(function()
@@ -7851,7 +8149,9 @@
                                 end
                             end
                         elseif data.action == "clear" then
-                            local f = io.open(_devLogPath, "w"); if f then f:close() end
+                            for _, cat in ipairs({"macro", "console", "error", "system", "input"}) do
+                                local p = _catPaths[cat]; if p then local f = io.open(p, "w"); if f then f:close() end end
+                            end
                         elseif data.action == "close" then
                             ms.dev.console.hide()
                         elseif data.action == "openWatcher" then
@@ -7913,11 +8213,7 @@
                         -- Inject history and theme after the panel is visible.
                         hs.timer.doAfter(0.1, function()
                             if not ms.dev._consolePanel or not ms.dev._consoleOpen then return end
-                            _loadDevHistory(ms.dev._consolePanel, function(e)
-                                return e.type == "macro" or e.type == "print"
-                                    or e.type == "result" or e.type == "error"
-                                    or e.type == "input"
-                            end)
+                            _loadDevHistory(ms.dev._consolePanel, {"macro", "console", "error", "system", "input"})
                             local tj = _devThemeJS()
                             if tj ~= "" then
                                 pcall(function() ms.dev._consolePanel:evaluateJavaScript(tj) end)
@@ -7946,9 +8242,9 @@
                         local ok, data = pcall(hs.json.decode, msg.body)
                         if not ok or type(data) ~= "table" then return end
                         if data.action == "clear" then
-                            -- Clear only macro/print/error entries from the log (keep keys).
-                            -- Simplest: just clear the whole log.
-                            local f = io.open(_devLogPath, "w"); if f then f:close() end
+                            for _, cat in ipairs({"macro", "error", "system"}) do
+                                local p = _catPaths[cat]; if p then local f = io.open(p, "w"); if f then f:close() end end
+                            end
                         elseif data.action == "close" then
                             ms.dev.watcher.hide()
                         elseif data.action == "move" and ms.dev._watcherPanelPos then
@@ -8004,9 +8300,7 @@
                         -- Inject history and theme after the panel is visible.
                         hs.timer.doAfter(0.1, function()
                             if not ms.dev._watcherPanel or not ms.dev._watcherOpen then return end
-                            _loadDevHistory(ms.dev._watcherPanel, function(e)
-                                return e.type=="macro" or e.type=="print" or e.type=="error"
-                            end)
+                            _loadDevHistory(ms.dev._watcherPanel, {"macro", "error", "system"})
                             local tj = _devThemeJS()
                             if tj ~= "" then
                                 pcall(function() ms.dev._watcherPanel:evaluateJavaScript(tj) end)
@@ -8035,7 +8329,7 @@
                         local ok, data = pcall(hs.json.decode, msg.body)
                         if not ok or type(data) ~= "table" then return end
                         if data.action == "clear" then
-                            local f = io.open(_devLogPath, "w"); if f then f:close() end
+                            local p = _catPaths["input"]; if p then local f = io.open(p, "w"); if f then f:close() end end
                         elseif data.action == "close" then
                             ms.dev.keys.hide()
                         elseif data.action == "ready" then
@@ -8119,10 +8413,7 @@
                         -- ensures navigation is long-settled before evaluateJavaScript runs.
                         hs.timer.doAfter(0.1, function()
                             if not ms.dev._keysPanel or not ms.dev._keysOpen then return end
-                            _loadDevHistory(ms.dev._keysPanel, function(e)
-                                return e.type=="key" or e.type=="mouse"
-                                    or e.type=="scroll" or e.type=="mousemove"
-                            end)
+                            _loadDevHistory(ms.dev._keysPanel, {"input"})
                             pcall(function() ms.dev._pushMouseState() end)
                             local tj = _devThemeJS()
                             if tj ~= "" then

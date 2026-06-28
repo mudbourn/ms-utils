@@ -1642,7 +1642,7 @@
                                 playSlot("interact");
                                 const items = [
                                     {
-                                        icon: "⌨",
+                                        icon: "",
                                         label: "Change Modifier\u2026",
                                         action: () =>
                                             sendToHost({
@@ -1654,7 +1654,7 @@
                                 if (ss.mod) {
                                     items.push("divider");
                                     items.push({
-                                        icon: "↺",
+                                        icon: "",
                                         label: "Clear Modifier",
                                         danger: true,
                                         action: () =>
@@ -1667,7 +1667,7 @@
                                 if (S.independentBindsEnabled) {
                                     items.push("divider");
                                     items.push({
-                                        icon: "⌨",
+                                        icon: "",
                                         label: "Rebind Independent\u2026",
                                         action: () =>
                                             sendToHost({
@@ -1677,7 +1677,7 @@
                                     });
                                     if (ss.bind)
                                         items.push({
-                                            icon: "↺",
+                                            icon: "",
                                             label: "Clear Independent Bind",
                                             danger: true,
                                             action: () =>
@@ -1704,7 +1704,7 @@
                         playSlot("interact");
                         const items = [
                             {
-                                icon: "⌨",
+                                icon: "",
                                 label: "Change Modifier\u2026",
                                 action: () =>
                                     sendToHost({
@@ -1716,7 +1716,7 @@
                         if (sub.mod) {
                             items.push("divider");
                             items.push({
-                                icon: "↺",
+                                icon: "",
                                 label: "Clear Modifier",
                                 danger: true,
                                 action: () =>
@@ -1729,7 +1729,7 @@
                         if (S.independentBindsEnabled) {
                             items.push("divider");
                             items.push({
-                                icon: "⌨",
+                                icon: "",
                                 label: "Rebind Independent\u2026",
                                 action: () =>
                                     sendToHost({
@@ -1739,7 +1739,7 @@
                             });
                             if (sub.bind)
                                 items.push({
-                                    icon: "↺",
+                                    icon: "",
                                     label: "Clear Independent Bind",
                                     danger: true,
                                     action: () =>
@@ -1781,25 +1781,27 @@
                         playSlot("interact");
                         const items = [
                             {
-                                icon: "\u2328",
+                                icon: "",
                                 label: "Rebind\u2026",
                                 action: () =>
                                     sendToHost({
                                         action: "startRebind",
                                         id: m.id,
+                                        systemBind: m.systemBind || false,
                                     }),
                             },
                         ];
                         if (m.bind) {
                             items.push("divider");
                             items.push({
-                                icon: "\u21ba",
+                                icon: "",
                                 label: "Reset Bind",
                                 danger: true,
                                 action: () =>
                                     sendToHost({
                                         action: "resetBind",
                                         id: m.id,
+                                        systemBind: m.systemBind || false,
                                     }),
                             });
                         }
@@ -2560,7 +2562,7 @@
                             e.clientY,
                             [
                                 {
-                                    icon: "\u2197",
+                                    icon: "",
                                     label: "Switch to this profile",
                                     action: async () => {
                                         const res = await openModal(
@@ -2577,7 +2579,7 @@
                                 },
                                 "divider",
                                 {
-                                    icon: "\u{1F5D1}",
+                                    icon: "",
                                     label: "Delete profile",
                                     danger: true,
                                     action: async () => {
@@ -2609,15 +2611,14 @@
                             const b = h(
                                 "button",
                                 {
-                                    cls: "btn-action" + (nameExists ? " disabled" : ""),
+                                    cls: "btn-action",
                                     onmouseenter: () => playSlot("hover"),
                                     onclick: () => {
-                                        if (nameExists) return;
                                         playSlot("interact");
-                                        sendToHost({ action: "saveAsNewProfile" });
+                                        sendToHost({ action: "createNewProfile" });
                                     },
                                 },
-                                "Save as New Profile",
+                                "Create New Profile",
                             );
                             return b;
                         })(),
@@ -2700,6 +2701,13 @@
                         ),
                     ),
                 );
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Open Dev Logs", "", () =>
+                            sendToHost({ action: "openDevLogs" }),
+                        ),
+                    ),
+                );
 
                 body.appendChild(divider());
 
@@ -2746,7 +2754,7 @@
                             }),
                         [
                             {
-                                icon: "\u21ba",
+                                icon: "",
                                 label: "Reset to default",
                                 action: () =>
                                     sendToHost({
