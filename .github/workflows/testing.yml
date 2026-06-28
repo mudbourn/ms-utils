@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths: [mac/ms_core.lua, win/ms_core_v2.ahk, ui/ms_settings_ui.html]
+  workflow_dispatch:
 
 permissions:
   contents: write
