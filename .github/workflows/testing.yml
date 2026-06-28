@@ -3,7 +3,7 @@ name: Testing
 on:
   push:
     branches: [main]
-    paths: [mac/ms_core.lua, win/ms_core_v2.ahk]
+    paths: [mac/ms_core.lua, win/ms_core_v2.ahk, ui/ms_settings_ui.html]
 
 permissions:
   contents: write
