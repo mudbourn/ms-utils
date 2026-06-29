@@ -525,7 +525,11 @@
                         onchange="onCoordModeChange(this.value)"
                     >
                         <option value="screen">Screen</option>
-                        <option value="window">Window</option>
+                        <option value="window">Window TL</option>
+                        <option value="windowTR">Window TR</option>
+                        <option value="windowBL">Window BL</option>
+                        <option value="windowBR">Window BR</option>
+                        <option value="windowCenter">Window Center</option>
                         <option value="ref">REF 1680×1044</option>
                         <option value="screenCenter">Screen center</option>
                     </select>
@@ -698,6 +702,7 @@
                             entry.down ? "↓" : "↑",
                         ),
                         mkSpan("key-name", entry.key || ""),
+                        mkSpan("dim", " (" + (entry.keyCode ?? "?") + ")"),
                     );
                 } else if (t === "mouse") {
                     row.append(
@@ -773,20 +778,25 @@
             }
 
             // ── Active keys pills ──────────────────────────────────────────────
-            function updateActiveKeys(names) {
+            // Accepts array of { name, code } objects (or plain strings for backwards compat).
+            function updateActiveKeys(keys) {
                 const row = document.getElementById("keys-pills");
                 row.innerHTML = "";
-                if (!names || names.length === 0) {
+                if (!keys || keys.length === 0) {
                     const p = document.createElement("span");
                     p.className = "pill pill-empty";
                     p.textContent = "—";
                     row.appendChild(p);
                     return;
                 }
-                names.forEach((name) => {
+                keys.forEach((entry) => {
                     const p = document.createElement("span");
                     p.className = "pill pill-key";
-                    p.textContent = name;
+                    if (typeof entry === "object" && entry !== null) {
+                        p.textContent = entry.name + " (" + entry.code + ")";
+                    } else {
+                        p.textContent = entry;
+                    }
                     row.appendChild(p);
                 });
             }

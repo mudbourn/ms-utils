@@ -393,12 +393,14 @@
                 end
 
                 ms.dev._onKeyEvent = function(keyCode, keyName, isDown)
-                    _devWrite({ type = "key", key = keyName or ("code:" .. tostring(keyCode)), down = isDown })
+                    _devWrite({ type = "key", key = keyName or ("code:" .. tostring(keyCode)), keyCode = keyCode, down = isDown })
                     if isDown then ms.dev._activeKeys[keyCode] = keyName or tostring(keyCode)
                     else            ms.dev._activeKeys[keyCode] = nil end
                     if ms.dev._keysPanel then
                         local active = {}
-                        for _, name in pairs(ms.dev._activeKeys) do table.insert(active, name) end
+                        for code, name in pairs(ms.dev._activeKeys) do
+                            table.insert(active, { name = name, code = code })
+                        end
                         local aok, aj = pcall(hs.json.encode, active)
                         if aok then
                             pcall(function()
@@ -5893,9 +5895,18 @@
                     end
                 end
 
+                -- On Retina (2×) displays, a 1-point snapshot produces a 2×2
+                -- pixel image.  colorAt({0,0}) then reads the top-left corner
+                -- pixel which can differ from the logical point's true colour
+                -- (anti-aliasing, sub-pixel rendering).  Read from the centre
+                -- of the image instead so we sample the pixel that actually
+                -- corresponds to the requested logical point.
+                local scale = (screen:currentMode() and screen:currentMode().scale) or 1
                 local img = screen:snapshot({ x = ax, y = ay, w = 1, h = 1 })
                 if not img then return nil end
-                local c = img:colorAt({ x = 0, y = 0 })
+                local px = math.floor(scale / 2)
+                local py = math.floor(scale / 2)
+                local c = img:colorAt({ x = px, y = py })
                 if not c then return nil end
 
                 return {
@@ -6420,8 +6431,17 @@
 
             ms.modHeld = function(id)
                 local key = ms.getMod(id)
-                if not key then return false end
-                return ms.keystate(key)
+                if not key then
+                    if ms.dev and ms.dev.trace then
+                        ms.dev.step("modHeld(" .. tostring(id) .. ") → false")
+                    end
+                    return false
+                end
+                local result = ms.keystate(key)
+                if ms.dev and ms.dev.trace then
+                    ms.dev.step("modHeld(" .. tostring(id) .. ") → " .. tostring(result))
+                end
+                return result
             end
 
             -- Returns true if the given sub-item id should fire for this invocation.
@@ -6439,8 +6459,14 @@
                             pcall(ms.dev._onMacroFire, id, def.label,
                                 def.sub, pd and pd.label, ms.getMod(id) or "")
                         end
+                        if ms.dev.trace then
+                            ms.dev.step("isSub(" .. tostring(id) .. ") → true")
+                        end
                     end
                     return true
+                end
+                if ms.dev and ms.dev.trace then
+                    ms.dev.step("isSub(" .. tostring(id) .. ") → false")
                 end
                 return false
             end
@@ -8527,13 +8553,29 @@
                         -- Transform raw screen coordinates to the selected reference frame.
                         local mode = ms.dev._coordMode or "screen"
                         local tx, ty = _x, _y
-                        if mode == "window" or mode == "ref" then
+                        if mode == "window" or mode == "windowTR" or mode == "windowBL"
+                            or mode == "windowBR" or mode == "windowCenter" or mode == "ref" then
                             local win = ms.getTargetWin()
                             if win then
                                 local f = win:frame()
-                                tx = _x - f.x
-                                ty = _y - f.y
-                                if mode == "ref" then
+                                if mode == "window" then
+                                    tx = _x - f.x
+                                    ty = _y - f.y
+                                elseif mode == "windowTR" then
+                                    tx = _x - (f.x + f.w)
+                                    ty = _y - f.y
+                                elseif mode == "windowBL" then
+                                    tx = _x - f.x
+                                    ty = _y - (f.y + f.h)
+                                elseif mode == "windowBR" then
+                                    tx = _x - (f.x + f.w)
+                                    ty = _y - (f.y + f.h)
+                                elseif mode == "windowCenter" then
+                                    tx = _x - (f.x + f.w / 2)
+                                    ty = _y - (f.y + f.h / 2)
+                                elseif mode == "ref" then
+                                    tx = _x - f.x
+                                    ty = _y - f.y
                                     tx = math.floor(tx * (1680 / f.w) + 0.5)
                                     ty = math.floor(ty * (1044 / f.h) + 0.5)
                                 end
@@ -8667,7 +8709,7 @@
                         -- Poll every 0.4 s for focused window changes.
                         if ms.dev._windowPoller then ms.dev._windowPoller:stop() end
                         ms.dev._windowPoller = hs.timer.doEvery(0.4, function()
-                            if not ms.dev._windowOpen then
+                            if not ms.dev._windowOpen or not ms.dev._windowPanel then
                                 if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
                                 return
                             end
@@ -8692,8 +8734,10 @@
                         ms.dev._windowOpen = false
                         if ms.dev._windowPanel then
                             ms.playSlot("settingsClose")
-                            _devFadeOut(ms.dev._windowPanel, "window", function()
-                                if ms.dev._windowPanel then ms.dev._windowPanel:hide() end
+                            local panel = ms.dev._windowPanel
+                            ms.dev._windowPanel = nil  -- nil immediately to stop pollers/event dispatch
+                            _devFadeOut(panel, "window", function()
+                                if panel then panel:hide() end
                             end)
                         end
                     end
