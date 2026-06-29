@@ -12,6 +12,8 @@
 # To uninstall:
 #   launchctl unload ~/Library/LaunchAgents/com.mudscript.guardian.plist 2>/dev/null
 #   rm -f ~/Library/LaunchAgents/com.mudscript.guardian.plist
+#   launchctl unload ~/Library/LaunchAgents/com.mudscript.cache-cleaner.plist 2>/dev/null
+#   rm -f ~/Library/LaunchAgents/com.mudscript.cache-cleaner.plist
 #   rm -rf ~/.hammerspoon/
 
 set -euo pipefail
@@ -137,6 +139,7 @@ echo "╚═══════════════════════�
 echo ""
 echo "   Directory:  $HS"
 echo "   Guardian:   ~/Library/LaunchAgents/com.mudscript.guardian.plist"
+echo "   Cache clean: ~/Library/LaunchAgents/com.mudscript.cache-cleaner.plist"
 echo ""
 echo "   The trusted hash is auto-seeded from MANIFEST.json on first load."
 echo ""

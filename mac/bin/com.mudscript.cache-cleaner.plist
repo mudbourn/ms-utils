@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    com.mudscript.cache-cleaner.plist — periodic Roblox cache cleanup
+    -----------------------------------------------------------------
+    DO NOT edit this template directly.
+    Run  bin/install_guardian_agent.sh  to expand placeholders and install.
+
+    Placeholders replaced by the install script:
+        %%AGENT_PATH%%   absolute path to clean_roblox_cache.sh
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mudscript.cache-cleaner</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>%%AGENT_PATH%%</string>
+    </array>
+
+    <!-- Run at login, then every 6 hours -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>21600</integer>
+
+    <key>StandardOutPath</key>
+    <string>/dev/null</string>
+    <key>StandardErrorPath</key>
+    <string>/dev/null</string>
+</dict>
+</plist>

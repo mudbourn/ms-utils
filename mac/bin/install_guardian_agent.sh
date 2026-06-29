@@ -8,6 +8,8 @@
 # To uninstall:
 #   launchctl unload ~/Library/LaunchAgents/com.mudscript.guardian.plist
 #   rm ~/Library/LaunchAgents/com.mudscript.guardian.plist
+#   launchctl unload ~/Library/LaunchAgents/com.mudscript.cache-cleaner.plist
+#   rm ~/Library/LaunchAgents/com.mudscript.cache-cleaner.plist
 
 set -euo pipefail
 
@@ -51,6 +53,27 @@ echo ""
 echo "mudscript Guardian agent installed and running."
 echo "It watches:  $HS/ms_core.lua"
 echo "Log file:    $HS/data/guardian_agent.log"
+
+# ── Install Roblox cache cleaner agent ────────────────────────────────────────
+
+CACHE_SCRIPT="$HS/bin/clean_roblox_cache.sh"
+CACHE_PLIST_TEMPLATE="$HS/bin/com.mudscript.cache-cleaner.plist"
+CACHE_PLIST_DST="$HOME/Library/LaunchAgents/com.mudscript.cache-cleaner.plist"
+
+if [ -f "$CACHE_PLIST_TEMPLATE" ] && [ -f "$CACHE_SCRIPT" ]; then
+    chmod 755 "$CACHE_SCRIPT"
+    sed "s|%%AGENT_PATH%%|$CACHE_SCRIPT|g" \
+        "$CACHE_PLIST_TEMPLATE" > "$CACHE_PLIST_DST"
+    launchctl unload "$CACHE_PLIST_DST" 2>/dev/null || true
+    launchctl load "$CACHE_PLIST_DST"
+    echo ""
+    echo "Roblox cache cleaner installed (every 6 h + at login)."
+    echo "Log file:    $HS/data/cache_cleaner.log"
+else
+    echo ""
+    echo "⚠  Cache cleaner files not found — skipping."
+fi
+
 echo ""
 echo "Optional: make the stub read-only for stronger protection:"
 echo "  chmod 444 ~/.hammerspoon/init.lua"
