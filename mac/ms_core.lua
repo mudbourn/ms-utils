@@ -4531,9 +4531,26 @@
                                 if ms.macroMeta then
                                     local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
                                     if ms.macroMeta.author then msg = msg .. "By: " .. ms.macroMeta.author end
-                                    if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
+                                    if ms.macroMeta.website then msg = msg .. " — " .. ms.macroMeta.website end
                                     ms.alert(msg, 10)
                                 end
+                            end },
+                            { title = "Version", fn = function()
+                                ms.playSlot("interact")
+                                local ver = "?"
+                                local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
+                                if lf then
+                                    local raw = lf:read("*a"); lf:close()
+                                    local v = raw:match('"version"%s*:%s*"([^"]+)"')
+                                    if v then ver = v end
+                                end
+                                local chan = ms._updateChannel or "stable"
+                                local label = (chan == "testing") and "Test Build" or "Release"
+                                ms.alert("mudscript v" .. ver .. "\n" .. label .. " (" .. chan .. ")", 5, true)
+                            end },
+                            { title = "GitHub", fn = function()
+                                ms.playSlot("interact")
+                                hs.urlevent.openURL("https://github.com/mudbourn/ms-utils")
                             end },
                             { title = "Documentation", fn = function()
                                 ms.playSlot("interact")
