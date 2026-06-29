@@ -304,6 +304,22 @@
                         entry.category = _typeToCategory[entry.type] or "system"
                     end
 
+                    -- Auto-format a readable msg from structured fields when none is given.
+                    -- Uses newlines + indentation so the Console/Watcher panels render
+                    -- isolated, scannable blocks instead of a single long line.
+                    if not entry.msg or entry.msg == "" then
+                        local headline = entry.event or entry.key or entry.type or "log"
+                        local details  = {}
+                        if entry.source then table.insert(details, "  source: " .. entry.source) end
+                        if entry.reason then table.insert(details, "  reason: " .. entry.reason) end
+                        if entry.output then table.insert(details, "  output: " .. tostring(entry.output):sub(1, 200)) end
+                        if #details > 0 then
+                            entry.msg = headline .. "\n" .. table.concat(details, "\n")
+                        else
+                            entry.msg = headline
+                        end
+                    end
+
                     local ok, json = pcall(hs.json.encode, entry)
                     if not ok then _devBusy = false; return end
 
@@ -658,8 +674,6 @@
                     end
 
                     -- dismissAll: instantly clears all active toasts without animation.
-                    -- Used by _doNotify to cut off a previous state toast before
-                    -- showing the new one.
                     local function dismissAll()
                         for i = #queue, 1, -1 do
                             local e = queue[i]
@@ -670,12 +684,47 @@
                         queue = {}
                     end
 
-                    return setmetatable({ dismissAll = dismissAll }, {
-                        __call = function(_, msg, duration, noDefaultSound)
+                    -- dismissById: removes only toasts tagged with the given id.
+                    local function dismissById(id)
+                        for i = #queue, 1, -1 do
+                            local e = queue[i]
+                            if e.id == id then
+                                if e.timer      then e.timer:stop();      e.timer      = nil end
+                                if e._animTimer then e._animTimer:stop(); e._animTimer = nil end
+                                if e.canvas     then pcall(function() e.canvas:delete() end); e.canvas = nil end
+                                table.remove(queue, i)
+                            end
+                        end
+                    end
+
+                    -- updateById: finds a toast with the given id and updates its
+                    -- message and timer in-place.  Returns true if found.
+                    local function updateById(id, msg, duration)
+                        for i = #queue, 1, -1 do
+                            local e = queue[i]
+                            if e.id == id then
+                                -- Replace canvas with new text.
+                                if e.canvas then pcall(function() e.canvas:delete() end); e.canvas = nil end
+                                e.msg = msg
+                                redraw(e)
+                                -- Reset dismiss timer.
+                                if e.timer then e.timer:stop() end
+                                e.timer = hs.timer.doAfter(duration, function()
+                                    dismissEntry(e)
+                                end)
+                                return true
+                            end
+                        end
+                        return false
+                    end
+
+                    return setmetatable({ dismissAll = dismissAll, dismissById = dismissById, updateById = updateById }, {
+                        __call = function(_, msg, duration, noDefaultSound, opts)
                             duration = duration or 5
 
                             -- Auto-log every alert to the dev log.  Heuristic:
                             -- error-like messages get category "error", rest get "system".
+                            local src = opts and opts.source or "system"
                             if ms.dev and ms.dev.log then
                                 local isError = msg and (
                                     msg:find("[Ff]ailed") or msg:find("[Ee]rror")
@@ -686,6 +735,7 @@
                                 ms.dev.log({
                                     type    = isError and "error" or "system",
                                     event   = "alert",
+                                    source  = src,
                                     msg     = (msg or ""):sub(1, 200),  -- truncate long messages
                                 })
                             end
@@ -704,7 +754,7 @@
                                 table.remove(queue, 1)
                             end
 
-                            local entry = { msg = msg, canvas = nil, timer = nil, h = nil }
+                            local entry = { msg = msg, canvas = nil, timer = nil, h = nil, id = opts and opts.id or nil, source = src }
                             table.insert(queue, entry)
                             redraw(entry)
 
@@ -5397,15 +5447,18 @@
                 if _debounceTimer then _debounceTimer:stop(); _debounceTimer = nil end
                 _debounceTimer = hs.timer.doAfter(0.05, function()
                     _debounceTimer = nil
-                    -- Cut off any previous state sound and toast before showing the new ones.
+                    -- Cut off any previous state sound before showing the new one.
                     if _stateSound then pcall(function() _stateSound:stop() end); _stateSound = nil end
-                    ms.alert.dismissAll()
                     if state == 1 then
                         _stateSound = ms.playSlot("enabled")
-                        ms.alert("Macros enabled!",  3, true)
+                        if not ms.alert.updateById("_state", "Macros enabled!", 3) then
+                            ms.alert("Macros enabled!",  3, true, { id = "_state", source = "system" })
+                        end
                     else
                         _stateSound = ms.playSlot("disabled")
-                        ms.alert("Macros disabled.", 3, true)
+                        if not ms.alert.updateById("_state", "Macros disabled.", 3) then
+                            ms.alert("Macros disabled.", 3, true, { id = "_state", source = "system" })
+                        end
                     end
                 end)
             end
@@ -8179,7 +8232,7 @@
                     -- ms.dev.prewarm() so the panel is ready before the user opens it.
                     local function _buildConsolePanel()
                         local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 640
+                        local w, h   = 360, 480
                         local x = screen.x + screen.w - w - 20
                         local y = screen.y + 20
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
@@ -8267,7 +8320,7 @@
                     -- Builds the macro watcher WebView (hidden). Pre-warmed at startup.
                     local function _buildWatcherPanel()
                         local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 640
+                        local w, h   = 360, 480
                         local x = screen.x + screen.w - w - 50
                         local y = screen.y + 44
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
@@ -8372,7 +8425,7 @@
                     -- Builds the input monitor WebView (hidden). Pre-warmed at startup.
                     local function _buildKeysPanel()
                         local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 640
+                        local w, h   = 360, 480
                         local x = screen.x + screen.w - w - 80
                         local y = screen.y + 68
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
@@ -8560,7 +8613,7 @@
                     -- Builds the window monitor WebView (hidden). Pre-warmed at startup.
                     local function _buildWindowPanel()
                         local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 480
+                        local w, h   = 480, 480
                         local x = screen.x + screen.w - w - 110
                         local y = screen.y + 68
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
@@ -8735,6 +8788,22 @@
                                         end
                                     end
                                     return ms.bind[bk]
+                                end,
+                            })
+                        end
+                        -- Wrap ms.alert to auto-tag macro-sourced toasts.
+                        if k == "alert" then
+                            return setmetatable({}, {
+                                __call = function(_, msg, duration, noDefaultSound)
+                                    return ms.alert(msg, duration, noDefaultSound, { source = "macro" })
+                                end,
+                                __index = function(_, bk)
+                                    -- Expose read-only alert methods (updateById, dismissById)
+                                    -- but not dismissAll — macros should not nuke all toasts.
+                                    if bk == "updateById" or bk == "dismissById" then
+                                        return ms.alert[bk]
+                                    end
+                                    return nil
                                 end,
                             })
                         end
