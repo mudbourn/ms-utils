@@ -1245,29 +1245,15 @@
                             ms.saveSettings()
                         end
 
-                        -- 6. Close the settings UI if open.
-                        if ms.ui._open then ms.ui.hide() end
-
-                        -- 7. Unfocus → refocus the target app so it picks up
-                        --    the new macro/key state, then toast.
-                        hs.timer.doAfter(0.5, function()
-                            local ok, err = pcall(function()
-                                local app = ms._targetApp and hs.application.get(ms._targetApp)
-                                if app then
-                                    app:hide()
-                                    hs.timer.doAfter(0.15, function()
-                                        pcall(function() app:activate() end)
-                                        hs.timer.doAfter(0.3, function()
-                                            ms.playSlot("update")
-                                            ms.alert("Quick Reload complete.", 5, true)
-                                        end)
-                                    end)
-                                else
-                                    ms.playSlot("update")
-                                    ms.alert("Quick Reload complete.", 5, true)
-                                end
-                            end)
-                            if not ok then print("quickReload step 7 error: " .. tostring(err)) end
+                        -- 6. Always toast the result (warn if nothing selected).
+                        local anySelected = qr.macros or qr.theme or qr.settings or qr.ui
+                        hs.timer.doAfter(1.0, function()
+                            ms.playSlot("update")
+                            if anySelected then
+                                ms.alert("Quick Reload complete.", 5, true)
+                            else
+                                ms.alert("Quick Reload: no options selected.", 5, true)
+                            end
                         end)
                     end
 
@@ -6824,7 +6810,22 @@
                             ms.alert("Macros reloaded.", 4, true)
                         end
                         ms.ui.hide()
-                        hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                        hs.timer.doAfter(0.15, function()
+                            ms.ui.show()
+                            -- Unfocus → refocus the target app so it picks up
+                            -- the new macro/key state.
+                            hs.timer.doAfter(0.35, function()
+                                pcall(function()
+                                    local app = ms._targetApp and hs.application.get(ms._targetApp)
+                                    if app then
+                                        app:hide()
+                                        hs.timer.doAfter(0.15, function()
+                                            pcall(function() app:activate() end)
+                                        end)
+                                    end
+                                end)
+                            end)
+                        end)
                     end,
 
                     reloadSettings = function()

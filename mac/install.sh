@@ -26,11 +26,38 @@ echo "║        mudscript — macOS Installer          ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 
-# ── Step 1: Source the files ──────────────────────────────────────────────────
+# ── Step 1: Ensure Hammerspoon is installed ───────────────────────────────────
+
+if [ -d "/Applications/Hammerspoon.app" ]; then
+    echo "❶  Hammerspoon is already installed."
+else
+    echo "❶  Hammerspoon not found — downloading latest release …"
+    HS_API="https://api.github.com/repos/Hammerspoon/hammerspoon/releases/latest"
+    HS_ZIP_URL=$(curl -sf "$HS_API" \
+        | grep -o '"browser_download_url": *"[^"]*\.zip"' \
+        | head -1 | sed 's/.*": *"//; s/"//')
+
+    if [ -z "$HS_ZIP_URL" ]; then
+        echo "   ✗ Could not determine Hammerspoon download URL."
+        echo "     Please install manually: https://www.hammerspoon.org"
+        exit 1
+    fi
+
+    echo "   Downloading: $HS_ZIP_URL"
+    HS_TMP=$(mktemp -d)
+    curl -sfL "$HS_ZIP_URL" -o "$HS_TMP/hammerspoon.zip"
+    unzip -qo "$HS_TMP/hammerspoon.zip" -d "$HS_TMP"
+    # The zip contains Hammerspoon.app at the top level
+    cp -R "$HS_TMP/Hammerspoon.app" /Applications/
+    rm -rf "$HS_TMP"
+    echo "   ✓ Hammerspoon installed to /Applications/."
+fi
+
+# ── Step 2: Source the files ──────────────────────────────────────────────────
 
 if [ -f "$SCRIPT_DIR/ms_core.lua" ] && [ -f "$SCRIPT_DIR/init.lua" ]; then
     # Full repo detected — copy directly
-    echo "❶  Copying local repo to ~/.hammerspoon/ …"
+    echo "❷  Copying local repo to ~/.hammerspoon/ …"
     mkdir -p "$HS"
     cp -R "$SCRIPT_DIR"/* "$HS/"
     # MANIFEST.json lives at the repo root (one level up from mac/)
@@ -39,7 +66,7 @@ if [ -f "$SCRIPT_DIR/ms_core.lua" ] && [ -f "$SCRIPT_DIR/init.lua" ]; then
     echo "   ✓ Files copied from $SCRIPT_DIR"
 else
     # Standalone script — download latest release
-    echo "❶  Downloading latest release from GitHub …"
+    echo "❷  Downloading latest release from GitHub …"
     mkdir -p "$HS"
 
     # Try to get the latest release download URL via the GitHub API
@@ -74,10 +101,10 @@ else
     rm -f "$HS/install.sh" 2>/dev/null || true
 fi
 
-# ── Step 2: Install Guardian Launch Agent ────────────────────────────────────
+# ── Step 3: Install Guardian Launch Agent ────────────────────────────────────
 
 echo ""
-echo "❷  Installing OS-level Guardian …"
+echo "❸  Installing OS-level Guardian …"
 if [ -f "$HS/bin/install_guardian_agent.sh" ]; then
     bash "$HS/bin/install_guardian_agent.sh"
     echo "   ✓ Guardian installed."
@@ -85,16 +112,16 @@ else
     echo "   ⚠  install_guardian_agent.sh not found — skipping."
 fi
 
-# ── Step 3: Lock init.lua ────────────────────────────────────────────────────
+# ── Step 4: Lock init.lua ────────────────────────────────────────────────────
 
 echo ""
-echo "❸  Locking bootstrap stub (chmod 444) …"
+echo "❹  Locking bootstrap stub (chmod 444) …"
 chmod 444 "$HS/init.lua" 2>/dev/null && echo "   ✓ init.lua locked." || echo "   ⚠  Could not chmod init.lua."
 
-# ── Step 4: Reload Hammerspoon ────────────────────────────────────────────────
+# ── Step 5: Reload Hammerspoon ────────────────────────────────────────────────
 
 echo ""
-echo "❹  Reloading Hammerspoon …"
+echo "❺  Reloading Hammerspoon …"
 if command -v open &>/dev/null; then
     open -g "hammerspoon://reload" 2>/dev/null && echo "   ✓ Hammerspoon reloaded." || echo "   ⚠  Reload manually (menubar icon → Reload)."
 else
