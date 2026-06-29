@@ -104,22 +104,25 @@ jobs:
 
       - name: Download lib dependencies
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github.v3+json" }
           mkdir lib -Force
-          $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
+          $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk" -Headers $headers
           $wv2 = $wv2.Replace('..\ComVar.ahk', 'ComVar.ahk').Replace('..\Promise.ahk', 'Promise.ahk')
           [System.IO.File]::WriteAllText("$pwd\lib\WebView2.ahk", $wv2, [System.Text.UTF8Encoding]::new($false))
           mkdir lib\WebView2 -Force
           $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
-          $items = Invoke-RestMethod $github
+          $items = Invoke-RestMethod $github -Headers $headers
           foreach ($item in $items) {
             if ($item.type -eq 'file') {
               $out = "lib\WebView2\$($item.name)"
-              Invoke-WebRequest -Uri $item.download_url -OutFile $out -UseBasicParsing
+              Invoke-WebRequest -Uri $item.download_url -OutFile $out -UseBasicParsing -Headers $headers
             }
           }
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" -OutFile "lib\ComVar.ahk" -UseBasicParsing
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" -OutFile "lib\Promise.ahk" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" -OutFile "lib\ComVar.ahk" -UseBasicParsing -Headers $headers
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" -OutFile "lib\Promise.ahk" -UseBasicParsing -Headers $headers
           Write-Output "Dependencies downloaded."
 
       - name: Build Windows package
