@@ -11,20 +11,50 @@ permissions:
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
-  # Build — package pre-release archives for both platforms
+  # Detect which platform(s) changed
   # ────────────────────────────────────────────────────────────────────────────
-  build:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: windows-latest
-            platform: windows
-            ext: zip
-          - runner: macos-latest
-            platform: macos
-            ext: tar.gz
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      mac: ${{ steps.filter.outputs.mac }}
+      win: ${{ steps.filter.outputs.win }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - id: filter
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          MAC=false
+          WIN=false
+
+          # mac/ or shared ui/ changes → build macOS
+          if echo "$CHANGED" | grep -qE "^(mac/|ui/)"; then MAC=true; fi
+          # win/ or shared ui/ changes → build Windows
+          if echo "$CHANGED" | grep -qE "^(win/|ui/)"; then WIN=true; fi
+
+          # workflow_dispatch always builds both
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MAC=true
+            WIN=true
+          fi
+
+          echo "mac=$MAC" >> $GITHUB_OUTPUT
+          echo "win=$WIN" >> $GITHUB_OUTPUT
+          echo "mac=$MAC  win=$WIN"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Build macOS
+  # ────────────────────────────────────────────────────────────────────────────
+  build-macos:
+    needs: check
+    if: needs.check.outputs.mac == 'true'
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -32,48 +62,7 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download lib dependencies (Windows only)
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          mkdir lib -Force
-          $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
-          $wv2 = $wv2.Replace('..\ComVar.ahk', 'ComVar.ahk').Replace('..\Promise.ahk', 'Promise.ahk')
-          [System.IO.File]::WriteAllText("$pwd\lib\WebView2.ahk", $wv2, [System.Text.UTF8Encoding]::new($false))
-          mkdir lib\WebView2 -Force
-          $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
-          $items = Invoke-RestMethod $github
-          foreach ($item in $items) {
-            if ($item.type -eq 'file') {
-              $out = "lib\WebView2\$($item.name)"
-              Invoke-WebRequest -Uri $item.download_url -OutFile $out -UseBasicParsing
-            }
-          }
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" -OutFile "lib\ComVar.ahk" -UseBasicParsing
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" -OutFile "lib\Promise.ahk" -UseBasicParsing
-          Write-Output "Dependencies downloaded."
-
-      - name: Build Windows package
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          $buildNum = "${{ github.run_number }}"
-          $dist = "mudscript-pre-$buildNum"
-          mkdir $dist
-          & .\win\bin\generate_icon.ps1
-          Copy-Item "win\install.bat","win\init.ahk","win\_ms_main.ahk","win\ms_core_v2.ahk","win\ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
-          Copy-Item -Recurse "ui","win\lib","win\bin","data" "$dist\"
-          Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
-          Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
-          Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
-          $archive = "mudscript-windows-pre-$buildNum.zip"
-          Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
-          Write-Output "Package: $archive"
-
       - name: Build macOS package
-        if: matrix.platform == 'macos'
         run: |
           BUILD_NUM="${{ github.run_number }}"
           DIST="mudscript-pre-${BUILD_NUM}"
@@ -96,14 +85,73 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-pre-${{ github.run_number }}
-          path: mudscript-${{ matrix.platform }}-pre-${{ github.run_number }}.${{ matrix.ext }}
+          name: macos-pre-${{ github.run_number }}
+          path: mudscript-macos-pre-${{ github.run_number }}.tar.gz
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Pre-release — create a tagged pre-release with build artifacts
+  # Build Windows
+  # ────────────────────────────────────────────────────────────────────────────
+  build-windows:
+    needs: check
+    if: needs.check.outputs.win == 'true'
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download lib dependencies
+        shell: pwsh
+        run: |
+          mkdir lib -Force
+          $wv2 = Invoke-RestMethod "https://raw.githubusercontent.com/thqby/ahk2_lib/master/WebView2/WebView2.ahk"
+          $wv2 = $wv2.Replace('..\ComVar.ahk', 'ComVar.ahk').Replace('..\Promise.ahk', 'Promise.ahk')
+          [System.IO.File]::WriteAllText("$pwd\lib\WebView2.ahk", $wv2, [System.Text.UTF8Encoding]::new($false))
+          mkdir lib\WebView2 -Force
+          $github = "https://api.github.com/repos/thqby/ahk2_lib/contents/WebView2"
+          $items = Invoke-RestMethod $github
+          foreach ($item in $items) {
+            if ($item.type -eq 'file') {
+              $out = "lib\WebView2\$($item.name)"
+              Invoke-WebRequest -Uri $item.download_url -OutFile $out -UseBasicParsing
+            }
+          }
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/ComVar.ahk" -OutFile "lib\ComVar.ahk" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/thqby/ahk2_lib/master/Promise.ahk" -OutFile "lib\Promise.ahk" -UseBasicParsing
+          Write-Output "Dependencies downloaded."
+
+      - name: Build Windows package
+        shell: pwsh
+        run: |
+          $buildNum = "${{ github.run_number }}"
+          $dist = "mudscript-pre-$buildNum"
+          mkdir $dist
+          & .\win\bin\generate_icon.ps1
+          Copy-Item "win\install.bat","win\init.ahk","win\_ms_main.ahk","win\ms_core_v2.ahk","win\ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
+          Copy-Item -Recurse "ui","win\lib","win\bin","data" "$dist\"
+          Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
+          Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
+          $archive = "mudscript-windows-pre-$buildNum.zip"
+          Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
+          Write-Output "Package: $archive"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-pre-${{ github.run_number }}
+          path: mudscript-windows-pre-${{ github.run_number }}.zip
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Pre-release — create a tagged pre-release with whatever was built
   # ────────────────────────────────────────────────────────────────────────────
   prerelease:
-    needs: build
+    needs: [build-macos, build-windows]
+    if: always() && (needs.build-macos.result == 'success' || needs.build-windows.result == 'success')
     runs-on: ubuntu-latest
 
     steps:
@@ -132,15 +180,21 @@ jobs:
           ASSETS=$(find . -name "mudscript-*-pre-${{ github.run_number }}.*" -type f 2>/dev/null | tr '\n' ' ' || true)
           echo "Assets: $ASSETS"
 
+          # Determine which platforms were built
+          BUILT=""
+          echo "$ASSETS" | grep -q "macos" && BUILT="${BUILT}macOS "
+          echo "$ASSETS" | grep -q "windows" && BUILT="${BUILT}Windows"
+          BUILT=$(echo "$BUILT" | xargs)  # trim
+
           CHANGES=$(git log --oneline $(git rev-list --tags --max-count=1 2>/dev/null || echo HEAD~5)..HEAD 2>/dev/null | head -20 || echo "No changes.")
 
           cat > notes.md <<EOF
           ## Pre-release build ${{ github.run_number }}
 
-          > ⚠️ **Testing build** — not an official release.  
+          > ⚠️ **Testing build** — not an official release.
           > Switch mudscript's update channel to **Testing** to install automatically.
 
-          > Bundle includes UI files (templates, default profile).
+          > Platforms: **${BUILT}**
 
           ### Changes
           $CHANGES
