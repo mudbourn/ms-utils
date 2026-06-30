@@ -277,15 +277,50 @@ jobs:
 
       - name: Download previous artifact
         if: steps.skip-check.outputs.skip == 'true'
+        id: download-prev
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $prevTag = git tag -l 'pre-*' --sort=-v:refname | Select-Object -First 1
           $prevNum = $prevTag -replace 'pre-',''
-          gh release download --repo "${{ github.repository }}" --pattern "mudscript-windows-pre-$prevNum.zip" --dir "$env:TEMP\prev-artifact"
-          Copy-Item "$env:TEMP\prev-artifact\mudscript-windows-pre-$prevNum.zip" "mudscript-windows-pre-${{ github.run_number }}.zip"
-          Write-Output "Reusing: mudscript-windows-pre-$prevNum.zip"
+          $archive = "mudscript-windows-pre-$prevNum.zip"
+          $ErrorActionPreference = 'SilentlyContinue'
+          gh release download --repo "${{ github.repository }}" --pattern $archive --dir "$env:TEMP\prev-artifact" 2>$null
+          if ($? -and (Test-Path "$env:TEMP\prev-artifact\$archive")) {
+            Copy-Item "$env:TEMP\prev-artifact\$archive" "mudscript-windows-pre-${{ github.run_number }}.zip"
+            Write-Output "Reusing: $archive"
+          } else {
+            Write-Output "Asset not found in $prevTag — will build fresh"
+            "download_failed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          }
+          exit 0
+
+      - name: Build Windows package (fallback)
+        if: steps.skip-check.outputs.skip == 'true' && steps.download-prev.outputs.download_failed == 'true'
+        shell: pwsh
+        run: |
+          $buildNum = "${{ github.run_number }}"
+          $dist = "mudscript-pre-$buildNum"
+          mkdir $dist
+          & .\win\bin\generate_icon.ps1
+          Copy-Item "win\install.bat","win\init.ahk","win\_ms_main.ahk","win\ms_core_v2.ahk","win\ms_macros.ahk","MANIFEST.json","README.md" "$dist\"
+          Copy-Item -Recurse "ui","win\lib","win\bin","data" "$dist\"
+          Copy-Item -Recurse "sounds" "$dist\" -ErrorAction SilentlyContinue
+          Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
+
+          $manifestPath = Join-Path $dist "MANIFEST.json"
+          if (Test-Path $manifestPath) {
+            $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+            $baseVer = if ($manifest.version) { $manifest.version } else { "0.0.0" }
+            $preVer = "$baseVer-pre.$buildNum"
+            $manifest.version = $preVer
+            $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath -NoNewline
+          }
+
+          Compress-Archive -Path "$dist\*" -DestinationPath "mudscript-windows-pre-$buildNum.zip" -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
