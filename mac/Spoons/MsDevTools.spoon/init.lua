@@ -600,14 +600,15 @@ local MsDevTools = {}
     end
 
     function MsDevTools:flushCam()
-        if _camMoveAccum > 0 then
+        if _camMoveAccum > 1 then
             if _watcherPanel then
                 self:watcherStep("cam.move \195\151" .. _camMoveAccum)
             end
 
             self:macroLog("cam.move \195\151" .. _camMoveAccum)
-            _camMoveAccum = 0
         end
+
+        _camMoveAccum = 0
     end
 
     function MsDevTools:flushWait()
