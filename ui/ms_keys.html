@@ -359,6 +359,13 @@
             .entry:hover {
                 background: var(--surface);
             }
+            .entry.selected {
+                background: var(--hover);
+                outline: 1px solid var(--accent-glow);
+            }
+            .entry.selected:hover {
+                background: var(--accent-glow-faint);
+            }
             .entry.move-entry {
                 opacity: 0.5;
             }
@@ -546,8 +553,72 @@
 
         <script>
             "use strict";
+            // ── Selection state ───────────────────────────────────────────────────
+            const _selected = new Set();
+            let _lastClicked = null;
 
-            document.addEventListener("contextmenu", (e) => e.preventDefault());
+            function _getEntries() {
+                return Array.from(document.querySelectorAll("#log .entry"));
+            }
+
+            function _updateSelectionVisuals() {
+                for (const el of _getEntries()) {
+                    el.classList.toggle("selected", _selected.has(el));
+                }
+            }
+
+            function _handleEntryClick(e) {
+                const row = e.currentTarget;
+                const entries = _getEntries();
+                const idx = entries.indexOf(row);
+                if (idx === -1) return;
+
+                playSlot("interact");
+
+                if (e.shiftKey && _lastClicked !== null) {
+                    const lo = Math.min(_lastClicked, idx);
+                    const hi = Math.max(_lastClicked, idx);
+                    for (let i = lo; i <= hi; i++) _selected.add(entries[i]);
+                } else if (e.metaKey || e.ctrlKey) {
+                    if (_selected.has(row)) _selected.delete(row);
+                    else _selected.add(row);
+                } else {
+                    _selected.clear();
+                    _selected.add(row);
+                }
+                _lastClicked = idx;
+                _updateSelectionVisuals();
+            }
+
+            function _copySelected() {
+                if (_selected.size === 0) return;
+                const lines = [];
+                for (const el of _getEntries()) {
+                    if (_selected.has(el)) {
+                        const ts = el.querySelector(".ts")?.textContent || "";
+                        const badge = el.querySelector(".badge")?.textContent || "";
+                        const msg = el.querySelector(".msg")?.textContent || "";
+                        lines.push(`[${ts}] ${badge}: ${msg}`.trim());
+                    }
+                }
+                const text = lines.join("\n");
+                try { navigator.clipboard.writeText(text); } catch (_) {}
+                playSlot("update");
+            }
+
+
+            // Right-click: copy selected entries, or right-clicked entry alone
+            document.addEventListener("contextmenu", (e) => {
+                const row = e.target.closest(".entry");
+                if (!row) return;
+                e.preventDefault();
+                if (!_selected.has(row)) {
+                    _selected.clear();
+                    _selected.add(row);
+                    _updateSelectionVisuals();
+                }
+                _copySelected();
+            });
 
             // ── Host communication ─────────────────────────────────────────────
             function sendToHost(msg) {
