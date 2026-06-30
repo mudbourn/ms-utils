@@ -2230,7 +2230,8 @@
                 end
 
                 -- Show and initialize after a short delay (let the webview render)
-                hs.timer.doAfter(0.05, function()
+                _G._loadTimers = {}
+                _G._loadTimers[1] = hs.timer.doAfter(0.05, function()
                     if not _lWebView then return end
                     -- Inject theme and state
                     local themeJson = hs.json.encode(ms._theme or {})
@@ -2245,11 +2246,12 @@
                     _lMsgBuffer = {}
                     -- Fade in
                     _lWebView:show()
+                    pcall(function() ms.sound(ms.sounds and ms.sounds["Reset"]) end)
                     local step, steps = 0, 6
-                    local t = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
+                    _G._loadTimers.fadeIn = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
                         step = step + 1
                         if _lWebView then _lWebView:alpha(step / steps) end
-                        if step >= steps and t then t:stop() end
+                        if step >= steps and _G._loadTimers.fadeIn then _G._loadTimers.fadeIn:stop(); _G._loadTimers.fadeIn = nil end
                     end)
                 end)
             end
@@ -2262,13 +2264,13 @@
                 if not _lWebView or _lFadingOut then return end
                 _lFadingOut = true
                 local step, steps = 0, 6
-                _lFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
+                _G._loadTimers.fadeOut = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
                     step = step + 1
                     if _lWebView then _lWebView:alpha(1 - (step / steps)) end
                     if step >= steps then
-                        if _lFadeTimer then _lFadeTimer:stop(); _lFadeTimer = nil end
+                        if _G._loadTimers.fadeOut then _G._loadTimers.fadeOut:stop(); _G._loadTimers.fadeOut = nil end
                         if _lWebView then _lWebView:delete(); _lWebView = nil end
-                        hs.timer.doAfter(0.1, _announceLoad)
+                        _G._loadTimers.announce = hs.timer.doAfter(0.1, _announceLoad)
                     end
                 end)
             end
@@ -2277,14 +2279,14 @@
                 if _loadAnnounced then return end
                 _loadAnnounced = true
                 pcall(function() ms.playSlot("load") end)
-                hs.timer.doAfter(0.4, function()
+                _G._loadTimers.announceBody = hs.timer.doAfter(0.4, function()
                     ms._startupSoundDone = true
                     pcall(function() ms.playSlot("launch") end)
                     ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true)
-                    hs.timer.doAfter(3, function()
+                    _G._loadTimers.announce3 = hs.timer.doAfter(3, function()
                         ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 3, true)
                     end)
-                    hs.timer.doAfter(6, function()
+                    _G._loadTimers.announce6 = hs.timer.doAfter(6, function()
                         if ms.macroMeta then
                             local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
                             if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
@@ -2300,7 +2302,7 @@
                     ms._loadComplete = true
                     ms.dev.log({ type = "system", event = "startup_complete" })
                     if ms._robloxActive then ms.setMacros(1, true) end
-                    hs.timer.doAfter(10, function()
+                    _G._loadTimers.integrityWarn = hs.timer.doAfter(10, function()
                         if _needsIntegrityWarning then
                             ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
                         else
