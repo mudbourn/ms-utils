@@ -57,9 +57,8 @@
 
                 _lUpdate = function(pct, msg)
                     if not _lWebView then return end
-                    local js = string.format("setProgress(%d, %s)",
-                        pct,
-                        msg and hs.json.encode(msg) or "null")
+                    local encoded = msg and ('"' .. msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
+                    local js = string.format("setProgress(%d, %s)", pct, encoded)
                     _lWebView:evaluateJavaScript(js)
                 end
 

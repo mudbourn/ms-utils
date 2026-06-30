@@ -1,0 +1,105 @@
+{
+  "socdMode" : "lastWins",
+  "soundEnabled" : true,
+  "importedSounds" : {},
+  "sensitivity" : 1.5,
+  "soundVolume" : 100,
+  "soundAssign" : {
+    "themeLoaded" : "ThemeLoaded",
+    "loadEnd" : "LoadEnd",
+    "launch" : "Launch",
+    "alert" : "Alert",
+    "back" : "Back",
+    "hover" : "Hover",
+    "interact" : "Interact",
+    "disabled" : "MacrosOff",
+    "enabled" : "MacrosOn",
+    "reset" : "Reset",
+    "settingsClose" : "SettingsClose",
+    "settingsOpen" : "SettingsOpen",
+    "update" : "Update",
+    "updateAvailable" : "UpdateAvailable"
+  },
+  "trackpadMode" : false,
+  "trackpadHoldKeys" : {
+    "right" : "j",
+    "left" : "n"
+  },
+  "socdEnabled" : false,
+  "independentBinds" : false,
+  "macros" : {
+    "fakeSwing" : {
+      "enabled" : true
+    },
+    "sgSetup" : {
+      "enabled" : true
+    },
+    "frameDump" : {
+      "enabled" : true
+    },
+    "spawnAlt" : {
+      "enabled" : false
+    },
+    "mouseClickTest" : {
+      "enabled" : true
+    },
+    "helloWorld" : {
+      "enabled" : true
+    },
+    "waitAndPress" : {
+      "enabled" : true
+    },
+    "stateDump" : {
+      "enabled" : true,
+      "bind" : {
+        "key" : "g",
+        "mods" : {
+          "launch" : "Launch2"
+        },
+        "type" : "key"
+      }
+    },
+    "cameraSweep" : {
+      "enabled" : true
+    },
+    "quickReset" : {
+      "enabled" : true
+    },
+    "repeatLoop" : {
+      "enabled" : true
+    },
+    "keyHoldTest" : {
+      "enabled" : true,
+      "bind" : {
+        "key" : "h",
+        "mods" : {
+          "launch" : "Launch2"
+        },
+        "type" : "key"
+      }
+    },
+    "quickSG" : {
+      "enabled" : true
+    },
+    "superJump" : {
+      "enabled" : true
+    },
+    "mousePos" : {
+      "enabled" : true
+    }
+  },
+  "skipDevPrewarm" : false,
+  "user" : {
+    "qsClickY" : 680,
+    "sgMenuY" : 37,
+    "sgMenuX" : 445,
+    "qsClickX" : 920,
+    "spamMoveY" : 34,
+    "clickLevel" : 3,
+    "sgItemX" : 467,
+    "spamClickX" : 452,
+    "spamMoveX" : 437
+  },
+  "devArchiveLimit" : 15,
+  "quickReloaded" : 0
+}

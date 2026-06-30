@@ -1,5 +1,6 @@
 # Runtime files — generated per-user, never commit
-data/
+data/*
+!data/ms_settings_default.json
 
 # Backup archives
 backups/
