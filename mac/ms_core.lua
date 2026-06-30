@@ -150,7 +150,7 @@
             ms._docsURL           = "https://docs-ms.mudbourn.info"  -- opened by Settings › Documentation
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
             ms._updateChannel     = "stable"  -- "stable" (MANIFEST.json) or "testing" (GitHub Actions)
-            ms._branchTrace       = false
+            ms._branchTrace       = true
             ms._testingWorkflow   = "testing" -- workflow filename (without .yml) for the testing channel
             ms._testingRepo       = "mudbourn/ms-utils"  -- GitHub owner/repo for Actions API
 

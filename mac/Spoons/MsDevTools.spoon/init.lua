@@ -662,72 +662,58 @@ local MsDevTools = {}
         if not co then return end
 
         _branchState[co] = {
-            depth     = 0,
-            prevLine  = 0,
-            loopStart = 0,
-            loopCount = 0,
-            label     = label or "macro",
-            buffer    = {},
-            isUser    = true,
+            depth      = 0,
+            label      = label or "macro",
+            buffer     = {},
+            lastFn     = nil,
+            repeatCount = 0,
         }
 
-        debug.sethook(co, function(event, line)
+        debug.sethook(co, function(event)
             local st = _branchState[co]
 
             if not st then return end
 
             if event == "call" then
-                local info = debug.getinfo(2, "S")
-                local src  = info and info.source or ""
-
-                if src:find("ms_core") or src:find("=[C]") or src == "" then
-                    st.isUser = false
-                    return
-                end
-
-                st.isUser = true
-                st.depth  = st.depth + 1
+                st.depth = st.depth + 1
 
                 local fnInfo = debug.getinfo(2, "n")
-                local name   = fnInfo and fnInfo.name or "function"
+                local name   = fnInfo and fnInfo.name
 
-                table.insert(st.buffer, string.rep("  ", st.depth) .. "START " .. name .. "()")
+                if not name then return end
+
+                -- Collapse repeated calls: "cam.move() ×120"
+                if name == st.lastFn then
+                    st.repeatCount = st.repeatCount + 1
+                else
+                    -- Flush previous repeat count.
+                    if st.lastFn and st.repeatCount > 1 then
+                        table.insert(st.buffer,
+                            string.rep("  ", math.max(0, st.depth - 1))
+                            .. st.lastFn .. "() \195\151" .. st.repeatCount
+                        )
+                    end
+
+                    st.lastFn      = name
+                    st.repeatCount = 1
+                end
 
             elseif event == "return" or event == "tail return" then
-                if not st.isUser then return end
-
                 if st.depth > 0 then
                     st.depth = st.depth - 1
                 end
 
-                local fnInfo = debug.getinfo(2, "n")
-                local name   = fnInfo and fnInfo.name or "function"
-
-                table.insert(st.buffer, string.rep("  ", st.depth) .. "END " .. name .. "()")
-
-            elseif event == "line" and line then
-                if not st.isUser then return end
-
-                if st.prevLine > 0 and line < st.prevLine and (st.prevLine - line) > 2 then
-                    if st.loopStart == 0 then
-                        st.loopStart = line
-                        st.loopCount = 1
-
-                        table.insert(st.buffer, string.rep("  ", st.depth) .. "START loop")
-                    else
-                        st.loopCount = st.loopCount + 1
-                    end
-
-                elseif st.loopStart > 0 and line > st.loopStart and (line - st.loopStart) > 10 then
-                    table.insert(st.buffer, string.rep("  ", st.depth) .. "END loop (" .. st.loopCount .. " iterations)")
-
-                    st.loopStart = 0
-                    st.loopCount = 0
+                -- Flush repeats when returning to a shallower depth.
+                if st.lastFn and st.repeatCount > 1 then
+                    table.insert(st.buffer,
+                        string.rep("  ", st.depth)
+                        .. st.lastFn .. "() \195\151" .. st.repeatCount
+                    )
+                    st.lastFn      = nil
+                    st.repeatCount = 0
                 end
-
-                st.prevLine = line
             end
-        end, "crl")
+        end, "cr")
     end
 
     function MsDevTools:stopTrace(co)
@@ -735,8 +721,11 @@ local MsDevTools = {}
 
         local st = _branchState[co]
 
-        if st and st.loopStart > 0 then
-            table.insert(st.buffer, string.rep("  ", st.depth) .. "END loop (" .. st.loopCount .. " iterations)")
+        if st and st.lastFn and st.repeatCount > 1 then
+            table.insert(st.buffer,
+                string.rep("  ", st.depth)
+                .. st.lastFn .. "() \195\151" .. st.repeatCount
+            )
         end
 
         self:flushTraceBuffer(co)
