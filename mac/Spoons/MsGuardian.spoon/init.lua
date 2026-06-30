@@ -24,7 +24,7 @@ iGn43A9ZutKUfkV+Muu1RcTy62zbXcQrzK3cyLl0M7gfTm0YWPzaf+d3ATNnq/9j
 YQIDAQAB
 -----END PUBLIC KEY-----
 ]]
--- END --
+-- END Paths --
 
 -- Helpers --
     local function _hashFile(path)
@@ -92,7 +92,7 @@ YQIDAQAB
 
         return _ok and _out and _out:find("Verified OK") ~= nil
     end
--- END --
+-- END Helpers --
 
 -- Integrity Check --
     local _cur     = _hashFile(_corePath)
@@ -309,12 +309,12 @@ YQIDAQAB
         end
         end -- if not _manifestOk
     end
--- END --
+-- END Integrity Check --
 
 -- Load Core --
     if not _blocked then
         dofile(_corePath)
     end
--- END --
+-- END Load Core --
 
 return _obj

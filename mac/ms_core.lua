@@ -307,313 +307,28 @@
         -- 2. Conditions, States, and UI Elements--
             ms.app = function() return hs.application.frontmostApplication():name() end
 
-            -- Alerts --
-                ms.alert = (function()
-                    local queue = {}              -- active toast entries
-                    local maxAlerts = 4
-                    local bottomY   = 150         -- px above the bottom of the usable area
-                    local animDuration = 0.25
-                    local animSteps    = 20
+            -- Alerts — MsAlert.spoon --
+                local _msAlertOk, _msAlertErr = pcall(function()
+                    hs.loadSpoon("MsAlert")
+                end)
 
-                    -- Recalculated on every render so display changes and
-                    -- secondary-monitor setups always position correctly.
-                    local function screenBounds()
-                        local f = hs.screen.mainScreen():frame()
-                        return f.x, f.y, f.w, f.y + f.h
-                    end
+                if not _msAlertOk then
+                    print("MsAlert: load failed — " .. tostring(_msAlertErr))
+                end
 
-                    local function makeCanvas(msg, x, y, w, alpha)
-                        local padding = 16
-                        local lineH   = 20
-                        local closeW  = 22  -- right-side area for the ✕ dismiss button
-
-                        local lines = {}
-                        for line in (msg .. "\n"):gmatch("([^\n]*)\n") do
-                            table.insert(lines, line)
-                        end
-
-                        local longestLine = 0
-                        for _, line in ipairs(lines) do
-                            if #line > longestLine then longestLine = #line end
-                        end
-
-                        local charW  = 8
-                        local cw     = math.max(200, math.min(600, longestLine * charW + padding * 2)) + closeW
-                        local textH  = #lines * lineH
-                        local ch     = textH + padding * 2
-                        local cx     = x + (w - cw) / 2  -- centred within the screen
-
-                        -- Read theme at render time so every toast reflects the current ms_theme.json.
-                        local theme = ms._theme or {}
-
-                        local function hexToColor(hex, default)
-                            if type(hex) ~= "string" then return default end
-                            local h = hex:match("^#?([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])")
-                            if not h then return default end
-                            return {
-                                red   = tonumber(h:sub(1,2), 16) / 255,
-                                green = tonumber(h:sub(3,4), 16) / 255,
-                                blue  = tonumber(h:sub(5,6), 16) / 255,
-                                alpha = 1,
-                            }
-                        end
-
-                        local bgColor     = hexToColor(theme.surface2, { red=0.11, green=0.063, blue=0.047, alpha=1 })
-                        local txtColor    = hexToColor(theme.text,     { red=0.94, green=0.87, blue=0.69, alpha=1 })
-                        local accentColor = hexToColor(theme.accent,   { red=0.77, green=0.10, blue=0.10, alpha=1 })
-                        local radius      = type(theme.radius) == "number" and math.max(0, theme.radius) or 3
-                        -- Canvas uses system font names. Bundled fonts are installed into
-                        -- ~/Library/Fonts/ at startup, so "Almendra" works directly.
-                        -- File paths are still skipped as a safety net.
-                        local font = "Helvetica"
-                        if type(theme.font) == "string" and #theme.font > 0
-                            and not theme.font:find("[/\\]") then
-                            font = theme.font
-                        end
-
-                        bgColor.alpha = 0.88
-
-                        local c = hs.canvas.new({ x = cx, y = y, w = cw, h = ch })
-                        c:level(hs.canvas.windowLevels.popUpMenu or hs.canvas.windowLevels.status or 25)
-                        c:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
-                        c:alpha(alpha or 0)
-                        c:appendElements(
-                            -- 1: Background — also tracks mouse enter/exit for hover-to-hold.
-                            {
-                                type                 = "rectangle",
-                                action               = "strokeAndFill",
-                                fillColor            = bgColor,
-                                strokeColor          = accentColor,
-                                strokeWidth          = 1,
-                                roundedRectRadii     = { xRadius = radius, yRadius = radius },
-                                trackMouseEnterExit  = true,
-                            },
-                            -- 2: Message text (narrowed to leave room for the ✕ button).
-                            {
-                                type          = "text",
-                                text          = msg,
-                                textFont      = font,
-                                textSize      = 13,
-                                textColor     = txtColor,
-                                textAlignment = "center",
-                                frame         = { x = 0, y = padding + 4, w = cw, h = textH }
-                            },
-                            -- 3: Dismiss button (✕) — hidden until hover, click to close.
-                            {
-                                type          = "text",
-                                text          = "\xe2\x9c\x95",
-                                textFont      = "Helvetica",
-                                textSize      = 10,
-                                textColor     = { red = txtColor.red, green = txtColor.green, blue = txtColor.blue, alpha = 0 },
-                                textAlignment = "center",
-                                frame         = { x = cw - closeW, y = 5, w = closeW - 4, h = 14 },
-                                trackMouseDown = true,
-                            }
-                        )
-                        c:show()
-
-                        local xShowColor = { red = txtColor.red, green = txtColor.green, blue = txtColor.blue, alpha = 0.45 }
-                        local xHideColor = { red = txtColor.red, green = txtColor.green, blue = txtColor.blue, alpha = 0 }
-                        local function showX() pcall(function() c:elementAttribute(3, "textColor", xShowColor) end) end
-                        local function hideX() pcall(function() c:elementAttribute(3, "textColor", xHideColor) end) end
-
-                        return c, ch, showX, hideX
-                    end
-
-                    local function animateEntry(entry, fromY, toY, fromAlpha, toAlpha, onDone)
-                        local step = 0
-                        if entry._animTimer then entry._animTimer:stop() end
-                        entry._animTimer = hs.timer.doEvery(animDuration / animSteps, function()
-                            step = step + 1
-                            local t    = step / animSteps
-                            local ease = 1 - (1 - t) ^ 3
-                            local y     = fromY     + (toY     - fromY)     * ease
-                            local alpha = fromAlpha + (toAlpha - fromAlpha) * ease
-                            if entry.canvas then
-                                local f = entry.canvas:frame()
-                                entry.canvas:frame({ x = f.x, y = y, w = f.w, h = f.h })
-                                entry.canvas:alpha(alpha)
-                            end
-                            if step >= animSteps then
-                                entry._animTimer:stop()
-                                entry._animTimer = nil
-                                if onDone then onDone() end
-                            end
-                        end)
-                    end
-
-                    -- Forward-declared so redraw's mouseCallback closure can reference it.
-                    local dismissEntry
-
-                    local function redraw(newEntry)
-                        local sx, sy, sw, sBottom = screenBounds()
-
-                        for _, entry in ipairs(queue) do
-                            if not entry.h then
-                                local lines = {}
-                                for line in (entry.msg .. "\n"):gmatch("([^\n]*)\n") do
-                                    table.insert(lines, line)
-                                end
-                                entry.h = #lines * 20 + 32
-                            end
-                        end
-
-                        local currentY = sBottom - bottomY
-                        for i = #queue, 1, -1 do
-                            local entry   = queue[i]
-                            local targetY = currentY - entry.h
-                            currentY = targetY - 8
-
-                            if entry == newEntry then
-                                if not entry.canvas then
-                                    local c, h, showX, hideX = makeCanvas(entry.msg, sx, sBottom - bottomY, sw, 0)
-                                    entry.canvas = c
-                                    entry.h      = h
-                                    entry._showX = showX
-                                    entry._hideX = hideX
-                                    -- Hover-to-hold and click-to-dismiss callbacks.
-                                    c:mouseCallback(function(cvs, msg, id, cx, cy)
-                                        if msg == "mouseEnter" then
-                                            entry._hovered = true
-                                            if entry.timer then entry.timer:stop(); entry.timer = nil end
-                                            if entry._showX then entry._showX() end
-                                        elseif msg == "mouseExit" and id == 1 then
-                                            entry._hovered = false
-                                            if entry._hideX then entry._hideX() end
-                                            if not entry.timer then
-                                                entry.timer = hs.timer.doAfter(2, function()
-                                                    dismissEntry(entry)
-                                                end)
-                                            end
-                                        elseif msg == "mouseDown" and id == 3 then
-                                            dismissEntry(entry)
-                                        end
-                                    end)
-                                end
-                                animateEntry(entry, sBottom - bottomY, targetY, 0, 1, nil)
-                            else
-                                if entry.canvas then
-                                    local f = entry.canvas:frame()
-                                    animateEntry(entry, f.y, targetY, 1, 1, nil)
-                                end
-                            end
-                        end
-                    end
-
-                    local function fadeOut(entry, onDone)
-                        if not entry.canvas then
-                            if onDone then onDone() end
-                            return
-                        end
-                        local f = entry.canvas:frame()
-                        animateEntry(entry, f.y, f.y, 1, 0, onDone)
-                    end
-
-                    dismissEntry = function(entry)
-                        if entry.timer then entry.timer:stop(); entry.timer = nil end
-                        for i, e in ipairs(queue) do
-                            if e == entry then
-                                table.remove(queue, i)
-                                fadeOut(e, function()
-                                    if e.canvas then e.canvas:delete() end
-                                end)
-                                redraw(nil)
-                                break
-                            end
-                        end
-                    end
-
-                    -- dismissAll: instantly clears all active toasts without animation.
-                    local function dismissAll()
-                        for i = #queue, 1, -1 do
-                            local e = queue[i]
-                            if e.timer      then e.timer:stop();      e.timer      = nil end
-                            if e._animTimer then e._animTimer:stop(); e._animTimer = nil end
-                            if e.canvas     then pcall(function() e.canvas:delete() end); e.canvas = nil end
-                        end
-                        queue = {}
-                    end
-
-                    -- dismissById: removes only toasts tagged with the given id.
-                    local function dismissById(id)
-                        for i = #queue, 1, -1 do
-                            local e = queue[i]
-                            if e.id == id then
-                                if e.timer      then e.timer:stop();      e.timer      = nil end
-                                if e._animTimer then e._animTimer:stop(); e._animTimer = nil end
-                                if e.canvas     then pcall(function() e.canvas:delete() end); e.canvas = nil end
-                                table.remove(queue, i)
-                            end
-                        end
-                    end
-
-                    -- updateById: finds a toast with the given id and updates its
-                    -- message and timer in-place.  Returns true if found.
-                    local function updateById(id, msg, duration)
-                        for i = #queue, 1, -1 do
-                            local e = queue[i]
-                            if e.id == id then
-                                -- Replace canvas with new text.
-                                if e.canvas then pcall(function() e.canvas:delete() end); e.canvas = nil end
-                                e.msg = msg
-                                redraw(e)
-                                -- Reset dismiss timer.
-                                if e.timer then e.timer:stop() end
-                                e.timer = hs.timer.doAfter(duration, function()
-                                    dismissEntry(e)
-                                end)
-                                return true
-                            end
-                        end
-                        return false
-                    end
-
-                    return setmetatable({ dismissAll = dismissAll, dismissById = dismissById, updateById = updateById }, {
-                        __call = function(_, msg, duration, noDefaultSound, opts)
-                            duration = duration or 5
-
-                            -- Auto-log every alert to the dev log.  Heuristic:
-                            -- error-like messages get category "error", rest get "system".
-                            local src = opts and opts.source or "system"
-                            if ms.dev and ms.dev.log then
-                                local isError = msg and (
-                                    msg:find("[Ff]ailed") or msg:find("[Ee]rror")
-                                    or msg:find("[Cc]ould not") or msg:find("[Cc]annot")
-                                    or msg:find("[Rr]ejected") or msg:find("[Dd]enied")
-                                    or msg:find("[Aa]borted")
-                                )
-                                ms.dev.log({
-                                    type    = isError and "error" or "system",
-                                    event   = "alert",
-                                    source  = src,
-                                    msg     = (msg or ""):sub(1, 200),  -- truncate long messages
-                                })
-                            end
-
-                            if loadfinish == 1 and not noDefaultSound then
-                                ms.playSlot("alert")
-                            end
-
-                            if #queue >= maxAlerts then
-                                local oldest = queue[1]
-                                if oldest._animTimer then oldest._animTimer:stop() end
-                                if oldest.timer then oldest.timer:stop() end
-                                fadeOut(oldest, function()
-                                    if oldest.canvas then oldest.canvas:delete() end
-                                end)
-                                table.remove(queue, 1)
-                            end
-
-                            local entry = { msg = msg, canvas = nil, timer = nil, h = nil, id = opts and opts.id or nil, source = src }
-                            table.insert(queue, entry)
-                            redraw(entry)
-
-                            entry.timer = hs.timer.doAfter(duration, function()
-                                dismissEntry(entry)
-                            end)
-                        end,
+                if spoon.MsAlert then
+                    ms.alert = spoon.MsAlert
+                else
+                    ms.alert = setmetatable({
+                        dismissAll   = function() end,
+                        dismissById  = function() end,
+                        updateById   = function() return false end,
+                    }, {
+                        __call = function(_, msg) print("MsAlert stub: " .. tostring(msg)) end,
                     })
-                end)()
+
+                    print("MsAlert: running without toast system (spoon not loaded)")
+                end
             -- END Alerts --
 
             -- Settings Menu --
@@ -5144,155 +4859,35 @@
             end
         -- END --
 
-        -- 7. Camera Engine --
-            ms.cam = {
-                anchor = nil,
-                -- button 5 is a synthetic-only internal channel: sits beyond the range of
-                -- buttons on any common mouse (0–4), so Roblox's camera responds to it
-                -- without any real mouse interaction. Never user-configurable.
-                button = 5,
-                cachedMult = 1.0,
-                _lastFrame = nil,
-                _updateTimer = nil,
-                _enabled = false,
+        -- 7. Camera Engine — MsCamera.spoon --
+            local _msCamOk, _msCamErr = pcall(function()
+                hs.loadSpoon("MsCamera")
+            end)
 
-                updateMultiplier = function()
-                    local curSens = (CUR_CAM_SENS and CUR_CAM_SENS > 0) and CUR_CAM_SENS or 1.5
-                    local win = ms.getRobloxWin()
-                    if not win then
-                        ms.cam.cachedMult = 1.0
-                        return
-                    end
-                    f = win:frame()
-                    ratio = f.w / f.h
-                    local refSens = (REF_SENS and REF_SENS > 0) and REF_SENS or 1.5
-                    curSens = (CUR_CAM_SENS and CUR_CAM_SENS > 0) and CUR_CAM_SENS or 1.5
-                    ms.cam.cachedMult = refSens / curSens
-                end,
-
-                updateAnchor = function()
-                    local win = ms.getRobloxWin()
-                    if not win then return end
-                    local f = win:frame()
-                    local last = ms.cam._lastFrame
-                    if last and math.abs(f.x - last.x) < 2 and math.abs(f.y - last.y) < 2
-                        and math.abs(f.w - last.w) < 2 and math.abs(f.h - last.h) < 2 then
-                        return
-                    end
-                    -- True only when a prior frame existed and dimensions changed.
-                    -- Prevents ratio alerts from firing on every tab-in after cam.disable().
-                    local sizeChanged = last ~= nil
-                        and (math.abs(f.w - last.w) >= 2 or math.abs(f.h - last.h) >= 2)
-                    ms.cam._lastFrame = { x = f.x, y = f.y, w = f.w, h = f.h }
-                    ms.cam.anchor = { x = f.x + (f.w / 2), y = f.y + (f.h / 2) }
-                    ms.cam.updateMultiplier()
-                    if sizeChanged then
-                        if ratio and ratio < 4/3 and not _ratioWarnTimer then
-                            ms.alert("Warning: Aspect ratio too narrow.\nMacros may not function correctly. Widen your Roblox window, or increase your screen resolution.", 13)
-                            _ratioWarnTimer = hs.timer.doAfter(15, function()
-                                _ratioWarnTimer = nil
-                            end)
-                        elseif ratio and loadfinish > 0 then
-                            ms.alert("Current aspect ratio: (" .. string.format("%.2f", ratio) .. ").\nRecommended aspect ratio: >=1.33.", 8)
-                        end
-                    end
-                end,
-
-                scheduleUpdate = function()
-                    if ms.cam._updateTimer then ms.cam._updateTimer:stop() end
-                    ms.cam._updateTimer = hs.timer.doAfter(0.5, function()
-                        ms.cam.updateAnchor()
-                    end)
-                end,
-
-                -- Idempotent: calling enable when already enabled is a no-op.
-                enable = function()
-                    if ms.cam._enabled then return end
-                    ms.cam._enabled = true
-                    local cx, cy = ms.winCenter()
-                    if cx == 0 and cy == 0 then
-                        if not ms.cam._startAttempts then ms.cam._startAttempts = 0 end
-                        ms.cam._startAttempts = ms.cam._startAttempts + 1
-                        if ms.cam._startAttempts < 10 then
-                            ms.cam._enabled = false
-                            hs.timer.doAfter(1, function() ms.cam.enable() end)
-                        else
-                            ms.cam._startAttempts = 0
-                            print("cam.enable: gave up after 10 attempts")
-                        end
-                        return
-                    end
-                    ms.cam._startAttempts = 0
-                    ms.cam.updateAnchor()
-                    -- Delay before posting button 5 init events: Roblox needs a moment
-                    -- to fully claim input focus after activation before it will process them.
-                    hs.timer.doAfter(0.3, function()
-                        if not ms.cam._enabled then return end
-                        local currentPos = hs.mouse.absolutePosition()
-                        local lock = hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.otherMouseDown,
-                            { x = currentPos.x, y = currentPos.y })
-                        local unlock = hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.otherMouseUp,
-                            { x = currentPos.x, y = currentPos.y })
-                        if lock then
-                            lock:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, ms.cam.button)
-                            unlock:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, ms.cam.button)
-                            lock:post()
-                            hs.timer.usleep(10000)
-                            unlock:post()
-                        end
-                    end)
-                end,
-
-                disable = function()
-                    ms.cam._enabled = false
-                    if ms.cam._uiWatcher then
-                        ms.cam._uiWatcher:stop()
-                        ms.cam._uiWatcher = nil
-                    end
-                    if ms.cam._updateTimer then
-                        ms.cam._updateTimer:stop()
-                        ms.cam._updateTimer = nil
-                    end
-                    ms.cam.anchor = nil
-                    ms.cam._lastFrame = nil
-                end,
-
-                move = function(dy, dx)
-                    spoon.MsDevTools:accCamMove()
-                    if not ms.cam.anchor then
-                        ms.wait(2)
-                        return
-                    end
-                    local m = ms.cam.cachedMult
-                    local final1 = math.floor((dx * m) + (dx >= 0 and 0.5 or -0.5))
-                    local final2 = math.floor((dy * m) + (dy >= 0 and 0.5 or -0.5))
-                    local drag = hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.otherMouseDragged, ms.cam.anchor)
-                    if drag then
-                        drag:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, ms.cam.button)
-                        drag:setProperty(hs.eventtap.event.properties.mouseEventDeltaX, final1)
-                        drag:setProperty(hs.eventtap.event.properties.mouseEventDeltaY, final2)
-                        drag:post()
-                    end
-                end
-            }
-
-            ms.cam._setupWatcher = function()
-                local robloxApp = hs.application.get("Roblox") or hs.application.get(ms._targetApp)
-                if not robloxApp then return end
-                if ms.cam._uiWatcher then ms.cam._uiWatcher:stop() end
-                ms.cam._uiWatcher = robloxApp:newWatcher(function(el, event)
-                    ms.cam.scheduleUpdate()
-                end)
-                ms.cam._uiWatcher:start({
-                    hs.uielement.watcher.windowCreated,
-                    hs.uielement.watcher.windowMoved,
-                    hs.uielement.watcher.windowResized,
-                    hs.uielement.watcher.mainWindowChanged,
-                })
+            if not _msCamOk then
+                print("MsCamera: load failed — " .. tostring(_msCamErr))
             end
 
-            ms.cam._setupWatcher()
-        -- END --
+            if spoon.MsCamera then
+                ms.cam = spoon.MsCamera
+                ms.cam._setupWatcher()
+            else
+                ms.cam = {
+                    anchor     = nil,
+                    button     = 5,
+                    cachedMult = 1.0,
+                    updateMultiplier = function() end,
+                    updateAnchor     = function() end,
+                    scheduleUpdate   = function() end,
+                    enable           = function() end,
+                    disable          = function() end,
+                    move             = function() end,
+                    _setupWatcher    = function() end,
+                }
+
+                print("MsCamera: running without camera engine (spoon not loaded)")
+            end
+        -- END Camera Engine --
 
         -- 8. Macro Bind Controller --
             -- Notification for enable/disable state changes.
