@@ -37,6 +37,33 @@ local MsDevTools = {}
 
     local _devBusy            = false
     local _devLastConsoleType = nil
+    local _lastReadLine       = nil
+    local _readRepeatCount    = 0
+
+    local function _flushReadLine()
+        if not _lastReadLine then return end
+
+        local catPath = _readablePaths and _readablePaths["macro"]
+
+        if catPath then
+            pcall(function()
+                local f = io.open(catPath, "a")
+
+                if f then
+                    if _readRepeatCount > 1 then
+                        f:write(_lastReadLine .. " \195\151" .. _readRepeatCount .. "\n")
+                    else
+                        f:write(_lastReadLine .. "\n")
+                    end
+
+                    f:close()
+                end
+            end)
+        end
+
+        _lastReadLine    = nil
+        _readRepeatCount = 0
+    end
 
     local _consolePanel, _watcherPanel, _keysPanel, _windowPanel
     local _consolePanelPos, _watcherPanelPos, _keysPanelPos, _windowPanelPos
@@ -231,6 +258,8 @@ local MsDevTools = {}
     end
 
     function MsDevTools:_archiveOnReload()
+        _flushReadLine()
+
         -- Prune first so we never accumulate unbounded folders.
         local limit = (type(self.archiveLimit) == "number" and self.archiveLimit >= 0)
             and self.archiveLimit or 15
@@ -259,6 +288,10 @@ local MsDevTools = {}
         if _devBusy then return end
 
         _devBusy = true
+
+        -- Flush any buffered readable line from the previous entry.
+        _flushReadLine()
+
         entry.ts = os.date("%H:%M:%S")
 
         if not entry.category then
@@ -378,7 +411,21 @@ local MsDevTools = {}
                         end
                     end
 
-                    f:write(line .. "\n")
+                    -- Consecutive suppression: collapse repeated identical lines.
+                    if line == _lastReadLine then
+                        _readRepeatCount = _readRepeatCount + 1
+                    else
+                        if _lastReadLine then
+                            if _readRepeatCount > 1 then
+                                f:write(_lastReadLine .. " \195\151" .. _readRepeatCount .. "\n")
+                            else
+                                f:write(_lastReadLine .. "\n")
+                            end
+                        end
+
+                        _lastReadLine    = line
+                        _readRepeatCount = 1
+                    end
                     f:close()
                 end
             end)
