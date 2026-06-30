@@ -8172,9 +8172,8 @@
                                 for line in f:lines() do
                                     -- .log files are pure JSON (one object per line).
                                     local ok, entry = pcall(hs.json.decode, line)
-                                        if ok and entry then
-                                            entries[#entries + 1] = entry
-                                        end
+                                    if ok and entry then
+                                        entries[#entries + 1] = entry
                                     end
                                 end
                                 f:close()
@@ -8317,6 +8316,7 @@
                         elseif data.action == "clear" then
                             for _, cat in ipairs({"macro", "console", "error", "system", "input"}) do
                                 local p = _catPaths[cat]; if p then local f = io.open(p, "w"); if f then f:close() end end
+                                local r = _readablePaths[cat]; if r then local f = io.open(r, "w"); if f then f:close() end end
                             end
                         elseif data.action == "close" then
                             ms.dev.console.hide()
@@ -8410,6 +8410,7 @@
                         if data.action == "clear" then
                             for _, cat in ipairs({"macro", "error", "system"}) do
                                 local p = _catPaths[cat]; if p then local f = io.open(p, "w"); if f then f:close() end end
+                                local r = _readablePaths[cat]; if r then local f = io.open(r, "w"); if f then f:close() end end
                             end
                         elseif data.action == "close" then
                             ms.dev.watcher.hide()
@@ -8496,6 +8497,7 @@
                         if not ok or type(data) ~= "table" then return end
                         if data.action == "clear" then
                             local p = _catPaths["input"]; if p then local f = io.open(p, "w"); if f then f:close() end end
+                            local r = _readablePaths["input"]; if r then local f = io.open(r, "w"); if f then f:close() end end
                         elseif data.action == "close" then
                             ms.dev.keys.hide()
                         elseif data.action == "ready" then
