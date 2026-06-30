@@ -988,7 +988,7 @@
 
                     ms.alert("Rebinding: " .. label
                         .. "\nCurrent: " .. bindDisplay(curBind)
-                        .. "\nPress your new key or mouse button.\nEscape to cancel.", 15)
+                        .. "\nPress your new key or mouse button.\nEscape to cancel.", 15, false, { id = "_rebind" })
 
                     ms._inputOpen = true
                     ms.ui._open   = false
@@ -1024,7 +1024,7 @@
                             local flags = event:getFlags()
                             if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
                                 ms._inputOpen = false
-                                ms.alert("Rebind cancelled.", 2)
+                                ms.alert("Rebind cancelled.", 2, false, { id = "_rebind" })
                                 restorePanel()
                                 return true
                             end
@@ -1070,18 +1070,18 @@
                                     ms.systemBinds.rebind()
                                     restorePanel()
                                     hs.timer.doAfter(0.2, function()
-                                        ms.alert(label .. " rebound to: " .. bindStr2, 3, true)
+                                        ms.alert(label .. " rebound to: " .. bindStr2, 3, true, { id = "_rebind" })
                                         ms.ui.refresh()
                                     end)
                                 else
-                                    ms.alert("Rebind cancelled.", 2)
+                                    ms.alert("Rebind cancelled.", 2, false, { id = "_rebind" })
                                     restorePanel()
                                     ms.ui.refresh()
                                 end
                             end)
                         else
                             ms._inputOpen = false
-                            ms.alert("Could not read input. Try again.", 2)
+                            ms.alert("Could not read input. Try again.", 2, false, { id = "_rebind" })
                             restorePanel()
                         end
                         return true
@@ -1092,7 +1092,7 @@
                         if capture then
                             capture:stop(); capture = nil
                             ms._inputOpen = false
-                            ms.alert("Rebind timed out.", 2)
+                            ms.alert("Rebind timed out.", 2, false, { id = "_rebind" })
                             restorePanel()
                             ms.ui.refresh()
                         end
@@ -1115,7 +1115,7 @@
 
                 ms.alert("Rebinding: " .. label
                     .. "\nCurrent: " .. bindDisplay(ms.effectiveBind(data.id))
-                    .. "\nPress your new key or mouse button.\nEscape to cancel.", 15)
+                    .. "\nPress your new key or mouse button.\nEscape to cancel.", 15, false, { id = "_rebind" })
 
                 ms._inputOpen = true
                 ms.ui._open   = false
@@ -1151,7 +1151,7 @@
                         local flags = event:getFlags()
                         if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
                             ms._inputOpen = false
-                            ms.alert("Rebind cancelled.", 2)
+                            ms.alert("Rebind cancelled.", 2, false, { id = "_rebind" })
                             restorePanel()
                             return true
                         end
@@ -1187,7 +1187,7 @@
                             local cLabel = (ms.registry._defs[conflictId] and ms.registry._defs[conflictId].label) or conflictId
                             ms.playSlot("alert")
                             ms._inputOpen = false
-                            ms.alert("Bind Conflict: \"" .. bindStr2 .. "\" is already used by \"" .. cLabel .. "\".\nChoose a different input.", 4)
+                            ms.alert("Bind Conflict: \"" .. bindStr2 .. "\" is already used by \"" .. cLabel .. "\".\nChoose a different input.", 4, false, { id = "_rebind" })
                             restorePanel()
                             return true
                         end
@@ -1210,18 +1210,18 @@
                                 ms.bind.rebind()
                                 restorePanel()
                                 hs.timer.doAfter(0.2, function()
-                                    ms.alert(label .. " rebound to: " .. bindStr2, 3, true)
+                                    ms.alert(label .. " rebound to: " .. bindStr2, 3, true, { id = "_rebind" })
                                     ms.ui.refresh()
                                 end)
                             else
-                                ms.alert("Rebind cancelled.", 2)
+                                ms.alert("Rebind cancelled.", 2, false, { id = "_rebind" })
                                 restorePanel()
                                 ms.ui.refresh()
                             end
                         end)
                     else
                         ms._inputOpen = false
-                        ms.alert("Could not read input. Try again.", 2)
+                        ms.alert("Could not read input. Try again.", 2, false, { id = "_rebind" })
                         restorePanel()
                     end
                     return true
@@ -1232,7 +1232,7 @@
                     if capture then
                         capture:stop(); capture = nil
                         ms._inputOpen = false
-                        ms.alert("Rebind timed out.", 2)
+                        ms.alert("Rebind timed out.", 2, false, { id = "_rebind" })
                         restorePanel()
                         ms.ui.refresh()
                     end
@@ -1369,7 +1369,7 @@
 
                 ms.alert("Modifier for \"" .. label .. "\""
                     .. "\nCurrent: " .. (cur or "unset")
-                    .. "\nPress a key  —  Backspace to clear  —  Escape to cancel.", 15)
+                    .. "\nPress a key  —  Backspace to clear  —  Escape to cancel.", 15, false, { id = "_rebind" })
 
                 ms._inputOpen = true
                 ms.ui._open   = false
@@ -1389,12 +1389,12 @@
                     hs.timer.doAfter(0.1, function()
                         if not cancelled then
                             if newKey then
-                                ms.alert("Modifier set to: " .. newKey, 3, true)
+                                ms.alert("Modifier set to: " .. newKey, 3, true, { id = "_rebind" })
                             else
-                                ms.alert("Modifier cleared.", 3, true)
+                                ms.alert("Modifier cleared.", 3, true, { id = "_rebind" })
                             end
                         else
-                            ms.alert("Modifier rebind cancelled.", 2)
+                            ms.alert("Modifier rebind cancelled.", 2, false, { id = "_rebind" })
                         end
                         ms.ui.refresh()
                     end)

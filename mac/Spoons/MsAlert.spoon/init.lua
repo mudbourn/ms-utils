@@ -323,6 +323,12 @@
         duration = duration or 5
 
         local src = opts and opts.source or "system"
+        local id  = opts and opts.id or nil
+
+        -- Auto-replace: if a toast with this id already exists, update it in-place
+        if id then
+            if self:updateById(id, msg, duration) then return end
+        end
 
         if ms.dev and ms.dev.log then
             local isError = msg and (
