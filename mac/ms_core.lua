@@ -4,71 +4,15 @@
             ms = {}
             if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
 
-        -- Loading Screen (created early so _lUpdate is available during spoon loading) --
+        -- Loading Screen locals (webview created after spoon loading) --
             local _lWebView, _lFadingOut, _lFadeTimer
-            local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad
+            local _lFadeOut, _loadAnnounced, _announceLoad
             local _needsIntegrityWarning = false
-            do
-                local sf  = hs.screen.mainScreen():frame()
-                local lw, lh = 300, 104
-                local lx  = sf.x + math.floor((sf.w - lw) / 2)
-                local ly  = sf.y + sf.h - 150 - lh
-
-                local _ucLoading = hs.webview.usercontent.new("loading")
-                _ucLoading:setCallback(function(message)
-                    local ok, data = pcall(hs.json.decode, message.body)
-                    if not ok or type(data) ~= "table" then return end
-                    if data.action == "toggleSkipPreload" then
-                        ms._skipDevPrewarm = not ms._skipDevPrewarm
-                        pcall(function() ms.saveSettings() end)
-                        if ms._skipDevPrewarm and not _lFadingOut then
-                            _lUpdate(100, "Developer tools skipped.")
-                            hs.timer.doAfter(0.8, _lFadeOut)
-                        end
-                    end
-                end)
-
-                local htmlPath = hs.configdir .. "/ui/ms_loading.html"
-                local baseURL  = "file://" .. hs.configdir .. "/ui/"
-
-                _lWebView = hs.webview.new({ x=lx, y=ly, w=lw, h=lh }, {}, _ucLoading)
-                pcall(function() _lWebView:windowStyle(0) end)
-                pcall(function() _lWebView:level(hs.canvas.windowLevels.popUpMenu or 25) end)
-                pcall(function() _lWebView:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                pcall(function() _lWebView:allowTextEntry(false) end)
-                pcall(function() _lWebView:shadow(false) end)
-                _lWebView:alpha(0)
-
-                _lWebView:navigationCallback(function(action, wv, navType, err)
-                    if navType == "didFinishLoad" then
-                        local themeJson = hs.json.encode(ms._theme or {})
-                        wv:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
-                        wv:evaluateJavaScript(
-                            "setSkipPreloadState(" .. (ms._skipDevPrewarm and "true" or "false") .. ")")
-                        wv:show()
-                        local step, steps = 0, 6
-                        local t = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
-                            step = step + 1
-                            if _lWebView then _lWebView:alpha(step / steps) end
-                            if step >= steps and t then t:stop() end
-                        end)
-                    end
-                end)
-
-                _lUpdate = function(pct, msg)
-                    if not _lWebView then return end
-                    local encoded = msg and ('"' .. msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
-                    local js = string.format("setProgress(%d, %s)", pct, encoded)
-                    _lWebView:evaluateJavaScript(js)
-                end
-
-                local f = io.open(htmlPath, "r")
-                if f then
-                    local html = f:read("*all"); f:close()
-                    _lWebView:html(html, baseURL)
-                end
+            local _lMsgBuffer = {}
+            local _lUpdate = function(pct, msg)
+                _lMsgBuffer[#_lMsgBuffer + 1] = { pct = pct, msg = msg }
             end
-        -- END Loading Screen --
+        -- END Loading Screen locals --
 
             -- Guardian (moved to MsGuardian.spoon) --
             -- END Guardian --
@@ -2216,6 +2160,76 @@
         ms.socdApply()
         BindValidity = 0  -- block macros during loading; _announceLoad re-enables when toasts fire
         ms._startupSoundDone = false  -- suppresses all non-load sounds until _announceLoad runs
+
+        -- Loading Screen — Webview Creation --
+            do
+                local sf  = hs.screen.mainScreen():frame()
+                local lw, lh = 300, 104
+                local lx  = sf.x + math.floor((sf.w - lw) / 2)
+                local ly  = sf.y + sf.h - 150 - lh
+
+                local _ucLoading = hs.webview.usercontent.new("loading")
+                _ucLoading:setCallback(function(message)
+                    local ok, data = pcall(hs.json.decode, message.body)
+                    if not ok or type(data) ~= "table" then return end
+                    if data.action == "toggleSkipPreload" then
+                        ms._skipDevPrewarm = not ms._skipDevPrewarm
+                        pcall(function() ms.saveSettings() end)
+                        if ms._skipDevPrewarm and not _lFadingOut then
+                            _lUpdate(100, "Developer tools skipped.")
+                            hs.timer.doAfter(0.8, _lFadeOut)
+                        end
+                    end
+                end)
+
+                local htmlPath = hs.configdir .. "/ui/ms_loading.html"
+                local baseURL  = "file://" .. hs.configdir .. "/ui/"
+
+                _lWebView = hs.webview.new({ x=lx, y=ly, w=lw, h=lh }, {}, _ucLoading)
+                pcall(function() _lWebView:windowStyle(0) end)
+                pcall(function() _lWebView:level(hs.canvas.windowLevels.popUpMenu or 25) end)
+                pcall(function() _lWebView:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                pcall(function() _lWebView:allowTextEntry(false) end)
+                pcall(function() _lWebView:shadow(false) end)
+                _lWebView:alpha(0)
+
+                _lWebView:navigationCallback(function(action, wv, navType, err)
+                    if navType == "didFinishLoad" then
+                        local themeJson = hs.json.encode(ms._theme or {})
+                        wv:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                        wv:evaluateJavaScript(
+                            "setSkipPreloadState(" .. (ms._skipDevPrewarm and "true" or "false") .. ")")
+                        -- Replay buffered messages
+                        for _, entry in ipairs(_lMsgBuffer) do
+                            local encoded = entry.msg and ('"' .. entry.msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
+                            wv:evaluateJavaScript(string.format("setProgress(%d, %s)", entry.pct, encoded))
+                        end
+                        _lMsgBuffer = {}
+                        wv:show()
+                        local step, steps = 0, 6
+                        local t = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
+                            step = step + 1
+                            if _lWebView then _lWebView:alpha(step / steps) end
+                            if step >= steps and t then t:stop() end
+                        end)
+                    end
+                end)
+
+                -- Replace buffer function with live function
+                _lUpdate = function(pct, msg)
+                    if not _lWebView then return end
+                    local encoded = msg and ('"' .. msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
+                    local js = string.format("setProgress(%d, %s)", pct, encoded)
+                    _lWebView:evaluateJavaScript(js)
+                end
+
+                local f = io.open(htmlPath, "r")
+                if f then
+                    local html = f:read("*all"); f:close()
+                    _lWebView:html(html, baseURL)
+                end
+            end
+        -- END Loading Screen — Webview Creation --
 
         -- Loading Screen — Fade, Announce & Timers --
             _lUpdate(20, "Initializing\u{2026}")
