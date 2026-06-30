@@ -2434,11 +2434,13 @@
             end)
 
             if notice ~= 1 then
-                hs.timer.doAfter(7.0, function()
+                _G._announceTimer = hs.timer.doAfter(7.0, function()
+                    _G._announceTimer = nil
                     pcall(function() _announceLoad() end)
                     -- Hard guarantee: if _announceLoad failed or returned early,
                     -- ensure startup flags are set so sounds/macros aren't blocked.
-                    hs.timer.doAfter(1, function()
+                    _G._announceGuardTimer = hs.timer.doAfter(1, function()
+                        _G._announceGuardTimer = nil
                         ms._startupSoundDone = true
                         if not ms._loadComplete then
                             ms._loadComplete = true
