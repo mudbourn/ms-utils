@@ -1610,6 +1610,15 @@
         if not _windowPanel  then _windowPanel  = self:_buildWindowPanel() end
     end
 
+    function MsDevTools:recolor()
+        local themeJson = hs.json.encode(ms._theme or {})
+        local js = "applyTheme(" .. themeJson .. ")"
+        if _consolePanel then pcall(function() _consolePanel:evaluateJavaScript(js) end) end
+        if _watcherPanel then pcall(function() _watcherPanel:evaluateJavaScript(js) end) end
+        if _keysPanel    then pcall(function() _keysPanel:evaluateJavaScript(js) end) end
+        if _windowPanel  then pcall(function() _windowPanel:evaluateJavaScript(js) end) end
+    end
+
     function MsDevTools:prewarmStep(which)
         if     which == "console" and not _consolePanel then
             _consolePanel = self:_buildConsolePanel()

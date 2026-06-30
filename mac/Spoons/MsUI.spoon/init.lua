@@ -505,6 +505,7 @@
             reloadTheme = function()
                 ms.loadTheme()
                 pcall(function() ms.alert:recolor() end)
+                pcall(function() ms.dev:recolor() end)
                 ms.playSlot("update")
                 ms.alert("Theme reloaded.", 4, true)
                 ms.ui.hide()
@@ -551,6 +552,7 @@
                 ms._discoverSounds()
                 -- Recolor existing toasts to match new theme
                 pcall(function() ms.alert:recolor() end)
+                pcall(function() ms.dev:recolor() end)
                 ms.playSlot("update")
                 ms.ui.refresh()
             end,
@@ -1563,11 +1565,7 @@
                     pcall(function() panel:alpha(startAlpha * (1 - (step / steps))) end)
                     if step >= steps then
                         if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-                        if ms.ui._panel == panel then
-                            pcall(function() panel:hide() end)
-                            ms.ui._panel    = nil
-                            ms.ui._panelPos = nil
-                        end
+                        pcall(function() panel:hide() end)
                     end
                 end)
             end
