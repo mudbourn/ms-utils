@@ -1050,12 +1050,12 @@
                     if state == 1 then
                         _stateSound = ms.playSlot("enabled")
                         if not ms.alert.updateById("_state", "Macros enabled!", 3) then
-                            ms.alert("Macros enabled!",  3, true, { id = "_state", source = "system", priority = "low" })
+                            ms.alert("Macros enabled!",  3, true, { id = "_state", source = "system" })
                         end
                     else
                         _stateSound = ms.playSlot("disabled")
                         if not ms.alert.updateById("_state", "Macros disabled.", 3) then
-                            ms.alert("Macros disabled.", 3, true, { id = "_state", source = "system", priority = "low" })
+                            ms.alert("Macros disabled.", 3, true, { id = "_state", source = "system" })
                         end
                     end
                 end)
