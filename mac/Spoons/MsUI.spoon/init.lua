@@ -692,7 +692,12 @@
             setSoundPreset = function(data)
                 if not data.assigns then return end
                 ms.soundAssign = ms.soundAssign or {}
-                -- Apply all preset assignments
+                -- Clear all loading slots first so missing slots get reset
+                local loadSlots = { "startup", "themeLoaded", "load", "launch" }
+                for _, sid in ipairs(loadSlots) do
+                    ms.soundAssign[sid] = nil
+                end
+                -- Apply preset assignments
                 for slotId, soundName in pairs(data.assigns) do
                     ms.soundAssign[slotId] = soundName
                 end
