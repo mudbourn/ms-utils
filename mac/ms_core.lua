@@ -8688,16 +8688,21 @@
 
                 -- Dev step logger (call from macros to trace execution) --
                     ms.dev.step = function(msg)
-                        if not ms.dev._watcherPanel then return end
-                        local ok, j = pcall(hs.json.encode, {
+                        local entry = {
                             type = "step",
-                            ts   = os.time(),
+                            ts   = os.date("%H:%M:%S"),
                             msg  = tostring(msg or ""),
-                        })
-                        if ok then
-                            pcall(function()
-                                ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
-                            end)
+                        }
+                        -- Write to log files.
+                        if ms.dev.log then ms.dev.log(entry) end
+                        -- Also send directly to watcher panel for live display.
+                        if ms.dev._watcherPanel then
+                            local ok, j = pcall(hs.json.encode, entry)
+                            if ok then
+                                pcall(function()
+                                    ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                                end)
+                            end
                         end
                     end
 
