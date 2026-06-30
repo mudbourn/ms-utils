@@ -266,8 +266,10 @@
                     if not hs.fs.attributes(path) then return end
                     hs.fs.mkdir(_devBaseDir)
                     hs.fs.mkdir(_devArchDir)
-                    local base = path:match("([^/]+)%.log$")  -- e.g. "ms_dev_system"
-                    os.rename(path, _devArchDir .. base .. "_" .. stamp .. ".log")
+                    local base, ext = path:match("([^/]+)%.(log)$")
+                    if not base then base, ext = path:match("([^/]+)%.(txt)$") end
+                    if not base then return end
+                    os.rename(path, _devArchDir .. base .. "_" .. stamp .. "." .. ext)
                 end
 
                 -- Prune helper: keep at most `limit` files matching a prefix pattern.
