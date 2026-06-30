@@ -60,12 +60,12 @@
 
         if sizeChanged then
             if _lastRatio and _lastRatio < 4/3 and not _ratioWarnTimer then
-                ms.alert("Warning: Aspect ratio too narrow.\nMacros may not function correctly. Widen your Roblox window, or increase your screen resolution.", 13)
+                ms.alert("Warning: Aspect ratio too narrow.\nMacros may not function correctly. Widen your Roblox window, or increase your screen resolution.", 13, false, { id = "_ratio" })
                 _ratioWarnTimer = hs.timer.doAfter(15, function()
                     _ratioWarnTimer = nil
                 end)
             elseif _lastRatio and loadfinish > 0 then
-                ms.alert("Current aspect ratio: (" .. string.format("%.2f", _lastRatio) .. ").\nRecommended aspect ratio: >=1.33.", 8)
+                ms.alert("Current aspect ratio: (" .. string.format("%.2f", _lastRatio) .. ").\nRecommended aspect ratio: >=1.33.", 8, false, { id = "_ratio" })
             end
         end
     end
