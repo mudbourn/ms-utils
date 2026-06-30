@@ -538,7 +538,6 @@
             setCustomTheme = function(data)
                 ms._customThemeDisabled = not (data.value and true or false)
                 ms.saveSettings()
-                ms.playSlot("update")
                 if ms._customThemeDisabled then
                     -- Revert to defaults
                     for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
@@ -546,9 +545,10 @@
                     -- Reload custom theme
                     ms.loadTheme()
                 end
-                -- Re-discover sounds (respects _customThemeDisabled for active/ dir)
+                -- Re-discover sounds BEFORE playing so paths resolve correctly
                 ms._soundsDirty = true
                 ms._discoverSounds()
+                ms.playSlot("update")
                 ms.ui.refresh()
             end,
 
