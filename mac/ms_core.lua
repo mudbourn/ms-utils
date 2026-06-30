@@ -213,307 +213,12 @@
                 require("hs.menubar")
                 require("hs.application")
 
-                -- Developer Tools — ms.dev --
-                ms.dev = {
-                    _consolePanel    = nil,
-                    _watcherPanel    = nil,
-                    _keysPanel       = nil,
-                    _consolePanelPos = nil,
-                    _watcherPanelPos = nil,
-                    _keysPanelPos    = nil,
-                    _activeKeys      = {},
-                    _activeButtons   = {},  -- button number → true while held
-                    _coordMode       = "screen",  -- screen | window | ref | screenCenter
-                }
-                -- ── Dev Log Infrastructure ──────────────────────────────────
-                -- Writes to per-category log files so you can tail just system
-                -- events or just errors without input noise.
-                --
-                -- Categories:  input | macro | system | error | console
-                -- Cat files:   ms_dev_logs/ms_dev_input.log    ms_dev_logs/ms_dev_system.log
-                --              ms_dev_logs/ms_dev_macro.log    ms_dev_logs/ms_dev_error.log
-                --              ms_dev_logs/ms_dev_console.log
-                -- Archives:    ms_dev_logs/backups/  (pruned to limit per category)
-                local _devLogDir  = os.getenv("HOME") .. "/Documents/"
-                local _devBaseDir = _devLogDir .. "ms_dev_logs/"
-                local _devArchDir = _devBaseDir .. "backups/"
-                -- Map entry.type → category.  Entries with an explicit .category
-                -- field are left alone; everything else goes through this table.
-                local _typeToCategory = {
-                    key       = "input",
-                    mouse     = "input",
-                    scroll    = "input",
-                    mousemove = "input",
-                    macro     = "macro",
-                    system    = "system",
-                    error     = "error",
-                    warn      = "error",
-                    print     = "console",
-                    result    = "console",
-                }
+                -- Developer Tools — MsDevTools.spoon --
+                hs.loadSpoon("MsDevTools")
+                spoon.MsDevTools:init()
 
-                -- Category → file path (built once).
-                -- _catPaths = JSON files (for panel history loader).
-                -- _readablePaths = human-readable files (for reading in editors).
-                -- Organized into json/ and readable/ subdirectories.
-                local _jsonDir = _devBaseDir .. "json/"
-                local _readDir = _devBaseDir .. "readable/"
-                local _catPaths = {}
-                local _readablePaths = {}
-                for _, cat in ipairs({"input", "macro", "system", "error", "console"}) do
-                    _catPaths[cat] = _jsonDir .. "ms_dev_" .. cat .. ".log"
-                    _readablePaths[cat] = _readDir .. "ms_dev_" .. cat .. ".txt"
-                end
-
-                -- Archive helper: moves a log file into backups/session_STAMP/{json|readable}/.
-                local function _archiveLog(path, stamp, subdir)
-                    if not hs.fs.attributes(path) then return end
-                    local sessionDir = _devArchDir .. "session_" .. stamp .. "/"
-                    local destDir = sessionDir .. subdir .. "/"
-                    hs.fs.mkdir(_devBaseDir)
-                    hs.fs.mkdir(_devArchDir)
-                    hs.fs.mkdir(sessionDir)
-                    hs.fs.mkdir(destDir)
-                    local filename = path:match("([^/]+)$")
-                    if filename then
-                        os.rename(path, destDir .. filename)
-                    end
-                end
-
-                -- Prune helper: keep at most `limit` session folders.
-                local function _pruneSessionArchives(limit)
-                    if not hs.fs.attributes(_devArchDir) then return end
-                    local list = {}
-                    for name in hs.fs.dir(_devArchDir) do
-                        if name:match("^session_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d$") then
-                            table.insert(list, name)
-                        end
-                    end
-                    table.sort(list)
-                    while #list > limit do
-                        local dir = _devArchDir .. list[1]
-                        for _, sub in ipairs({"json", "readable"}) do
-                            local sp = dir .. "/" .. sub
-                            if hs.fs.attributes(sp) then
-                                for fname in hs.fs.dir(sp) do
-                                    if fname ~= "." and fname ~= ".." then
-                                        os.remove(sp .. "/" .. fname)
-                                    end
-                                end
-                                hs.fs.rmdir(sp)
-                            end
-                        end
-                        hs.fs.rmdir(dir)
-                        table.remove(list, 1)
-                    end
-                end
-
-                -- On every reload, archive all log files so each session starts clean.
-                do
-                    local stamp = os.date("%Y-%m-%d_%H%M%S")
-                    hs.fs.mkdir(_jsonDir)
-                    hs.fs.mkdir(_readDir)
-                    for _, p in pairs(_catPaths) do _archiveLog(p, stamp, "json") end
-                    for _, p in pairs(_readablePaths) do _archiveLog(p, stamp, "readable") end
-
-                    -- Prune: session folders, limited by configurable archive limit.
-                    local catLimit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
-                        and ms._devArchiveLimit or 15
-                    _pruneSessionArchives(catLimit)
-                end
-
-                local _devBusy = false
-                local _devLastConsoleType = nil  -- last key/mouse/macro type sent; gates repeat suppression
-
-                local function _devWrite(entry)
-                    if _devBusy then return end
-                    _devBusy = true
-                    entry.ts = os.date("%H:%M:%S")
-
-                    -- Derive category from type if not explicitly set.
-                    if not entry.category then
-                        entry.category = _typeToCategory[entry.type] or "system"
-                    end
-
-                    -- Auto-format a readable msg from structured fields when none is given.
-                    -- Uses newlines + indentation so the Console/Watcher panels render
-                    -- isolated, scannable blocks instead of a single long line.
-                    if not entry.msg or entry.msg == "" then
-                        local headline = entry.event or entry.key or entry.type or "log"
-                        local details  = {}
-                        if entry.source then table.insert(details, "  source: " .. entry.source) end
-                        if entry.reason then table.insert(details, "  reason: " .. entry.reason) end
-                        if entry.output then table.insert(details, "  output: " .. tostring(entry.output):sub(1, 200)) end
-                        if #details > 0 then
-                            entry.msg = headline .. "\n" .. table.concat(details, "\n")
-                        else
-                            entry.msg = headline
-                        end
-                    end
-
-                    local ok, json = pcall(hs.json.encode, entry)
-                    if not ok then _devBusy = false; return end
-
-                    -- Write JSON to .log file (for panel history loader).
-                    local catPath = _catPaths[entry.category]
-                    if catPath then
-                        pcall(function()
-                            hs.fs.mkdir(_devBaseDir)
-                            hs.fs.mkdir(_jsonDir)
-                            local f = io.open(catPath, "a")
-                            if f then f:write(json .. "\n"); f:close() end
-                        end)
-                    end
-
-                    -- Write human-readable entry to .txt file.
-                    local readPath = _readablePaths[entry.category]
-                    if readPath then
-                        pcall(function()
-                            hs.fs.mkdir(_devBaseDir)
-                            hs.fs.mkdir(_readDir)
-                            local f = io.open(readPath, "a")
-                            if f then
-                                local t = entry.type
-                                local line
-                                -- Compact one-liner for high-frequency input events.
-                                if t == "key" then
-                                    local arrow = entry.down and "↓" or "↑"
-                                    line = "[" .. entry.ts .. "] " .. arrow .. " "
-                                        .. (entry.key or "?") .. " (" .. tostring(entry.keyCode or "?") .. ")"
-                                elseif t == "mouse" then
-                                    local arrow = entry.down and "↓" or "↑"
-                                    local pos = ""
-                                    if entry.x and entry.y then pos = "  " .. entry.x .. "," .. entry.y end
-                                    line = "[" .. entry.ts .. "] " .. arrow .. " mouse:"
-                                        .. tostring(entry.button or "?") .. pos
-                                elseif t == "scroll" then
-                                    line = "[" .. entry.ts .. "] ↕ scroll " .. (entry.direction or "")
-                                elseif t == "mousemove" then
-                                    line = "[" .. entry.ts .. "] → " .. (entry.x or "?") .. ", " .. (entry.y or "?")
-                                else
-                                    -- Everything else: structured multi-line with indented fields.
-                                    local parts = {}
-                                    local function add(label, val)
-                                        if val ~= nil and val ~= "" then parts[#parts + 1] = "  " .. label .. ": " .. tostring(val) end
-                                    end
-                                    local headline = entry.msg or entry.label or entry.event or entry.type or "log"
-                                    local first, rest = headline:match("^([^\n]+)\n(.*)$")
-                                    if first then headline = first; add("detail", rest:gsub("\n", " | ")) end
-                                    add("fromDialog", entry.fromDialog)
-                                    add("to",          entry.to)
-                                    add("status",      entry.status)
-                                    add("cur",         entry.cur)
-                                    add("trusted",     entry.trusted)
-                                    add("code",        entry.code)
-                                    add("version",     entry.version)
-                                    add("channel",     entry.channel)
-                                    add("target",      entry.target)
-                                    add("format",      entry.format)
-                                    add("id",          entry.id)
-                                    add("label",       entry.label)
-                                    add("parent",      entry.parentLabel)
-                                    add("trigger",     entry.trigger)
-                                    line = "[" .. entry.ts .. "] " .. headline
-                                    if #parts > 0 then line = line .. "\n" .. table.concat(parts, "\n") end
-                                end
-                                f:write(line .. "\n")
-                                f:close()
-                            end
-                        end)
-                    end
-
-                    -- Panel routing (unchanged logic).
-                    local t = entry.type
-                    -- Console routing with consecutive-repeat suppression.
-                    -- key/mouse/macro: only send when the type changes from the last sent.
-                    -- print/error/result/system: always send and reset the gate.
-                    if ms.dev._consolePanel and t ~= "mousemove" then
-                        local send = false
-                        if t == "key" or t == "mouse" or t == "macro" then
-                            if _devLastConsoleType ~= t then
-                                _devLastConsoleType = t
-                                send = true
-                            end
-                        else
-                            _devLastConsoleType = nil
-                            send = true
-                        end
-                        if send then
-                            pcall(function()
-                                ms.dev._consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                            end)
-                        end
-                    end
-                    -- Watcher: macro, print, error, system
-                    if ms.dev._watcherPanel and (t=="macro" or t=="print" or t=="error" or t=="system") then
-                        pcall(function()
-                            ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                        end)
-                    end
-                    if ms.dev._keysPanel and ms.dev._keysReady
-                        and (t=="key" or t=="mouse" or t=="scroll" or t=="mousemove") then
-                        pcall(function()
-                            ms.dev._keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
-                        end)
-                    end
-                    _devBusy = false
-                end
-
-                -- Public API: any code can call ms.dev.log({ type = "system", event = "...", ... })
-                -- .category is auto-derived from .type unless you override it.
-                ms.dev.log = function(entry) _devWrite(entry) end
-
-                local _origPrint = print
-                _G.print = function(...)
-                    _origPrint(...)
-                    local parts = {}
-                    for i = 1, select('#', ...) do parts[i] = tostring(select(i, ...)) end
-                    _devWrite({ type = "print", msg = table.concat(parts, "\t") })
-                end
-
-                ms.dev._onMacroFire = function(id, label, parentId, parentLabel, trigger)
-                    _devWrite({
-                        type        = "macro",
-                        id          = id,
-                        label       = label or id,
-                        parentLabel = parentLabel,
-                        trigger     = trigger,
-                    })
-                end
-
-                ms.dev._onKeyEvent = function(keyCode, keyName, isDown)
-                    _devWrite({ type = "key", key = keyName or ("code:" .. tostring(keyCode)), keyCode = keyCode, down = isDown })
-                    if isDown then ms.dev._activeKeys[keyCode] = keyName or tostring(keyCode)
-                    else            ms.dev._activeKeys[keyCode] = nil end
-                    if ms.dev._keysPanel then
-                        local active = {}
-                        for code, name in pairs(ms.dev._activeKeys) do
-                            table.insert(active, { name = name, code = code })
-                        end
-                        local aok, aj = pcall(hs.json.encode, active)
-                        if aok then
-                            pcall(function()
-                                ms.dev._keysPanel:evaluateJavaScript("updateActiveKeys(" .. aj .. ")")
-                            end)
-                        end
-                    end
-                end
-
-                ms.dev._onMouseEvent = function(button, isDown, x, y)
-                    _devWrite({ type = "mouse", button = button, down = isDown, x = x, y = y })
-                    if isDown then ms.dev._activeButtons[button] = true
-                    else            ms.dev._activeButtons[button] = nil end
-                    if ms.dev._keysPanel and ms.dev._keysReady then
-                        local active = {}
-                        for btn in pairs(ms.dev._activeButtons) do table.insert(active, btn) end
-                        local aok, aj = pcall(hs.json.encode, { x = x, y = y, buttons = active })
-                        if aok then
-                            pcall(function()
-                                ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. aj .. ")")
-                            end)
-                        end
-                    end
-                end
+                -- Developer Tools — populated by MsDevTools:start() --
+                spoon.MsDevTools:start()
 
                 hs.timer.doAfter(0.3, function()
                     local roblox = hs.application.get("Roblox")
@@ -4947,205 +4652,16 @@
                 return false
             end):start()
 
-            -- Macro Watcher tracing helpers --
-                local _camMoveAccum  = 0   -- consecutive cam.move calls awaiting flush
-                local _waitAccum     = 0   -- consecutive identical waits awaiting flush
-                local _waitDuration  = 0   -- the wait ms being accumulated
-                local _traceSuppress = false  -- true while ms.type is dispatching internally
-
-                local function _watcherStep(msg)
-                    if not ms.dev._watcherPanel then return end
-                    local co  = coroutine.running()
-                    local ctx = co and ms._coroContext[co]
-                    if ctx and ctx.cancelled then return end
-                    local label = (ctx and ctx.label) or "macro"
-                    local ok, j = pcall(hs.json.encode, {
-                        type = "step", ts = os.time(),
-                        msg  = "[" .. label .. "] " .. msg,
-                    })
-                    if ok then
-                        pcall(function()
-                            ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
-                        end)
-                    end
-                end
-
-                local function _devMacroLog(msg)
-                    local co  = coroutine.running()
-                    local ctx = co and ms._coroContext[co]
-                    if ctx and ctx.cancelled then return end
-                    local label = (ctx and ctx.label) or ms._pendingLabel or "macro"
-
-                    ms.dev.log({
-                        type     = "step",
-                        category = "macro",
-                        msg      = "[" .. label .. "] " .. msg,
-                    })
-                end
-
-                -- Branch Tracing --
-                    local _branchState = {}
-
-                    local function _traceLog(co, msg)
-                        local st = _branchState[co]
-                        if not st then return end
-
-                        table.insert(st.buffer, "[" .. os.date("%H:%M:%S") .. "] [" .. st.label .. "] " .. msg)
-                    end
-
-                    local function _flushTraceBuffer(co)
-                        local st = _branchState[co]
-                        if not st or #st.buffer == 0 then return end
-
-                        pcall(function()
-                            hs.fs.mkdir(_devBaseDir)
-                            hs.fs.mkdir(_readDir)
-                            local f = io.open(_readablePaths["macro"], "a")
-                            if f then
-                                for _, line in ipairs(st.buffer) do
-                                    f:write(line .. "\n")
-                                end
-                                f:close()
-                            end
-                        end)
-
-                        if ms.dev and ms.dev._watcherPanel then
-                            for _, line in ipairs(st.buffer) do
-                                local ok, j = pcall(hs.json.encode, {
-                                    type = "step",
-                                    ts   = os.time(),
-                                    msg  = line,
-                                })
-
-                                if ok then
-                                    pcall(function()
-                                        ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
-                                    end)
-                                end
-                            end
-                        end
-
-                        st.buffer = {}
-                    end
-
-                    local function _startBranchTrace(co, label)
-                        if not co then return end
-
-                        _branchState[co] = {
-                            depth     = 0,
-                            prevLine  = 0,
-                            loopStart = 0,
-                            loopCount = 0,
-                            label     = label or "macro",
-                            buffer    = {},
-                            isUser    = true,
-                        }
-
-                        debug.sethook(co, function(event, line)
-                            local st = _branchState[co]
-                            if not st then return end
-
-                            if event == "call" then
-                                local info = debug.getinfo(2, "S")
-                                local src = info and info.source or ""
-
-                                if src:find("ms_core") or src:find("=[C]") or src == "" then
-                                    st.isUser = false
-                                    return
-                                end
-
-                                st.isUser = true
-                                st.depth = st.depth + 1
-
-                                local fnInfo = debug.getinfo(2, "n")
-                                local name = fnInfo and fnInfo.name or "function"
-
-                                table.insert(st.buffer, string.rep("  ", st.depth) .. "START " .. name .. "()")
-
-                            elseif event == "return" or event == "tail return" then
-                                if not st.isUser then return end
-                                if st.depth > 0 then st.depth = st.depth - 1 end
-
-                                local fnInfo = debug.getinfo(2, "n")
-                                local name = fnInfo and fnInfo.name or "function"
-
-                                table.insert(st.buffer, string.rep("  ", st.depth) .. "END " .. name .. "()")
-
-                            elseif event == "line" and line then
-                                if not st.isUser then return end
-
-                                if st.prevLine > 0 and line < st.prevLine and (st.prevLine - line) > 2 then
-                                    if st.loopStart == 0 then
-                                        st.loopStart = line
-                                        st.loopCount = 1
-
-                                        table.insert(st.buffer, string.rep("  ", st.depth) .. "START loop")
-                                    else
-                                        st.loopCount = st.loopCount + 1
-                                    end
-                                elseif st.loopStart > 0 and line > st.loopStart and (line - st.loopStart) > 10 then
-                                    table.insert(st.buffer, string.rep("  ", st.depth) .. "END loop (" .. st.loopCount .. " iterations)")
-                                    st.loopStart = 0
-                                    st.loopCount = 0
-                                end
-
-                                st.prevLine = line
-                            end
-                        end, "crl")
-                    end
-
-                    local function _stopBranchTrace(co)
-                        pcall(debug.sethook, co)
-
-                        local st = _branchState[co]
-                        if st and st.loopStart > 0 then
-                            table.insert(st.buffer, string.rep("  ", st.depth) .. "END loop (" .. st.loopCount .. " iterations)")
-                        end
-
-                        _flushTraceBuffer(co)
-                        _branchState[co] = nil
-                    end
-                -- END --
-
-                local function _flushCam()
-                    if _camMoveAccum > 0 then
-                        if ms.dev._watcherPanel then
-                            _watcherStep("cam.move ×" .. _camMoveAccum)
-                        end
-
-                        _devMacroLog("cam.move ×" .. _camMoveAccum)
-                        _camMoveAccum = 0
-                    end
-                end
-
-                local function _flushWait()
-                    if _waitAccum > 0 then
-                        local msg = "wait " .. _waitDuration .. "ms"
-                        if _waitAccum > 1 then msg = msg .. " ×" .. _waitAccum end
-
-                        if ms.dev._watcherPanel then
-                            _watcherStep(msg)
-                        end
-
-                        _devMacroLog(msg)
-                        _waitAccum = 0
-                    end
-                end
-
-                local function _flushAll()
-                    _flushCam()
-                    _flushWait()
-                end
 
                 ms.press = function(key, mods, hidinject)
-                    if ms.dev then _flushAll() end
-                    if ms.dev._watcherPanel and not _traceSuppress then
+                    if ms.dev then spoon.MsDevTools:flushAll() end
+                    if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        _watcherStep("↓ " .. tostring(key) .. modsStr)
+                        spoon.MsDevTools:watcherStep("↓ " .. tostring(key) .. modsStr)
                     end
                     if ms.dev then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        _devMacroLog("↓ " .. tostring(key) .. modsStr)
+                        spoon.MsDevTools:macroLog("↓ " .. tostring(key) .. modsStr)
                     end
                     local keyCode = getCode(key)
                     if not keyCode then
@@ -5163,12 +4679,12 @@
                 end
 
                 ms.release = function(key, mods, hidinject)
-                    if ms.dev then _flushAll() end
-                    if ms.dev._watcherPanel and not _traceSuppress then
-                        _watcherStep("↑ " .. tostring(key))
+                    if ms.dev then spoon.MsDevTools:flushAll() end
+                    if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
+                        spoon.MsDevTools:watcherStep("↑ " .. tostring(key))
                     end
                     if ms.dev then
-                        _devMacroLog("↑ " .. tostring(key))
+                        spoon.MsDevTools:macroLog("↑ " .. tostring(key))
                     end
                     local keyCode = getCode(key)
                     if not keyCode then return end
@@ -5183,21 +4699,21 @@
                 end
 
                 ms.type = function(key, mods, hidinject)
-                    if ms.dev then _flushAll() end
+                    if ms.dev then spoon.MsDevTools:flushAll() end
                     if ms.dev._watcherPanel then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        _watcherStep("type " .. tostring(key) .. modsStr)
+                        spoon.MsDevTools:watcherStep("type " .. tostring(key) .. modsStr)
                     end
                     if ms.dev then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        _devMacroLog("type " .. tostring(key) .. modsStr)
+                        spoon.MsDevTools:macroLog("type " .. tostring(key) .. modsStr)
                     end
-                    local _saved = _traceSuppress
-                    _traceSuppress = true
+                    local _saved = spoon.MsDevTools:getTraceSuppress()
+                    spoon.MsDevTools:setTraceSuppress(true)
                     ms.press(key, mods, hidinject)
                     ms.wait(15)
                     ms.release(key, mods, hidinject)
-                    _traceSuppress = _saved  -- restore rather than reset; safe across cancellation
+                    spoon.MsDevTools:setTraceSuppress(_saved)  -- restore rather than reset; safe across cancellation
                 end
 
                 ms.key = function(mods, key, swallow, pressFn, releaseFn, isSystem)
@@ -5236,8 +4752,8 @@
         -- 4. Mouse Actions -
             ms.scroll = function(direction, clicks)
                 if ms.dev._watcherPanel then
-                    _flushCam()
-                    _watcherStep("scroll " .. tostring(direction)
+                    spoon.MsDevTools:flushCam()
+                    spoon.MsDevTools:watcherStep("scroll " .. tostring(direction)
                         .. (clicks and clicks > 1 and " \xc3\x97" .. clicks or ""))
                 end
                 clicks = clicks or 1
@@ -5340,12 +4856,12 @@
                     ScreenTL=true,   ScreenTR=true,  ScreenBL=true,
                     ScreenBR=true,   ScreenCenter=true,
                 }
-                if ms.dev then _flushAll() end
+                if ms.dev then spoon.MsDevTools:flushAll() end
                 if ms.dev._watcherPanel then
-                    _watcherStep("Mouse " .. tostring(operation) .. " " .. tostring(button))
+                    spoon.MsDevTools:watcherStep("Mouse " .. tostring(operation) .. " " .. tostring(button))
                 end
                 if ms.dev then
-                    _devMacroLog("Mouse " .. tostring(operation) .. " " .. tostring(button))
+                    spoon.MsDevTools:macroLog("Mouse " .. tostring(operation) .. " " .. tostring(button))
                 end
                 assert(OPS[operation],     "ms.Mouse: unknown operation '"  .. tostring(operation)  .. "'")
                 assert(BTNS[button] ~= nil, "ms.Mouse: unknown button '"      .. tostring(button)     .. "'")
@@ -5447,18 +4963,10 @@
                 local co = coroutine.running()
                 if co then
                     local ctx = ms._coroContext[co]
-                    if ms.dev then _flushCam() end
+                    if ms.dev then spoon.MsDevTools:flushCam() end
 
                     if ms.dev then
-                        local msNum = tonumber(ms_time) or 0
-
-                        if _waitAccum > 0 and msNum == _waitDuration then
-                            _waitAccum = _waitAccum + 1
-                        else
-                            _flushWait()
-                            _waitDuration = msNum
-                            _waitAccum = 1
-                        end
+                        spoon.MsDevTools:accWait(tonumber(ms_time) or 0)
                     end
                     hs.timer.doAfter(ms_time / 1000, function()
                         -- Don't resume a coroutine whose macro has been cancelled or paused.
@@ -5470,12 +4978,12 @@
                         if coroutine.status(co) == "dead" then
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
-                            if ms.dev then _stopBranchTrace(co) end
-                            if ms.dev then _flushAll() end
+                            if ms.dev then spoon.MsDevTools:stopTrace(co) end
+                            if ms.dev then spoon.MsDevTools:flushAll() end
                         end
                     end)
                     -- Flush trace buffer before yielding so entries appear live.
-                    if ms._branchTrace then _flushTraceBuffer(co) end
+                    if ms._branchTrace then spoon.MsDevTools:flushTraceBuffer(co) end
                     coroutine.yield()
                 else
                     -- Intentional blocking fallback for the rare case where ms.wait is called
@@ -5696,7 +5204,7 @@
                 end,
 
                 move = function(dy, dx)
-                    _camMoveAccum = _camMoveAccum + 1
+                    spoon.MsDevTools:accCamMove()
                     if not ms.cam.anchor then
                         ms.wait(2)
                         return
@@ -5892,7 +5400,7 @@
                     ms._coroContext[co]    = ctx
                     ms._activeContexts[ctx] = true
 
-                    if ms.dev and ms._branchTrace then _startBranchTrace(co, label) end
+                    if ms.dev and ms._branchTrace then spoon.MsDevTools:startTrace(co, label) end
 
                     local ok, err = coroutine.resume(co, ...)
                     if not ok then
@@ -5901,10 +5409,10 @@
                     end
 
                     if coroutine.status(co) == "dead" then
-                        if ms.dev then _stopBranchTrace(co) end
+                        if ms.dev then spoon.MsDevTools:stopTrace(co) end
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
-                        if ms.dev then _flushAll() end
+                        if ms.dev then spoon.MsDevTools:flushAll() end
                     end
                 end
             end
@@ -5936,10 +5444,10 @@
                         print("ms.resume error: " .. tostring(err))
                     end
                     if coroutine.status(co) == "dead" then
-                        if ms.dev then _stopBranchTrace(co) end
+                        if ms.dev then spoon.MsDevTools:stopTrace(co) end
                         ms._coroContext[co] = nil
                         ms._activeContexts[ctx] = nil
-                        if ms.dev then _flushAll() end
+                        if ms.dev then spoon.MsDevTools:flushAll() end
                     end
                 end
                 if not id then
@@ -5952,12 +5460,12 @@
             end
 
             ms.copy = function(text)
-                if ms.dev then _flushAll() end
+                if ms.dev then spoon.MsDevTools:flushAll() end
                 if ms.dev._watcherPanel then
-                    _watcherStep("copy")
+                    spoon.MsDevTools:watcherStep("copy")
                 end
                 if ms.dev then
-                    _devMacroLog("copy")
+                    spoon.MsDevTools:macroLog("copy")
                 end
                 hs.pasteboard.setContents(text)
             end
@@ -5967,13 +5475,13 @@
             ms.cancelMacros = function()
                 for co, ctx in pairs(ms._coroContext) do
                     ctx.cancelled = true
-                    if ms.dev then _stopBranchTrace(co) end
+                    if ms.dev then spoon.MsDevTools:stopTrace(co) end
                 end
 
                 ms._activeContexts = {}
                 ms._coroContext     = {}
 
-                if ms.dev then _flushAll() end
+                if ms.dev then spoon.MsDevTools:flushAll() end
 
                 -- Release every key currently held by a macro press.
                 for keyCode, entry in pairs(ms._macroHeldKeys) do
@@ -6039,11 +5547,11 @@
             end
 
             ms.sound = function(path, async, device)
-                if ms.dev then _flushAll() end
+                if ms.dev then spoon.MsDevTools:flushAll() end
                 if path then
                     local fname = tostring(path):match("([^/\\]+)$") or tostring(path)
-                    if ms.dev._watcherPanel then _watcherStep("sound " .. fname) end
-                    if ms.dev then _devMacroLog("sound " .. fname) end
+                    if ms.dev._watcherPanel then spoon.MsDevTools:watcherStep("sound " .. fname) end
+                    if ms.dev then spoon.MsDevTools:macroLog("sound " .. fname) end
                 end
                 if not ms.soundEnabled then return end
                 if not path then return end
@@ -6073,10 +5581,10 @@
                                     print("ms.sound resume error: " .. tostring(err))
                                 end
                                 if coroutine.status(co) == "dead" then
-                                    if ms.dev then _stopBranchTrace(co) end
+                                    if ms.dev then spoon.MsDevTools:stopTrace(co) end
                                     ms._coroContext[co] = nil
                                     if ctx then ms._activeContexts[ctx] = nil end
-                                    if ms.dev then _flushAll() end
+                                    if ms.dev then spoon.MsDevTools:flushAll() end
                                 end
                             end
                         end)
@@ -8412,722 +7920,7 @@
             -- END --
         -- END --
 
-        -- 12. Developer Panels --
-            do
-                local _devBase = "file://" .. os.getenv("HOME") .. "/.hammerspoon/ui/"
-                local _home    = os.getenv("HOME")
 
-                -- Helper: read category-specific dev logs and push history to a panel.
-                local _HIST_MAX = 300  -- mirrors MAX_ENTRIES in the panel JS
-                local function _loadDevHistory(panel, categories)
-                    local entries = {}
-                    for _, cat in ipairs(categories) do
-                        local path = _catPaths[cat]
-                        if path then
-                            local f = io.open(path, "r")
-                            if f then
-                                for line in f:lines() do
-                                    -- .log files are pure JSON (one object per line).
-                                    local ok, entry = pcall(hs.json.decode, line)
-                                    if ok and entry then
-                                        entries[#entries + 1] = entry
-                                    end
-                                end
-                                f:close()
-                            end
-                        end
-                    end
-                    if #entries == 0 then return end
-                    -- Sort by timestamp so entries from different files interleave correctly.
-                    table.sort(entries, function(a, b) return (a.ts or "") < (b.ts or "") end)
-                    -- Keep only the last _HIST_MAX after merging.
-                    while #entries > _HIST_MAX do table.remove(entries, 1) end
-                    local ok, json = pcall(hs.json.encode, entries)
-                    if ok then
-                        pcall(function()
-                            panel:evaluateJavaScript("loadHistory(" .. json .. ")")
-                        end)
-                    end
-                end
-
-                -- Helper: build a JS snippet that injects the current ms._theme
-                -- colors into a dev panel's CSS variables. Called in each panel's
-                -- navigationCallback so the panel stays in sync with the theme file.
-                local function _devThemeJS()
-                    local t = ms._theme or {}
-                    local parts = {}
-                    local function sv(prop, key)
-                        local val = t[key]
-                        if type(val) == "string" then
-                            -- Hex-only: matches the loadTheme validation policy.
-                            -- The old `^rgb` branch is removed: it was a prefix-only
-                            -- check that would allow arbitrary content after "rgb",
-                            -- and loadTheme never stores non-hex colors anyway.
-                            if val:match("^#[0-9a-fA-F]+$") then
-                                table.insert(parts, string.format("r.setProperty('%s','%s')", prop, val))
-                            end
-                        end
-                    end
-                    sv("--bg",       "bg")
-                    sv("--surface",  "surface")
-                    sv("--surface2", "surface2")
-                    sv("--accent",   "accent")
-                    sv("--text",     "text")
-                    -- text2 is derived: we use warning color for mouse/scroll highlights
-                    sv("--mouse",    "warning")
-                    if type(t.radius) == "number" then
-                        table.insert(parts, string.format("r.setProperty('--radius','%dpx')", math.max(0, t.radius)))
-                    end
-                    -- Font family.
-                    -- loadTheme strips [;{}()<>"'] from font names before storing them,
-                    -- so no injection-relevant characters can reach this point.
-                    local font = t.font
-                    if type(font) == "string" and font ~= "" and not font:match("%.[ot]tf$") and not font:match("%.woff") then
-                        table.insert(parts, string.format("document.body.style.fontFamily=\"'%s',Palatino,Georgia,serif\"", font))
-                    end
-                    if #parts == 0 then return "" end
-                    return "(function(){var r=document.documentElement.style;" .. table.concat(parts, ";") .. "})()"
-                end
-
-                -- Helper: make a small floating panel.
-                local function _makeDevPanel(ucName, w, h, xOff, yOff)
-                    local uc = hs.webview.usercontent.new(ucName)
-                    local screen = hs.screen.mainScreen():frame()
-                    local x = screen.x + screen.w - w - xOff
-                    local y = screen.y + yOff
-                    local panel = hs.webview.new({ x=x, y=y, w=w, h=h }, { developerExtrasEnabled = true }, uc)
-                    if not panel then return nil, uc end
-                    pcall(function() panel:windowStyle(0) end)
-                    pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                    pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                    pcall(function() panel:allowTextEntry(true) end)
-                    pcall(function() panel:shadow(true) end)
-                    return panel, uc, { x=x, y=y, w=w, h=h }
-                end
-
-
-                -- Dev panel fade helpers --
-                    -- Shared 150 ms fade-in / fade-out for all four developer panels.
-                    -- Each panel gets its own timer slot keyed by a short string so a
-                    -- re-open while fading out cancels the out-animation and reverses.
-                    local _devFadeTimers = {}
-
-                    local function _devFadeIn(panel, key)
-                        if _devFadeTimers[key] then
-                            _devFadeTimers[key]:stop()
-                            _devFadeTimers[key] = nil
-                        end
-                        pcall(function() panel:alpha(0) end)
-                        local step, steps = 0, 6
-                        _devFadeTimers[key] = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                            step = step + 1
-                            pcall(function() panel:alpha(step / steps) end)
-                            if step >= steps then
-                                _devFadeTimers[key]:stop()
-                                _devFadeTimers[key] = nil
-                            end
-                        end)
-                    end
-
-                    local function _devFadeOut(panel, key, onDone)
-                        if _devFadeTimers[key] then
-                            _devFadeTimers[key]:stop()
-                            _devFadeTimers[key] = nil
-                        end
-                        local step, steps = 0, 6
-                        _devFadeTimers[key] = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                            step = step + 1
-                            pcall(function() panel:alpha(1 - (step / steps)) end)
-                            if step >= steps then
-                                _devFadeTimers[key]:stop()
-                                _devFadeTimers[key] = nil
-                                if onDone then onDone() end
-                            end
-                        end)
-                    end
-
-                -- END --
-
-                -- Console --
-                    local _ucCon = hs.webview.usercontent.new("msConsole")
-                    _ucCon:setCallback(function(msg)
-                        local ok, data = pcall(hs.json.decode, msg.body)
-                        if not ok or type(data) ~= "table" then return end
-                        if data.action == "execute" and data.code then
-                            -- Try as expression, fall back to statement.
-                            local fn, err = load("return " .. data.code)
-                            if not fn then fn, err = load(data.code) end
-                            if not fn then
-                                _devWrite({ type = "error", msg = err or "syntax error" })
-                            else
-                                local res = table.pack(pcall(fn))
-                                local success = table.remove(res, 1)
-                                if not success then
-                                    _devWrite({ type = "error", msg = tostring(res[1]) })
-                                elseif #res > 0 then
-                                    local parts = {}
-                                    for _, v in ipairs(res) do parts[#parts+1] = tostring(v) end
-                                    _devWrite({ type = "result", msg = table.concat(parts, "\t") })
-                                end
-                            end
-                        elseif data.action == "clear" then
-                            for _, cat in ipairs({"macro", "console", "error", "system", "input"}) do
-                                local p = _catPaths[cat]; if p then local f = io.open(p, "w"); if f then f:close() end end
-                                local r = _readablePaths[cat]; if r then local f = io.open(r, "w"); if f then f:close() end end
-                            end
-                        elseif data.action == "close" then
-                            ms.dev.console.hide()
-                        elseif data.action == "openWatcher" then
-                            ms.dev.watcher.show()
-                        elseif data.action == "openKeys" then
-                            ms.dev.keys.show()
-                        elseif data.action == "move" and ms.dev._consolePanelPos then
-                            ms.dev._consolePanelPos.x = ms.dev._consolePanelPos.x + (data.dx or 0)
-                            ms.dev._consolePanelPos.y = ms.dev._consolePanelPos.y + (data.dy or 0)
-                            if ms.dev._consolePanel then
-                                pcall(function() ms.dev._consolePanel:frame(ms.dev._consolePanelPos) end)
-                            end
-                        elseif data.action == "playSlot" and data.slot then
-                            ms.playSlot(data.slot)
-                        end
-                    end)
-
-                    -- Builds the console WebView (hidden). Called at startup by
-                    -- ms.dev.prewarm() so the panel is ready before the user opens it.
-                    local function _buildConsolePanel()
-                        local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 480
-                        local x = screen.x + screen.w - w - 20
-                        local y = screen.y + 20
-                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                            { developerExtrasEnabled = true }, _ucCon)
-                        if not panel then return nil end
-                        pcall(function() panel:windowStyle(0) end)
-                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                        pcall(function() panel:allowTextEntry(true) end)
-                        pcall(function() panel:shadow(true) end)
-                        local f = io.open(_home .. "/.hammerspoon/ui/ms_console.html", "r")
-                        if f then panel:html(f:read("*all"), _devBase); f:close() end
-                        ms.dev._consolePanelPos = { x=x, y=y, w=w, h=h }
-                        panel:navigationCallback(function(_, action)
-                            if action == "navigating" then return end
-                            -- History is loaded in console.show() so the log read
-                            -- never blocks the startup prewarm sequence.
-                            hs.timer.doAfter(0, function()
-                                local tj = _devThemeJS()
-                                if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                            end)
-                        end)
-                        return panel
-                    end
-
-                    ms.dev.console = {}
-                    ms.dev.console.show = function()
-                        if not ms.dev._consolePanel then
-                            ms.dev._consolePanel = _buildConsolePanel()
-                            if not ms.dev._consolePanel then return end
-                        end
-                        ms.dev._consoleOpen = true
-                        ms.playSlot("settingsOpen")
-                        ms.dev._consolePanel:show()
-                        pcall(function() ms.dev._consolePanel:bringToFront(true) end)
-                        _devFadeIn(ms.dev._consolePanel, "console")
-                        -- Inject history and theme after the panel is visible.
-                        hs.timer.doAfter(0.1, function()
-                            if not ms.dev._consolePanel or not ms.dev._consoleOpen then return end
-                            _loadDevHistory(ms.dev._consolePanel, {"macro", "console", "error", "system", "input"})
-                            local tj = _devThemeJS()
-                            if tj ~= "" then
-                                pcall(function() ms.dev._consolePanel:evaluateJavaScript(tj) end)
-                            end
-                        end)
-                    end
-                    ms.dev.console.hide = function()
-                        ms.dev._consoleOpen = false
-                        if ms.dev._consolePanel then
-                            ms.playSlot("settingsClose")
-                            _devFadeOut(ms.dev._consolePanel, "console", function()
-                                if ms.dev._consolePanel then ms.dev._consolePanel:hide() end
-                            end)
-                        end
-                    end
-                    ms.dev.console.toggle = function()
-                        if ms.dev._consoleOpen then ms.dev.console.hide()
-                        else ms.dev.console.show() end
-                    end
-
-                -- END --
-
-                -- Macro Watcher --
-                    local _ucWatcher = hs.webview.usercontent.new("msWatcher")
-                    _ucWatcher:setCallback(function(msg)
-                        local ok, data = pcall(hs.json.decode, msg.body)
-                        if not ok or type(data) ~= "table" then return end
-                        if data.action == "clear" then
-                            for _, cat in ipairs({"macro", "error", "system"}) do
-                                local p = _catPaths[cat]; if p then local f = io.open(p, "w"); if f then f:close() end end
-                                local r = _readablePaths[cat]; if r then local f = io.open(r, "w"); if f then f:close() end end
-                            end
-                        elseif data.action == "close" then
-                            ms.dev.watcher.hide()
-                        elseif data.action == "move" and ms.dev._watcherPanelPos then
-                            ms.dev._watcherPanelPos.x = ms.dev._watcherPanelPos.x + (data.dx or 0)
-                            ms.dev._watcherPanelPos.y = ms.dev._watcherPanelPos.y + (data.dy or 0)
-                            if ms.dev._watcherPanel then
-                                pcall(function() ms.dev._watcherPanel:frame(ms.dev._watcherPanelPos) end)
-                            end
-                        elseif data.action == "playSlot" and data.slot then
-                            ms.playSlot(data.slot)
-                        end
-                    end)
-
-                    -- Builds the macro watcher WebView (hidden). Pre-warmed at startup.
-                    local function _buildWatcherPanel()
-                        local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 480
-                        local x = screen.x + screen.w - w - 50
-                        local y = screen.y + 44
-                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                            { developerExtrasEnabled = true }, _ucWatcher)
-                        if not panel then return nil end
-                        pcall(function() panel:windowStyle(0) end)
-                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                        pcall(function() panel:shadow(true) end)
-                        local f = io.open(_home .. "/.hammerspoon/ui/ms_watcher.html", "r")
-                        if f then panel:html(f:read("*all"), _devBase); f:close() end
-                        ms.dev._watcherPanelPos = { x=x, y=y, w=w, h=h }
-                        panel:navigationCallback(function(_, action)
-                            if action == "navigating" then return end
-                            -- History is loaded in watcher.show() so the log read
-                            -- never blocks the startup prewarm sequence.
-                            hs.timer.doAfter(0, function()
-                                local tj = _devThemeJS()
-                                if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                            end)
-                        end)
-                        return panel
-                    end
-
-                    ms.dev.watcher = {}
-                    ms.dev.watcher.show = function()
-                        if not ms.dev._watcherPanel then
-                            ms.dev._watcherPanel = _buildWatcherPanel()
-                            if not ms.dev._watcherPanel then return end
-                        end
-                        ms.dev._watcherOpen = true
-                        ms.playSlot("settingsOpen")
-                        ms.dev._watcherPanel:show()
-                        pcall(function() ms.dev._watcherPanel:bringToFront(true) end)
-                        _devFadeIn(ms.dev._watcherPanel, "watcher")
-                        -- Inject history and theme after the panel is visible.
-                        hs.timer.doAfter(0.1, function()
-                            if not ms.dev._watcherPanel or not ms.dev._watcherOpen then return end
-                            _loadDevHistory(ms.dev._watcherPanel, {"macro", "error", "system"})
-                            local tj = _devThemeJS()
-                            if tj ~= "" then
-                                pcall(function() ms.dev._watcherPanel:evaluateJavaScript(tj) end)
-                            end
-                        end)
-                    end
-                    ms.dev.watcher.hide = function()
-                        ms.dev._watcherOpen = false
-                        if ms.dev._watcherPanel then
-                            ms.playSlot("settingsClose")
-                            _devFadeOut(ms.dev._watcherPanel, "watcher", function()
-                                if ms.dev._watcherPanel then ms.dev._watcherPanel:hide() end
-                            end)
-                        end
-                    end
-                    ms.dev.watcher.toggle = function()
-                        if ms.dev._watcherOpen then ms.dev.watcher.hide()
-                        else ms.dev.watcher.show() end
-                    end
-
-                -- END --
-
-                -- Key Monitor --
-                    local _ucKeys = hs.webview.usercontent.new("msKeys")
-                    _ucKeys:setCallback(function(msg)
-                        local ok, data = pcall(hs.json.decode, msg.body)
-                        if not ok or type(data) ~= "table" then return end
-                        if data.action == "clear" then
-                            local p = _catPaths["input"]; if p then local f = io.open(p, "w"); if f then f:close() end end
-                            local r = _readablePaths["input"]; if r then local f = io.open(r, "w"); if f then f:close() end end
-                        elseif data.action == "close" then
-                            ms.dev.keys.hide()
-                        elseif data.action == "ready" then
-                            -- DOMContentLoaded fired: page JS is parsed and ready.
-                            -- Only record that the panel is ready here — no evaluateJavaScript
-                            -- calls, because the navigation is still in-flight and any
-                            -- synchronous JS call from within this usercontent callback
-                            -- re-enters WebKit and deadlocks the loading sequence.
-                            -- History + theme injection happen in keys.show() instead.
-                            if not ms.dev._keysReady then
-                                ms.dev._keysReady = true
-                                local _p = hs.mouse.absolutePosition()
-                                ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
-                            end
-                        elseif data.action == "setCoordMode" then
-                            ms.dev._coordMode = data.mode or "screen"
-                            -- Re-push current position immediately in the new coordinate system.
-                            hs.timer.doAfter(0.01, function()
-                                if ms.dev._keysPanel then
-                                    pcall(function() ms.dev._pushMouseState() end)
-                                end
-                            end)
-                        elseif data.action == "move" and ms.dev._keysPanelPos then
-                            ms.dev._keysPanelPos.x = ms.dev._keysPanelPos.x + (data.dx or 0)
-                            ms.dev._keysPanelPos.y = ms.dev._keysPanelPos.y + (data.dy or 0)
-                            if ms.dev._keysPanel then
-                                pcall(function() ms.dev._keysPanel:frame(ms.dev._keysPanelPos) end)
-                            end
-                        elseif data.action == "playSlot" and data.slot then
-                            ms.playSlot(data.slot)
-                        end
-                    end)
-
-                    -- Builds the input monitor WebView (hidden). Pre-warmed at startup.
-                    local function _buildKeysPanel()
-                        local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 480
-                        local x = screen.x + screen.w - w - 80
-                        local y = screen.y + 68
-                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                            { developerExtrasEnabled = true }, _ucKeys)
-                        if not panel then return nil end
-                        pcall(function() panel:windowStyle(0) end)
-                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                        pcall(function() panel:shadow(true) end)
-                        local f = io.open(_home .. "/.hammerspoon/ui/ms_keys.html", "r")
-                        if not f then return nil end
-                        panel:html(f:read("*all"), _devBase); f:close()
-                        ms.dev._keysPanelPos = { x=x, y=y, w=w, h=h }
-                        ms.dev._keysReady    = false
-                        panel:navigationCallback(function(_, action)
-                            if action ~= "didNavigate" then return end
-                            -- Mark the panel ready so live key/mouse events are routed to it.
-                            -- No evaluateJavaScript here: calling JS from inside a navigation
-                            -- callback re-enters WebKit synchronously and hangs the load sequence.
-                            -- History + theme are injected in keys.show() once the panel is visible.
-                            if not ms.dev._keysReady then
-                                ms.dev._keysReady = true
-                                local _p = hs.mouse.absolutePosition()
-                                ms.dev._mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
-                            end
-                        end)
-                        return panel
-                    end
-
-                    ms.dev.keys = {}
-                    ms.dev.keys.show = function()
-                        if not ms.dev._keysPanel then
-                            ms.dev._keysPanel = _buildKeysPanel()
-                            if not ms.dev._keysPanel then return end
-                        end
-                        ms.dev._keysOpen = true
-                        ms.dev._keysReady = true
-                        ms.playSlot("settingsOpen")
-                        ms.dev._keysPanel:show()
-                        pcall(function() ms.dev._keysPanel:bringToFront(true) end)
-                        _devFadeIn(ms.dev._keysPanel, "keys")
-                        -- Inject history and theme after the panel is visible and WebKit is
-                        -- fully idle.  doAfter(0.1) gives the show animation one frame and
-                        -- ensures navigation is long-settled before evaluateJavaScript runs.
-                        hs.timer.doAfter(0.1, function()
-                            if not ms.dev._keysPanel or not ms.dev._keysOpen then return end
-                            _loadDevHistory(ms.dev._keysPanel, {"input"})
-                            pcall(function() ms.dev._pushMouseState() end)
-                            local tj = _devThemeJS()
-                            if tj ~= "" then
-                                pcall(function() ms.dev._keysPanel:evaluateJavaScript(tj) end)
-                            end
-                        end)
-                        -- Poll mouse position every 100 ms so display stays current.
-                        if ms.dev._mousePoller then ms.dev._mousePoller:stop() end
-                        ms.dev._mousePoller = hs.timer.doEvery(0.1, function()
-                            if not ms.dev._keysPanel then
-                                if ms.dev._mousePoller then
-                                    ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
-                                end
-                                return
-                            end
-                            local _p = hs.mouse.absolutePosition()
-                            local _x, _y = math.floor(_p.x), math.floor(_p.y)
-                            local prev = ms.dev._mousePos
-                            if not prev or _x ~= prev.x or _y ~= prev.y then
-                                ms.dev._mousePos = { x = _x, y = _y }
-                                ms.dev._pushMouseState(_x, _y)
-                            end
-                        end)
-                    end
-                    ms.dev.keys.hide = function()
-                        if ms.dev._mousePoller then
-                            ms.dev._mousePoller:stop(); ms.dev._mousePoller = nil
-                        end
-                        ms.dev._keysReady = false
-                        ms.dev._keysOpen  = false
-                        if ms.dev._keysPanel then
-                            ms.playSlot("settingsClose")
-                            _devFadeOut(ms.dev._keysPanel, "keys", function()
-                                if ms.dev._keysPanel then ms.dev._keysPanel:hide() end
-                            end)
-                        end
-                    end
-                    ms.dev.keys.toggle = function()
-                        if ms.dev._keysOpen then ms.dev.keys.hide()
-                        else ms.dev.keys.show() end
-                    end
-
-                -- END --
-
-                -- Mouse state pusher --
-                    -- Defined here so both the nav callback and the poller can call it.
-                    -- Applies the coordinate transform selected by the user's dropdown.
-                    ms.dev._pushMouseState = function(x, y)
-                        if not ms.dev._keysPanel then return end
-                        local _x = x or (ms.dev._mousePos and ms.dev._mousePos.x) or 0
-                        local _y = y or (ms.dev._mousePos and ms.dev._mousePos.y) or 0
-                        -- Transform raw screen coordinates to the selected reference frame.
-                        local mode = ms.dev._coordMode or "screen"
-                        local tx, ty = _x, _y
-                        if mode == "window" or mode == "windowTR" or mode == "windowBL"
-                            or mode == "windowBR" or mode == "windowCenter" or mode == "ref" then
-                            local win = ms.getTargetWin()
-                            if win then
-                                local f = win:frame()
-                                if mode == "window" then
-                                    tx = _x - f.x
-                                    ty = _y - f.y
-                                elseif mode == "windowTR" then
-                                    tx = _x - (f.x + f.w)
-                                    ty = _y - f.y
-                                elseif mode == "windowBL" then
-                                    tx = _x - f.x
-                                    ty = _y - (f.y + f.h)
-                                elseif mode == "windowBR" then
-                                    tx = _x - (f.x + f.w)
-                                    ty = _y - (f.y + f.h)
-                                elseif mode == "windowCenter" then
-                                    tx = _x - (f.x + f.w / 2)
-                                    ty = _y - (f.y + f.h / 2)
-                                elseif mode == "ref" then
-                                    tx = _x - f.x
-                                    ty = _y - f.y
-                                    tx = math.floor(tx * (1680 / f.w) + 0.5)
-                                    ty = math.floor(ty * (1044 / f.h) + 0.5)
-                                end
-                            end
-                        elseif mode == "screenCenter" then
-                            local sf = hs.screen.mainScreen():frame()
-                            tx = _x - math.floor(sf.w / 2)
-                            ty = _y - math.floor(sf.h / 2)
-                        end
-                        local j = string.format('{"x":%d,"y":%d}', math.floor(tx), math.floor(ty))
-                        pcall(function()
-                            ms.dev._keysPanel:evaluateJavaScript("updateMouseState(" .. j .. ")")
-                        end)
-                    end
-
-                -- END --
-
-                -- Dev step logger (call from macros to trace execution) --
-                    ms.dev.step = function(msg)
-                        local entry = {
-                            type = "step",
-                            ts   = os.date("%H:%M:%S"),
-                            msg  = tostring(msg or ""),
-                        }
-                        -- Write to log files.
-                        if ms.dev.log then ms.dev.log(entry) end
-                        -- Also send directly to watcher panel for live display.
-                        if ms.dev._watcherPanel then
-                            local ok, j = pcall(hs.json.encode, entry)
-                            if ok then
-                                pcall(function()
-                                    ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
-                                end)
-                            end
-                        end
-                    end
-
-                -- END --
-
-                -- Window Monitor --
-                    local _ucWindow = hs.webview.usercontent.new("msWindow")
-                    _ucWindow:setCallback(function(msg)
-                        local ok, data = pcall(hs.json.decode, msg.body)
-                        if not ok or type(data) ~= "table" then return end
-                        if data.action == "clear" then
-                            ms.dev._windowHistory = {}
-                        elseif data.action == "close" then
-                            ms.dev.window.hide()
-                        elseif data.action == "move" and ms.dev._windowPanelPos then
-                            ms.dev._windowPanelPos.x = ms.dev._windowPanelPos.x + (data.dx or 0)
-                            ms.dev._windowPanelPos.y = ms.dev._windowPanelPos.y + (data.dy or 0)
-                            if ms.dev._windowPanel then
-                                pcall(function() ms.dev._windowPanel:frame(ms.dev._windowPanelPos) end)
-                            end
-                        elseif data.action == "playSlot" and data.slot then
-                            ms.playSlot(data.slot)
-                        end
-                    end)
-
-                    ms.dev._windowHistory = {}
-                    ms.dev._windowMaxHistory = 80
-                    ms.dev._windowLast = nil  -- last focused window id, for change detection
-
-                    -- Push an entry into the panel and history ring buffer.
-                    local function _pushWindowEvent(entry)
-                        table.insert(ms.dev._windowHistory, entry)
-                        if #ms.dev._windowHistory > ms.dev._windowMaxHistory then
-                            table.remove(ms.dev._windowHistory, 1)
-                        end
-                        if ms.dev._windowPanel then
-                            local ok, j = pcall(hs.json.encode, entry)
-                            if ok then
-                                pcall(function()
-                                    ms.dev._windowPanel:evaluateJavaScript(
-                                        "appendEntry(" .. j .. ");updateCurrentWindow(" .. j .. ")"
-                                    )
-                                end)
-                            end
-                        end
-                    end
-
-                    -- Builds the window monitor WebView (hidden). Pre-warmed at startup.
-                    local function _buildWindowPanel()
-                        local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 360, 480
-                        local x = screen.x + screen.w - w - 110
-                        local y = screen.y + 68
-                        local panel = hs.webview.new({ x=x, y=y, w=w, h=h },
-                            { developerExtrasEnabled = true }, _ucWindow)
-                        if not panel then return nil end
-                        pcall(function() panel:windowStyle(0) end)
-                        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-                        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                        pcall(function() panel:shadow(true) end)
-                        local f = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
-                        if f then panel:html(f:read("*all"), _devBase); f:close() end
-                        ms.dev._windowPanelPos = { x=x, y=y, w=w, h=h }
-                        panel:navigationCallback(function(_, action)
-                            if action == "navigating" then return end
-                            hs.timer.doAfter(0, function()
-                                local tj = _devThemeJS()
-                                if tj ~= "" then pcall(function() panel:evaluateJavaScript(tj) end) end
-                                if #ms.dev._windowHistory > 0 then
-                                    local ok, j = pcall(hs.json.encode, ms.dev._windowHistory)
-                                    if ok then pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end) end
-                                end
-                                local win = hs.window.focusedWindow()
-                                if win then
-                                    local app   = (win:application() and win:application():name()) or "?"
-                                    local title = win:title() or ""
-                                    local wf    = win:frame()
-                                    local ok2, j2 = pcall(hs.json.encode, {
-                                        type="focus", ts=os.time(),
-                                        app=app, title=title,
-                                        w=math.floor(wf.w), h=math.floor(wf.h),
-                                        x=math.floor(wf.x), y=math.floor(wf.y),
-                                    })
-                                    if ok2 then pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end) end
-                                end
-                            end)
-                        end)
-                        return panel
-                    end
-
-                    ms.dev.window = {}
-                    ms.dev.window.show = function()
-                        if not ms.dev._windowPanel then
-                            ms.dev._windowPanel = _buildWindowPanel()
-                            if not ms.dev._windowPanel then return end
-                        end
-                        ms.dev._windowOpen = true
-                        ms.playSlot("settingsOpen")
-                        ms.dev._windowPanel:show()
-                        pcall(function() ms.dev._windowPanel:bringToFront(true) end)
-                        _devFadeIn(ms.dev._windowPanel, "window")
-                        -- Poll every 0.4 s for focused window changes.
-                        if ms.dev._windowPoller then ms.dev._windowPoller:stop() end
-                        ms.dev._windowPoller = hs.timer.doEvery(0.4, function()
-                            if not ms.dev._windowOpen or not ms.dev._windowPanel then
-                                if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
-                                return
-                            end
-                            local win = hs.window.focusedWindow()
-                            if not win then return end
-                            local winId = win:id()
-                            if winId == ms.dev._windowLast then return end
-                            ms.dev._windowLast = winId
-                            local app   = (win:application() and win:application():name()) or "?"
-                            local title = win:title() or ""
-                            local f     = win:frame()
-                            _pushWindowEvent({
-                                type="focus", ts=os.time(),
-                                app=app, title=title,
-                                w=math.floor(f.w), h=math.floor(f.h),
-                                x=math.floor(f.x), y=math.floor(f.y),
-                            })
-                        end)
-                    end
-                    ms.dev.window.hide = function()
-                        if ms.dev._windowPoller then ms.dev._windowPoller:stop(); ms.dev._windowPoller = nil end
-                        ms.dev._windowOpen = false
-                        if ms.dev._windowPanel then
-                            ms.playSlot("settingsClose")
-                            local panel = ms.dev._windowPanel
-                            ms.dev._windowPanel = nil  -- nil immediately to stop pollers/event dispatch
-                            _devFadeOut(panel, "window", function()
-                                if panel then panel:hide() end
-                            end)
-                        end
-                    end
-                    ms.dev.window.toggle = function()
-                        if ms.dev._windowOpen then ms.dev.window.hide()
-                        else ms.dev.window.show() end
-                    end
-
-                    -- Pre-warm all four developer panels (hidden) so they load instantly
-                    -- when the user first opens them.  Called from startup after a delay
-                    -- so it doesn't compete with the main settings panel prewarm.
-                    -- Each builder is a local in this scope, so upvalues resolve correctly.
-                    ms.dev.prewarm = function()
-                        if not ms.dev._consolePanel then
-                            ms.dev._consolePanel = _buildConsolePanel()
-                        end
-                        if not ms.dev._watcherPanel then
-                            ms.dev._watcherPanel = _buildWatcherPanel()
-                        end
-                        if not ms.dev._keysPanel then
-                            ms.dev._keysPanel = _buildKeysPanel()
-                        end
-                        if not ms.dev._windowPanel then
-                            ms.dev._windowPanel = _buildWindowPanel()
-                        end
-                    end
-
-                    -- Builds a single named dev panel. Used by the startup loading sequence
-                    -- to spread WebView creation across separate timer ticks so the main
-                    -- thread is never blocked for longer than ~300 ms at a time.
-                    ms.dev.prewarmStep = function(which)
-                        if     which == "console" and not ms.dev._consolePanel then
-                            ms.dev._consolePanel = _buildConsolePanel()
-                        elseif which == "watcher" and not ms.dev._watcherPanel then
-                            ms.dev._watcherPanel = _buildWatcherPanel()
-                        elseif which == "keys"    and not ms.dev._keysPanel    then
-                            ms.dev._keysPanel    = _buildKeysPanel()
-                        elseif which == "window"  and not ms.dev._windowPanel  then
-                            ms.dev._windowPanel  = _buildWindowPanel()
-                        end
-                    end
-                -- END --
-
-            end
-        -- END --
 
         -- 13. Safety Nets --
             -- Load ms_macros.lua inside a restricted sandbox environment.

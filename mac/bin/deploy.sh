@@ -22,6 +22,9 @@ cp "$REPO/ui/ms_settings_ui.html" "$HS/ui/ms_settings_ui.html" 2>/dev/null || tr
 # Copy Guardian spoon.
 cp -R "$REPO/mac/Spoons/MsGuardian.spoon" "$HS/Spoons/MsGuardian.spoon" 2>/dev/null || true
 
+# Copy MsDevTools spoon.
+cp -R "$REPO/mac/Spoons/MsDevTools.spoon" "$HS/Spoons/MsDevTools.spoon" 2>/dev/null || true
+
 # Copy guardian agent script.
 cp "$REPO/mac/bin/ms_guardian_agent.sh" "$HS/bin/ms_guardian_agent.sh" 2>/dev/null || true
 
