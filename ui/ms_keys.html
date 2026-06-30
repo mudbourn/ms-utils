@@ -713,6 +713,7 @@
                             entry.down ? "↓" : "↑",
                         ),
                         mkSpan("mouse-name", btnName(entry.button)),
+                        mkSpan("dim", " (" + entry.button + ")"),
                         mkSpan("dim", "  " + entry.x + ", " + entry.y),
                     );
                 } else if (t === "scroll") {
@@ -738,7 +739,7 @@
                 if (entry.type === "key" && entry.down)
                     flagKey(entry.key || "?");
                 if (entry.type === "mouse" && entry.down)
-                    flagMouse(btnName(entry.button));
+                    flagMouse(btnName(entry.button) + " (" + entry.button + ")");
 
                 const t = entry.type;
                 const isMouseSide =
@@ -827,7 +828,7 @@
                 btns.forEach((b) => {
                     const p = document.createElement("span");
                     p.className = "pill pill-mouse";
-                    p.textContent = btnName(b);
+                    p.textContent = btnName(b) + " (" + b + ")";
                     row.appendChild(p);
                 });
             }

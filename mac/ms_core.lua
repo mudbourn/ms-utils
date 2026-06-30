@@ -6776,6 +6776,13 @@
                     updateChannel           = ms._updateChannel or "stable",
                     qrOptions               = ms._qrOptions or { macros = true, theme = true, settings = true, ui = true },
                     theme                   = themeOut,
+                    msVersion               = (function()
+                        local p = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
+                        local f = io.open(p, "r")
+                        if not f then return nil end
+                        local ok, m = pcall(hs.json.decode, f:read("*all")); f:close()
+                        return (ok and m and m.version) or nil
+                    end)(),
                 }
             end
 
@@ -8690,7 +8697,7 @@
                     -- Builds the window monitor WebView (hidden). Pre-warmed at startup.
                     local function _buildWindowPanel()
                         local screen = hs.screen.mainScreen():frame()
-                        local w, h   = 480, 480
+                        local w, h   = 360, 480
                         local x = screen.x + screen.w - w - 110
                         local y = screen.y + 68
                         local panel = hs.webview.new({ x=x, y=y, w=w, h=h },

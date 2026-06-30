@@ -2891,16 +2891,14 @@
 
             function buildHelp(body) {
                 const meta = S.macroMeta || {};
-                if (meta.name) {
-                    body.appendChild(
-                        h(
-                            "div",
-                            { cls: "group-label" },
-                            meta.name +
-                                (meta.author ? " — " + meta.author : ""),
-                        ),
-                    );
-                }
+                const ver = S.msVersion || "dev";
+                body.appendChild(
+                    h(
+                        "div",
+                        { cls: "group-label" },
+                        "mudscript Hammerspoon Utilities \u2013 (Version/Build): " + ver,
+                    ),
+                );
 
                 const aboutBtn = actionBtn("About", "", () => {
                     sendToHost({
@@ -2930,6 +2928,14 @@
                 );
                 docBtn.style.flex = "1";
 
+                const githubBtn = actionBtn("GitHub", "", () =>
+                    sendToHost({
+                        action: "openURL",
+                        url: "https://github.com/mudbourn/ms-utils",
+                    }),
+                );
+                githubBtn.style.flex = "1";
+
                 if (S.updateManifestURL || S.updateChannel === "testing") {
                     const _chan = S.updateChannel || "stable";
                     const updateBtn = actionBtn(
@@ -2949,7 +2955,7 @@
                 } else {
                     body.appendChild(btnRow(aboutBtn));
                 }
-                body.appendChild(btnRow(docBtn));
+                body.appendChild(btnRow(docBtn, githubBtn));
             }
 
             // ── Render ─────────────────────────────────────────────────────────
