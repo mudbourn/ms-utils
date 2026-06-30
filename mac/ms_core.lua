@@ -2246,7 +2246,7 @@
                     _lMsgBuffer = {}
                     -- Fade in
                     _lWebView:show()
-                    pcall(function() ms.sound(ms.sounds and ms.sounds["Reset"]) end)
+                    pcall(function() ms.sound(SoundDefaultsDir .. "Reset.wav") end)
                     local step, steps = 0, 6
                     _G._loadTimers.fadeIn = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
                         step = step + 1
