@@ -1,696 +1,696 @@
-1|<!doctype html>
-2|<html lang="en">
-3|    <head>
-4|        <meta charset="UTF-8" />
-5|        <style>
-6|            /* ── Fonts ──────────────────────────────────────────────────────── */
-7|            @font-face {
-8|                font-family: "Almendra";
-9|                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
-10|                font-weight: 400;
-11|                font-style: normal;
-12|            }
-13|            @font-face {
-14|                font-family: "Almendra";
-15|                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
-16|                font-weight: 700;
-17|                font-style: normal;
-18|            }
-19|            @font-face {
-20|                font-family: "Almendra";
-21|                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
-22|                font-weight: 400;
-23|                font-style: italic;
-24|            }
-25|            @font-face {
-26|                font-family: "Almendra";
-27|                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
-28|                font-weight: 700;
-29|                font-style: italic;
-30|            }
-31|
-32|            /* ── Tokens ─────────────────────────────────────────────────────── */
-33|            :root {
-34|                --bg: #0e0e0e;
-35|                --surface: #1a1a1a;
-36|                --surface2: #252525;
-37|                --hover: #333333;
-38|                --accent: #cccccc;
-39|                --accent-hi: #e8e8e8;
-40|                --success: #888888;
-41|                --danger: #d8d8d8;
-42|                --warning: #aaaaaa;
-43|                --text: #d8d8d8;
-44|                --text2: rgba(200, 200, 200, 0.85);
-45|                --text3: rgba(160, 160, 160, 0.55);
-46|                --border: rgba(100, 100, 100, 0.55);
-47|                --radius: 2px;
-48|                --radius-s: 1px;
-49|                /* panel extras */
-50|                --mouse: #aaaaaa;
-51|                --scroll: #888888;
-52|                --border-dim: rgba(100, 100, 100, 0.18);
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            /* ── Fonts ──────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
+
+            /* ── Tokens ─────────────────────────────────────────────────────── */
+            :root {
+                --bg: #0e0e0e;
+                --surface: #1a1a1a;
+                --surface2: #252525;
+                --hover: #333333;
+                --accent: #cccccc;
+                --accent-hi: #e8e8e8;
+                --success: #888888;
+                --danger: #d8d8d8;
+                --warning: #aaaaaa;
+                --text: #d8d8d8;
+                --text2: rgba(200, 200, 200, 0.85);
+                --text3: rgba(160, 160, 160, 0.55);
+                --border: rgba(100, 100, 100, 0.55);
+                --radius: 2px;
+                --radius-s: 1px;
+                /* panel extras */
+                --mouse: #aaaaaa;
+                --scroll: #888888;
+                --border-dim: rgba(100, 100, 100, 0.18);
                 --accent-glow: rgba(196, 26, 26, 0.4);
                 --accent-glow-faint: rgba(196, 26, 26, 0.12);
                 --danger-glow: rgba(212, 32, 32, 0.6);
                 --danger-border: rgba(212, 32, 32, 0.3);
-53|                --border-faint: rgba(100, 100, 100, 0.08);
-54|                --shadow-panel: rgba(0, 0, 0, 0.4);
-55|            }
-56|
-57|            /* ── Reset ──────────────────────────────────────────────────────── */
-58|            *,
-59|            *::before,
-60|            *::after {
-61|                box-sizing: border-box;
-62|                margin: 0;
-63|                padding: 0;
-64|                user-select: none;
-65|                -webkit-user-select: none;
-66|            }
-67|            html,
-68|            body {
-69|                height: 100%;
-70|                overflow: hidden;
-71|                background: var(--bg);
-72|            }
-73|            body {
-74|                font-family: Arial, "Almendra", sans-serif;
-75|                font-size: 13px;
-76|                color: var(--text);
-77|                -webkit-font-smoothing: antialiased;
-78|                display: flex;
-79|                flex-direction: column;
-80|                position: relative;
-81|            }
-82|            button {
-83|                cursor: pointer;
-84|                border: none;
-85|                background: none;
-86|                color: inherit;
-87|                font: inherit;
-88|            }
-89|
-90|            /* ── Header ─────────────────────────────────────────────────────── */
-91|            #header {
-92|                display: flex;
-93|                align-items: center;
-94|                gap: 8px;
-95|                padding: 10px 12px 8px;
-96|                background: var(--surface);
-97|                border-bottom: 1px solid var(--border);
-98|                box-shadow: 0 1px 12px
-99|                    color-mix(in srgb, var(--accent) 12%, transparent);
-100|                flex-shrink: 0;
-101|                -webkit-app-region: drag;
-102|            }
-103|            #panel-title {
-104|                flex: 1;
-105|                font-weight: 600;
-106|                font-size: 13px;
-107|            }
-108|            .header-btns {
-109|                display: flex;
-110|                gap: 4px;
-111|                -webkit-app-region: no-drag;
-112|            }
-113|            .btn-ghost {
-114|                padding: 3px 10px;
-115|                border-radius: 20px;
-116|                font-size: 11px;
-117|                font-weight: 600;
-118|                background: var(--surface2);
-119|                color: var(--text2);
-120|                transition: opacity 0.15s;
-121|            }
-122|            .btn-ghost:hover {
-123|                opacity: 0.8;
-124|            }
-125|            .btn-close {
-126|                width: 22px;
-127|                height: 22px;
-128|                border-radius: 50%;
-129|                background: var(--surface2);
-130|                color: var(--text2);
-131|                font-size: 12px;
-132|                display: flex;
-133|                align-items: center;
-134|                justify-content: center;
-135|                transition: background 0.15s;
-136|            }
-137|            .btn-close:hover {
-138|                background: var(--hover);
-139|                color: var(--text);
-140|            }
-141|            #filter-btn.has-mutes {
-142|                color: var(--accent);
-143|            }
-144|
-145|            /* ── Log area ───────────────────────────────────────────────────── */
-146|            #log {
-147|                flex: 1;
-148|                overflow-y: auto;
-149|                padding: 4px 0 8px;
-150|                min-height: 0;
-151|            }
-152|            #log::-webkit-scrollbar {
-153|                width: 5px;
-154|            }
-155|            #log::-webkit-scrollbar-track {
-156|                background: transparent;
-157|            }
-158|            #log::-webkit-scrollbar-thumb {
-159|                background: var(--border);
-160|                border-radius: 3px;
-161|            }
-162|
-163|            /* ── Entry rows ─────────────────────────────────────────────────── */
-164|            .entry {
-165|                display: flex;
-166|                align-items: flex-start;
-167|                gap: 6px;
-168|                padding: 5px 12px;
-169|                font-size: 12px;
-170|                border-bottom: 1px solid var(--border-dim);
-171|            }
-172|            .entry:hover {
-173|                background: var(--surface);
-174|            }
-175|            .ts {
-176|                color: var(--text3);
-177|                font:
-178|                    10px "SF Mono",
-179|                    Menlo,
-180|                    monospace;
-181|                flex-shrink: 0;
-182|                padding-top: 1px;
-183|                min-width: 52px;
-184|            }
-185|            .badge {
-186|                flex-shrink: 0;
-187|                padding: 1px 5px;
-188|                border-radius: var(--radius-s);
-189|                font:
-190|                    700 10px "SF Mono",
-191|                    Menlo,
-192|                    monospace;
-193|                letter-spacing: 0.05em;
-194|                text-transform: uppercase;
-195|            }
-196|            .badge-print {
-197|                background: color-mix(in srgb, var(--text2) 8%, transparent);
-198|                color: var(--text2);
-199|            }
-200|            .badge-error {
-201|                background: color-mix(in srgb, var(--danger) 12%, transparent);
-202|                color: var(--danger);
-203|            }
-204|            .dot {
-205|                font-size: 7px;
-206|                color: var(--accent);
-207|                flex-shrink: 0;
-208|                padding-top: 2px;
-209|            }
-210|            .msg {
-211|                color: var(--text);
-212|                word-break: break-word;
-213|                white-space: pre-wrap;
-214|                flex: 1;
-215|                min-width: 0;
-216|            }
-217|            .msg .sub-sep {
-218|                color: var(--text3);
-219|                margin: 0 3px;
-220|            }
-221|            .msg .sub-name {
-222|                color: var(--text);
-223|            }
-224|            .pill {
-225|                display: inline-flex;
-226|                align-items: center;
-227|                padding: 1px 7px;
-228|                border-radius: 20px;
-229|                font:
-230|                    700 10px "SF Mono",
-231|                    Menlo,
-232|                    monospace;
-233|                background: var(--surface2);
-234|                border: 1px solid var(--border);
-235|                color: var(--text2);
-236|                flex-shrink: 0;
-237|            }
-238|
-239|            /* ── Step rows ──────────────────────────────────────────────────── */
-240|            .step {
-241|                display: flex;
-242|                align-items: flex-start;
-243|                gap: 6px;
-244|                padding: 3px 12px 3px 36px;
-245|                font-size: 11px;
-246|                opacity: 0.45;
-247|                border-bottom: 1px solid var(--border-faint);
-248|            }
-249|            .step:hover {
-250|                opacity: 0.7;
-251|            }
-252|            .step-msg {
-253|                color: var(--text2);
-254|                word-break: break-word;
-255|                flex: 1;
-256|            }
-257|
-258|            /* ── Mute rules — toggled by classes on #log ────────────────────── */
-259|            #log.mute-wait .step[data-cat="wait"] {
-260|                display: none;
-261|            }
-262|            #log.mute-sound .step[data-cat="sound"] {
-263|                display: none;
-264|            }
-265|            #log.mute-cam .step[data-cat="cam"] {
-266|                display: none;
-267|            }
-268|            #log.mute-keys .step[data-cat="keys"] {
-269|                display: none;
-270|            }
-271|            #log.mute-mouse .step[data-cat="mouse"] {
-272|                display: none;
-273|            }
-274|            #log.mute-scroll .step[data-cat="scroll"] {
-275|                display: none;
-276|            }
-277|            #log.mute-copy .step[data-cat="copy"] {
-278|                display: none;
-279|            }
-280|
-281|            /* ── Filter panel ───────────────────────────────────────────────── */
-282|            #filter-panel {
-283|                position: absolute;
-284|                bottom: 0;
-285|                right: 0;
-286|                width: 200px;
-287|                background: var(--surface);
-288|                border-top: 1px solid var(--border);
-289|                border-left: 1px solid var(--border);
-290|                border-radius: var(--radius) 0 0 0;
-291|                padding: 8px 0;
-292|                display: none;
-293|                box-shadow: -2px -2px 12px var(--shadow-panel);
-294|                z-index: 10;
-295|            }
-296|            #filter-panel.open {
-297|                display: block;
-298|            }
-299|            .filter-row {
-300|                display: flex;
-301|                align-items: center;
-302|                gap: 8px;
-303|                padding: 5px 12px;
-304|                cursor: pointer;
-305|            }
-306|            .filter-row:hover {
-307|                background: var(--hover);
-308|            }
-309|            .filter-row.muted .filter-label {
-310|                opacity: 0.4;
-311|                text-decoration: line-through;
-312|            }
-313|            .filter-dot {
-314|                width: 8px;
-315|                height: 8px;
-316|                border-radius: 50%;
-317|                flex-shrink: 0;
-318|                /* --dot-clr is set per-row via JS (inherits into this child) */
-319|                background: var(--dot-clr, var(--text3));
-320|                transition:
-321|                    background 0.1s,
-322|                    opacity 0.1s;
-323|            }
-324|            /* Higher specificity wins — grays out the dot when muted */
-325|            .filter-row.muted .filter-dot {
-326|                background: var(--border);
-327|                opacity: 0.6;
-328|            }
-329|            .filter-label {
-330|                font-size: 12px;
-331|                flex: 1;
-332|                color: var(--text);
-333|            }
-334|            .filter-sep {
-335|                height: 1px;
-336|                background: var(--border);
-337|                margin: 4px 12px;
-338|            }
-339|            .filter-clear {
-340|                padding: 5px 12px;
-341|                font-size: 11px;
-342|                color: var(--text2);
-343|                cursor: pointer;
-344|                text-align: center;
-345|            }
-346|            .filter-clear:hover {
-347|                color: var(--text);
-348|            }
-349|        </style>
-350|    </head>
-351|    <body>
-352|        <div id="header">
-353|            <span id="panel-title">mudscript — macro monitor</span>
-354|            <div class="header-btns">
-355|                <button
-356|                    class="btn-ghost"
-357|                    id="filter-btn"
-358|                    onmouseenter="playSlot('hover')"
-359|                    onclick="
-360|                        playSlot('interact');
-361|                        toggleFilterPanel();
-362|                    "
-363|                >
-364|                    filter
-365|                </button>
-366|                <button
-367|                    class="btn-ghost"
-368|                    onmouseenter="playSlot('hover')"
-369|                    onclick="
-370|                        playSlot('interact');
-371|                        clearLog();
-372|                    "
-373|                >
-374|                    Clear
-375|                </button>
-376|                <button
-377|                    class="btn-close"
-378|                    onmouseenter="playSlot('hover')"
-379|                    onclick="
-380|                        playSlot('interact');
-381|                        closePanel();
-382|                    "
-383|                >
-384|                    ✕
-385|                </button>
-386|            </div>
-387|        </div>
-388|
-389|        <div id="log"></div>
-390|
-391|        <!-- Filter panel — absolute bottom-right, injected by JS -->
-392|        <div id="filter-panel"></div>
-393|
-394|        <script>
-395|            "use strict";
-396|
-397|            document.addEventListener("contextmenu", (e) => e.preventDefault());
-398|
-399|            // ── Host communication ─────────────────────────────────────────────
-400|            function sendToHost(msg) {
-401|                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-402|                try {
-403|                    window.webkit.messageHandlers.msWatcher.postMessage(s);
-404|                } catch (e) {}
-405|            }
-406|            function playSlot(slot) {
-407|                sendToHost({ action: "playSlot", slot });
-408|            }
-409|
-410|            // ── Header drag ────────────────────────────────────────────────────
-411|            (function () {
-412|                let _drag = null;
-413|                document
-414|                    .getElementById("header")
-415|                    .addEventListener("mousedown", (e) => {
-416|                        if (e.target.closest(".header-btns")) return;
-417|                        _drag = { ox: e.screenX, oy: e.screenY };
-418|                        const onMove = (ev) => {
-419|                            if (!_drag) return;
-420|                            sendToHost({
-421|                                action: "move",
-422|                                dx: ev.screenX - _drag.ox,
-423|                                dy: ev.screenY - _drag.oy,
-424|                            });
-425|                            _drag.ox = ev.screenX;
-426|                            _drag.oy = ev.screenY;
-427|                        };
-428|                        const onUp = () => {
-429|                            _drag = null;
-430|                            window.removeEventListener("mousemove", onMove);
-431|                            window.removeEventListener("mouseup", onUp);
-432|                        };
-433|                        window.addEventListener("mousemove", onMove);
-434|                        window.addEventListener("mouseup", onUp);
-435|                    });
-436|            })();
-437|
-438|            // Close filter panel when clicking outside it
-439|            document.addEventListener("mousedown", (e) => {
-440|                const panel = document.getElementById("filter-panel");
-441|                const btn = document.getElementById("filter-btn");
-442|                if (!panel.contains(e.target) && !btn.contains(e.target)) {
-443|                    closeFilterPanel();
-444|                }
-445|            });
-446|
-447|            // ── Scroll helpers ─────────────────────────────────────────────────
-448|            const MAX_ENTRIES = 300;
-449|            const SCROLL_THRESH = 48;
-450|
-451|            function isNearBottom(el) {
-452|                return (
-453|                    el.scrollHeight - el.scrollTop - el.clientHeight <=
-454|                    SCROLL_THRESH
-455|                );
-456|            }
-457|
-458|            // ── Step categories ────────────────────────────────────────────────
-459|            const CATS = [
-460|                { id: "wait", label: "Waits", regex: /\] wait / },
-461|                { id: "sound", label: "Sound calls", regex: /\] sound / },
-462|                { id: "cam", label: "Camera moves", regex: /\] cam\.move/ },
-463|                {
-464|                    id: "keys",
-465|                    label: "Key presses",
-466|                    regex: /\] [↓↑] |\] type /,
-467|                },
-468|                { id: "mouse", label: "Mouse actions", regex: /\] Mouse / },
-469|                { id: "scroll", label: "Scrolls", regex: /\] scroll / },
-470|                { id: "copy", label: "Clipboard", regex: /\] copy/ },
-471|            ];
-472|
-473|            function stepCat(msg) {
-474|                for (const c of CATS) {
-475|                    if (c.regex.test(msg)) return c.id;
-476|                }
-477|                return "other";
-478|            }
-479|
-480|            // ── Mute state ─────────────────────────────────────────────────────
-481|            const _muted = new Set();
-482|
-483|            function isMuted(cat) {
-484|                return _muted.has(cat);
-485|            }
-486|
-487|            function setMute(cat, on) {
-488|                const log = document.getElementById("log");
-489|                if (on) {
-490|                    _muted.add(cat);
-491|                    log.classList.add("mute-" + cat);
-492|                } else {
-493|                    _muted.delete(cat);
-494|                    log.classList.remove("mute-" + cat);
-495|                }
-496|                _updateFilterUI();
-497|            }
-498|
-499|            function _updateFilterUI() {
-500|                const btn = document.getElementById("filter-btn");
-501|                btn.classList.toggle("has-mutes", _muted.size > 0);
-502|                btn.textContent =
-503|                    _muted.size > 0 ? "filter (" + _muted.size + ")" : "filter";
-504|                CATS.forEach((c) => {
-505|                    const row = document.getElementById("frow-" + c.id);
-506|                    if (row) row.classList.toggle("muted", _muted.has(c.id));
-507|                });
-508|                const action = document.getElementById("filter-action");
-509|                if (action) {
-510|                    action.textContent =
-511|                        _muted.size === CATS.length ? "show all" : "hide all";
-512|                }
-513|            }
-514|
-515|            // ── Build filter panel ─────────────────────────────────────────────
-516|            (function buildFilterPanel() {
-517|                const CAT_DOT_COLORS = {
-518|                    wait: "var(--text3)",
-519|                    sound: "var(--warning)",
-520|                    cam: "var(--success)",
-521|                    keys: "var(--text2)",
-522|                    mouse: "var(--mouse)",
-523|                    scroll: "var(--scroll)",
-524|                    copy: "var(--accent)",
-525|                };
-526|
-527|                const panel = document.getElementById("filter-panel");
-528|
-529|                CATS.forEach((c) => {
-530|                    const row = document.createElement("div");
-531|                    row.className = "filter-row";
-532|                    row.id = "frow-" + c.id;
-533|                    // --dot-clr is inherited by the .filter-dot child
-534|                    row.style.setProperty(
-535|                        "--dot-clr",
-536|                        CAT_DOT_COLORS[c.id] || "var(--text3)",
-537|                    );
-538|
-539|                    const dot = document.createElement("span");
-540|                    dot.className = "filter-dot";
-541|
-542|                    const lbl = document.createElement("span");
-543|                    lbl.className = "filter-label";
-544|                    lbl.textContent = c.label;
-545|
-546|                    row.append(dot, lbl);
-547|                    row.addEventListener("click", () =>
-548|                        setMute(c.id, !isMuted(c.id)),
-549|                    );
-550|                    panel.appendChild(row);
-551|                });
-552|
-553|                const sep = document.createElement("div");
-554|                sep.className = "filter-sep";
-555|                panel.appendChild(sep);
-556|
-557|                const clear = document.createElement("div");
-558|                clear.className = "filter-clear";
-559|                clear.id = "filter-action";
-560|                clear.textContent = "hide all";
-561|                clear.addEventListener("click", () => {
-562|                    if (_muted.size === CATS.length) {
-563|                        [..._muted].forEach((id) => setMute(id, false));
-564|                    } else {
-565|                        CATS.forEach((c) => setMute(c.id, true));
-566|                    }
-567|                });
-568|                panel.appendChild(clear);
-569|            })();
-570|
-571|            function toggleFilterPanel() {
-572|                document
-573|                    .getElementById("filter-panel")
-574|                    .classList.toggle("open");
-575|            }
-576|            function closeFilterPanel() {
-577|                document
-578|                    .getElementById("filter-panel")
-579|                    .classList.remove("open");
-580|            }
-581|
-582|            // ── Entry builder ──────────────────────────────────────────────────
-583|            function buildRow(entry) {
-584|                if (entry.type === "step") {
-585|                    const row = document.createElement("div");
-586|                    row.className = "step";
-587|                    row.dataset.cat = stepCat(entry.msg || "");
-588|
-589|                    const ts = document.createElement("span");
-590|                    ts.className = "ts";
-591|                    ts.textContent = "[" + (entry.ts || "") + "]";
-592|
-593|                    const msg = document.createElement("span");
-594|                    msg.className = "step-msg";
-595|                    msg.textContent = entry.msg || "";
-596|
-597|                    row.append(ts, msg);
-598|                    return row;
-599|                }
-600|
-601|                const row = document.createElement("div");
-602|                row.className = "entry";
-603|
-604|                const ts = document.createElement("span");
-605|                ts.className = "ts";
-606|                ts.textContent = "[" + (entry.ts || "") + "]";
-607|                row.appendChild(ts);
-608|
-609|                if (entry.type === "macro") {
-610|                    row.classList.add("entry-macro");
-611|
-612|                    const dot = document.createElement("span");
-613|                    dot.className = "dot";
-614|                    dot.textContent = "●";
-615|                    row.appendChild(dot);
-616|
-617|                    const msg = document.createElement("span");
-618|                    msg.className = "msg";
-619|                    if (entry.parentLabel) {
-620|                        msg.appendChild(
-621|                            document.createTextNode(entry.parentLabel),
-622|                        );
-623|                        const sep = document.createElement("span");
-624|                        sep.className = "sub-sep";
-625|                        sep.textContent = "›";
-626|                        const sub = document.createElement("span");
-627|                        sub.className = "sub-name";
-628|                        sub.textContent = entry.label || entry.id || "";
-629|                        msg.append(sep, sub);
-630|                    } else {
-631|                        msg.textContent = entry.label || entry.id || "";
-632|                    }
-633|                    row.appendChild(msg);
-634|
-635|                    if (entry.trigger) {
-636|                        const trig = document.createElement("span");
-637|                        trig.className = "pill";
-638|                        trig.textContent = entry.trigger;
-639|                        row.appendChild(trig);
-640|                    }
-641|                } else {
-642|                    const badge = document.createElement("span");
-643|                    badge.className = "badge badge-" + entry.type;
-644|                    badge.textContent = entry.type;
-645|                    row.appendChild(badge);
-646|
-647|                    const msg = document.createElement("span");
-648|                    msg.className = "msg";
-649|                    msg.textContent = entry.msg || "";
-650|                    row.appendChild(msg);
-651|                }
-652|
-653|                return row;
-654|            }
-655|
-656|            // ── Public API ─────────────────────────────────────────────────────
-657|            function appendEntry(entry) {
-658|                const log = document.getElementById("log");
-659|                const atBottom = isNearBottom(log);
-660|                log.appendChild(buildRow(entry));
-661|                while (log.childElementCount > MAX_ENTRIES) {
-662|                    log.removeChild(log.firstElementChild);
-663|                }
-664|                if (atBottom) log.scrollTop = log.scrollHeight;
-665|            }
-666|
-667|            function loadHistory(entries) {
-668|                const log = document.getElementById("log");
-669|                log.innerHTML = "";
-670|                const capped =
-671|                    entries && entries.length > MAX_ENTRIES
-672|                        ? entries.slice(-MAX_ENTRIES)
-673|                        : entries || [];
-674|                const frag = document.createDocumentFragment();
-675|                capped.forEach((e) => frag.appendChild(buildRow(e)));
-676|                log.appendChild(frag);
-677|                log.scrollTop = log.scrollHeight;
-678|            }
-679|
-680|            function clearLog() {
-681|                document.getElementById("log").innerHTML = "";
-682|                sendToHost({ action: "clear" });
-683|            }
-684|
-685|            function closePanel() {
-686|                sendToHost({ action: "close" });
-687|            }
-688|
-689|            // ── Theme ──────────────────────────────────────────────────────────
+                --border-faint: rgba(100, 100, 100, 0.08);
+                --shadow-panel: rgba(0, 0, 0, 0.4);
+            }
+
+            /* ── Reset ──────────────────────────────────────────────────────── */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+            html,
+            body {
+                height: 100%;
+                overflow: hidden;
+                background: var(--bg);
+            }
+            body {
+                font-family: Arial, "Almendra", sans-serif;
+                font-size: 13px;
+                color: var(--text);
+                -webkit-font-smoothing: antialiased;
+                display: flex;
+                flex-direction: column;
+                position: relative;
+            }
+            button {
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: inherit;
+                font: inherit;
+            }
+
+            /* ── Header ─────────────────────────────────────────────────────── */
+            #header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 10px 12px 8px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px
+                    color-mix(in srgb, var(--accent) 12%, transparent);
+                flex-shrink: 0;
+                -webkit-app-region: drag;
+            }
+            #panel-title {
+                flex: 1;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            .header-btns {
+                display: flex;
+                gap: 4px;
+                -webkit-app-region: no-drag;
+            }
+            .btn-ghost {
+                padding: 3px 10px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                background: var(--surface2);
+                color: var(--text2);
+                transition: opacity 0.15s;
+            }
+            .btn-ghost:hover {
+                opacity: 0.8;
+            }
+            .btn-close {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+            }
+            .btn-close:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+            #filter-btn.has-mutes {
+                color: var(--accent);
+            }
+
+            /* ── Log area ───────────────────────────────────────────────────── */
+            #log {
+                flex: 1;
+                overflow-y: auto;
+                padding: 4px 0 8px;
+                min-height: 0;
+            }
+            #log::-webkit-scrollbar {
+                width: 5px;
+            }
+            #log::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            #log::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 3px;
+            }
+
+            /* ── Entry rows ─────────────────────────────────────────────────── */
+            .entry {
+                display: flex;
+                align-items: flex-start;
+                gap: 6px;
+                padding: 5px 12px;
+                font-size: 12px;
+                border-bottom: 1px solid var(--border-dim);
+            }
+            .entry:hover {
+                background: var(--surface);
+            }
+            .ts {
+                color: var(--text3);
+                font:
+                    10px "SF Mono",
+                    Menlo,
+                    monospace;
+                flex-shrink: 0;
+                padding-top: 1px;
+                min-width: 52px;
+            }
+            .badge {
+                flex-shrink: 0;
+                padding: 1px 5px;
+                border-radius: var(--radius-s);
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+            }
+            .badge-print {
+                background: color-mix(in srgb, var(--text2) 8%, transparent);
+                color: var(--text2);
+            }
+            .badge-error {
+                background: color-mix(in srgb, var(--danger) 12%, transparent);
+                color: var(--danger);
+            }
+            .dot {
+                font-size: 7px;
+                color: var(--accent);
+                flex-shrink: 0;
+                padding-top: 2px;
+            }
+            .msg {
+                color: var(--text);
+                word-break: break-word;
+                white-space: pre-wrap;
+                flex: 1;
+                min-width: 0;
+            }
+            .msg .sub-sep {
+                color: var(--text3);
+                margin: 0 3px;
+            }
+            .msg .sub-name {
+                color: var(--text);
+            }
+            .pill {
+                display: inline-flex;
+                align-items: center;
+                padding: 1px 7px;
+                border-radius: 20px;
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                color: var(--text2);
+                flex-shrink: 0;
+            }
+
+            /* ── Step rows ──────────────────────────────────────────────────── */
+            .step {
+                display: flex;
+                align-items: flex-start;
+                gap: 6px;
+                padding: 3px 12px 3px 36px;
+                font-size: 11px;
+                opacity: 0.45;
+                border-bottom: 1px solid var(--border-faint);
+            }
+            .step:hover {
+                opacity: 0.7;
+            }
+            .step-msg {
+                color: var(--text2);
+                word-break: break-word;
+                flex: 1;
+            }
+
+            /* ── Mute rules — toggled by classes on #log ────────────────────── */
+            #log.mute-wait .step[data-cat="wait"] {
+                display: none;
+            }
+            #log.mute-sound .step[data-cat="sound"] {
+                display: none;
+            }
+            #log.mute-cam .step[data-cat="cam"] {
+                display: none;
+            }
+            #log.mute-keys .step[data-cat="keys"] {
+                display: none;
+            }
+            #log.mute-mouse .step[data-cat="mouse"] {
+                display: none;
+            }
+            #log.mute-scroll .step[data-cat="scroll"] {
+                display: none;
+            }
+            #log.mute-copy .step[data-cat="copy"] {
+                display: none;
+            }
+
+            /* ── Filter panel ───────────────────────────────────────────────── */
+            #filter-panel {
+                position: absolute;
+                bottom: 0;
+                right: 0;
+                width: 200px;
+                background: var(--surface);
+                border-top: 1px solid var(--border);
+                border-left: 1px solid var(--border);
+                border-radius: var(--radius) 0 0 0;
+                padding: 8px 0;
+                display: none;
+                box-shadow: -2px -2px 12px var(--shadow-panel);
+                z-index: 10;
+            }
+            #filter-panel.open {
+                display: block;
+            }
+            .filter-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 5px 12px;
+                cursor: pointer;
+            }
+            .filter-row:hover {
+                background: var(--hover);
+            }
+            .filter-row.muted .filter-label {
+                opacity: 0.4;
+                text-decoration: line-through;
+            }
+            .filter-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                flex-shrink: 0;
+                /* --dot-clr is set per-row via JS (inherits into this child) */
+                background: var(--dot-clr, var(--text3));
+                transition:
+                    background 0.1s,
+                    opacity 0.1s;
+            }
+            /* Higher specificity wins — grays out the dot when muted */
+            .filter-row.muted .filter-dot {
+                background: var(--border);
+                opacity: 0.6;
+            }
+            .filter-label {
+                font-size: 12px;
+                flex: 1;
+                color: var(--text);
+            }
+            .filter-sep {
+                height: 1px;
+                background: var(--border);
+                margin: 4px 12px;
+            }
+            .filter-clear {
+                padding: 5px 12px;
+                font-size: 11px;
+                color: var(--text2);
+                cursor: pointer;
+                text-align: center;
+            }
+            .filter-clear:hover {
+                color: var(--text);
+            }
+        </style>
+    </head>
+    <body>
+        <div id="header">
+            <span id="panel-title">mudscript — macro monitor</span>
+            <div class="header-btns">
+                <button
+                    class="btn-ghost"
+                    id="filter-btn"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        toggleFilterPanel();
+                    "
+                >
+                    filter
+                </button>
+                <button
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        clearLog();
+                    "
+                >
+                    Clear
+                </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        closePanel();
+                    "
+                >
+                    ✕
+                </button>
+            </div>
+        </div>
+
+        <div id="log"></div>
+
+        <!-- Filter panel — absolute bottom-right, injected by JS -->
+        <div id="filter-panel"></div>
+
+        <script>
+            "use strict";
+
+            document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+            // ── Host communication ─────────────────────────────────────────────
+            function sendToHost(msg) {
+                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
+                try {
+                    window.webkit.messageHandlers.msWatcher.postMessage(s);
+                } catch (e) {}
+            }
+            function playSlot(slot) {
+                sendToHost({ action: "playSlot", slot });
+            }
+
+            // ── Header drag ────────────────────────────────────────────────────
+            (function () {
+                let _drag = null;
+                document
+                    .getElementById("header")
+                    .addEventListener("mousedown", (e) => {
+                        if (e.target.closest(".header-btns")) return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            sendToHost({
+                                action: "move",
+                                dx: ev.screenX - _drag.ox,
+                                dy: ev.screenY - _drag.oy,
+                            });
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+            })();
+
+            // Close filter panel when clicking outside it
+            document.addEventListener("mousedown", (e) => {
+                const panel = document.getElementById("filter-panel");
+                const btn = document.getElementById("filter-btn");
+                if (!panel.contains(e.target) && !btn.contains(e.target)) {
+                    closeFilterPanel();
+                }
+            });
+
+            // ── Scroll helpers ─────────────────────────────────────────────────
+            const MAX_ENTRIES = 300;
+            const SCROLL_THRESH = 48;
+
+            function isNearBottom(el) {
+                return (
+                    el.scrollHeight - el.scrollTop - el.clientHeight <=
+                    SCROLL_THRESH
+                );
+            }
+
+            // ── Step categories ────────────────────────────────────────────────
+            const CATS = [
+                { id: "wait", label: "Waits", regex: /\] wait / },
+                { id: "sound", label: "Sound calls", regex: /\] sound / },
+                { id: "cam", label: "Camera moves", regex: /\] cam\.move/ },
+                {
+                    id: "keys",
+                    label: "Key presses",
+                    regex: /\] [↓↑] |\] type /,
+                },
+                { id: "mouse", label: "Mouse actions", regex: /\] Mouse / },
+                { id: "scroll", label: "Scrolls", regex: /\] scroll / },
+                { id: "copy", label: "Clipboard", regex: /\] copy/ },
+            ];
+
+            function stepCat(msg) {
+                for (const c of CATS) {
+                    if (c.regex.test(msg)) return c.id;
+                }
+                return "other";
+            }
+
+            // ── Mute state ─────────────────────────────────────────────────────
+            const _muted = new Set();
+
+            function isMuted(cat) {
+                return _muted.has(cat);
+            }
+
+            function setMute(cat, on) {
+                const log = document.getElementById("log");
+                if (on) {
+                    _muted.add(cat);
+                    log.classList.add("mute-" + cat);
+                } else {
+                    _muted.delete(cat);
+                    log.classList.remove("mute-" + cat);
+                }
+                _updateFilterUI();
+            }
+
+            function _updateFilterUI() {
+                const btn = document.getElementById("filter-btn");
+                btn.classList.toggle("has-mutes", _muted.size > 0);
+                btn.textContent =
+                    _muted.size > 0 ? "filter (" + _muted.size + ")" : "filter";
+                CATS.forEach((c) => {
+                    const row = document.getElementById("frow-" + c.id);
+                    if (row) row.classList.toggle("muted", _muted.has(c.id));
+                });
+                const action = document.getElementById("filter-action");
+                if (action) {
+                    action.textContent =
+                        _muted.size === CATS.length ? "show all" : "hide all";
+                }
+            }
+
+            // ── Build filter panel ─────────────────────────────────────────────
+            (function buildFilterPanel() {
+                const CAT_DOT_COLORS = {
+                    wait: "var(--text3)",
+                    sound: "var(--warning)",
+                    cam: "var(--success)",
+                    keys: "var(--text2)",
+                    mouse: "var(--mouse)",
+                    scroll: "var(--scroll)",
+                    copy: "var(--accent)",
+                };
+
+                const panel = document.getElementById("filter-panel");
+
+                CATS.forEach((c) => {
+                    const row = document.createElement("div");
+                    row.className = "filter-row";
+                    row.id = "frow-" + c.id;
+                    // --dot-clr is inherited by the .filter-dot child
+                    row.style.setProperty(
+                        "--dot-clr",
+                        CAT_DOT_COLORS[c.id] || "var(--text3)",
+                    );
+
+                    const dot = document.createElement("span");
+                    dot.className = "filter-dot";
+
+                    const lbl = document.createElement("span");
+                    lbl.className = "filter-label";
+                    lbl.textContent = c.label;
+
+                    row.append(dot, lbl);
+                    row.addEventListener("click", () =>
+                        setMute(c.id, !isMuted(c.id)),
+                    );
+                    panel.appendChild(row);
+                });
+
+                const sep = document.createElement("div");
+                sep.className = "filter-sep";
+                panel.appendChild(sep);
+
+                const clear = document.createElement("div");
+                clear.className = "filter-clear";
+                clear.id = "filter-action";
+                clear.textContent = "hide all";
+                clear.addEventListener("click", () => {
+                    if (_muted.size === CATS.length) {
+                        [..._muted].forEach((id) => setMute(id, false));
+                    } else {
+                        CATS.forEach((c) => setMute(c.id, true));
+                    }
+                });
+                panel.appendChild(clear);
+            })();
+
+            function toggleFilterPanel() {
+                document
+                    .getElementById("filter-panel")
+                    .classList.toggle("open");
+            }
+            function closeFilterPanel() {
+                document
+                    .getElementById("filter-panel")
+                    .classList.remove("open");
+            }
+
+            // ── Entry builder ──────────────────────────────────────────────────
+            function buildRow(entry) {
+                if (entry.type === "step") {
+                    const row = document.createElement("div");
+                    row.className = "step";
+                    row.dataset.cat = stepCat(entry.msg || "");
+
+                    const ts = document.createElement("span");
+                    ts.className = "ts";
+                    ts.textContent = "[" + (entry.ts || "") + "]";
+
+                    const msg = document.createElement("span");
+                    msg.className = "step-msg";
+                    msg.textContent = entry.msg || "";
+
+                    row.append(ts, msg);
+                    return row;
+                }
+
+                const row = document.createElement("div");
+                row.className = "entry";
+
+                const ts = document.createElement("span");
+                ts.className = "ts";
+                ts.textContent = "[" + (entry.ts || "") + "]";
+                row.appendChild(ts);
+
+                if (entry.type === "macro") {
+                    row.classList.add("entry-macro");
+
+                    const dot = document.createElement("span");
+                    dot.className = "dot";
+                    dot.textContent = "●";
+                    row.appendChild(dot);
+
+                    const msg = document.createElement("span");
+                    msg.className = "msg";
+                    if (entry.parentLabel) {
+                        msg.appendChild(
+                            document.createTextNode(entry.parentLabel),
+                        );
+                        const sep = document.createElement("span");
+                        sep.className = "sub-sep";
+                        sep.textContent = "›";
+                        const sub = document.createElement("span");
+                        sub.className = "sub-name";
+                        sub.textContent = entry.label || entry.id || "";
+                        msg.append(sep, sub);
+                    } else {
+                        msg.textContent = entry.label || entry.id || "";
+                    }
+                    row.appendChild(msg);
+
+                    if (entry.trigger) {
+                        const trig = document.createElement("span");
+                        trig.className = "pill";
+                        trig.textContent = entry.trigger;
+                        row.appendChild(trig);
+                    }
+                } else {
+                    const badge = document.createElement("span");
+                    badge.className = "badge badge-" + entry.type;
+                    badge.textContent = entry.type;
+                    row.appendChild(badge);
+
+                    const msg = document.createElement("span");
+                    msg.className = "msg";
+                    msg.textContent = entry.msg || "";
+                    row.appendChild(msg);
+                }
+
+                return row;
+            }
+
+            // ── Public API ─────────────────────────────────────────────────────
+            function appendEntry(entry) {
+                const log = document.getElementById("log");
+                const atBottom = isNearBottom(log);
+                log.appendChild(buildRow(entry));
+                while (log.childElementCount > MAX_ENTRIES) {
+                    log.removeChild(log.firstElementChild);
+                }
+                if (atBottom) log.scrollTop = log.scrollHeight;
+            }
+
+            function loadHistory(entries) {
+                const log = document.getElementById("log");
+                log.innerHTML = "";
+                const capped =
+                    entries && entries.length > MAX_ENTRIES
+                        ? entries.slice(-MAX_ENTRIES)
+                        : entries || [];
+                const frag = document.createDocumentFragment();
+                capped.forEach((e) => frag.appendChild(buildRow(e)));
+                log.appendChild(frag);
+                log.scrollTop = log.scrollHeight;
+            }
+
+            function clearLog() {
+                document.getElementById("log").innerHTML = "";
+                sendToHost({ action: "clear" });
+            }
+
+            function closePanel() {
+                sendToHost({ action: "close" });
+            }
+
+            // ── Theme ──────────────────────────────────────────────────────────
             // Parse #rrggbb or #rgb -> { r, g, b }
             function hexToRgb(hex) {
                 hex = hex.replace(/^#/, "");
@@ -766,12 +766,11 @@
                     r.setProperty("--radius-s", Math.max(0, t.radius - 1) + "px");
                 }
 
-723|
-724|            // ── Init ───────────────────────────────────────────────────────────
-725|            document.addEventListener("DOMContentLoaded", () => {
-726|                sendToHost({ action: "ready" });
-727|            });
-728|        </script>
-729|    </body>
-730|</html>
-731|
+
+            // ── Init ───────────────────────────────────────────────────────────
+            document.addEventListener("DOMContentLoaded", () => {
+                sendToHost({ action: "ready" });
+            });
+        </script>
+    </body>
+</html>

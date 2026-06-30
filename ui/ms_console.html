@@ -1,619 +1,619 @@
-1|<!doctype html>
-2|<html lang="en">
-3|    <head>
-4|        <meta charset="UTF-8" />
-5|        <style>
-6|            /* ── Fonts ─────────────────────────────────────────────────────────── */
-7|            @font-face {
-8|                font-family: "Almendra";
-9|                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
-10|                font-weight: 400;
-11|                font-style: normal;
-12|            }
-13|            @font-face {
-14|                font-family: "Almendra";
-15|                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
-16|                font-weight: 700;
-17|                font-style: normal;
-18|            }
-19|            @font-face {
-20|                font-family: "Almendra";
-21|                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
-22|                font-weight: 400;
-23|                font-style: italic;
-24|            }
-25|            @font-face {
-26|                font-family: "Almendra";
-27|                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
-28|                font-weight: 700;
-29|                font-style: italic;
-30|            }
-31|
-32|            /* ── Tokens ─────────────────────────────────────────────────────────── */
-33|            :root {
-34|                --bg: #0e0e0e;
-35|                --surface: #1a1a1a;
-36|                --surface2: #252525;
-37|                --hover: #333333;
-38|                --accent: #cccccc;
-39|                --accent-hi: #e8e8e8;
-40|                --success: #888888;
-41|                --danger-bg: #1a1616;
-42|                --danger: #d8d8d8;
-43|                --warning: #aaaaaa;
-44|                --text: #d8d8d8;
-45|                --text2: rgba(200, 200, 200, 0.85);
-46|                --text3: rgba(160, 160, 160, 0.55);
-47|                --border: rgba(100, 100, 100, 0.55);
-48|                --border-dim: rgba(100, 100, 100, 0.18);
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            /* ── Fonts ─────────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+                font-weight: 400;
+                font-style: italic;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+                font-weight: 700;
+                font-style: italic;
+            }
+
+            /* ── Tokens ─────────────────────────────────────────────────────────── */
+            :root {
+                --bg: #0e0e0e;
+                --surface: #1a1a1a;
+                --surface2: #252525;
+                --hover: #333333;
+                --accent: #cccccc;
+                --accent-hi: #e8e8e8;
+                --success: #888888;
+                --danger-bg: #1a1616;
+                --danger: #d8d8d8;
+                --warning: #aaaaaa;
+                --text: #d8d8d8;
+                --text2: rgba(200, 200, 200, 0.85);
+                --text3: rgba(160, 160, 160, 0.55);
+                --border: rgba(100, 100, 100, 0.55);
+                --border-dim: rgba(100, 100, 100, 0.18);
                 --accent-glow: rgba(196, 26, 26, 0.4);
                 --accent-glow-faint: rgba(196, 26, 26, 0.12);
                 --danger-glow: rgba(212, 32, 32, 0.6);
                 --danger-border: rgba(212, 32, 32, 0.3);
-49|                --radius: 2px;
-50|                --radius-s: 1px;
-51|            }
-52|
-53|            /* ── Reset ──────────────────────────────────────────────────────────── */
-54|            *,
-55|            *::before,
-56|            *::after {
-57|                box-sizing: border-box;
-58|                margin: 0;
-59|                padding: 0;
-60|                user-select: none;
-61|                -webkit-user-select: none;
-62|            }
-63|
-64|            html,
-65|            body {
-66|                width: 100%;
-67|                height: 100%;
-68|                overflow: hidden;
-69|                background: var(--bg);
-70|                color: var(--text);
-71|                font-family: Arial, "Almendra", sans-serif;
-72|                font-size: 13px;
-73|                line-height: 1.5;
-74|                -webkit-font-smoothing: antialiased;
-75|            }
-76|
-77|            body {
-78|                display: flex;
-79|                flex-direction: column;
-80|            }
-81|
-82|            button {
-83|                cursor: pointer;
-84|                border: none;
-85|                background: none;
-86|                color: inherit;
-87|                font: inherit;
-88|            }
-89|
-90|            input {
-91|                font: inherit;
-92|                color: inherit;
-93|                background: none;
-94|                border: none;
-95|                outline: none;
-96|            }
-97|
-98|            /* ── Header ─────────────────────────────────────────────────────────── */
-99|            #header {
-100|                display: flex;
-101|                align-items: center;
-102|                gap: 8px;
-103|                padding: 10px 12px 8px;
-104|                background: var(--surface);
-105|                border-bottom: 1px solid var(--border);
-106|                box-shadow: 0 1px 12px
-107|                    color-mix(in srgb, var(--accent) 12%, transparent);
-108|                flex-shrink: 0;
-109|                -webkit-app-region: drag;
-110|            }
-111|
-112|            #panel-title {
-113|                flex: 1;
-114|                font-weight: 600;
-115|                font-size: 13px;
-116|            }
-117|
-118|            .header-btns {
-119|                display: flex;
-120|                gap: 4px;
-121|                -webkit-app-region: no-drag;
-122|            }
-123|
-124|            /* ── Ghost button ────────────────────────────────────────────────────── */
-125|            .btn-ghost {
-126|                flex: 1;
-127|                padding: 5px 8px;
-128|                border-radius: var(--radius-s);
-129|                background: var(--surface2);
-130|                color: var(--text2);
-131|                font-size: 11px;
-132|                font-weight: 500;
-133|                transition: opacity 0.15s;
-134|            }
-135|            .btn-ghost:hover {
-136|                opacity: 0.8;
-137|            }
-138|
-139|            /* In the header bar, ghost buttons should not stretch */
-140|            .header-btns .btn-ghost {
-141|                flex: 0 0 auto;
-142|            }
-143|
-144|            /* ── Close button ────────────────────────────────────────────────────── */
-145|            .btn-close {
-146|                width: 22px;
-147|                height: 22px;
-148|                border-radius: 50%;
-149|                background: var(--surface2);
-150|                color: var(--text2);
-151|                font-size: 12px;
-152|                display: flex;
-153|                align-items: center;
-154|                justify-content: center;
-155|                transition: background 0.15s;
-156|            }
-157|            .btn-close:hover {
-158|                background: var(--hover);
-159|                color: var(--text);
-160|            }
-161|
-162|            /* ── Log area ────────────────────────────────────────────────────────── */
-163|            #log {
-164|                flex: 1;
-165|                overflow-y: auto;
-166|                overflow-x: hidden;
-167|                padding: 4px 0;
-168|                min-height: 0;
-169|                scrollbar-width: thin;
-170|                scrollbar-color: var(--border) transparent;
-171|            }
-172|            #log::-webkit-scrollbar {
-173|                width: 5px;
-174|            }
-175|            #log::-webkit-scrollbar-track {
-176|                background: transparent;
-177|            }
-178|            #log::-webkit-scrollbar-thumb {
-179|                background: var(--border);
-180|                border-radius: var(--radius);
-181|            }
-182|
-183|            /* ── Entry rows ──────────────────────────────────────────────────────── */
-184|            .entry {
-185|                display: flex;
-186|                align-items: flex-start;
-187|                gap: 6px;
-188|                padding: 5px 12px;
-189|                font-size: 12px;
-190|                border-bottom: 1px solid var(--border-dim);
-191|            }
-192|            .entry:hover {
-193|                background: var(--surface);
-194|            }
-195|
-196|            .ts {
-197|                color: var(--text3);
-198|                font:
-199|                    10px "SF Mono",
-200|                    Menlo,
-201|                    monospace;
-202|                flex-shrink: 0;
-203|                padding-top: 1px;
-204|                min-width: 52px;
-205|            }
-206|
-207|            /* ── Badges ──────────────────────────────────────────────────────────── */
-208|            .badge {
-209|                flex-shrink: 0;
-210|                padding: 1px 5px;
-211|                border-radius: var(--radius-s);
-212|                font:
-213|                    700 10px "SF Mono",
-214|                    Menlo,
-215|                    monospace;
-216|                letter-spacing: 0.05em;
-217|                text-transform: uppercase;
-218|                border: 1px solid transparent;
-219|            }
-220|
-221|            .badge-print {
-222|                background: var(--surface2);
-223|                color: var(--text2);
-224|                border-color: var(--border);
-225|            }
-226|
-227|            .badge-result {
-228|                background: color-mix(in srgb, var(--success) 20%, transparent);
-229|                color: var(--success);
-230|                border-color: color-mix(
-231|                    in srgb,
-232|                    var(--success) 45%,
-233|                    transparent
-234|                );
-235|            }
-236|
-237|            .badge-error {
-238|                background: color-mix(in srgb, var(--danger) 20%, transparent);
-239|                color: var(--danger);
-240|                border-color: color-mix(
-241|                    in srgb,
-242|                    var(--danger) 45%,
-243|                    transparent
-244|                );
-245|            }
-246|
-247|            .badge-macro {
-248|                background: color-mix(in srgb, var(--accent) 20%, transparent);
-249|                color: var(--accent);
-250|                border-color: color-mix(
-251|                    in srgb,
-252|                    var(--accent) 45%,
-253|                    transparent
-254|                );
-255|            }
-256|
-257|            .badge-key {
-258|                background: var(--surface2);
-259|                color: var(--text2);
-260|                border-color: var(--border);
-261|            }
-262|
-263|            .badge-mouse {
-264|                background: color-mix(in srgb, var(--warning) 20%, transparent);
-265|                color: var(--warning);
-266|                border-color: color-mix(
-267|                    in srgb,
-268|                    var(--warning) 45%,
-269|                    transparent
-270|                );
-271|            }
-272|
-273|            .badge-input {
-274|                background: transparent;
-275|                color: var(--text2);
-276|                font-style: italic;
-277|                border-color: transparent;
-278|            }
-279|
-280|            /* ── Message text ────────────────────────────────────────────────────── */
-281|            .msg {
-282|                flex: 1;
-283|                word-break: break-word;
-284|                white-space: pre-wrap;
-285|            }
-286|
-287|            .entry-result .msg,
-288|            .entry-error .msg,
-289|            .entry-input .msg {
-290|                font:
-291|                    12px "SF Mono",
-292|                    Menlo,
-293|                    monospace;
-294|            }
-295|
-296|            .entry-error .msg {
-297|                color: var(--danger);
-298|            }
-299|
-300|            .entry-input .msg {
-301|                color: var(--text2);
-302|                font-style: italic;
-303|            }
-304|
-305|            /* ── Pill ────────────────────────────────────────────────────────────── */
-306|            .pill {
-307|                display: inline-flex;
-308|                align-items: center;
-309|                padding: 1px 7px;
-310|                border-radius: 20px;
-311|                font:
-312|                    700 10px "SF Mono",
-313|                    Menlo,
-314|                    monospace;
-315|                background: var(--surface2);
-316|                border: 1px solid var(--border);
-317|                color: var(--text2);
-318|            }
-319|
-320|            /* ── Input bar ───────────────────────────────────────────────────────── */
-321|            #inputbar {
-322|                display: flex;
-323|                align-items: center;
-324|                gap: 8px;
-325|                padding: 8px 12px;
-326|                background: var(--surface);
-327|                border-top: 1px solid var(--border);
-328|                flex-shrink: 0;
-329|            }
-330|
-331|            #code-input {
-332|                flex: 1;
-333|                background: var(--surface2);
-334|                border: 1px solid var(--border);
-335|                border-radius: var(--radius);
-336|                padding: 5px 8px;
-337|                color: var(--text);
-338|                font:
-339|                    12px "SF Mono",
-340|                    Menlo,
-341|                    monospace;
-342|                outline: none;
-343|                transition: border-color 0.15s;
-344|                user-select: text;
-345|                -webkit-user-select: text;
-346|            }
-347|            #code-input::placeholder {
-348|                color: var(--text2);
-349|                opacity: 0.55;
-350|            }
-351|            #code-input:focus {
-352|                border-color: var(--accent);
-353|            }
-354|
-355|            #run-btn {
-356|                padding: 5px 12px;
-357|                border-radius: var(--radius);
-358|                font-size: 11px;
-359|                font-weight: 700;
-360|                background: var(--accent);
-361|                color: var(--bg);
-362|                transition: opacity 0.15s;
-363|                -webkit-app-region: no-drag;
-364|            }
-365|            #run-btn:hover {
-366|                opacity: 0.85;
-367|            }
-368|        </style>
-369|    </head>
-370|    <body>
-371|        <!-- Header -->
-372|        <div id="header">
-373|            <span id="panel-title">mudscript — console</span>
-374|            <div class="header-btns">
-375|                <button
-376|                    class="btn-ghost"
-377|                    onmouseenter="playSlot('hover')"
-378|                    onclick="
-379|                        playSlot('interact');
-380|                        doClear();
-381|                    "
-382|                >
-383|                    Clear
-384|                </button>
-385|                <button
-386|                    class="btn-close"
-387|                    onmouseenter="playSlot('hover')"
-388|                    onclick="
-389|                        playSlot('back');
-390|                        closePanel();
-391|                    "
-392|                >
-393|                    ✕
-394|                </button>
-395|            </div>
-396|        </div>
-397|
-398|        <!-- Log -->
-399|        <div id="log"></div>
-400|
-401|        <!-- Input bar -->
-402|        <div id="inputbar">
-403|            <input
-404|                id="code-input"
-405|                type="text"
-406|                placeholder="> enter lua…"
-407|                autocomplete="off"
-408|                spellcheck="false"
-409|            />
-410|            <button
-411|                id="run-btn"
-412|                onmouseenter="playSlot('hover')"
-413|                onclick="
-414|                    playSlot('interact');
-415|                    doRun();
-416|                "
-417|            >
-418|                Run
-419|            </button>
-420|        </div>
-421|
-422|        <script>
-423|            "use strict";
-424|
-425|            document.addEventListener("contextmenu", (e) => e.preventDefault());
-426|
-427|            // ── Constants ─────────────────────────────────────────────────────────
-428|            const MAX_ENTRIES = 500;
-429|            const SCROLL_THRESH = 60;
-430|
-431|            // ── Host bridge ───────────────────────────────────────────────────────
-432|            function sendToHost(msg) {
-433|                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-434|                try {
-435|                    window.webkit.messageHandlers.msConsole.postMessage(s);
-436|                } catch (e) {}
-437|            }
-438|
-439|            function playSlot(slot) {
-440|                sendToHost({ action: "playSlot", slot });
-441|            }
-442|
-443|            // ── Time helpers ──────────────────────────────────────────────────────
-444|            function pad2(n) {
-445|                return String(n).padStart(2, "0");
-446|            }
-447|
-448|            function nowTs() {
-449|                const d = new Date();
-450|                return (
-451|                    pad2(d.getHours()) +
-452|                    ":" +
-453|                    pad2(d.getMinutes()) +
-454|                    ":" +
-455|                    pad2(d.getSeconds())
-456|                );
-457|            }
-458|
-459|            // ── Scroll helper ─────────────────────────────────────────────────────
-460|            function isNearBottom() {
-461|                const log = document.getElementById("log");
-462|                return (
-463|                    log.scrollHeight - log.scrollTop - log.clientHeight <
-464|                    SCROLL_THRESH
-465|                );
-466|            }
-467|
-468|            // ── Badge labels ──────────────────────────────────────────────────────
-469|            const LABELS = {
-470|                print: "print",
-471|                result: "result",
-472|                error: "error",
-473|                macro: "macro",
-474|                input: "input",
-475|                key: "key",
-476|                mouse: "mouse",
-477|            };
-478|
-479|            // ── appendEntry ───────────────────────────────────────────────────────
-480|            // entry = { ts?, type, msg?, label?, parentLabel?, trigger? }
-481|            // types: "print" | "result" | "error" | "macro" | "input" | "key" | "mouse"
-482|            function appendEntry(entry) {
-483|                const log = document.getElementById("log");
-484|                const near = isNearBottom();
-485|
-486|                const type = entry.type || "print";
-487|                const ts = entry.ts || nowTs();
-488|
-489|                // Build row
-490|                const row = document.createElement("div");
-491|                row.className = "entry entry-" + type;
-492|
-493|                // Timestamp
-494|                const tsEl = document.createElement("span");
-495|                tsEl.className = "ts";
-496|                tsEl.textContent = ts;
-497|                row.appendChild(tsEl);
-498|
-499|                // Badge
-500|                const badge = document.createElement("span");
-501|                badge.className = "badge badge-" + type;
-502|                badge.textContent = LABELS[type] ?? type;
-503|                row.appendChild(badge);
-504|
-505|                // Message
-506|                const msgEl = document.createElement("span");
-507|                msgEl.className = "msg";
-508|
-509|                if (type === "key" || type === "mouse") {
-510|                    msgEl.textContent = "";
-511|                } else if (type === "macro") {
-512|                    msgEl.textContent = entry.parentLabel
-513|                        ? entry.parentLabel + " \u203a " + (entry.label || "")
-514|                        : entry.label || entry.id || "";
-515|                } else if (type === "input") {
-516|                    msgEl.textContent = "> " + String(entry.msg ?? "");
-517|                } else {
-518|                    msgEl.textContent = String(entry.msg ?? "");
-519|                }
-520|
-521|                row.appendChild(msgEl);
-522|
-523|                // Trigger pill (macro type only)
-524|                if (type === "macro" && entry.trigger) {
-525|                    const pill = document.createElement("span");
-526|                    pill.className = "pill";
-527|                    pill.textContent = entry.trigger;
-528|                    row.appendChild(pill);
-529|                }
-530|
-531|                log.appendChild(row);
-532|
-533|                // Trim oldest entries beyond the cap
-534|                while (log.children.length > MAX_ENTRIES) {
-535|                    log.removeChild(log.firstChild);
-536|                }
-537|
-538|                if (near) log.scrollTop = log.scrollHeight;
-539|            }
-540|
-541|            // ── loadHistory ───────────────────────────────────────────────────────
-542|            // Clears log, appends last MAX_ENTRIES entries, scrolls to bottom
-543|            function loadHistory(entries) {
-544|                const log = document.getElementById("log");
-545|                log.innerHTML = "";
-546|                if (Array.isArray(entries)) {
-547|                    for (const e of entries.slice(-MAX_ENTRIES)) {
-548|                        appendEntry(e);
-549|                    }
-550|                }
-551|                log.scrollTop = log.scrollHeight;
-552|            }
-553|
-554|            // ── Actions ───────────────────────────────────────────────────────────
-555|            function doRun() {
-556|                const input = document.getElementById("code-input");
-557|                const code = input.value.trim();
-558|                if (!code) return;
-559|                appendEntry({ ts: nowTs(), type: "input", msg: code });
-560|                sendToHost({ action: "execute", code });
-561|                input.value = "";
-562|            }
-563|
-564|            function doClear() {
-565|                document.getElementById("log").innerHTML = "";
-566|                sendToHost({ action: "clear" });
-567|            }
-568|
-569|            function closePanel() {
-570|                sendToHost({ action: "close" });
-571|            }
-572|
-573|            // ── Input bar: Enter to run ────────────────────────────────────────────
-574|            document
-575|                .getElementById("code-input")
-576|                .addEventListener("keydown", (e) => {
-577|                    if (e.key === "Enter") {
-578|                        e.preventDefault();
-579|                        doRun();
-580|                    }
-581|                });
-582|
-583|            // ── Drag to move ──────────────────────────────────────────────────────
-584|            (function () {
-585|                let _drag = null;
-586|                document
-587|                    .getElementById("header")
-588|                    .addEventListener("mousedown", (e) => {
-589|                        if (e.button !== 0) return;
-590|                        if (e.target.closest(".header-btns")) return;
-591|                        _drag = { ox: e.screenX, oy: e.screenY };
-592|                        const onMove = (ev) => {
-593|                            if (!_drag) return;
-594|                            sendToHost({
-595|                                action: "move",
-596|                                dx: ev.screenX - _drag.ox,
-597|                                dy: ev.screenY - _drag.oy,
-598|                            });
-599|                            _drag.ox = ev.screenX;
-600|                            _drag.oy = ev.screenY;
-601|                        };
-602|                        const onUp = () => {
-603|                            _drag = null;
-604|                            window.removeEventListener("mousemove", onMove);
-605|                            window.removeEventListener("mouseup", onUp);
-606|                        };
-607|                        window.addEventListener("mousemove", onMove);
-608|                        window.addEventListener("mouseup", onUp);
-609|                    });
-610|            })();
-611|
-612|            // ── Theme injection ───────────────────────────────────────────────────
+                --radius: 2px;
+                --radius-s: 1px;
+            }
+
+            /* ── Reset ──────────────────────────────────────────────────────────── */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            html,
+            body {
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background: var(--bg);
+                color: var(--text);
+                font-family: Arial, "Almendra", sans-serif;
+                font-size: 13px;
+                line-height: 1.5;
+                -webkit-font-smoothing: antialiased;
+            }
+
+            body {
+                display: flex;
+                flex-direction: column;
+            }
+
+            button {
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: inherit;
+                font: inherit;
+            }
+
+            input {
+                font: inherit;
+                color: inherit;
+                background: none;
+                border: none;
+                outline: none;
+            }
+
+            /* ── Header ─────────────────────────────────────────────────────────── */
+            #header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 10px 12px 8px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px
+                    color-mix(in srgb, var(--accent) 12%, transparent);
+                flex-shrink: 0;
+                -webkit-app-region: drag;
+            }
+
+            #panel-title {
+                flex: 1;
+                font-weight: 600;
+                font-size: 13px;
+            }
+
+            .header-btns {
+                display: flex;
+                gap: 4px;
+                -webkit-app-region: no-drag;
+            }
+
+            /* ── Ghost button ────────────────────────────────────────────────────── */
+            .btn-ghost {
+                flex: 1;
+                padding: 5px 8px;
+                border-radius: var(--radius-s);
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 11px;
+                font-weight: 500;
+                transition: opacity 0.15s;
+            }
+            .btn-ghost:hover {
+                opacity: 0.8;
+            }
+
+            /* In the header bar, ghost buttons should not stretch */
+            .header-btns .btn-ghost {
+                flex: 0 0 auto;
+            }
+
+            /* ── Close button ────────────────────────────────────────────────────── */
+            .btn-close {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                background: var(--surface2);
+                color: var(--text2);
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+            }
+            .btn-close:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+
+            /* ── Log area ────────────────────────────────────────────────────────── */
+            #log {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 4px 0;
+                min-height: 0;
+                scrollbar-width: thin;
+                scrollbar-color: var(--border) transparent;
+            }
+            #log::-webkit-scrollbar {
+                width: 5px;
+            }
+            #log::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            #log::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: var(--radius);
+            }
+
+            /* ── Entry rows ──────────────────────────────────────────────────────── */
+            .entry {
+                display: flex;
+                align-items: flex-start;
+                gap: 6px;
+                padding: 5px 12px;
+                font-size: 12px;
+                border-bottom: 1px solid var(--border-dim);
+            }
+            .entry:hover {
+                background: var(--surface);
+            }
+
+            .ts {
+                color: var(--text3);
+                font:
+                    10px "SF Mono",
+                    Menlo,
+                    monospace;
+                flex-shrink: 0;
+                padding-top: 1px;
+                min-width: 52px;
+            }
+
+            /* ── Badges ──────────────────────────────────────────────────────────── */
+            .badge {
+                flex-shrink: 0;
+                padding: 1px 5px;
+                border-radius: var(--radius-s);
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                border: 1px solid transparent;
+            }
+
+            .badge-print {
+                background: var(--surface2);
+                color: var(--text2);
+                border-color: var(--border);
+            }
+
+            .badge-result {
+                background: color-mix(in srgb, var(--success) 20%, transparent);
+                color: var(--success);
+                border-color: color-mix(
+                    in srgb,
+                    var(--success) 45%,
+                    transparent
+                );
+            }
+
+            .badge-error {
+                background: color-mix(in srgb, var(--danger) 20%, transparent);
+                color: var(--danger);
+                border-color: color-mix(
+                    in srgb,
+                    var(--danger) 45%,
+                    transparent
+                );
+            }
+
+            .badge-macro {
+                background: color-mix(in srgb, var(--accent) 20%, transparent);
+                color: var(--accent);
+                border-color: color-mix(
+                    in srgb,
+                    var(--accent) 45%,
+                    transparent
+                );
+            }
+
+            .badge-key {
+                background: var(--surface2);
+                color: var(--text2);
+                border-color: var(--border);
+            }
+
+            .badge-mouse {
+                background: color-mix(in srgb, var(--warning) 20%, transparent);
+                color: var(--warning);
+                border-color: color-mix(
+                    in srgb,
+                    var(--warning) 45%,
+                    transparent
+                );
+            }
+
+            .badge-input {
+                background: transparent;
+                color: var(--text2);
+                font-style: italic;
+                border-color: transparent;
+            }
+
+            /* ── Message text ────────────────────────────────────────────────────── */
+            .msg {
+                flex: 1;
+                word-break: break-word;
+                white-space: pre-wrap;
+            }
+
+            .entry-result .msg,
+            .entry-error .msg,
+            .entry-input .msg {
+                font:
+                    12px "SF Mono",
+                    Menlo,
+                    monospace;
+            }
+
+            .entry-error .msg {
+                color: var(--danger);
+            }
+
+            .entry-input .msg {
+                color: var(--text2);
+                font-style: italic;
+            }
+
+            /* ── Pill ────────────────────────────────────────────────────────────── */
+            .pill {
+                display: inline-flex;
+                align-items: center;
+                padding: 1px 7px;
+                border-radius: 20px;
+                font:
+                    700 10px "SF Mono",
+                    Menlo,
+                    monospace;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                color: var(--text2);
+            }
+
+            /* ── Input bar ───────────────────────────────────────────────────────── */
+            #inputbar {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 12px;
+                background: var(--surface);
+                border-top: 1px solid var(--border);
+                flex-shrink: 0;
+            }
+
+            #code-input {
+                flex: 1;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 5px 8px;
+                color: var(--text);
+                font:
+                    12px "SF Mono",
+                    Menlo,
+                    monospace;
+                outline: none;
+                transition: border-color 0.15s;
+                user-select: text;
+                -webkit-user-select: text;
+            }
+            #code-input::placeholder {
+                color: var(--text2);
+                opacity: 0.55;
+            }
+            #code-input:focus {
+                border-color: var(--accent);
+            }
+
+            #run-btn {
+                padding: 5px 12px;
+                border-radius: var(--radius);
+                font-size: 11px;
+                font-weight: 700;
+                background: var(--accent);
+                color: var(--bg);
+                transition: opacity 0.15s;
+                -webkit-app-region: no-drag;
+            }
+            #run-btn:hover {
+                opacity: 0.85;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Header -->
+        <div id="header">
+            <span id="panel-title">mudscript — console</span>
+            <div class="header-btns">
+                <button
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        doClear();
+                    "
+                >
+                    Clear
+                </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('back');
+                        closePanel();
+                    "
+                >
+                    ✕
+                </button>
+            </div>
+        </div>
+
+        <!-- Log -->
+        <div id="log"></div>
+
+        <!-- Input bar -->
+        <div id="inputbar">
+            <input
+                id="code-input"
+                type="text"
+                placeholder="> enter lua…"
+                autocomplete="off"
+                spellcheck="false"
+            />
+            <button
+                id="run-btn"
+                onmouseenter="playSlot('hover')"
+                onclick="
+                    playSlot('interact');
+                    doRun();
+                "
+            >
+                Run
+            </button>
+        </div>
+
+        <script>
+            "use strict";
+
+            document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+            // ── Constants ─────────────────────────────────────────────────────────
+            const MAX_ENTRIES = 500;
+            const SCROLL_THRESH = 60;
+
+            // ── Host bridge ───────────────────────────────────────────────────────
+            function sendToHost(msg) {
+                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
+                try {
+                    window.webkit.messageHandlers.msConsole.postMessage(s);
+                } catch (e) {}
+            }
+
+            function playSlot(slot) {
+                sendToHost({ action: "playSlot", slot });
+            }
+
+            // ── Time helpers ──────────────────────────────────────────────────────
+            function pad2(n) {
+                return String(n).padStart(2, "0");
+            }
+
+            function nowTs() {
+                const d = new Date();
+                return (
+                    pad2(d.getHours()) +
+                    ":" +
+                    pad2(d.getMinutes()) +
+                    ":" +
+                    pad2(d.getSeconds())
+                );
+            }
+
+            // ── Scroll helper ─────────────────────────────────────────────────────
+            function isNearBottom() {
+                const log = document.getElementById("log");
+                return (
+                    log.scrollHeight - log.scrollTop - log.clientHeight <
+                    SCROLL_THRESH
+                );
+            }
+
+            // ── Badge labels ──────────────────────────────────────────────────────
+            const LABELS = {
+                print: "print",
+                result: "result",
+                error: "error",
+                macro: "macro",
+                input: "input",
+                key: "key",
+                mouse: "mouse",
+            };
+
+            // ── appendEntry ───────────────────────────────────────────────────────
+            // entry = { ts?, type, msg?, label?, parentLabel?, trigger? }
+            // types: "print" | "result" | "error" | "macro" | "input" | "key" | "mouse"
+            function appendEntry(entry) {
+                const log = document.getElementById("log");
+                const near = isNearBottom();
+
+                const type = entry.type || "print";
+                const ts = entry.ts || nowTs();
+
+                // Build row
+                const row = document.createElement("div");
+                row.className = "entry entry-" + type;
+
+                // Timestamp
+                const tsEl = document.createElement("span");
+                tsEl.className = "ts";
+                tsEl.textContent = ts;
+                row.appendChild(tsEl);
+
+                // Badge
+                const badge = document.createElement("span");
+                badge.className = "badge badge-" + type;
+                badge.textContent = LABELS[type] ?? type;
+                row.appendChild(badge);
+
+                // Message
+                const msgEl = document.createElement("span");
+                msgEl.className = "msg";
+
+                if (type === "key" || type === "mouse") {
+                    msgEl.textContent = "";
+                } else if (type === "macro") {
+                    msgEl.textContent = entry.parentLabel
+                        ? entry.parentLabel + " \u203a " + (entry.label || "")
+                        : entry.label || entry.id || "";
+                } else if (type === "input") {
+                    msgEl.textContent = "> " + String(entry.msg ?? "");
+                } else {
+                    msgEl.textContent = String(entry.msg ?? "");
+                }
+
+                row.appendChild(msgEl);
+
+                // Trigger pill (macro type only)
+                if (type === "macro" && entry.trigger) {
+                    const pill = document.createElement("span");
+                    pill.className = "pill";
+                    pill.textContent = entry.trigger;
+                    row.appendChild(pill);
+                }
+
+                log.appendChild(row);
+
+                // Trim oldest entries beyond the cap
+                while (log.children.length > MAX_ENTRIES) {
+                    log.removeChild(log.firstChild);
+                }
+
+                if (near) log.scrollTop = log.scrollHeight;
+            }
+
+            // ── loadHistory ───────────────────────────────────────────────────────
+            // Clears log, appends last MAX_ENTRIES entries, scrolls to bottom
+            function loadHistory(entries) {
+                const log = document.getElementById("log");
+                log.innerHTML = "";
+                if (Array.isArray(entries)) {
+                    for (const e of entries.slice(-MAX_ENTRIES)) {
+                        appendEntry(e);
+                    }
+                }
+                log.scrollTop = log.scrollHeight;
+            }
+
+            // ── Actions ───────────────────────────────────────────────────────────
+            function doRun() {
+                const input = document.getElementById("code-input");
+                const code = input.value.trim();
+                if (!code) return;
+                appendEntry({ ts: nowTs(), type: "input", msg: code });
+                sendToHost({ action: "execute", code });
+                input.value = "";
+            }
+
+            function doClear() {
+                document.getElementById("log").innerHTML = "";
+                sendToHost({ action: "clear" });
+            }
+
+            function closePanel() {
+                sendToHost({ action: "close" });
+            }
+
+            // ── Input bar: Enter to run ────────────────────────────────────────────
+            document
+                .getElementById("code-input")
+                .addEventListener("keydown", (e) => {
+                    if (e.key === "Enter") {
+                        e.preventDefault();
+                        doRun();
+                    }
+                });
+
+            // ── Drag to move ──────────────────────────────────────────────────────
+            (function () {
+                let _drag = null;
+                document
+                    .getElementById("header")
+                    .addEventListener("mousedown", (e) => {
+                        if (e.button !== 0) return;
+                        if (e.target.closest(".header-btns")) return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            sendToHost({
+                                action: "move",
+                                dx: ev.screenX - _drag.ox,
+                                dy: ev.screenY - _drag.oy,
+                            });
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+            })();
+
+            // ── Theme injection ───────────────────────────────────────────────────
             // Parse #rrggbb or #rgb -> { r, g, b }
             function hexToRgb(hex) {
                 hex = hex.replace(/^#/, "");
@@ -689,13 +689,12 @@
                     r.setProperty("--radius-s", Math.max(0, t.radius - 1) + "px");
                 }
 
-635|
-636|            // ── Init ──────────────────────────────────────────────────────────────
-637|            document.addEventListener("DOMContentLoaded", () => {
-638|                sendToHost({ action: "ready" });
-639|                document.getElementById("code-input").focus();
-640|            });
-641|        </script>
-642|    </body>
-643|</html>
-644|
+
+            // ── Init ──────────────────────────────────────────────────────────────
+            document.addEventListener("DOMContentLoaded", () => {
+                sendToHost({ action: "ready" });
+                document.getElementById("code-input").focus();
+            });
+        </script>
+    </body>
+</html>
