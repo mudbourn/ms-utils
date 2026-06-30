@@ -377,6 +377,8 @@
             ScreenBL     = "ScreenBL";  ScreenBR     = "ScreenBR";  ScreenCenter = "ScreenCenter"
             BindValidity = 1
             SoundLib = os.getenv("HOME") .. "/.hammerspoon/sounds/"
+            SoundDefaultsDir = SoundLib .. "defaults/"
+            SoundActiveDir   = SoundLib .. "active/"
             ms.sounds          = {}
             ms.importedSounds  = {}
             ms.soundEnabled    = true
@@ -1271,18 +1273,31 @@
                 if not ms._soundsDirty then return end
                 ms._soundsDirty = false
                 ms.sounds = {}
-                if hs.fs.attributes(SoundLib) then
-                    for file in hs.fs.dir(SoundLib) do
+
+                -- Helper: scan a directory for .wav files
+                local function scanDir(dir)
+                    if not hs.fs.attributes(dir) then return end
+                    for file in hs.fs.dir(dir) do
                         if file ~= "." and file ~= ".." then
                             local name = file:match("^(.+)%.[^%.]+$")
                             if name then
-                                ms.sounds[name] = SoundLib .. file
+                                ms.sounds[name] = dir .. file
                             end
                         end
                     end
                 end
+
+                -- Always load defaults
+                scanDir(SoundDefaultsDir)
+
+                -- Load active profile sounds only when custom themes are enabled
+                if not ms._customThemeDisabled then
+                    scanDir(SoundActiveDir)
+                end
+
+                -- Imported sounds (MSPKG) also gated by custom theme setting
                 for name, filename in pairs(ms.importedSounds or {}) do
-                    if not ms.sounds[name] then
+                    if not ms._customThemeDisabled and not ms.sounds[name] then
                         local path = SoundLib .. filename
                         if hs.fs.attributes(path) then
                             ms.sounds[name] = path

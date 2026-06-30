@@ -1589,15 +1589,15 @@
                 local soundsDir = tmpDir .. "sounds/"
                 local soundsAdded = {}
                 if hs.fs.attributes(soundsDir) then
-                    local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
+                    local slibDir = SoundActiveDir:match("^(.-)[/\\]*$") or SoundActiveDir
                     if not hs.fs.attributes(slibDir) then
-                        hs.execute("mkdir -p '" .. SoundLib .. "'")
+                        hs.execute("mkdir -p '" .. SoundActiveDir .. "'")
                     end
                     for file in hs.fs.dir(soundsDir) do
                         if file ~= "." and file ~= ".." then
                             local importName = file:match("^(.+)%.[^%.]+$") or file
                             local srcSnd = soundsDir .. file
-                            local dstSnd = SoundLib .. file
+                            local dstSnd = SoundActiveDir .. file
                             if not hs.fs.attributes(dstSnd) then
                                 local sf = io.open(srcSnd, "rb")
                                 if sf then
@@ -3428,10 +3428,10 @@
                     fn = function()
                         ms.playSlot("alert")
                         hs.focus()
-                        local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
+                        local slibDir = SoundActiveDir:match("^(.-)[/\\]*$") or SoundActiveDir
                         local result = hs.dialog.chooseFileOrFolder(
                             "Select one or more sound files to add to your library",
-                            hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
+                            hs.fs.attributes(slibDir) and SoundActiveDir or os.getenv("HOME"),
                             true, false, true
                         )
                         local paths = {}
@@ -3442,7 +3442,7 @@
                         result = paths
 
                         if not hs.fs.attributes(slibDir) then
-                            hs.execute("mkdir -p '" .. SoundLib .. "'")
+                            hs.execute("mkdir -p '" .. SoundActiveDir .. "'")
                         end
                         if not hs.fs.attributes(slibDir) then
                             ms.alert("Could not create sounds folder at:\n" .. SoundLib, 4); return
@@ -3457,7 +3457,7 @@
                             if not filename or not importName then
                                 table.insert(failed, srcPath); goto nextFile
                             end
-                            local dst = SoundLib .. filename
+                            local dst = SoundActiveDir .. filename
                             if srcPath ~= dst then
                                 local copied = false
                                 local f = io.open(srcPath, "rb")
