@@ -4923,6 +4923,8 @@
 
             -- Macro Watcher tracing helpers --
                 local _camMoveAccum  = 0   -- consecutive cam.move calls awaiting flush
+                local _waitAccum     = 0   -- consecutive identical waits awaiting flush
+                local _waitDuration  = 0   -- the wait ms being accumulated
                 local _traceSuppress = false  -- true while ms.type is dispatching internally
 
                 local function _watcherStep(msg)
@@ -4964,8 +4966,27 @@
                     end
                 end
 
+                -- Flush accumulated identical waits (e.g. from a tight loop).
+                local function _flushWait()
+                    if _waitAccum > 0 then
+                        local msg = "wait " .. _waitDuration .. "ms"
+                        if _waitAccum > 1 then msg = msg .. " ×" .. _waitAccum end
+                        if ms.dev._watcherPanel then
+                            _watcherStep(msg)
+                        end
+                        _devMacroLog(msg)
+                        _waitAccum = 0
+                    end
+                end
+
+                -- Flush all accumulated batched actions (cam moves + waits).
+                local function _flushAll()
+                    _flushCam()
+                    _flushWait()
+                end
+
                 ms.press = function(key, mods, hidinject)
-                    if ms.dev then _flushCam() end
+                    if ms.dev then _flushAll() end
                     if ms.dev._watcherPanel and not _traceSuppress then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                         _watcherStep("↓ " .. tostring(key) .. modsStr)
@@ -4990,7 +5011,7 @@
                 end
 
                 ms.release = function(key, mods, hidinject)
-                    if ms.dev then _flushCam() end
+                    if ms.dev then _flushAll() end
                     if ms.dev._watcherPanel and not _traceSuppress then
                         _watcherStep("↑ " .. tostring(key))
                     end
@@ -5010,7 +5031,7 @@
                 end
 
                 ms.type = function(key, mods, hidinject)
-                    if ms.dev then _flushCam() end
+                    if ms.dev then _flushAll() end
                     if ms.dev._watcherPanel then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                         _watcherStep("type " .. tostring(key) .. modsStr)
@@ -5167,9 +5188,12 @@
                     ScreenTL=true,   ScreenTR=true,  ScreenBL=true,
                     ScreenBR=true,   ScreenCenter=true,
                 }
+                if ms.dev then _flushAll() end
                 if ms.dev._watcherPanel then
-                    _flushCam()
                     _watcherStep("Mouse " .. tostring(operation) .. " " .. tostring(button))
+                end
+                if ms.dev then
+                    _devMacroLog("Mouse " .. tostring(operation) .. " " .. tostring(button))
                 end
                 assert(OPS[operation],     "ms.Mouse: unknown operation '"  .. tostring(operation)  .. "'")
                 assert(BTNS[button] ~= nil, "ms.Mouse: unknown button '"      .. tostring(button)     .. "'")
@@ -5273,23 +5297,18 @@
                     local ctx = ms._coroContext[co]  -- capture context at yield time
                     -- Flush accumulated cam.move calls before the wait entry.
                     if ms.dev then _flushCam() end
-                    -- When the watcher is open, log waits as step entries.
-                    if ms.dev and ms.dev._watcherPanel then
-                        local _label = (ctx and ctx.label) or "macro"
-                        local ok2, j2 = pcall(hs.json.encode, {
-                            type = "step",
-                            ts   = os.time(),
-                            msg  = "[" .. _label .. "] wait " .. tostring(ms_time) .. "ms",
-                        })
-                        if ok2 then
-                            pcall(function()
-                                ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j2 .. ")")
-                            end)
-                        end
-                    end
-                    -- Always log waits to the macro .txt file.
+                    -- Accumulate identical waits instead of logging each one.
+                    -- Flushes happen when a different action (press/release/type/cam.move)
+                    -- fires, or when the wait duration changes.
                     if ms.dev then
-                        _devMacroLog("wait " .. tostring(ms_time) .. "ms")
+                        local msNum = tonumber(ms_time) or 0
+                        if _waitAccum > 0 and msNum == _waitDuration then
+                            _waitAccum = _waitAccum + 1
+                        else
+                            _flushWait()
+                            _waitDuration = msNum
+                            _waitAccum = 1
+                        end
                     end
                     hs.timer.doAfter(ms_time / 1000, function()
                         -- Don't resume a coroutine whose macro has been cancelled or paused.
@@ -5301,6 +5320,9 @@
                         if coroutine.status(co) == "dead" then
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
+                            -- Flush any trailing batched actions (waits, cam moves)
+                            -- that accumulated after the last non-wait action.
+                            if ms.dev then _flushAll() end
                         end
                     end)
                     coroutine.yield()
@@ -5767,9 +5789,12 @@
             end
 
             ms.copy = function(text)
+                if ms.dev then _flushAll() end
                 if ms.dev._watcherPanel then
-                    _flushCam()
                     _watcherStep("copy")
+                end
+                if ms.dev then
+                    _devMacroLog("copy")
                 end
                 hs.pasteboard.setContents(text)
             end
@@ -5852,10 +5877,11 @@
             -- async: true (default) = fire-and-forget; false = yield until complete.
             -- device: output device name string; nil = system default.
             ms.sound = function(path, async, device)
-                if ms.dev._watcherPanel and path then
-                    _flushCam()
+                if ms.dev then _flushAll() end
+                if path then
                     local fname = tostring(path):match("([^/\\]+)$") or tostring(path)
-                    _watcherStep("sound " .. fname)
+                    if ms.dev._watcherPanel then _watcherStep("sound " .. fname) end
+                    if ms.dev then _devMacroLog("sound " .. fname) end
                 end
                 if not ms.soundEnabled then return end
                 if not path then return end
