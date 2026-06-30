@@ -2071,54 +2071,72 @@
                     local folderName = sanitizeName(name)
                     local sq = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
 
-                    -- Archive current profile (same as switchProfile archiving).
-                    hs.fs.mkdir(profilesPath)
-                    hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
-                    if not hs.fs.attributes(profilesPath .. folderName) then
-                        ms.alert("Could not create profile folder.", 3)
-                        return
-                    end
-                    local _, st = hs.execute("/bin/cp " .. sq(macrosPath) .. " " .. sq(profilesPath .. folderName .. "/ms_macros.lua"))
-                    if st ~= true then
-                        ms.alert("Could not archive current macros.", 3)
-                        return
-                    end
-                    if hs.fs.attributes(jsonPath) then
-                        hs.execute("/bin/cp " .. sq(jsonPath) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
-                    end
-                    if hs.fs.attributes(defaultPath) then
-                        hs.execute("/bin/cp " .. sq(defaultPath) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
-                    end
-                    if hs.fs.attributes(themePath) then
-                        hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
+                    local function _doArchive()
+                        -- Archive current profile (same as switchProfile archiving).
+                        hs.fs.mkdir(profilesPath)
+                        hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
+                        if not hs.fs.attributes(profilesPath .. folderName) then
+                            ms.alert("Could not create profile folder.", 3)
+                            return
+                        end
+                        local _, st = hs.execute("/bin/cp " .. sq(macrosPath) .. " " .. sq(profilesPath .. folderName .. "/ms_macros.lua"))
+                        if st ~= true then
+                            ms.alert("Could not archive current macros.", 3)
+                            return
+                        end
+                        if hs.fs.attributes(jsonPath) then
+                            hs.execute("/bin/cp " .. sq(jsonPath) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
+                        end
+                        if hs.fs.attributes(defaultPath) then
+                            hs.execute("/bin/cp " .. sq(defaultPath) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
+                        end
+                        if hs.fs.attributes(themePath) then
+                            hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
+                        end
+
+                        -- Write blank template ms_macros.lua.
+                        local templatePath = home .. "/templates/ms_macros.lua"
+                        local tpl = io.open(templatePath, "r")
+                        local blankSrc
+                        if tpl then
+                            blankSrc = tpl:read("*a"); tpl:close()
+                        else
+                            blankSrc = 'ms.macroMeta = {\n    name    = "My Macros",\n    author  = "",\n    website = "",\n}\n'
+                        end
+                        local mf = io.open(macrosPath, "w")
+                        if mf then
+                            mf:write(blankSrc); mf:close()
+                        else
+                            ms.alert("Could not write blank macros file.", 3)
+                            return
+                        end
+
+                        -- Remove active settings/defaults/theme so the new profile starts clean.
+                        os.remove(jsonPath)
+                        os.remove(defaultPath)
+                        os.remove(themePath)
+
+                        ms.playSlot("update")
+                        ms._profilesDirty = true
+                        ms.alert("Profile \"" .. name .. "\" archived.\nNew blank profile active.\nReloading in 3 seconds...", 4)
+                        hs.timer.doAfter(3, function() hs.reload() end)
                     end
 
-                    -- Write blank template ms_macros.lua.
-                    local templatePath = home .. "/templates/ms_macros.lua"
-                    local tpl = io.open(templatePath, "r")
-                    local blankSrc
-                    if tpl then
-                        blankSrc = tpl:read("*a"); tpl:close()
+                    -- Collision guard: if a folder with this name already exists and it
+                    -- is NOT the currently active profile, warn before overwriting.
+                    local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                    if folderName ~= activeName and hs.fs.attributes(profilesPath .. folderName) then
+                        ms.ui.modal({
+                            title   = "Overwrite Profile?",
+                            msg     = "\"" .. name .. "\" already exists in your library.\nReplace it with the current profile?",
+                            confirm = "Replace",
+                            cancel  = "Cancel",
+                        }, function(r)
+                            if r.confirmed then _doArchive() end
+                        end)
                     else
-                        blankSrc = 'ms.macroMeta = {\n    name    = "My Macros",\n    author  = "",\n    website = "",\n}\n'
+                        _doArchive()
                     end
-                    local mf = io.open(macrosPath, "w")
-                    if mf then
-                        mf:write(blankSrc); mf:close()
-                    else
-                        ms.alert("Could not write blank macros file.", 3)
-                        return
-                    end
-
-                    -- Remove active settings/defaults/theme so the new profile starts clean.
-                    os.remove(jsonPath)
-                    os.remove(defaultPath)
-                    os.remove(themePath)
-
-                    ms.playSlot("update")
-                    ms._profilesDirty = true
-                    ms.alert("Profile \"" .. name .. "\" archived.\nNew blank profile active.\nReloading in 3 seconds...", 4)
-                    hs.timer.doAfter(3, function() hs.reload() end)
                 end
 
                 local function saveCurrentProfile()
