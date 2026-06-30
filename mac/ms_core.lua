@@ -254,34 +254,55 @@
                 -- Category → file path (built once).
                 -- _catPaths = JSON files (for panel history loader).
                 -- _readablePaths = human-readable files (for reading in editors).
+                -- Organized into json/ and readable/ subdirectories.
+                local _jsonDir = _devBaseDir .. "json/"
+                local _readDir = _devBaseDir .. "readable/"
                 local _catPaths = {}
                 local _readablePaths = {}
                 for _, cat in ipairs({"input", "macro", "system", "error", "console"}) do
-                    _catPaths[cat] = _devBaseDir .. "ms_dev_" .. cat .. ".log"
-                    _readablePaths[cat] = _devBaseDir .. "ms_dev_" .. cat .. ".txt"
+                    _catPaths[cat] = _jsonDir .. "ms_dev_" .. cat .. ".log"
+                    _readablePaths[cat] = _readDir .. "ms_dev_" .. cat .. ".txt"
                 end
 
-                -- Archive helper: moves a log file into backups/ with a timestamp.
-                local function _archiveLog(path, stamp)
+                -- Archive helper: moves a log file into backups/session_STAMP/{json|readable}/.
+                local function _archiveLog(path, stamp, subdir)
                     if not hs.fs.attributes(path) then return end
+                    local sessionDir = _devArchDir .. "session_" .. stamp .. "/"
+                    local destDir = sessionDir .. subdir .. "/"
                     hs.fs.mkdir(_devBaseDir)
                     hs.fs.mkdir(_devArchDir)
-                    local base, ext = path:match("([^/]+)%.(log)$")
-                    if not base then base, ext = path:match("([^/]+)%.(txt)$") end
-                    if not base then return end
-                    os.rename(path, _devArchDir .. base .. "_" .. stamp .. "." .. ext)
+                    hs.fs.mkdir(sessionDir)
+                    hs.fs.mkdir(destDir)
+                    local filename = path:match("([^/]+)$")
+                    if filename then
+                        os.rename(path, destDir .. filename)
+                    end
                 end
 
-                -- Prune helper: keep at most `limit` files matching a prefix pattern.
-                local function _pruneArchives(prefixPattern, limit)
+                -- Prune helper: keep at most `limit` session folders.
+                local function _pruneSessionArchives(limit)
                     if not hs.fs.attributes(_devArchDir) then return end
                     local list = {}
                     for name in hs.fs.dir(_devArchDir) do
-                        if name:match(prefixPattern) then table.insert(list, name) end
+                        if name:match("^session_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d$") then
+                            table.insert(list, name)
+                        end
                     end
                     table.sort(list)
                     while #list > limit do
-                        os.remove(_devArchDir .. list[1])
+                        local dir = _devArchDir .. list[1]
+                        for _, sub in ipairs({"json", "readable"}) do
+                            local sp = dir .. "/" .. sub
+                            if hs.fs.attributes(sp) then
+                                for fname in hs.fs.dir(sp) do
+                                    if fname ~= "." and fname ~= ".." then
+                                        os.remove(sp .. "/" .. fname)
+                                    end
+                                end
+                                hs.fs.rmdir(sp)
+                            end
+                        end
+                        hs.fs.rmdir(dir)
                         table.remove(list, 1)
                     end
                 end
@@ -289,13 +310,15 @@
                 -- On every reload, archive all log files so each session starts clean.
                 do
                     local stamp = os.date("%Y-%m-%d_%H%M%S")
-                    for _, p in pairs(_catPaths) do _archiveLog(p, stamp) end
-                    for _, p in pairs(_readablePaths) do _archiveLog(p, stamp) end
+                    hs.fs.mkdir(_jsonDir)
+                    hs.fs.mkdir(_readDir)
+                    for _, p in pairs(_catPaths) do _archiveLog(p, stamp, "json") end
+                    for _, p in pairs(_readablePaths) do _archiveLog(p, stamp, "readable") end
 
-                    -- Prune: category logs use the configurable archive limit.
+                    -- Prune: session folders, limited by configurable archive limit.
                     local catLimit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
                         and ms._devArchiveLimit or 15
-                    _pruneArchives("^ms_dev_%w+_%d%d%d%d%-%d%d%-%d%d_%d%d%d%d%d%d%.log$", catLimit)
+                    _pruneSessionArchives(catLimit)
                 end
 
                 local _devBusy = false
@@ -335,6 +358,7 @@
                     if catPath then
                         pcall(function()
                             hs.fs.mkdir(_devBaseDir)
+                            hs.fs.mkdir(_jsonDir)
                             local f = io.open(catPath, "a")
                             if f then f:write(json .. "\n"); f:close() end
                         end)
@@ -345,6 +369,7 @@
                     if readPath then
                         pcall(function()
                             hs.fs.mkdir(_devBaseDir)
+                            hs.fs.mkdir(_readDir)
                             local f = io.open(readPath, "a")
                             if f then
                                 local t = entry.type
@@ -4955,6 +4980,93 @@
                     ms.dev.log({ type = "step", category = "macro", msg = "[" .. label .. "] " .. msg })
                 end
 
+                -- ── Branch Tracing ──────────────────────────────────────────────
+                -- Uses debug.sethook on macro coroutines to trace function calls
+                -- and detect loop iterations (backward line jumps).
+                -- Writes directly to the readable macro log to avoid _devWrite
+                -- re-entrance issues (_devBusy guard).
+                local _branchState = {}  -- co -> { depth, prevLine, loopStart, loopCount, label }
+
+                local function _traceLog(co, msg)
+                    local st = _branchState[co]
+                    if not st then return end
+                    local ts = os.date("%H:%M:%S")
+                    pcall(function()
+                        hs.fs.mkdir(_devBaseDir)
+                        hs.fs.mkdir(_readDir)
+                        local f = io.open(_readablePaths["macro"], "a")
+                        if f then
+                            f:write("[" .. ts .. "] [" .. st.label .. "] " .. msg .. "\n")
+                            f:close()
+                        end
+                    end)
+                end
+
+                local function _startBranchTrace(co, label)
+                    if not co then return end
+                    _branchState[co] = {
+                        depth     = 0,
+                        prevLine  = 0,
+                        loopStart = 0,
+                        loopCount = 0,
+                        label     = label or "macro",
+                    }
+                    debug.sethook(co, function(event, line)
+                        local st = _branchState[co]
+                        if not st then return end
+                        -- Only trace user macro code, not ms_core.lua internals.
+                        local info = debug.getinfo(2, "S")
+                        local src = info and info.source or ""
+                        if src:find("ms_core") or src:find("=[C]") or src == "" then return end
+
+                        local indent = string.rep("  ", st.depth)
+
+                        if event == "call" then
+                            st.depth = st.depth + 1
+                            local fnInfo = debug.getinfo(2, "n")
+                            local name = fnInfo and fnInfo.name or "function"
+                            _traceLog(co, indent .. "START " .. name .. "()")
+
+                        elseif event == "return" or event == "tail return" then
+                            if st.depth > 0 then
+                                st.depth = st.depth - 1
+                                indent = string.rep("  ", st.depth)
+                            end
+                            local fnInfo = debug.getinfo(2, "n")
+                            local name = fnInfo and fnInfo.name or "function"
+                            _traceLog(co, indent .. "END " .. name .. "()")
+
+                        elseif event == "line" and line then
+                            if st.prevLine > 0 and line < st.prevLine and (st.prevLine - line) > 2 then
+                                -- Backward jump: entering or repeating a loop body.
+                                if st.loopStart == 0 then
+                                    st.loopStart = line
+                                    st.loopCount = 1
+                                    _traceLog(co, indent .. "START loop")
+                                else
+                                    st.loopCount = st.loopCount + 1
+                                end
+                            elseif st.loopStart > 0 and line > st.loopStart and (line - st.loopStart) > 10 then
+                                -- Forward jump past loop start = loop exited.
+                                _traceLog(co, indent .. "END loop (" .. st.loopCount .. " iterations)")
+                                st.loopStart = 0
+                                st.loopCount = 0
+                            end
+                            st.prevLine = line
+                        end
+                    end, "crl")  -- c = call, r = return, l = line
+                end
+
+                local function _stopBranchTrace(co)
+                    pcall(debug.sethook, co)
+                    -- Flush any remaining loop state.
+                    local st = _branchState[co]
+                    if st and st.loopStart > 0 then
+                        _traceLog(co, string.rep("  ", st.depth) .. "END loop (" .. st.loopCount .. " iterations)")
+                    end
+                    _branchState[co] = nil
+                end
+
                 -- Flush accumulated cam.move calls before logging a different action.
                 local function _flushCam()
                     if _camMoveAccum > 0 then
@@ -5320,6 +5432,8 @@
                         if coroutine.status(co) == "dead" then
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
+                            -- Stop branch tracing.
+                            if ms.dev then _stopBranchTrace(co) end
                             -- Flush any trailing batched actions (waits, cam moves)
                             -- that accumulated after the last non-wait action.
                             if ms.dev then _flushAll() end
@@ -5732,9 +5846,12 @@
                     -- Inherit the pending label set by firedFn so ms.wait step entries
                     -- can identify which macro is running without needing an id param.
                     local ctx = { cancelled = false, paused = false, label = ms._pendingLabel or "macro" }
+                    local label = ms._pendingLabel or "macro"
                     ms._pendingLabel = nil
                     ms._coroContext[co]    = ctx
                     ms._activeContexts[ctx] = true
+                    -- Start branch tracing on this coroutine.
+                    if ms.dev then _startBranchTrace(co, label) end
                     local ok, err = coroutine.resume(co, ...)
                     if not ok then
                         print("ms.fn error: " .. tostring(err))
@@ -5742,8 +5859,11 @@
                     end
                     -- Coroutine finished without ever yielding: clean up immediately.
                     if coroutine.status(co) == "dead" then
+                        if ms.dev then _stopBranchTrace(co) end
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
+                        -- Flush any trailing batched actions.
+                        if ms.dev then _flushAll() end
                     end
                 end
             end
@@ -5775,8 +5895,10 @@
                         print("ms.resume error: " .. tostring(err))
                     end
                     if coroutine.status(co) == "dead" then
+                        if ms.dev then _stopBranchTrace(co) end
                         ms._coroContext[co] = nil
                         ms._activeContexts[ctx] = nil
+                        if ms.dev then _flushAll() end
                     end
                 end
                 if not id then
@@ -5804,11 +5926,14 @@
             ms.cancelMacros = function()
                 -- Mark every live coroutine as cancelled so pending ms.wait /
                 -- ms.sound callbacks don't resume it after this point.
-                for ctx in pairs(ms._activeContexts) do
+                for co, ctx in pairs(ms._coroContext) do
                     ctx.cancelled = true
+                    if ms.dev then _stopBranchTrace(co) end
                 end
                 ms._activeContexts = {}
                 ms._coroContext     = {}
+                -- Flush any trailing batched actions from cancelled macros.
+                if ms.dev then _flushAll() end
 
                 -- Release every key currently held by a macro press.
                 for keyCode, entry in pairs(ms._macroHeldKeys) do
@@ -5911,8 +6036,10 @@
                                     print("ms.sound resume error: " .. tostring(err))
                                 end
                                 if coroutine.status(co) == "dead" then
+                                    if ms.dev then _stopBranchTrace(co) end
                                     ms._coroContext[co] = nil
                                     if ctx then ms._activeContexts[ctx] = nil end
+                                    if ms.dev then _flushAll() end
                                 end
                             end
                         end)
