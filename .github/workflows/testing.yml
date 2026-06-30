@@ -62,7 +62,47 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check if build can be skipped
+        id: skip-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Compute content hash of everything that ends up in the macOS dist
+          HASH=$(
+            {
+              # Individual source files that get copied into the dist
+              for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua MANIFEST.json README.md; do
+                [ -f "$f" ] && shasum -a 256 "$f"
+              done
+              # Directory trees that get copied into the dist
+              find mac/Spoons ui mac/bin mac/templates profiles/Default \
+                -type f ! -name '.DS_Store' ! -name '.gitignore' \
+                -exec shasum -a 256 {} + 2>/dev/null
+            } | sort | shasum -a 256 | cut -d' ' -f1
+          )
+          echo "Current source hash: $HASH"
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+
+          # Fetch hash from the latest pre-release
+          PREV_HASH=$(gh release download \
+            --repo "${{ github.repository }}" \
+            --pattern "macos-source-hash.txt" \
+            --dir /tmp/prev-hash \
+            2>/dev/null \
+            && cat /tmp/prev-hash/macos-source-hash.txt 2>/dev/null \
+            || echo "")
+          echo "Previous hash: $PREV_HASH"
+
+          if [ -n "$PREV_HASH" ] && [ "$HASH" = "$PREV_HASH" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "✓ Source unchanged — skipping build"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "✗ Source changed — rebuilding"
+          fi
+
       - name: Build macOS package
+        if: steps.skip-check.outputs.skip != 'true'
         run: |
           BUILD_NUM="${{ github.run_number }}"
           DIST="mudscript-pre-${BUILD_NUM}"
@@ -77,16 +117,52 @@ jobs:
           [ -d profiles/Default ] && cp -R profiles/Default "$DIST/profiles/"
           mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
           rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
+
+          # Stamp MANIFEST.json with pre-release version
+          if [ -f "$DIST/MANIFEST.json" ]; then
+            BASE_VER=$(jq -r '.version // "0.0.0"' "$DIST/MANIFEST.json")
+            PRE_VER="${BASE_VER}-pre.${BUILD_NUM}"
+            jq --arg v "$PRE_VER" '.version = $v' "$DIST/MANIFEST.json" > "$DIST/MANIFEST.json.tmp"
+            mv "$DIST/MANIFEST.json.tmp" "$DIST/MANIFEST.json"
+            echo "Stamped MANIFEST.json: $BASE_VER → $PRE_VER"
+          fi
+
           ARCHIVE="mudscript-macos-pre-${BUILD_NUM}.tar.gz"
           tar czf "$ARCHIVE" "$DIST"
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
           echo "Package: $ARCHIVE"
+
+      - name: Download previous artifact
+        if: steps.skip-check.outputs.skip == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download \
+            --repo "${{ github.repository }}" \
+            --pattern "mudscript-macos-pre-*.tar.gz" \
+            --dir /tmp/prev-artifact
+          PREV=$(ls /tmp/prev-artifact/mudscript-macos-pre-*.tar.gz | head -1)
+          cp "$PREV" "mudscript-macos-pre-${{ github.run_number }}.tar.gz"
+          echo "Reusing: $PREV"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-pre-${{ github.run_number }}
           path: mudscript-macos-pre-${{ github.run_number }}.tar.gz
+          if-no-files-found: warn
+
+      - name: Upload source hash
+        if: steps.skip-check.outputs.skip != 'true'
+        run: |
+          echo "${{ steps.skip-check.outputs.hash }}" > macos-source-hash.txt
+
+      - name: Upload hash file for release
+        if: steps.skip-check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-hash
+          path: macos-source-hash.txt
 
   # ────────────────────────────────────────────────────────────────────────────
   # Build Windows
@@ -102,7 +178,61 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check if build can be skipped
+        id: skip-check
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Compute content hash of everything that ends up in the Windows dist
+          $files = @(
+            "win\init.ahk",
+            "win\_ms_main.ahk",
+            "win\ms_core_v2.ahk",
+            "win\ms_macros.ahk",
+            "win\install.bat",
+            "win\bin\generate_icon.ps1"
+          )
+          $dirs = @("ui", "profiles\Default")
+          $hashes = @()
+          foreach ($f in $files) {
+            if (Test-Path $f) { $hashes += (Get-FileHash -Path $f -Algorithm SHA256).Hash }
+          }
+          foreach ($d in $dirs) {
+            if (Test-Path $d) {
+              Get-ChildItem -Path $d -Recurse -File | Where-Object { $_.Name -ne '.DS_Store' -and $_.Name -ne '.gitignore' } | ForEach-Object {
+                $hashes += (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+              }
+            }
+          }
+          $hashes = $hashes | Sort-Object
+          $combined = ($hashes -join "`n")
+          $sha = [System.Security.Cryptography.SHA256]::Create()
+          $bytes = [System.Text.Encoding]::UTF8.GetBytes($combined)
+          $hash = $sha.ComputeHash($bytes)
+          $hashStr = [BitConverter]::ToString($hash) -replace '-', '' | ForEach-Object { $_.ToLower() }
+          Write-Output "Current source hash: $hashStr"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "hash=$hashStr"
+
+          # Fetch hash from the latest pre-release
+          $prevHash = ""
+          try {
+            gh release download --repo "${{ github.repository }}" --pattern "windows-source-hash.txt" --dir "$env:TEMP\prev-hash" 2>$null
+            $prevHash = Get-Content "$env:TEMP\prev-hash\windows-source-hash.txt" -Raw
+            $prevHash = $prevHash.Trim()
+          } catch {}
+          Write-Output "Previous hash: $prevHash"
+
+          if ($prevHash -ne "" -and $hashStr -eq $prevHash) {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "skip=true"
+            Write-Output "✓ Source unchanged — skipping build"
+          } else {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "skip=false"
+            Write-Output "✗ Source changed — rebuilding"
+          }
+
       - name: Download lib dependencies
+        if: steps.skip-check.outputs.skip != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,6 +256,7 @@ jobs:
           Write-Output "Dependencies downloaded."
 
       - name: Build Windows package
+        if: steps.skip-check.outputs.skip != 'true'
         shell: pwsh
         run: |
           $buildNum = "${{ github.run_number }}"
@@ -138,16 +269,53 @@ jobs:
           Copy-Item -Recurse "profiles" "$dist\" -ErrorAction SilentlyContinue
           Remove-Item -Recurse "$dist\bin\*.sh","$dist\bin\*.plist","$dist\bin\*.swift","$dist\bin\hidinject","$dist\Spoons" -ErrorAction SilentlyContinue
           Remove-Item -Recurse "$dist\*.lua","$dist\install.sh","$dist\.gitignore" -ErrorAction SilentlyContinue
+
+          # Stamp MANIFEST.json with pre-release version
+          $manifestPath = Join-Path $dist "MANIFEST.json"
+          if (Test-Path $manifestPath) {
+            $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+            $baseVer = if ($manifest.version) { $manifest.version } else { "0.0.0" }
+            $preVer = "$baseVer-pre.$buildNum"
+            $manifest.version = $preVer
+            $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath -NoNewline
+            Write-Output "Stamped MANIFEST.json: $baseVer -> $preVer"
+          }
+
           $archive = "mudscript-windows-pre-$buildNum.zip"
           Compress-Archive -Path "$dist\*" -DestinationPath $archive -Force
           Add-Content -Path $env:GITHUB_OUTPUT -Value "archive=$archive"
           Write-Output "Package: $archive"
+
+      - name: Download previous artifact
+        if: steps.skip-check.outputs.skip == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --repo "${{ github.repository }}" --pattern "mudscript-windows-pre-*.zip" --dir "$env:TEMP\prev-artifact"
+          $prev = Get-ChildItem "$env:TEMP\prev-artifact\mudscript-windows-pre-*.zip" | Select-Object -First 1
+          Copy-Item $prev.FullName "mudscript-windows-pre-${{ github.run_number }}.zip"
+          Write-Output "Reusing: $($prev.Name)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-pre-${{ github.run_number }}
           path: mudscript-windows-pre-${{ github.run_number }}.zip
+          if-no-files-found: warn
+
+      - name: Upload source hash
+        if: steps.skip-check.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          Set-Content -Path "windows-source-hash.txt" -Value "${{ steps.skip-check.outputs.hash }}"
+
+      - name: Upload hash file for release
+        if: steps.skip-check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-hash
+          path: windows-source-hash.txt
 
   # ────────────────────────────────────────────────────────────────────────────
   # Pre-release — create a tagged pre-release with whatever was built
@@ -164,6 +332,14 @@ jobs:
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          pattern: "*-pre-*"
+
+      - name: Download hash files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-hash"
+        continue-on-error: true
 
       - name: Create pre-release
         env:
@@ -181,12 +357,18 @@ jobs:
           git push origin "$TAG"
 
           ASSETS=$(find . -name "mudscript-*-pre-${{ github.run_number }}.*" -type f 2>/dev/null | tr '\n' ' ' || true)
-          echo "Assets: $ASSETS"
+          echo "Build assets: $ASSETS"
+
+          # Include hash files as release assets (for future skip-checks)
+          HASHES=$(find . -name "*-source-hash.txt" -type f 2>/dev/null | tr '\n' ' ' || true)
+          echo "Hash files: $HASHES"
+
+          ALL_ASSETS="$ASSETS $HASHES"
 
           # Determine which platforms were built
           BUILT=""
-          echo "$ASSETS" | grep -q "macos" && BUILT="${BUILT}macOS "
-          echo "$ASSETS" | grep -q "windows" && BUILT="${BUILT}Windows"
+          echo "$ALL_ASSETS" | grep -q "macos" && BUILT="${BUILT}macOS "
+          echo "$ALL_ASSETS" | grep -q "windows" && BUILT="${BUILT}Windows"
           BUILT=$(echo "$BUILT" | xargs)  # trim
 
           CHANGES=$(git log --oneline $(git rev-list --tags --max-count=1 2>/dev/null || echo HEAD~5)..HEAD 2>/dev/null | head -20 || echo "No changes.")
@@ -212,6 +394,6 @@ jobs:
             --notes-file notes.md \
             --prerelease \
             --target main \
-            $ASSETS
+            $ALL_ASSETS
 
           echo "Pre-release: https://github.com/${{ github.repository }}/releases/tag/$TAG"
