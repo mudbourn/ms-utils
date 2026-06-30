@@ -3,6 +3,8 @@
         -- 0. Bootstrap & Spoons --
             ms = {}
             if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
+            if _G.__ms_core_running then return end
+            _G.__ms_core_running = true
 
         -- Loading Screen locals (webview created after spoon loading) --
             local _lWebView, _lFadingOut, _lFadeTimer
@@ -201,6 +203,9 @@
                 end
 
                 if spoon.MsSettings then
+                    ms.settings = ms.settings or {}
+                    ms.menu     = ms.menu or {}
+                    ms.features = ms.features or {}
                     spoon.MsSettings:start()
                 else
                     ms.settings = ms.settings or {}
@@ -2083,7 +2088,7 @@
                         error("ms_macros.lua: cannot open file for security audit: " .. macrosPath)
                     end
                     rawSrc = af:read("*all"); af:close()
-                    local auditErrs = auditMacros(rawSrc)
+                    local auditErrs = ms.auditMacros(rawSrc)
                     if #auditErrs > 0 then
                         local msg = "ms_macros.lua failed security audit ("
                             .. #auditErrs .. " violation"
@@ -2168,8 +2173,8 @@
                 local lx  = sf.x + math.floor((sf.w - lw) / 2)
                 local ly  = sf.y + sf.h - 150 - lh
 
-                local _ucLoading = hs.webview.usercontent.new("loading")
-                _ucLoading:setCallback(function(message)
+                local _ucLoad = hs.webview.usercontent.new("loadingScreen")
+                _ucLoad:setCallback(function(message)
                     local ok, data = pcall(hs.json.decode, message.body)
                     if not ok or type(data) ~= "table" then return end
                     if data.action == "toggleSkipPreload" then
@@ -2185,35 +2190,13 @@
                 local htmlPath = hs.configdir .. "/ui/ms_loading.html"
                 local baseURL  = "file://" .. hs.configdir .. "/ui/"
 
-                _lWebView = hs.webview.new({ x=lx, y=ly, w=lw, h=lh }, {}, _ucLoading)
+                _lWebView = hs.webview.new({ x=lx, y=ly, w=lw, h=lh }, {}, _ucLoad)
                 pcall(function() _lWebView:windowStyle(0) end)
                 pcall(function() _lWebView:level(hs.canvas.windowLevels.popUpMenu or 25) end)
                 pcall(function() _lWebView:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
                 pcall(function() _lWebView:allowTextEntry(false) end)
                 pcall(function() _lWebView:shadow(false) end)
                 _lWebView:alpha(0)
-
-                _lWebView:navigationCallback(function(action, wv, navType, err)
-                    if navType == "didFinishLoad" then
-                        local themeJson = hs.json.encode(ms._theme or {})
-                        wv:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
-                        wv:evaluateJavaScript(
-                            "setSkipPreloadState(" .. (ms._skipDevPrewarm and "true" or "false") .. ")")
-                        -- Replay buffered messages
-                        for _, entry in ipairs(_lMsgBuffer) do
-                            local encoded = entry.msg and ('"' .. entry.msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
-                            wv:evaluateJavaScript(string.format("setProgress(%d, %s)", entry.pct, encoded))
-                        end
-                        _lMsgBuffer = {}
-                        wv:show()
-                        local step, steps = 0, 6
-                        local t = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
-                            step = step + 1
-                            if _lWebView then _lWebView:alpha(step / steps) end
-                            if step >= steps and t then t:stop() end
-                        end)
-                    end
-                end)
 
                 -- Replace buffer function with live function
                 _lUpdate = function(pct, msg)
@@ -2228,6 +2211,30 @@
                     local html = f:read("*all"); f:close()
                     _lWebView:html(html, baseURL)
                 end
+
+                -- Show and initialize after a short delay (let the webview render)
+                hs.timer.doAfter(0.05, function()
+                    if not _lWebView then return end
+                    -- Inject theme and state
+                    local themeJson = hs.json.encode(ms._theme or {})
+                    _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                    _lWebView:evaluateJavaScript(
+                        "setSkipPreloadState(" .. (ms._skipDevPrewarm and "true" or "false") .. ")")
+                    -- Replay buffered messages
+                    for _, entry in ipairs(_lMsgBuffer) do
+                        local encoded = entry.msg and ('"' .. entry.msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
+                        _lWebView:evaluateJavaScript(string.format("setProgress(%d, %s)", entry.pct, encoded))
+                    end
+                    _lMsgBuffer = {}
+                    -- Fade in
+                    _lWebView:show()
+                    local step, steps = 0, 6
+                    local t = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
+                        step = step + 1
+                        if _lWebView then _lWebView:alpha(step / steps) end
+                        if step >= steps and t then t:stop() end
+                    end)
+                end)
             end
         -- END Loading Screen — Webview Creation --
 
@@ -2297,7 +2304,7 @@
             -- Set profile name on loading screen
             if ms.macroMeta and ms.macroMeta.name and _lWebView then
                 _lWebView:evaluateJavaScript("setProfileName(" ..
-                    hs.json.encode(ms.macroMeta.name) .. ")")
+                    '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
             end
 
             hs.timer.doAfter(0, function()

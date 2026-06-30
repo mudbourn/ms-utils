@@ -989,6 +989,7 @@
         end
 
         local auditMacros
+        ms.auditMacros = function(src) return auditMacros(src) end
 
         local function switchProfile(targetName)
             ms.dev.log({

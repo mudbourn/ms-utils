@@ -345,7 +345,16 @@
         local function _emptyToNil(s) if s == nil or s == "" then return nil end; return s end
 
         ms.ui._actions = {
-            ready = function() ms.ui.refresh() end,
+            ready = function()
+                ms._panelHTMLLoaded = true
+                if ms._settingsPendingShow and ms.ui._open then
+                    ms._settingsPendingShow = false
+                    _showAndFadeIn()
+                else
+                    ms._settingsPendingShow = false
+                    ms.ui.refresh()
+                end
+            end,
 
             setMacros = function(data)
                 ms.setMacros(tonumber(data.value) == 1 and 1 or 0)
@@ -1425,7 +1434,10 @@
             }
         end
 
+        local _showAndFadeIn  -- forward declaration; defined after _buildPanel
+
         local function _buildPanel()
+            ms._panelHTMLLoaded = false
             local panel = hs.webview.new(_panelFrame(), { developerExtrasEnabled = true }, _ucMS)
             if not panel then return nil end
             pcall(function() panel:windowStyle(0) end)
@@ -1443,6 +1455,25 @@
             end)
             panel:html(_loadPanelHTML(), uiBasePath)
             return panel
+        end
+
+        -- Show panel and fade in; captures panel ref locally so the timer
+        -- survives _panel being swapped or nilled by a concurrent hide().
+        _showAndFadeIn = function()
+            local panel = ms.ui._panel
+            if not panel then return end
+            pcall(function() panel:alpha(0) end)
+            panel:show()
+            pcall(function() panel:bringToFront(true) end)
+            ms.ui.refresh()
+            local step, steps = 0, 6
+            ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
+                step = step + 1
+                pcall(function() panel:alpha(step / steps) end)
+                if step >= steps then
+                    if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
+                end
+            end)
         end
 
         ms.ui.show = function()
@@ -1464,34 +1495,32 @@
             pcall(function() ms.ui._panel:frame(_pf) end)
             ms.ui._open = true
             ms.playSlot("settingsOpen")
-            pcall(function() ms.ui._panel:alpha(0) end)
-            ms.ui._panel:show()
-            pcall(function() ms.ui._panel:bringToFront(true) end)
-            ms.ui.refresh()
-            local step, steps = 0, 6
-            ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                step = step + 1
-                pcall(function() ms.ui._panel:alpha(step / steps) end)
-                if step >= steps then
-                    ms.ui._uiFadeTimer:stop()
-                    ms.ui._uiFadeTimer = nil
-                end
-            end)
+            if ms._panelHTMLLoaded then
+                -- HTML already loaded (prewarm or previous show); fade in now
+                _showAndFadeIn()
+            else
+                -- HTML still loading; ready callback will call _showAndFadeIn
+                ms._settingsPendingShow = true
+            end
         end
 
         ms.ui.hide = function()
             if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
+            ms._settingsPendingShow = false
             if ms.ui._open then ms.playSlot("settingsClose") end
             ms.ui._open = false
             local panel = ms.ui._panel
             if panel then
+                -- Capture current alpha so fade-out starts from wherever we are,
+                -- not from an assumed 1.0 (which would flash a transparent panel).
+                local startAlpha = 1
+                pcall(function() startAlpha = panel:alpha() or 1 end)
                 local step, steps = 0, 6
                 ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
                     step = step + 1
-                    pcall(function() panel:alpha(1 - (step / steps)) end)
+                    pcall(function() panel:alpha(startAlpha * (1 - (step / steps))) end)
                     if step >= steps then
-                        ms.ui._uiFadeTimer:stop()
-                        ms.ui._uiFadeTimer = nil
+                        if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
                         if ms.ui._panel == panel then
                             pcall(function() panel:hide() end)
                             ms.ui._panel    = nil
