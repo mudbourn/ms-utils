@@ -662,72 +662,12 @@ local MsDevTools = {}
         if not co then return end
 
         _branchState[co] = {
-            depth      = 0,
-            label      = label or "macro",
-            buffer     = {},
-            lastFn     = nil,
-            repeatCount = 0,
+            label  = label or "macro",
+            buffer = {},
         }
-
-        debug.sethook(co, function(event)
-            local st = _branchState[co]
-
-            if not st then return end
-
-            if event == "call" then
-                st.depth = st.depth + 1
-
-                local fnInfo = debug.getinfo(2, "n")
-                local name   = fnInfo and fnInfo.name
-
-                if not name then return end
-
-                -- Collapse repeated calls: "cam.move() ×120"
-                if name == st.lastFn then
-                    st.repeatCount = st.repeatCount + 1
-                else
-                    -- Flush previous repeat count.
-                    if st.lastFn and st.repeatCount > 1 then
-                        table.insert(st.buffer,
-                            string.rep("  ", math.max(0, st.depth - 1))
-                            .. st.lastFn .. "() \195\151" .. st.repeatCount
-                        )
-                    end
-
-                    st.lastFn      = name
-                    st.repeatCount = 1
-                end
-
-            elseif event == "return" or event == "tail return" then
-                if st.depth > 0 then
-                    st.depth = st.depth - 1
-                end
-
-                -- Flush repeats when returning to a shallower depth.
-                if st.lastFn and st.repeatCount > 1 then
-                    table.insert(st.buffer,
-                        string.rep("  ", st.depth)
-                        .. st.lastFn .. "() \195\151" .. st.repeatCount
-                    )
-                    st.lastFn      = nil
-                    st.repeatCount = 0
-                end
-            end
-        end, "cr")
     end
 
     function MsDevTools:stopTrace(co)
-        pcall(debug.sethook, co)
-
-        local st = _branchState[co]
-
-        if st and st.lastFn and st.repeatCount > 1 then
-            table.insert(st.buffer,
-                string.rep("  ", st.depth)
-                .. st.lastFn .. "() \195\151" .. st.repeatCount
-            )
-        end
-
         self:flushTraceBuffer(co)
 
         _branchState[co] = nil
