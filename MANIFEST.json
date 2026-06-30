@@ -1,10 +1,10 @@
 {
   "version": "1.2.8",
-  "sha256": "16a8ca9536f93d96de94266ba1d22a008bc8f389d01e611df4f1e18b2d4c04a4",
+  "sha256": "aba5fed5bc32c1e70a748ef571da58a1d8486ab7969ed12eaa6fd832f432909c",
   "url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua",
   "bundle": {
     "url": "https://github.com/mudbourn/ms-utils/releases/download/v1.2.8/mudscript-macos-1.2.8.tar.gz",
-    "sha256": "b0ba05fd45742af31068b9b3a6e8412d3488671691784f9236404ae5d24e628e"
+    "sha256": "f35dafc4cd77668f21bf9ea1ec3b2a894337f16a86fa92e6a70d50e2df513252"
   },
-  "signature": "wDVk6X7/k9oLoE5ScD5AXtySxnX+mrtXlbHBlvw++lh1K28RRKWeMXzrziBZTnVikR7SOk3ewSBbAmeXvgaQBgjsME5QaqCCcfpcgj03Cdfq+9++ok2HRM3oMyx4loxGMHc5lPa3BPyZfB62pW8Fi8mrIXZQnNGos6ctgWdmHCBZjzAzVfedCB5jjr0B56QDvgW/QhB1bRUs2BcYbVz7H7f4vo12xzf1MiLw+qGSDvq/9Em5GZ8JBH5eOguEOPv4aNHr8dQ77lQ7sbev+WTJ2fg+UdQKVXphGrJIT7u0twFg0hvXyGR823Omb9P/S+J79ZE6sAcb1iROP1wisq81iA=="
+  "signature": "lLt/ROEQLxPPTDMYWOzirmnbbfNYwLNWHyBaTduh69Wi89GUeHdBpicYqVh44S2jEAx2ywJ/BqURRfGuVx2WOsxoWMq7FqaonLDlDIs2P3bKsdB52lRZSezi511YbiyYUNCGQgutOChZylwQ8jwVdsKKSA91Gw8IkIJdtz+w1P+AvycCqpvY56GD0yLmP2d+zGI4AhIPZGxcJCxPv8D0vvcKxvPwyMJVXrLrBhCEiGMEnDbfHbjwrIzTY/xLjNwzpUSSjhFSaEyz4wTRRynqKWbYP7gzOREjEtNPjBsh9phLq8O7qhleztVXAOBfF+L435lv2uUt9hlCEDwb/SZYBA=="
 }
