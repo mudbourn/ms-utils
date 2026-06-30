@@ -2334,22 +2334,34 @@
             end
 
             _G._timers = {}
+            -- Timing: when dev tools are skipped, compress the chain
+            local _skip = ms._skipDevPrewarm
+            local t1 = _skip and 0.2 or 0.3
+            local t2 = _skip and 0.3 or 0.5
+            local t3 = _skip and 0.5 or 0.8
+            local t4 = _skip and 0.7 or 1.3
+            local t5 = _skip and 1.0 or 2.0
+            local t6 = _skip and 1.0 or 2.6   -- same as t5 when skipped
+            local t7 = _skip and 1.0 or 3.2
+            local t8 = _skip and 1.0 or 3.8
+            local t9 = _skip and 1.2 or 4.2
+            local t10 = _skip and 1.5 or 4.6
             _G._timers[1] = hs.timer.doAfter(0, function()
                 print("[startup] t=0: prebuild")
                 pcall(function() ms.ui.prebuild() end)
                 _lUpdate(25, "Building UI state cache\u{2026}")
             end)
-            _G._timers[2] = hs.timer.doAfter(0.3, function()
-                print("[startup] t=0.3: prep settings")
+            _G._timers[2] = hs.timer.doAfter(t1, function()
+                print("[startup] t=" .. t1 .. ": prep settings")
                 _lUpdate(32, "Preparing settings panel\u{2026}")
             end)
-            _G._timers[3] = hs.timer.doAfter(0.5, function()
-                print("[startup] t=0.5: prewarm")
+            _G._timers[3] = hs.timer.doAfter(t2, function()
+                print("[startup] t=" .. t2 .. ": prewarm")
                 pcall(function() ms.ui.prewarm() end)
                 _lUpdate(40, "Loading settings panel\u{2026}")
             end)
-            _G._timers[4] = hs.timer.doAfter(0.8, function()
-                print("[startup] t=0.8: theme")
+            _G._timers[4] = hs.timer.doAfter(t3, function()
+                print("[startup] t=" .. t3 .. ": theme")
                 _lUpdate(48, "Applying theme\u{2026}")
                 pcall(function()
                     if _lWebView then
@@ -2359,52 +2371,52 @@
                 end)
                 pcall(function() ms.playSlot("themeLoaded") end)
             end)
-            _G._timers[5] = hs.timer.doAfter(1.3, function()
-                print("[startup] t=1.3: integrity seed")
+            _G._timers[5] = hs.timer.doAfter(t4, function()
+                print("[startup] t=" .. t4 .. ": integrity seed")
                 _lUpdate(55, "Seeding integrity hash\u{2026}")
             end)
-            _G._timers[6] = hs.timer.doAfter(2.0, function()
-                print("[startup] t=2.0: console")
+            _G._timers[6] = hs.timer.doAfter(t5, function()
+                print("[startup] t=" .. t5 .. ": console")
                 if ms._skipDevPrewarm then return end
                 _lUpdate(62, "Loading console\u{2026}")
                 _G._timers[60] = hs.timer.doAfter(0, function()
                     if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("console") end) end
                 end)
             end)
-            _G._timers[7] = hs.timer.doAfter(2.6, function()
-                print("[startup] t=2.6: watcher")
+            _G._timers[7] = hs.timer.doAfter(t6, function()
+                print("[startup] t=" .. t6 .. ": watcher")
                 if ms._skipDevPrewarm then return end
                 _lUpdate(72, "Loading macro monitor\u{2026}")
                 _G._timers[70] = hs.timer.doAfter(0, function()
                     if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("watcher") end) end
                 end)
             end)
-            _G._timers[8] = hs.timer.doAfter(3.2, function()
-                print("[startup] t=3.2: keys")
+            _G._timers[8] = hs.timer.doAfter(t7, function()
+                print("[startup] t=" .. t7 .. ": keys")
                 if ms._skipDevPrewarm then return end
                 _lUpdate(82, "Loading input monitor\u{2026}")
                 _G._timers[80] = hs.timer.doAfter(0, function()
                     if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("keys") end) end
                 end)
             end)
-            _G._timers[9] = hs.timer.doAfter(3.8, function()
-                print("[startup] t=3.8: window")
+            _G._timers[9] = hs.timer.doAfter(t8, function()
+                print("[startup] t=" .. t8 .. ": window")
                 if ms._skipDevPrewarm then return end
                 _lUpdate(90, "Loading window monitor\u{2026}")
                 _G._timers[90] = hs.timer.doAfter(0, function()
                     if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("window") end) end
                 end)
             end)
-            _G._timers[10] = hs.timer.doAfter(4.2, function()
-                print("[startup] t=4.2: finalize")
+            _G._timers[10] = hs.timer.doAfter(t9, function()
+                print("[startup] t=" .. t9 .. ": finalize")
                 if not _lFadingOut then _lUpdate(96, "Finalizing\u{2026}") end
             end)
-            _G._timers[11] = hs.timer.doAfter(4.6, function()
-                print("[startup] t=4.6: fade start")
+            _G._timers[11] = hs.timer.doAfter(t10, function()
+                print("[startup] t=" .. t10 .. ": fade start")
                 if not _lFadingOut then
                     _lUpdate(100, "Ready.")
                     _G._timers[12] = hs.timer.doAfter(0.8, function()
-                        print("[startup] t=5.4: calling _lFadeOut")
+                        print("[startup] fade out")
                         pcall(function() _lFadeOut() end)
                     end)
                 end

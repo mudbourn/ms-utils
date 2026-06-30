@@ -376,6 +376,14 @@
                 playSlot("update");
             }
 
+
+            let _lastHoverTs = 0;
+            function _hoverDebounced() {
+                const now = Date.now();
+                if (now - _lastHoverTs < 200) return;
+                _lastHoverTs = now;
+                playSlot("hover");
+            }
             // Right-click on entries: copy selected
             document.addEventListener("contextmenu", (e) => {
                 const row = e.target.closest(".entry, .step");
@@ -481,7 +489,7 @@
                     row.appendChild(pill);
                 }
 
-                row.addEventListener("mouseenter", () => playSlot("hover"));
+                row.addEventListener("mouseenter", _hoverDebounced);
                 row.addEventListener("click", _handleEntryClick);
                 return row;
             }

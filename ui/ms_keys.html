@@ -555,7 +555,7 @@
             let _lastClicked = null;
 
             function _getEntries() {
-                return Array.from(document.querySelectorAll("#log .entry, #log .step"));
+                return Array.from(document.querySelectorAll(".log .entry, .log .step"));
             }
 
             function _updateSelectionVisuals() {
@@ -601,6 +601,14 @@
                 playSlot("update");
             }
 
+
+            let _lastHoverTs = 0;
+            function _hoverDebounced() {
+                const now = Date.now();
+                if (now - _lastHoverTs < 200) return;
+                _lastHoverTs = now;
+                playSlot("hover");
+            }
             // Right-click on entries: copy selected
             document.addEventListener("contextmenu", (e) => {
                 const row = e.target.closest(".entry, .step");
@@ -757,7 +765,7 @@
                         mkSpan("arrow arrow-move", "→"),
                         mkSpan("move-name", entry.x + ", " + entry.y),
                     );
-                    row.addEventListener("mouseenter", () => playSlot("hover"));
+                    row.addEventListener("mouseenter", _hoverDebounced);
                     row.addEventListener("click", _handleEntryClick);
                     return row;
                 }
@@ -802,7 +810,7 @@
                     );
                 }
 
-                row.addEventListener("mouseenter", () => playSlot("hover"));
+                row.addEventListener("mouseenter", _hoverDebounced);
                 row.addEventListener("click", _handleEntryClick);
                 return row;
             }
