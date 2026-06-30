@@ -759,39 +759,32 @@
     end
 
     local function _devThemeJS()
-        local t     = ms._theme or {}
-        local parts = {}
+        local t = ms._theme or {}
 
-        local function sv(prop, key)
-            local val = t[key]
+        -- Build a clean theme object for applyTheme()
+        local safe = {}
+        for _, k in ipairs({"bg","surface","surface2","hover","accent","accentHi",
+            "success","dangerBg","danger","warning","text","text2","text3",
+            "border","borderDim","accentGlow","accentGlowFaint","dangerGlow",
+            "dangerBorder","radius","font"}) do
+            if t[k] ~= nil then safe[k] = t[k] end
+        end
 
-            if type(val) == "string" then
-                if val:match("^#[0-9a-fA-F]+$") then
-                    table.insert(parts, string.format("r.setProperty('%s','%s')", prop, val))
-                end
+        -- Handle font URL for custom font files
+        if type(t.font) == "string" and t.font:match("%.[ot]tf$") then
+            local fp = hs.configdir .. "/sounds/" .. t.font
+            local f = io.open(fp, "r")
+            if not f then
+                fp = _home .. "/.hammerspoon/sounds/" .. t.font
+                f = io.open(fp, "r")
             end
+            if f then f:close(); safe.fontURL = "file://" .. fp end
         end
 
-        sv("--bg",       "bg")
-        sv("--surface",  "surface")
-        sv("--surface2", "surface2")
-        sv("--accent",   "accent")
-        sv("--text",     "text")
-        sv("--mouse",    "warning")
+        local ok, json = pcall(hs.json.encode, safe)
+        if not ok or json == "{}" then return "" end
 
-        if type(t.radius) == "number" then
-            table.insert(parts, string.format("r.setProperty('--radius','%dpx')", math.max(0, t.radius)))
-        end
-
-        local font = t.font
-
-        if type(font) == "string" and font ~= "" and not font:match("%.[ot]tf$") and not font:match("%.woff") then
-            table.insert(parts, string.format("document.body.style.fontFamily=\"'%s',Palatino,Georgia,serif\"", font))
-        end
-
-        if #parts == 0 then return "" end
-
-        return "(function(){var r=document.documentElement.style;" .. table.concat(parts, ";") .. "})()"
+        return "applyTheme(" .. json .. ")"
     end
 
     local function _makeDevPanel(ucName, w, h, xOff, yOff)
