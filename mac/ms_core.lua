@@ -2325,23 +2325,25 @@
             end
 
             hs.timer.doAfter(0, function()
-                ms.ui.prebuild()
+                pcall(function() ms.ui.prebuild() end)
                 _lUpdate(25, "Building UI state cache\u{2026}")
             end)
             hs.timer.doAfter(0.3, function()
                 _lUpdate(32, "Preparing settings panel\u{2026}")
             end)
             hs.timer.doAfter(0.5, function()
-                ms.ui.prewarm()
+                pcall(function() ms.ui.prewarm() end)
                 _lUpdate(40, "Loading settings panel\u{2026}")
             end)
             hs.timer.doAfter(0.8, function()
                 _lUpdate(48, "Applying theme\u{2026}")
                 -- Re-inject theme now that it's loaded
-                if _lWebView then
-                    local themeJson = hs.json.encode(ms._theme or {})
-                    _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
-                end
+                pcall(function()
+                    if _lWebView then
+                        local themeJson = hs.json.encode(ms._theme or {})
+                        _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                    end
+                end)
                 pcall(function() ms.playSlot("themeLoaded") end)
             end)
             hs.timer.doAfter(1.3, function()
@@ -2378,19 +2380,22 @@
             hs.timer.doAfter(4.2, function()
                 if not _lFadingOut then _lUpdate(96, "Finalizing\u{2026}") end
             end)
-            hs.timer.doAfter(4.6, function()
+            _G._fadeStartTimer = hs.timer.doAfter(4.6, function()
+                _G._fadeStartTimer = nil
                 if not _lFadingOut then
                     _lUpdate(100, "Ready.")
-                    hs.timer.doAfter(0.8, _lFadeOut)
+                    hs.timer.doAfter(0.8, function() pcall(function() _lFadeOut() end) end)
                 end
             end)
-            hs.timer.doAfter(8, function()
+            _G._startupGuardTimer = hs.timer.doAfter(8, function()
+                _G._startupGuardTimer = nil
                 pcall(function()
                     if _lWebView and not _lFadingOut then _lFadeOut() end
                 end)
                 ms._startupSoundDone = true
             end)
-            hs.timer.doAfter(3, function()
+            _G._integrityCheckTimer = hs.timer.doAfter(3, function()
+                _G._integrityCheckTimer = nil
                 pcall(function()
                     if ms.integrity.check() ~= "uninitialized" then return end
                     local _mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
