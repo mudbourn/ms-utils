@@ -765,8 +765,8 @@
                         mkSpan("arrow arrow-move", "→"),
                         mkSpan("move-name", entry.x + ", " + entry.y),
                     );
-                    row.addEventListener("mouseenter", _hoverDebounced);
-                    row.addEventListener("click", _handleEntryClick);
+                    row.onmouseenter = function() { playSlot("hover"); };
+                    row.onclick = _handleEntryClick;
                     return row;
                 }
 
@@ -810,8 +810,8 @@
                     );
                 }
 
-                row.addEventListener("mouseenter", _hoverDebounced);
-                row.addEventListener("click", _handleEntryClick);
+                row.onmouseenter = function() { playSlot("hover"); };
+                row.onclick = _handleEntryClick;
                 return row;
             }
 

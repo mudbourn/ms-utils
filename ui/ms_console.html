@@ -605,8 +605,8 @@
                     row.appendChild(pill);
                 }
 
-                row.addEventListener("mouseenter", _hoverDebounced);
-                row.addEventListener("click", _handleEntryClick);
+                row.onmouseenter = function() { playSlot("hover"); };
+                row.onclick = _handleEntryClick;
                 log.appendChild(row);
 
                 // Trim oldest entries beyond the cap
