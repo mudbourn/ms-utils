@@ -2212,6 +2212,33 @@
                     );
                 }
 
+                // Custom theme toggle (moved from Developer)
+                if (!hidden.independentBinds) body.appendChild(divider());
+                const customTheme = S.customThemeEnabled !== false;
+                body.appendChild(
+                    row(
+                        "Custom theme",
+                        "Load ms_theme.json colors and font",
+                        h(
+                            "button",
+                            {
+                                cls:
+                                    "btn-macro " +
+                                    (customTheme ? "btn-enable" : "btn-disable"),
+                                onmouseenter: () => playSlot("hover"),
+                                onclick: () => {
+                                    playSlot("interact");
+                                    sendToHost({
+                                        action: "setCustomTheme",
+                                        value: !customTheme,
+                                    });
+                                },
+                            },
+                            customTheme ? "ON" : "OFF",
+                        ),
+                    ),
+                );
+
                 // User-defined settings targeting the Settings section
                 const items = S.userSettings || [];
                 const hasSystem =
@@ -2801,32 +2828,6 @@
                 );
 
                 body.appendChild(divider());
-
-                // Custom theme toggle
-                const customTheme = S.customThemeEnabled !== false;
-                body.appendChild(
-                    row(
-                        "Custom theme",
-                        "Load ms_theme.json colors and font",
-                        h(
-                            "button",
-                            {
-                                cls:
-                                    "btn-macro " +
-                                    (customTheme ? "btn-enable" : "btn-disable"),
-                                onmouseenter: () => playSlot("hover"),
-                                onclick: () => {
-                                    playSlot("interact");
-                                    sendToHost({
-                                        action: "setCustomTheme",
-                                        value: !customTheme,
-                                    });
-                                },
-                            },
-                            customTheme ? "ON" : "OFF",
-                        ),
-                    ),
-                );
 
                 // Preload dev tools on startup toggle
                 const preload = S.preloadDevTools !== false;

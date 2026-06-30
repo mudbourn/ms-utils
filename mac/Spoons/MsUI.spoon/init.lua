@@ -546,6 +546,9 @@
                     -- Reload custom theme
                     ms.loadTheme()
                 end
+                -- Re-discover sounds (respects _customThemeDisabled for active/ dir)
+                ms._soundsDirty = true
+                ms._discoverSounds()
                 ms.ui.refresh()
             end,
 
