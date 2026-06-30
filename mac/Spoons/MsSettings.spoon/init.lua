@@ -795,6 +795,18 @@
                 local clean = data.font:gsub("[;{}()<>\"']", "")
                 if #clean > 0 then ms._theme.font = clean end
             end
+            -- Pass through override keys (text2, text3, border, accentGlow, etc.)
+            -- These accept any string (hex or rgba) so users have full control.
+            local overrideKeys = {
+                "text2","text3","border",
+                "accentGlow","accentGlowFaint",
+                "dangerGlow","dangerBorder",
+            }
+            for _, k in ipairs(overrideKeys) do
+                if type(data[k]) == "string" and #data[k] > 0 then
+                    ms._theme[k] = data[k]
+                end
+            end
         end
     -- END Theme System --
 
