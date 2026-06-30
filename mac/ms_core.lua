@@ -1369,9 +1369,7 @@
                 if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "startup" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" then return false end
                 local now = hs.timer.absoluteTime()
                 ms._playSlotTimes = ms._playSlotTimes or {}
-                -- Per-slot cooldown: hover 150ms, interact 100ms, others 50ms
-                local cooldown = slotId == "hover" and 0.15 or (slotId == "interact" and 0.1 or 0.05)
-                if (now - (ms._playSlotTimes[slotId] or 0)) < cooldown then return false end
+                if (now - (ms._playSlotTimes[slotId] or 0)) < 0.05 then return false end
                 ms._playSlotTimes[slotId] = now
                 ms._slotHandles = ms._slotHandles or {}
                 -- If this slot is already playing, don't restart — let it finish
