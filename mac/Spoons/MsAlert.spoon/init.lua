@@ -396,10 +396,11 @@
         }
 
         -- Low-priority toasts go to the bottom of the queue
+        -- _redraw iterates #queue→1, so queue[#queue]=bottom, queue[1]=top
         if entry.priority == "low" then
-            table.insert(queue, 1, entry)
-        else
             table.insert(queue, entry)
+        else
+            table.insert(queue, 1, entry)
         end
         self:_redraw(entry)
 
