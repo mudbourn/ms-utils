@@ -2325,19 +2325,22 @@
             end
 
             hs.timer.doAfter(0, function()
+                print("[startup] t=0: prebuild")
                 pcall(function() ms.ui.prebuild() end)
                 _lUpdate(25, "Building UI state cache\u{2026}")
             end)
             hs.timer.doAfter(0.3, function()
+                print("[startup] t=0.3: prep settings")
                 _lUpdate(32, "Preparing settings panel\u{2026}")
             end)
             hs.timer.doAfter(0.5, function()
+                print("[startup] t=0.5: prewarm")
                 pcall(function() ms.ui.prewarm() end)
                 _lUpdate(40, "Loading settings panel\u{2026}")
             end)
             hs.timer.doAfter(0.8, function()
+                print("[startup] t=0.8: theme")
                 _lUpdate(48, "Applying theme\u{2026}")
-                -- Re-inject theme now that it's loaded
                 pcall(function()
                     if _lWebView then
                         local themeJson = hs.json.encode(ms._theme or {})
@@ -2347,9 +2350,11 @@
                 pcall(function() ms.playSlot("themeLoaded") end)
             end)
             hs.timer.doAfter(1.3, function()
+                print("[startup] t=1.3: integrity seed")
                 _lUpdate(55, "Seeding integrity hash\u{2026}")
             end)
             hs.timer.doAfter(2.0, function()
+                print("[startup] t=2.0: console")
                 if ms._skipDevPrewarm then return end
                 _lUpdate(62, "Loading console\u{2026}")
                 hs.timer.doAfter(0, function()
@@ -2357,6 +2362,7 @@
                 end)
             end)
             hs.timer.doAfter(2.6, function()
+                print("[startup] t=2.6: watcher")
                 if ms._skipDevPrewarm then return end
                 _lUpdate(72, "Loading macro monitor\u{2026}")
                 hs.timer.doAfter(0, function()
@@ -2364,6 +2370,7 @@
                 end)
             end)
             hs.timer.doAfter(3.2, function()
+                print("[startup] t=3.2: keys")
                 if ms._skipDevPrewarm then return end
                 _lUpdate(82, "Loading input monitor\u{2026}")
                 hs.timer.doAfter(0, function()
@@ -2371,6 +2378,7 @@
                 end)
             end)
             hs.timer.doAfter(3.8, function()
+                print("[startup] t=3.8: window")
                 if ms._skipDevPrewarm then return end
                 _lUpdate(90, "Loading window monitor\u{2026}")
                 hs.timer.doAfter(0, function()
@@ -2378,23 +2386,31 @@
                 end)
             end)
             hs.timer.doAfter(4.2, function()
+                print("[startup] t=4.2: finalize")
                 if not _lFadingOut then _lUpdate(96, "Finalizing\u{2026}") end
             end)
             _G._fadeStartTimer = hs.timer.doAfter(4.6, function()
+                print("[startup] t=4.6: fade start")
                 _G._fadeStartTimer = nil
                 if not _lFadingOut then
                     _lUpdate(100, "Ready.")
-                    hs.timer.doAfter(0.8, function() pcall(function() _lFadeOut() end) end)
+                    hs.timer.doAfter(0.8, function()
+                        print("[startup] t=5.4: calling _lFadeOut")
+                        pcall(function() _lFadeOut() end)
+                    end)
                 end
             end)
             _G._startupGuardTimer = hs.timer.doAfter(8, function()
+                print("[startup] t=8: GUARD fired")
                 _G._startupGuardTimer = nil
                 pcall(function()
                     if _lWebView and not _lFadingOut then _lFadeOut() end
                 end)
                 ms._startupSoundDone = true
+                print("[startup] t=8: startupSoundDone set to", ms._startupSoundDone)
             end)
             _G._integrityCheckTimer = hs.timer.doAfter(3, function()
+                print("[startup] t=3: integrity check")
                 _G._integrityCheckTimer = nil
                 pcall(function()
                     if ms.integrity.check() ~= "uninitialized" then return end
