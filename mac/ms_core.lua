@@ -6,15 +6,15 @@
             if _G.__ms_core_running then return end
             _G.__ms_core_running = true
 
-        -- Loading Screen locals (webview created after spoon loading) --
-            local _lWebView, _lFadingOut, _lFadeTimer
-            local _lFadeOut, _loadAnnounced, _announceLoad
-            local _needsIntegrityWarning = false
-            local _lMsgBuffer = {}
-            local _lUpdate = function(pct, msg)
-                _lMsgBuffer[#_lMsgBuffer + 1] = { pct = pct, msg = msg }
-            end
-        -- END Loading Screen locals --
+            -- Loading Screen locals (webview created after spoon loading) --
+                local _lWebView, _lFadingOut, _lFadeTimer
+                local _lFadeOut, _loadAnnounced, _announceLoad
+                local _needsIntegrityWarning = false
+                local _lMsgBuffer = {}
+                local _lUpdate = function(pct, msg)
+                    _lMsgBuffer[#_lMsgBuffer + 1] = { pct = pct, msg = msg }
+                end
+            -- END Loading Screen locals --
 
             -- Guardian (moved to MsGuardian.spoon) --
             -- END Guardian --
@@ -1959,7 +1959,7 @@
             end
         -- END 9. Bind System & Settings Panel --
 
-        -- 11. Safety Nets --
+        -- 10. Safety Nets --
             do
                 local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
 
@@ -2136,7 +2136,7 @@
                     spawnAlt = { enabled = false },
                 },
             }
-        -- END 11. Safety Nets --
+        -- END 10. Safety Nets --
     -- END Hammerspoon mudscript Utility Library --
 
     -- Startup Executions --

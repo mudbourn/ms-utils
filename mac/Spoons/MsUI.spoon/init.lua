@@ -262,8 +262,8 @@
                 soundVolume             = ms.soundVolume or 100,
                 soundAssign             = ms.soundAssign or {},
                 soundNames              = soundNames,
-                currentProfile          = meta.name and sanitizeName(meta.name) or "",
-                profiles                = getProfiles(),
+                currentProfile          = meta.name and ms.sanitizeName(meta.name) or "",
+                profiles                = ms.getProfiles(),
                 integrityStatus         = status,
                 integrityHash           = curHash,
                 macroMeta               = {
@@ -345,16 +345,7 @@
         local function _emptyToNil(s) if s == nil or s == "" then return nil end; return s end
 
         ms.ui._actions = {
-            ready = function()
-                ms._panelHTMLLoaded = true
-                if ms._settingsPendingShow and ms.ui._open then
-                    ms._settingsPendingShow = false
-                    _showAndFadeIn()
-                else
-                    ms._settingsPendingShow = false
-                    ms.ui.refresh()
-                end
-            end,
+            ready = function() ms.ui.refresh() end,
 
             setMacros = function(data)
                 ms.setMacros(tonumber(data.value) == 1 and 1 or 0)
@@ -408,7 +399,7 @@
                     return
                 end
                 local rawSrc = af:read("*all"); af:close()
-                local auditErrs = auditMacros(rawSrc)
+                local auditErrs = ms.auditMacros(rawSrc)
                 if #auditErrs > 0 then
                     ms.alert("Reload blocked — audit failed.", 6)
                     return
@@ -666,12 +657,12 @@
                 ms.ui.refresh()
             end,
 
-            switchProfile = function(data) if data.name then switchProfile(data.name) end end,
+            switchProfile = function(data) if data.name then ms.switchProfile(data.name) end end,
 
             deleteProfile = function(data)
                 if not data.name then return end
-                local targetName = sanitizeName(data.name)
-                local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                local targetName = ms.sanitizeName(data.name)
+                local activeName = ms.macroMeta and ms.sanitizeName(ms.macroMeta.name or "") or ""
                 if targetName == "" or targetName == activeName then return end
                 local dir = profilesPath .. targetName
                 if not hs.fs.attributes(dir) then return end
@@ -687,14 +678,14 @@
             end,
 
             clearProfiles = function()
-                local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+                local activeName = ms.macroMeta and ms.sanitizeName(ms.macroMeta.name or "") or ""
                 if activeName == "" then return end
                 if not hs.fs.attributes(profilesPath) then return end
                 local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                 local deleted = 0
                 for entry in hs.fs.dir(profilesPath) do
                     if entry ~= "." and entry ~= ".." then
-                        local safe = sanitizeName(entry)
+                        local safe = ms.sanitizeName(entry)
                         if safe ~= "" and safe ~= activeName then
                             local dir = profilesPath .. entry
                             local attr = hs.fs.attributes(dir)
@@ -714,11 +705,11 @@
                 end)
             end,
 
-            importProfile     = function() importProfile() end,
-            importProfilePkg  = function() importProfilePkg() end,
-            exportProfilePkg  = function() exportProfilePkg() end,
-            createNewProfile  = function() createNewProfile() end,
-            saveCurrentProfile = function() saveCurrentProfile() end,
+            importProfile     = function() ms.importProfile() end,
+            importProfilePkg  = function() ms.importProfilePkg() end,
+            exportProfilePkg  = function() ms.exportProfilePkg() end,
+            createNewProfile  = function() ms.createNewProfile() end,
+            saveCurrentProfile = function() ms.saveCurrentProfile() end,
 
             importSounds = function()
                 ms.playSlot("alert")
@@ -1434,10 +1425,7 @@
             }
         end
 
-        local _showAndFadeIn  -- forward declaration; defined after _buildPanel
-
         local function _buildPanel()
-            ms._panelHTMLLoaded = false
             local panel = hs.webview.new(_panelFrame(), { developerExtrasEnabled = true }, _ucMS)
             if not panel then return nil end
             pcall(function() panel:windowStyle(0) end)
@@ -1455,25 +1443,6 @@
             end)
             panel:html(_loadPanelHTML(), uiBasePath)
             return panel
-        end
-
-        -- Show panel and fade in; captures panel ref locally so the timer
-        -- survives _panel being swapped or nilled by a concurrent hide().
-        _showAndFadeIn = function()
-            local panel = ms.ui._panel
-            if not panel then return end
-            pcall(function() panel:alpha(0) end)
-            panel:show()
-            pcall(function() panel:bringToFront(true) end)
-            ms.ui.refresh()
-            local step, steps = 0, 6
-            ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                step = step + 1
-                pcall(function() panel:alpha(step / steps) end)
-                if step >= steps then
-                    if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-                end
-            end)
         end
 
         ms.ui.show = function()
@@ -1495,18 +1464,25 @@
             pcall(function() ms.ui._panel:frame(_pf) end)
             ms.ui._open = true
             ms.playSlot("settingsOpen")
-            if ms._panelHTMLLoaded then
-                -- HTML already loaded (prewarm or previous show); fade in now
-                _showAndFadeIn()
-            else
-                -- HTML still loading; ready callback will call _showAndFadeIn
-                ms._settingsPendingShow = true
-            end
+            pcall(function() ms.ui._panel:alpha(0) end)
+            ms.ui._panel:show()
+            pcall(function() ms.ui._panel:bringToFront(true) end)
+            ms.ui.refresh()
+            -- Capture panel ref locally so the timer survives _panel being
+            -- swapped or nilled by a concurrent hide().
+            local panel = ms.ui._panel
+            local step, steps = 0, 6
+            ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
+                step = step + 1
+                pcall(function() panel:alpha(step / steps) end)
+                if step >= steps then
+                    if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
+                end
+            end)
         end
 
         ms.ui.hide = function()
             if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-            ms._settingsPendingShow = false
             if ms.ui._open then ms.playSlot("settingsClose") end
             ms.ui._open = false
             local panel = ms.ui._panel

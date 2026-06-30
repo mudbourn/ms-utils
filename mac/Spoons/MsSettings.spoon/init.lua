@@ -1669,6 +1669,16 @@
                 _commit()
             end
         end
+
+        -- Expose profile management functions for MsUI action handlers
+        ms.sanitizeName       = sanitizeName
+        ms.getProfiles        = getProfiles
+        ms.switchProfile      = switchProfile
+        ms.importProfile      = importProfile
+        ms.importProfilePkg   = importProfilePkg
+        ms.exportProfilePkg   = exportProfilePkg
+        ms.createNewProfile   = createNewProfile
+        ms.saveCurrentProfile = saveCurrentProfile
     -- END Profile Management --
 
     -- System Integrity --
