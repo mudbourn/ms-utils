@@ -2228,7 +2228,6 @@
                                     (customTheme ? "btn-enable" : "btn-disable"),
                                 onmouseenter: () => playSlot("hover"),
                                 onclick: () => {
-                                    playSlot("interact");
                                     sendToHost({
                                         action: "setCustomTheme",
                                         value: !customTheme,

@@ -558,6 +558,7 @@
                 -- Recolor existing toasts to match new theme
                 pcall(function() ms.alert:recolor() end)
                 pcall(function() ms.dev:recolor() end)
+                ms.playSlot("interact")
                 ms.playSlot("update")
                 ms.ui.refresh()
             end,
