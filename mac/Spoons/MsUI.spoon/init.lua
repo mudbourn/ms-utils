@@ -548,6 +548,8 @@
                 -- Re-discover sounds BEFORE playing so paths resolve correctly
                 ms._soundsDirty = true
                 ms._discoverSounds()
+                -- Recolor existing toasts to match new theme
+                pcall(function() ms.alert:recolor() end)
                 ms.playSlot("update")
                 ms.ui.refresh()
             end,
