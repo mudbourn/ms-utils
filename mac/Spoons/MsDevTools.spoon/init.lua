@@ -1452,6 +1452,7 @@
         pcall(function() panel:windowStyle(0) end)
         pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
         pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+        pcall(function() panel:allowTextEntry(true) end)
         pcall(function() panel:shadow(true) end)
 
         local f = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
