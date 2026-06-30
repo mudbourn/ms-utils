@@ -317,6 +317,9 @@
 
 -- Call --
     function MsAlert:__call(msg, duration, noDefaultSound, opts)
+        -- Suppress all toasts until loading screen completes
+        if not ms._startupSoundDone then return end
+
         duration = duration or 5
 
         local src = opts and opts.source or "system"

@@ -592,10 +592,11 @@
 
             local anySelected = qr.macros or qr.theme or qr.settings or qr.ui
             hs.timer.doAfter(1.0, function()
-                ms.playSlot("update")
                 if anySelected then
+                    ms.playSlot("update")
                     ms.alert("Quick Reload complete.", 5, true)
                 else
+                    ms.playSlot("alert")
                     ms.alert("Quick Reload: no options selected.", 5, true)
                 end
             end)
