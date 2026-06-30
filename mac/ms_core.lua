@@ -252,9 +252,13 @@
                 }
 
                 -- Category → file path (built once).
+                -- _catPaths = JSON files (for panel history loader).
+                -- _readablePaths = human-readable files (for reading in editors).
                 local _catPaths = {}
+                local _readablePaths = {}
                 for _, cat in ipairs({"input", "macro", "system", "error", "console"}) do
                     _catPaths[cat] = _devBaseDir .. "ms_dev_" .. cat .. ".log"
+                    _readablePaths[cat] = _devBaseDir .. "ms_dev_" .. cat .. ".txt"
                 end
 
                 -- Archive helper: moves a log file into backups/ with a timestamp.
@@ -284,6 +288,7 @@
                 do
                     local stamp = os.date("%Y-%m-%d_%H%M%S")
                     for _, p in pairs(_catPaths) do _archiveLog(p, stamp) end
+                    for _, p in pairs(_readablePaths) do _archiveLog(p, stamp) end
 
                     -- Prune: category logs use the configurable archive limit.
                     local catLimit = (type(ms._devArchiveLimit) == "number" and ms._devArchiveLimit >= 0)
@@ -323,20 +328,28 @@
                     local ok, json = pcall(hs.json.encode, entry)
                     if not ok then _devBusy = false; return end
 
-                    -- Write to category-specific log (human-readable + JSON for panel history).
+                    -- Write JSON to .log file (for panel history loader).
                     local catPath = _catPaths[entry.category]
                     if catPath then
                         pcall(function()
                             hs.fs.mkdir(_devBaseDir)
                             local f = io.open(catPath, "a")
+                            if f then f:write(json .. "\n"); f:close() end
+                        end)
+                    end
+
+                    -- Write human-readable entry to .txt file.
+                    local readPath = _readablePaths[entry.category]
+                    if readPath then
+                        pcall(function()
+                            hs.fs.mkdir(_devBaseDir)
+                            local f = io.open(readPath, "a")
                             if f then
-                                -- Build human-readable prefix.
                                 local parts = {}
                                 local function add(label, val)
                                     if val ~= nil and val ~= "" then parts[#parts + 1] = "  " .. label .. ": " .. tostring(val) end
                                 end
                                 local headline = entry.msg or entry.event or entry.type or "log"
-                                -- Multi-line msg: use first line as headline, rest as detail.
                                 local first, rest = headline:match("^([^\n]+)\n(.*)$")
                                 if first then headline = first; add("detail", rest:gsub("\n", " | ")) end
                                 add("fromDialog", entry.fromDialog)
@@ -349,16 +362,9 @@
                                 add("channel",     entry.channel)
                                 add("target",      entry.target)
                                 add("format",      entry.format)
-                                local readable = "[" .. entry.ts .. "] " .. headline
-                                if #parts > 0 then readable = readable .. "\n" .. table.concat(parts, "\n") end
-
-                                -- Encode JSON for panel history loader.
-                                local ok2, jsonLine = pcall(hs.json.encode, entry)
-                                if ok2 then
-                                    f:write(readable .. "  // " .. jsonLine .. "\n")
-                                else
-                                    f:write(readable .. "\n")
-                                end
+                                local line = "[" .. entry.ts .. "] " .. headline
+                                if #parts > 0 then line = line .. "\n" .. table.concat(parts, "\n") end
+                                f:write(line .. "\n")
                                 f:close()
                             end
                         end)
@@ -8164,11 +8170,8 @@
                             local f = io.open(path, "r")
                             if f then
                                 for line in f:lines() do
-                                    -- Each line is: [ts] headline  // {json}
-                                    -- Extract the JSON after the "//" marker.
-                                    local jsonStr = line:match("//%s*(%{.+)$")
-                                    if jsonStr then
-                                        local ok, entry = pcall(hs.json.decode, jsonStr)
+                                    -- .log files are pure JSON (one object per line).
+                                    local ok, entry = pcall(hs.json.decode, line)
                                         if ok and entry then
                                             entries[#entries + 1] = entry
                                         end
