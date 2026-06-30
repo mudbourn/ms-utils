@@ -124,18 +124,49 @@ jobs:
 
       - name: Download previous artifact
         if: steps.skip-check.outputs.skip == 'true'
+        id: download-prev
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PREV_TAG=$(git tag -l 'pre-*' --sort=-v:refname | head -1)
           PREV_NUM=$(echo "$PREV_TAG" | sed 's/pre-//')
-          gh release download \
+          ARCHIVE="mudscript-macos-pre-${PREV_NUM}.tar.gz"
+          if gh release download \
             --repo "${{ github.repository }}" \
-            --pattern "mudscript-macos-pre-${PREV_NUM}.tar.gz" \
-            --dir /tmp/prev-artifact
-          cp "/tmp/prev-artifact/mudscript-macos-pre-${PREV_NUM}.tar.gz" \
-             "mudscript-macos-pre-${{ github.run_number }}.tar.gz"
-          echo "Reusing: mudscript-macos-pre-${PREV_NUM}.tar.gz"
+            --pattern "$ARCHIVE" \
+            --dir /tmp/prev-artifact 2>/dev/null; then
+            cp "/tmp/prev-artifact/$ARCHIVE" "mudscript-macos-pre-${{ github.run_number }}.tar.gz"
+            echo "Reusing: $ARCHIVE"
+          else
+            echo "Asset not found in $PREV_TAG — will build fresh"
+            echo "download_failed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build macOS package (fallback)
+        if: steps.skip-check.outputs.skip == 'true' && steps.download-prev.outputs.download_failed == 'true'
+        run: |
+          BUILD_NUM="${{ github.run_number }}"
+          DIST="mudscript-pre-${BUILD_NUM}"
+          mkdir -p "$DIST"
+          for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua MANIFEST.json README.md; do
+            [ -f "$f" ] && cp "$f" "$DIST/"
+          done
+          for d in mac/Spoons ui mac/bin; do
+            [ -d "$d" ] && cp -R "$d" "$DIST/"
+          done
+          [ -d mac/templates ] && cp -R mac/templates "$DIST/"
+          [ -d profiles/Default ] && cp -R profiles/Default "$DIST/profiles/"
+          mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
+          rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
+
+          if [ -f "$DIST/MANIFEST.json" ]; then
+            BASE_VER=$(jq -r '.version // "0.0.0"' "$DIST/MANIFEST.json")
+            PRE_VER="${BASE_VER}-pre.${BUILD_NUM}"
+            jq --arg v "$PRE_VER" '.version = $v' "$DIST/MANIFEST.json" > "$DIST/MANIFEST.json.tmp"
+            mv "$DIST/MANIFEST.json.tmp" "$DIST/MANIFEST.json"
+          fi
+
+          tar czf "mudscript-macos-pre-${BUILD_NUM}.tar.gz" "$DIST"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
