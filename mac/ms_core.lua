@@ -347,33 +347,49 @@
                             hs.fs.mkdir(_devBaseDir)
                             local f = io.open(readPath, "a")
                             if f then
-                                local parts = {}
-                                local function add(label, val)
-                                    if val ~= nil and val ~= "" then parts[#parts + 1] = "  " .. label .. ": " .. tostring(val) end
+                                local t = entry.type
+                                local line
+                                -- Compact one-liner for high-frequency input events.
+                                if t == "key" then
+                                    local arrow = entry.down and "↓" or "↑"
+                                    line = "[" .. entry.ts .. "] " .. arrow .. " "
+                                        .. (entry.key or "?") .. " (" .. tostring(entry.keyCode or "?") .. ")"
+                                elseif t == "mouse" then
+                                    local arrow = entry.down and "↓" or "↑"
+                                    local pos = ""
+                                    if entry.x and entry.y then pos = "  " .. entry.x .. "," .. entry.y end
+                                    line = "[" .. entry.ts .. "] " .. arrow .. " mouse:"
+                                        .. tostring(entry.button or "?") .. pos
+                                elseif t == "scroll" then
+                                    line = "[" .. entry.ts .. "] ↕ scroll " .. (entry.direction or "")
+                                elseif t == "mousemove" then
+                                    line = "[" .. entry.ts .. "] → " .. (entry.x or "?") .. ", " .. (entry.y or "?")
+                                else
+                                    -- Everything else: structured multi-line with indented fields.
+                                    local parts = {}
+                                    local function add(label, val)
+                                        if val ~= nil and val ~= "" then parts[#parts + 1] = "  " .. label .. ": " .. tostring(val) end
+                                    end
+                                    local headline = entry.msg or entry.label or entry.event or entry.type or "log"
+                                    local first, rest = headline:match("^([^\n]+)\n(.*)$")
+                                    if first then headline = first; add("detail", rest:gsub("\n", " | ")) end
+                                    add("fromDialog", entry.fromDialog)
+                                    add("to",          entry.to)
+                                    add("status",      entry.status)
+                                    add("cur",         entry.cur)
+                                    add("trusted",     entry.trusted)
+                                    add("code",        entry.code)
+                                    add("version",     entry.version)
+                                    add("channel",     entry.channel)
+                                    add("target",      entry.target)
+                                    add("format",      entry.format)
+                                    add("id",          entry.id)
+                                    add("label",       entry.label)
+                                    add("parent",      entry.parentLabel)
+                                    add("trigger",     entry.trigger)
+                                    line = "[" .. entry.ts .. "] " .. headline
+                                    if #parts > 0 then line = line .. "\n" .. table.concat(parts, "\n") end
                                 end
-                                local headline = entry.msg or entry.label or entry.event or entry.type or "log"
-                                local first, rest = headline:match("^([^\n]+)\n(.*)$")
-                                if first then headline = first; add("detail", rest:gsub("\n", " | ")) end
-                                add("fromDialog", entry.fromDialog)
-                                add("to",          entry.to)
-                                add("status",      entry.status)
-                                add("cur",         entry.cur)
-                                add("trusted",     entry.trusted)
-                                add("code",        entry.code)
-                                add("version",     entry.version)
-                                add("channel",     entry.channel)
-                                add("target",      entry.target)
-                                add("format",      entry.format)
-                                add("id",          entry.id)
-                                add("label",       entry.label)
-                                add("parent",      entry.parentLabel)
-                                add("trigger",     entry.trigger)
-                                add("key",         entry.key)
-                                add("keyCode",     entry.keyCode)
-                                add("button",      entry.button)
-                                add("down",        entry.down ~= nil and tostring(entry.down) or nil)
-                                local line = "[" .. entry.ts .. "] " .. headline
-                                if #parts > 0 then line = line .. "\n" .. table.concat(parts, "\n") end
                                 f:write(line .. "\n")
                                 f:close()
                             end
@@ -4926,19 +4942,37 @@
                     end
                 end
 
+                -- Log macro step to the .txt log file (always, not gated on panels).
+                -- Uses ms.dev.log → _devWrite with category="macro" so entries
+                -- reach ms_dev_macro.txt without duplicating into live panels.
+                local function _devMacroLog(msg)
+                    local co  = coroutine.running()
+                    local ctx = co and ms._coroContext[co]
+                    if ctx and ctx.cancelled then return end
+                    local label = (ctx and ctx.label) or ms._pendingLabel or "macro"
+                    ms.dev.log({ type = "step", category = "macro", msg = "[" .. label .. "] " .. msg })
+                end
+
                 -- Flush accumulated cam.move calls before logging a different action.
                 local function _flushCam()
                     if _camMoveAccum > 0 then
-                        _watcherStep("cam.move \xc3\x97" .. _camMoveAccum)
+                        if ms.dev._watcherPanel then
+                            _watcherStep("cam.move ×" .. _camMoveAccum)
+                        end
+                        _devMacroLog("cam.move ×" .. _camMoveAccum)
                         _camMoveAccum = 0
                     end
                 end
 
                 ms.press = function(key, mods, hidinject)
+                    if ms.dev then _flushCam() end
                     if ms.dev._watcherPanel and not _traceSuppress then
-                        _flushCam()
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                         _watcherStep("↓ " .. tostring(key) .. modsStr)
+                    end
+                    if ms.dev then
+                        local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
+                        _devMacroLog("↓ " .. tostring(key) .. modsStr)
                     end
                     local keyCode = getCode(key)
                     if not keyCode then
@@ -4956,9 +4990,12 @@
                 end
 
                 ms.release = function(key, mods, hidinject)
+                    if ms.dev then _flushCam() end
                     if ms.dev._watcherPanel and not _traceSuppress then
-                        _flushCam()
                         _watcherStep("↑ " .. tostring(key))
+                    end
+                    if ms.dev then
+                        _devMacroLog("↑ " .. tostring(key))
                     end
                     local keyCode = getCode(key)
                     if not keyCode then return end
@@ -4973,10 +5010,14 @@
                 end
 
                 ms.type = function(key, mods, hidinject)
+                    if ms.dev then _flushCam() end
                     if ms.dev._watcherPanel then
-                        _flushCam()
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                         _watcherStep("type " .. tostring(key) .. modsStr)
+                    end
+                    if ms.dev then
+                        local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
+                        _devMacroLog("type " .. tostring(key) .. modsStr)
                     end
                     local _saved = _traceSuppress
                     _traceSuppress = true
@@ -5230,10 +5271,10 @@
                 local co = coroutine.running()
                 if co then
                     local ctx = ms._coroContext[co]  -- capture context at yield time
+                    -- Flush accumulated cam.move calls before the wait entry.
+                    if ms.dev then _flushCam() end
                     -- When the watcher is open, log waits as step entries.
-                    -- Flush any accumulated cam.move calls first so ordering is correct.
                     if ms.dev and ms.dev._watcherPanel then
-                        _flushCam()
                         local _label = (ctx and ctx.label) or "macro"
                         local ok2, j2 = pcall(hs.json.encode, {
                             type = "step",
@@ -5245,6 +5286,10 @@
                                 ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j2 .. ")")
                             end)
                         end
+                    end
+                    -- Always log waits to the macro .txt file.
+                    if ms.dev then
+                        _devMacroLog("wait " .. tostring(ms_time) .. "ms")
                     end
                     hs.timer.doAfter(ms_time / 1000, function()
                         -- Don't resume a coroutine whose macro has been cancelled or paused.
@@ -5478,9 +5523,7 @@
                 end,
 
                 move = function(dy, dx)
-                    if ms.dev._watcherPanel then
-                        _camMoveAccum = _camMoveAccum + 1
-                    end
+                    _camMoveAccum = _camMoveAccum + 1
                     if not ms.cam.anchor then
                         ms.wait(2)
                         return
