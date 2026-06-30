@@ -1,5 +1,4 @@
 -- MsDevTools --
-
 local MsDevTools = {}
 
     MsDevTools.name    = "MsDevTools"
@@ -8,11 +7,9 @@ local MsDevTools = {}
     MsDevTools.archiveLimit = 15
     MsDevTools.logDir       = "~/Documents/ms_dev_logs/"
     MsDevTools.branchTrace  = true
-
--- END --
+-- END MsDevTools --
 
 -- State --
-
     local _home       = os.getenv("HOME")
     local _devLogDir  = _home .. "/Documents/"
     local _devBaseDir = _devLogDir .. "ms_dev_logs/"
@@ -85,11 +82,9 @@ local MsDevTools = {}
     local _branchState   = {}
 
     local _devFadeTimers = {}
-
--- END --
+-- END State --
 
 -- Lifecycle --
-
     function MsDevTools:init()
         _jsonDir = _devBaseDir .. "json/"
         _readDir = _devBaseDir .. "readable/"
@@ -200,11 +195,9 @@ local MsDevTools = {}
             })
         end
     end
-
--- END --
+-- END Lifecycle --
 
 -- Archive Helpers --
-
     function MsDevTools:_archiveLog(path, stamp, subdir)
         if not hs.fs.attributes(path) then return end
 
@@ -284,11 +277,9 @@ local MsDevTools = {}
             self:_archiveLog(p, stamp, "readable")
         end
     end
-
--- END --
+-- END Archive Helpers --
 
 -- Core Logging --
-
     function MsDevTools:_devWrite(entry)
         if _devBusy then return end
 
@@ -478,11 +469,9 @@ local MsDevTools = {}
     function MsDevTools:log(entry)
         self:_devWrite(entry)
     end
-
--- END --
+-- END Core Logging --
 
 -- Event Hooks --
-
     function MsDevTools:onMacroFire(id, label, parentId, parentLabel, trigger)
         self:_devWrite({
             type        = "macro",
@@ -562,11 +551,9 @@ local MsDevTools = {}
             end
         end
     end
-
--- END --
+-- END Event Hooks --
 
 -- Watcher Helpers --
-
     function MsDevTools:watcherStep(msg)
         if not _watcherPanel then return end
 
@@ -660,11 +647,9 @@ local MsDevTools = {}
     function MsDevTools:getTraceSuppress()
         return _traceSuppress
     end
-
--- END --
+-- END Watcher Helpers --
 
 -- Branch Tracing --
-
     function MsDevTools:_traceLog(co, msg)
         local st = _branchState[co]
 
@@ -726,11 +711,9 @@ local MsDevTools = {}
 
         _branchState[co] = nil
     end
-
--- END --
+-- END Branch Tracing --
 
 -- Panel Helpers --
-
     local _HIST_MAX = 300
 
     local function _loadDevHistory(panel, categories)
@@ -934,11 +917,9 @@ local MsDevTools = {}
             _keysPanel:evaluateJavaScript("updateMouseState(" .. j .. ")")
         end)
     end
-
--- END --
+-- END Panel Helpers --
 
 -- Console Panel --
-
     function MsDevTools:_buildConsolePanel()
         local ucCon = hs.webview.usercontent.new("msConsole")
 
@@ -1103,11 +1084,9 @@ local MsDevTools = {}
             self:showConsole()
         end
     end
-
--- END --
+-- END Console Panel --
 
 -- Watcher Panel --
-
     function MsDevTools:_buildWatcherPanel()
         local ucWatcher = hs.webview.usercontent.new("msWatcher")
 
@@ -1232,11 +1211,9 @@ local MsDevTools = {}
             self:showWatcher()
         end
     end
-
--- END --
+-- END Watcher Panel --
 
 -- Keys Panel --
-
     function MsDevTools:_buildKeysPanel()
         local ucKeys = hs.webview.usercontent.new("msKeys")
 
@@ -1416,11 +1393,9 @@ local MsDevTools = {}
             self:showKeys()
         end
     end
-
--- END --
+-- END Keys Panel --
 
 -- Window Panel --
-
     function MsDevTools:_pushWindowEvent(entry)
         table.insert(_windowHistory, entry)
 
@@ -1625,11 +1600,9 @@ local MsDevTools = {}
             self:showWindow()
         end
     end
-
--- END --
+-- END Window Panel --
 
 -- Prewarm --
-
     function MsDevTools:prewarm()
         if not _consolePanel then _consolePanel = self:_buildConsolePanel() end
         if not _watcherPanel then _watcherPanel = self:_buildWatcherPanel() end
@@ -1671,11 +1644,9 @@ local MsDevTools = {}
             end
         end
     end
-
--- END --
+-- END Prewarm --
 
 -- Public Accessors --
-
     function MsDevTools:getPanel(name)
         if     name == "console" then return _consolePanel
         elseif name == "watcher" then return _watcherPanel
@@ -1683,7 +1654,6 @@ local MsDevTools = {}
         elseif name == "window"  then return _windowPanel
         end
     end
-
--- END --
+-- END Public Accessors --
 
 return MsDevTools

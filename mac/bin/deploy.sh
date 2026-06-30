@@ -25,6 +25,9 @@ cp -R "$REPO/mac/Spoons/MsGuardian.spoon" "$HS/Spoons/MsGuardian.spoon" 2>/dev/n
 # Copy MsDevTools spoon.
 cp -R "$REPO/mac/Spoons/MsDevTools.spoon" "$HS/Spoons/MsDevTools.spoon" 2>/dev/null || true
 
+# Copy MsAlert spoon.
+cp -R "$REPO/mac/Spoons/MsAlert.spoon" "$HS/Spoons/MsAlert.spoon" 2>/dev/null || true
+
 # Copy guardian agent script.
 cp "$REPO/mac/bin/ms_guardian_agent.sh" "$HS/bin/ms_guardian_agent.sh" 2>/dev/null || true
 
