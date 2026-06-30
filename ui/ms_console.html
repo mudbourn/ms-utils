@@ -46,10 +46,6 @@
                 --text3: rgba(160, 160, 160, 0.55);
                 --border: rgba(100, 100, 100, 0.55);
                 --border-dim: rgba(100, 100, 100, 0.18);
-                --accent-glow: rgba(196, 26, 26, 0.4);
-                --accent-glow-faint: rgba(196, 26, 26, 0.12);
-                --danger-glow: rgba(212, 32, 32, 0.6);
-                --danger-border: rgba(212, 32, 32, 0.3);
                 --radius: 2px;
                 --radius-s: 1px;
             }
@@ -433,16 +429,12 @@
         <script>
             "use strict";
 
-            // ── Constants ─────────────────────────────────────────────────────────
-            const MAX_ENTRIES = 500;
-            const SCROLL_THRESH = 60;
-
             // ── Selection state ───────────────────────────────────────────────────
             const _selected = new Set();
             let _lastClicked = null;
 
             function _getEntries() {
-                return Array.from(document.querySelectorAll("#log .entry"));
+                return Array.from(document.querySelectorAll("#log .entry, #log .step"));
             }
 
             function _updateSelectionVisuals() {
@@ -456,20 +448,16 @@
                 const entries = _getEntries();
                 const idx = entries.indexOf(row);
                 if (idx === -1) return;
-
                 playSlot("interact");
 
                 if (e.shiftKey && _lastClicked !== null) {
-                    // Range select
                     const lo = Math.min(_lastClicked, idx);
                     const hi = Math.max(_lastClicked, idx);
                     for (let i = lo; i <= hi; i++) _selected.add(entries[i]);
                 } else if (e.metaKey || e.ctrlKey) {
-                    // Toggle
                     if (_selected.has(row)) _selected.delete(row);
                     else _selected.add(row);
                 } else {
-                    // Single select
                     _selected.clear();
                     _selected.add(row);
                 }
@@ -483,9 +471,8 @@
                 for (const el of _getEntries()) {
                     if (_selected.has(el)) {
                         const ts = el.querySelector(".ts")?.textContent || "";
-                        const badge = el.querySelector(".badge")?.textContent || "";
-                        const msg = el.querySelector(".msg")?.textContent || "";
-                        lines.push(`[${ts}] ${badge}: ${msg}`.trim());
+                        const msg = el.querySelector(".msg, .step-msg, .entry-app, .entry-title, .key-name, .mouse-name, .move-name, .scroll-name")?.textContent || "";
+                        lines.push(`[${ts}] ${msg}`.trim());
                     }
                 }
                 const text = lines.join("\n");
@@ -493,10 +480,10 @@
                 playSlot("update");
             }
 
-            // Right-click: copy selected entries, or right-clicked entry alone
+            // Right-click on entries: copy selected
             document.addEventListener("contextmenu", (e) => {
-                const row = e.target.closest(".entry");
-                if (!row) return; // allow default for non-entry areas (e.g. input)
+                const row = e.target.closest(".entry, .step");
+                if (!row) return;
                 e.preventDefault();
                 if (!_selected.has(row)) {
                     _selected.clear();
@@ -505,6 +492,10 @@
                 }
                 _copySelected();
             });
+
+            // ── Constants ─────────────────────────────────────────────────────────
+            const MAX_ENTRIES = 500;
+            const SCROLL_THRESH = 60;
 
             // ── Host bridge ───────────────────────────────────────────────────────
             function sendToHost(msg) {
@@ -606,11 +597,6 @@
                     row.appendChild(pill);
                 }
 
-                // Entry interaction: sound + selection
-                row.addEventListener("mouseenter", () => playSlot("hover"));
-                row.addEventListener("click", _handleEntryClick);
-
-                // Entry interaction: sound + selection
                 row.addEventListener("mouseenter", () => playSlot("hover"));
                 row.addEventListener("click", _handleEntryClick);
                 log.appendChild(row);
@@ -647,8 +633,6 @@
             }
 
             function doClear() {
-                _selected.clear();
-                _lastClicked = null;
                 document.getElementById("log").innerHTML = "";
                 sendToHost({ action: "clear" });
             }
@@ -697,7 +681,7 @@
             })();
 
             // ── Theme injection ───────────────────────────────────────────────────
-            // Parse #rrggbb or #rgb -> { r, g, b }
+            // Parse #rrggbb or #rgb → { r, g, b }
             function hexToRgb(hex) {
                 hex = hex.replace(/^#/, "");
                 if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
@@ -771,7 +755,7 @@
                     r.setProperty("--radius", t.radius + "px");
                     r.setProperty("--radius-s", Math.max(0, t.radius - 1) + "px");
                 }
-
+            }
 
             // ── Init ──────────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {

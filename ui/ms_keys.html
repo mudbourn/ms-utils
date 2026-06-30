@@ -44,10 +44,6 @@
                 --text2: rgba(200, 200, 200, 0.85);
                 --text3: rgba(160, 160, 160, 0.55);
                 --border: rgba(100, 100, 100, 0.55);
-                --accent-glow: rgba(196, 26, 26, 0.4);
-                --accent-glow-faint: rgba(196, 26, 26, 0.12);
-                --danger-glow: rgba(212, 32, 32, 0.6);
-                --danger-border: rgba(212, 32, 32, 0.3);
                 --radius: 2px;
                 --radius-s: 1px;
                 /* panel extras */
@@ -553,12 +549,13 @@
 
         <script>
             "use strict";
+
             // ── Selection state ───────────────────────────────────────────────────
             const _selected = new Set();
             let _lastClicked = null;
 
             function _getEntries() {
-                return Array.from(document.querySelectorAll("#log .entry"));
+                return Array.from(document.querySelectorAll("#log .entry, #log .step"));
             }
 
             function _updateSelectionVisuals() {
@@ -572,7 +569,6 @@
                 const entries = _getEntries();
                 const idx = entries.indexOf(row);
                 if (idx === -1) return;
-
                 playSlot("interact");
 
                 if (e.shiftKey && _lastClicked !== null) {
@@ -596,9 +592,8 @@
                 for (const el of _getEntries()) {
                     if (_selected.has(el)) {
                         const ts = el.querySelector(".ts")?.textContent || "";
-                        const badge = el.querySelector(".badge")?.textContent || "";
-                        const msg = el.querySelector(".msg")?.textContent || "";
-                        lines.push(`[${ts}] ${badge}: ${msg}`.trim());
+                        const msg = el.querySelector(".msg, .step-msg, .entry-app, .entry-title, .key-name, .mouse-name, .move-name, .scroll-name")?.textContent || "";
+                        lines.push(`[${ts}] ${msg}`.trim());
                     }
                 }
                 const text = lines.join("\n");
@@ -606,10 +601,9 @@
                 playSlot("update");
             }
 
-
-            // Right-click: copy selected entries, or right-clicked entry alone
+            // Right-click on entries: copy selected
             document.addEventListener("contextmenu", (e) => {
-                const row = e.target.closest(".entry");
+                const row = e.target.closest(".entry, .step");
                 if (!row) return;
                 e.preventDefault();
                 if (!_selected.has(row)) {
@@ -935,7 +929,7 @@
             }
 
             // ── Theme ──────────────────────────────────────────────────────────
-            // Parse #rrggbb or #rgb -> { r, g, b }
+            // Parse #rrggbb or #rgb → { r, g, b }
             function hexToRgb(hex) {
                 hex = hex.replace(/^#/, "");
                 if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
@@ -1009,7 +1003,19 @@
                     r.setProperty("--radius", t.radius + "px");
                     r.setProperty("--radius-s", Math.max(0, t.radius - 1) + "px");
                 }
-
+                if (t.font) {
+                    if (t.fontURL) {
+                        let el = document.getElementById("_ms-custom-font");
+                        if (!el) {
+                            el = document.createElement("style");
+                            el.id = "_ms-custom-font";
+                            document.head.appendChild(el);
+                        }
+                        el.textContent = `@font-face { font-family: "${t.font}"; src: url("${t.fontURL}"); }`;
+                    }
+                    document.body.style.fontFamily = `"${t.font}", Almendra, Palatino, Georgia, serif`;
+                }
+            }
 
             // ── Init ───────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
