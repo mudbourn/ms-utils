@@ -2385,26 +2385,30 @@
                 end
             end)
             hs.timer.doAfter(8, function()
-                if _lWebView and not _lFadingOut then _lFadeOut() end
+                pcall(function()
+                    if _lWebView and not _lFadingOut then _lFadeOut() end
+                end)
                 ms._startupSoundDone = true
             end)
             hs.timer.doAfter(3, function()
-                if ms.integrity.check() ~= "uninitialized" then return end
-                local _mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
-                local _mf    = io.open(_mPath, "r")
-                if _mf then
-                    local _ok, _manifest = pcall(hs.json.decode, _mf:read("*all")); _mf:close()
-                    if _ok and type(_manifest) == "table"
-                        and type(_manifest.sha256) == "string"
-                        and #_manifest.sha256 == 64 then
-                        local _cur = ms.integrity.hashFile(corePath)
-                        if _cur and _cur:lower() == _manifest.sha256:lower() then
-                            ms.integrity.writeTrustedHash(_cur)
-                            return  -- clean install — seeded silently, no alert needed
+                pcall(function()
+                    if ms.integrity.check() ~= "uninitialized" then return end
+                    local _mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
+                    local _mf    = io.open(_mPath, "r")
+                    if _mf then
+                        local _ok, _manifest = pcall(hs.json.decode, _mf:read("*all")); _mf:close()
+                        if _ok and type(_manifest) == "table"
+                            and type(_manifest.sha256) == "string"
+                            and #_manifest.sha256 == 64 then
+                            local _cur = ms.integrity.hashFile(corePath)
+                            if _cur and _cur:lower() == _manifest.sha256:lower() then
+                                ms.integrity.writeTrustedHash(_cur)
+                                return  -- clean install — seeded silently, no alert needed
+                            end
                         end
                     end
-                end
-                _needsIntegrityWarning = true
+                    _needsIntegrityWarning = true
+                end)
             end)
 
 
@@ -2425,7 +2429,18 @@
             end)
 
             if notice ~= 1 then
-                hs.timer.doAfter(7.0, _announceLoad)
+                hs.timer.doAfter(7.0, function()
+                    pcall(function() _announceLoad() end)
+                    -- Hard guarantee: if _announceLoad failed or returned early,
+                    -- ensure startup flags are set so sounds/macros aren't blocked.
+                    hs.timer.doAfter(1, function()
+                        ms._startupSoundDone = true
+                        if not ms._loadComplete then
+                            ms._loadComplete = true
+                            if ms._robloxActive then pcall(function() ms.setMacros(1, true) end) end
+                        end
+                    end)
+                end)
                 notice = 1
             end
         -- END Startup Loading Indicator --
