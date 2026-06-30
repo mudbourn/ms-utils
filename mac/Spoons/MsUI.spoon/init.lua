@@ -504,6 +504,7 @@
 
             reloadTheme = function()
                 ms.loadTheme()
+                pcall(function() ms.alert:recolor() end)
                 ms.playSlot("update")
                 ms.alert("Theme reloaded.", 4, true)
                 ms.ui.hide()
