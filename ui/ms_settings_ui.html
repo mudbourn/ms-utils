@@ -2374,10 +2374,6 @@
 
                 // Slot pickers
                 const SLOTS = [
-                    { id: "startup", label: "Loading Screen Start" },
-                    { id: "themeLoaded", label: "Theme Applied" },
-                    { id: "load", label: "Loading Screen End" },
-                    { id: "launch", label: "Launch Announcement" },
                     { id: "updateAvailable", label: "Update Available" },
                     { id: "alert", label: "Alert / Notice" },
                     { id: "enabled", label: "Macros Enabled" },
@@ -2390,8 +2386,109 @@
                     { id: "settingsOpen", label: "Settings Open" },
                     { id: "settingsClose", label: "Settings Close" },
                 ];
-                body.appendChild(groupLabel("Event Slots"));
+
+                // Loading sound slots
+                const LOAD_SLOTS = [
+                    { id: "startup", label: "Loading Screen Start" },
+                    { id: "themeLoaded", label: "Theme Applied" },
+                    { id: "load", label: "Loading Screen End" },
+                    { id: "launch", label: "Launch Announcement" },
+                ];
+
+                // ── Loading Sound Presets ─────────────────────────────────
+                const presets = S.soundPresets || [];
+                const presetSlotIds = LOAD_SLOTS.map(s => s.id);
+
+                // Detect which preset is currently active (if any)
+                let activePreset = null;
+                const sa = S.soundAssign || {};
+                for (const p of presets) {
+                    let match = true;
+                    for (const sid of presetSlotIds) {
+                        const expected = p.assigns[sid] || null;
+                        const actual = sa[sid] || null;
+                        if (expected !== actual) { match = false; break; }
+                    }
+                    if (match) { activePreset = String(p.num); break; }
+                }
+
+                body.appendChild(groupLabel("Loading Sounds"));
+                const presetWrap = h("div", { cls: "seg" });
+                // "Custom" option
+                const customBtn = h("button", {
+                    cls: "seg-btn" + (activePreset === null ? " active" : ""),
+                    onmouseenter: () => playSlot("hover"),
+                    onclick: () => {
+                        playSlot("interact");
+                        sendToHost({ action: "clearSoundPreset", slots: presetSlotIds });
+                    },
+                }, "Custom");
+                presetWrap.appendChild(customBtn);
+                // Numbered presets
+                for (const p of presets) {
+                    const pBtn = h("button", {
+                        cls: "seg-btn" + (activePreset === String(p.num) ? " active" : ""),
+                        onmouseenter: () => playSlot("hover"),
+                        onclick: () => {
+                            playSlot("interact");
+                            sendToHost({ action: "setSoundPreset", assigns: p.assigns });
+                        },
+                    }, String(p.num));
+                    presetWrap.appendChild(pBtn);
+                }
+                body.appendChild(row("Preset", "Select a numbered sound set or Custom for individual control", presetWrap));
+
+                // Individual loading slots (always visible)
                 const names = S.soundNames || [];
+                for (const slot of LOAD_SLOTS) {
+                    const assigned = (S.soundAssign || {})[slot.id] || "";
+                    body.appendChild(
+                        row(
+                            slot.label,
+                            null,
+                            soundPicker(slot.id, assigned, names),
+                            "",
+                            [
+                                {
+                                    icon: "",
+                                    label: "Play",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "playSlot",
+                                            slot: slot.id,
+                                        }),
+                                },
+                                {
+                                    icon: "",
+                                    label: "Import",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "importSoundForSlot",
+                                            slot: slot.id,
+                                            label: slot.label,
+                                        }),
+                                },
+                                ...(assigned
+                                    ? [
+                                          {
+                                              icon: "",
+                                              label: "Clear",
+                                              action: () =>
+                                                  sendToHost({
+                                                      action: "setSoundAssign",
+                                                      slot: slot.id,
+                                                      name: "",
+                                                  }),
+                                          },
+                                      ]
+                                    : []),
+                            ],
+                        ),
+                    );
+                }
+
+                body.appendChild(divider());
+                body.appendChild(groupLabel("Event Slots"));
                 for (const slot of SLOTS) {
                     const assigned = (S.soundAssign || {})[slot.id] || "";
                     body.appendChild(

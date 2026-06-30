@@ -129,6 +129,37 @@
             for name in pairs(ms.sounds or {}) do table.insert(soundNames, name) end
             table.sort(soundNames)
 
+            -- Build loading sound presets from numbered variants.
+            -- Slots in the preset group: startup, themeLoaded, load, launch
+            -- Looks for base names (Launch, LoadEnd, etc.) and groups
+            -- numbered variants (Launch2, LoadEnd2, …) into presets.
+            local presetSlots = {
+                { id = "startup",     bases = { "LoadStart", "Load Start" } },
+                { id = "themeLoaded", bases = { "ThemeLoaded", "Theme Loaded" } },
+                { id = "load",        bases = { "LoadEnd", "Load End" } },
+                { id = "launch",      bases = { "Launch" } },
+            }
+            local presetMap = {}  -- presetNum → { slotId → soundName }
+            for _, ps in ipairs(presetSlots) do
+                for _, base in ipairs(ps.bases) do
+                    -- Find all sounds starting with this base name
+                    for sname in pairs(ms.sounds or {}) do
+                        local num = sname:match("^" .. base .. "(%d*)$")
+                        if num then
+                            num = num == "" and "1" or num
+                            presetMap[num] = presetMap[num] or {}
+                            presetMap[num][ps.id] = sname
+                        end
+                    end
+                end
+            end
+            -- Convert to sorted array
+            local soundPresets = {}
+            for num, assigns in pairs(presetMap) do
+                table.insert(soundPresets, { num = tonumber(num), assigns = assigns })
+            end
+            table.sort(soundPresets, function(a, b) return a.num < b.num end)
+
             local status, curHash = ms.integrity.check()
             local meta = ms.macroMeta or {}
 
@@ -262,6 +293,7 @@
                 soundVolume             = ms.soundVolume or 100,
                 soundAssign             = ms.soundAssign or {},
                 soundNames              = soundNames,
+                soundPresets            = soundPresets,
                 currentProfile          = meta.name and ms.sanitizeName(meta.name) or "",
                 profiles                = ms.getProfiles(),
                 integrityStatus         = status,
@@ -652,6 +684,29 @@
                 if not data.slot then return end
                 ms.soundAssign = ms.soundAssign or {}
                 ms.soundAssign[data.slot] = _emptyToNil(data.name)
+                ms.saveSettings()
+                ms.playSlot("update")
+                ms.ui.refresh()
+            end,
+
+            setSoundPreset = function(data)
+                if not data.assigns then return end
+                ms.soundAssign = ms.soundAssign or {}
+                -- Apply all preset assignments
+                for slotId, soundName in pairs(data.assigns) do
+                    ms.soundAssign[slotId] = soundName
+                end
+                ms.saveSettings()
+                ms.playSlot("update")
+                ms.ui.refresh()
+            end,
+
+            clearSoundPreset = function(data)
+                if not data.slots then return end
+                ms.soundAssign = ms.soundAssign or {}
+                for _, slotId in ipairs(data.slots) do
+                    ms.soundAssign[slotId] = nil
+                end
                 ms.saveSettings()
                 ms.playSlot("update")
                 ms.ui.refresh()
