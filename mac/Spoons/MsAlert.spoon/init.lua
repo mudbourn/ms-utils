@@ -246,6 +246,10 @@
 
                 e.msg = msg
 
+                -- Move to top of queue so it appears above all other toasts
+                table.remove(queue, i)
+                table.insert(queue, e)
+
                 self:_redraw(e)
 
                 if e.timer then e.timer:stop() end
