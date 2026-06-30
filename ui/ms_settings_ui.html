@@ -3076,15 +3076,7 @@
                 if (t.dangerBg) r.setProperty("--danger-bg", t.dangerBg);
                 if (t.danger) r.setProperty("--danger", t.danger);
                 if (t.warning) r.setProperty("--warning", t.warning);
-                if (t.text) {
-                    r.setProperty("--text", t.text);
-                    if (!t.text2 && !t.text3 && !t.border) {
-                        const c = hexToRgb(t.text);
-                        if (c && !t.text2) r.setProperty("--text2", `rgba(${c.r},${c.g},${c.b},0.85)`);
-                        if (c && !t.text3) r.setProperty("--text3", `rgba(${c.r},${c.g},${c.b},0.55)`);
-                        if (c && !t.border) r.setProperty("--border", `rgba(${c.r},${c.g},${c.b},0.4)`);
-                    }
-                }
+                if (t.text) r.setProperty("--text", t.text);
                 if (t.text2) r.setProperty("--text2", t.text2);
                 if (t.text3) r.setProperty("--text3", t.text3);
                 if (t.border) r.setProperty("--border", t.border);
