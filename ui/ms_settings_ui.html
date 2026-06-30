@@ -46,6 +46,10 @@
                 --text2: rgba(200, 200, 200, 0.85);
                 --text3: rgba(160, 160, 160, 0.55);
                 --border: rgba(100, 100, 100, 0.55);
+                --accent-glow: rgba(196, 26, 26, 0.4);
+                --accent-glow-faint: rgba(196, 26, 26, 0.12);
+                --danger-glow: rgba(212, 32, 32, 0.6);
+                --danger-border: rgba(212, 32, 32, 0.3);
                 --radius: 2px;
                 --radius-s: 1px;
             }
@@ -109,7 +113,7 @@
                 padding: 10px 12px 8px;
                 background: var(--surface);
                 border-bottom: 1px solid var(--border);
-                box-shadow: 0 1px 12px rgba(196, 26, 26, 0.12);
+                box-shadow: 0 1px 12px var(--accent-glow-faint);
                 flex-shrink: 0;
                 -webkit-app-region: drag;
                 user-select: none;
@@ -124,7 +128,7 @@
             }
             #status-dot.off {
                 background: var(--danger);
-                box-shadow: 0 0 4px rgba(212, 32, 32, 0.6);
+                box-shadow: 0 0 4px var(--danger-glow);
             }
             #status-text {
                 flex: 1;
@@ -326,7 +330,7 @@
             }
             .section-head:hover {
                 background: var(--surface2);
-                box-shadow: inset 2px 0 0 rgba(196, 26, 26, 0.4);
+                box-shadow: inset 2px 0 0 var(--accent-glow);
             }
             .section-chevron {
                 font-size: 9px;
@@ -372,7 +376,7 @@
             }
             .row:hover {
                 background: var(--surface2);
-                box-shadow: inset 2px 0 0 rgba(196, 26, 26, 0.4);
+                box-shadow: inset 2px 0 0 var(--accent-glow);
             }
             .row.disabled {
                 opacity: 0.35;
@@ -586,7 +590,7 @@
             .btn-action.danger {
                 background: var(--danger-bg);
                 color: var(--danger);
-                border: 1px solid rgba(212, 32, 32, 0.3);
+                border: 1px solid var(--danger-border);
             }
             .btn-action.danger:hover {
                 background: #2a0a0a;
@@ -861,7 +865,7 @@
             .modal-btns button.destructive {
                 background: var(--danger-bg);
                 color: var(--danger);
-                border: 1px solid rgba(212, 32, 32, 0.3);
+                border: 1px solid var(--danger-border);
             }
             /* ── User-defined collapsible groups ─────────────────────────────── */
             .user-group {
@@ -3051,6 +3055,14 @@
                 }
             }
 
+            // Parse #rrggbb or #rgb → { r, g, b }
+            function hexToRgb(hex) {
+                hex = hex.replace(/^#/, "");
+                if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+                const n = parseInt(hex, 16);
+                return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+            }
+
             function applyTheme(t) {
                 if (!t) return;
                 const r = document.documentElement.style;
@@ -3064,7 +3076,24 @@
                 if (t.dangerBg) r.setProperty("--danger-bg", t.dangerBg);
                 if (t.danger) r.setProperty("--danger", t.danger);
                 if (t.warning) r.setProperty("--warning", t.warning);
-                if (t.text) r.setProperty("--text", t.text);
+                if (t.text) {
+                    r.setProperty("--text", t.text);
+                    // Derive secondary text/border from the theme text color
+                    const c = hexToRgb(t.text);
+                    r.setProperty("--text2", `rgba(${c.r},${c.g},${c.b},0.85)`);
+                    r.setProperty("--text3", `rgba(${c.r},${c.g},${c.b},0.55)`);
+                    r.setProperty("--border", `rgba(${c.r},${c.g},${c.b},0.25)`);
+                }
+                if (t.accent) {
+                    const a = hexToRgb(t.accent);
+                    r.setProperty("--accent-glow", `rgba(${a.r},${a.g},${a.b},0.4)`);
+                    r.setProperty("--accent-glow-faint", `rgba(${a.r},${a.g},${a.b},0.12)`);
+                }
+                if (t.danger) {
+                    const d = hexToRgb(t.danger);
+                    r.setProperty("--danger-glow", `rgba(${d.r},${d.g},${d.b},0.6)`);
+                    r.setProperty("--danger-border", `rgba(${d.r},${d.g},${d.b},0.3)`);
+                }
                 if (t.radius !== undefined) {
                     r.setProperty("--radius", t.radius + "px");
                     r.setProperty(

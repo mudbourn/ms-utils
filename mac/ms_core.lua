@@ -2156,8 +2156,9 @@
         ms._skipDevPrewarm   = false  -- overridden by loadSettings() if previously saved
         ms._devArchiveLimit   = 15     -- overridden by loadSettings() if previously saved
         ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
+        ms.loadSettings()            -- load first so importedSounds/soundAssign are available
+        ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)
         ms._discoverSounds()
-        ms.loadSettings()
         ms.loadTheme()
         ms.cam.updateMultiplier()
         os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
