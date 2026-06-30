@@ -1,486 +1,498 @@
-<!doctype html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <style>
-            /* ── Fonts ─────────────────────────────────────────────────────────── */
-            @font-face {
-                font-family: "Almendra";
-                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
-                font-weight: 400;
-                font-style: normal;
+1|<!doctype html>
+2|<html lang="en">
+3|    <head>
+4|        <meta charset="UTF-8" />
+5|        <style>
+6|            /* ── Fonts ─────────────────────────────────────────────────────────── */
+7|            @font-face {
+8|                font-family: "Almendra";
+9|                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+10|                font-weight: 400;
+11|                font-style: normal;
+12|            }
+13|            @font-face {
+14|                font-family: "Almendra";
+15|                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+16|                font-weight: 700;
+17|                font-style: normal;
+18|            }
+19|            @font-face {
+20|                font-family: "Almendra";
+21|                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
+22|                font-weight: 400;
+23|                font-style: italic;
+24|            }
+25|            @font-face {
+26|                font-family: "Almendra";
+27|                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
+28|                font-weight: 700;
+29|                font-style: italic;
+30|            }
+31|
+32|            /* ── Tokens ─────────────────────────────────────────────────────────── */
+33|            :root {
+34|                --bg: #0e0e0e;
+35|                --surface: #1a1a1a;
+36|                --surface2: #252525;
+37|                --hover: #333333;
+38|                --accent: #cccccc;
+39|                --accent-hi: #e8e8e8;
+40|                --success: #888888;
+41|                --danger-bg: #1a1616;
+42|                --danger: #d8d8d8;
+43|                --warning: #aaaaaa;
+44|                --text: #d8d8d8;
+45|                --text2: rgba(200, 200, 200, 0.85);
+46|                --text3: rgba(160, 160, 160, 0.55);
+47|                --border: rgba(100, 100, 100, 0.55);
+48|                --border-dim: rgba(100, 100, 100, 0.18);
+                --accent-glow: rgba(196, 26, 26, 0.4);
+                --accent-glow-faint: rgba(196, 26, 26, 0.12);
+                --danger-glow: rgba(212, 32, 32, 0.6);
+                --danger-border: rgba(212, 32, 32, 0.3);
+49|                --radius: 2px;
+50|                --radius-s: 1px;
+51|            }
+52|
+53|            /* ── Reset ──────────────────────────────────────────────────────────── */
+54|            *,
+55|            *::before,
+56|            *::after {
+57|                box-sizing: border-box;
+58|                margin: 0;
+59|                padding: 0;
+60|                user-select: none;
+61|                -webkit-user-select: none;
+62|            }
+63|
+64|            html,
+65|            body {
+66|                width: 100%;
+67|                height: 100%;
+68|                overflow: hidden;
+69|                background: var(--bg);
+70|                color: var(--text);
+71|                font-family: Arial, "Almendra", sans-serif;
+72|                font-size: 13px;
+73|                line-height: 1.5;
+74|                -webkit-font-smoothing: antialiased;
+75|            }
+76|
+77|            body {
+78|                display: flex;
+79|                flex-direction: column;
+80|            }
+81|
+82|            button {
+83|                cursor: pointer;
+84|                border: none;
+85|                background: none;
+86|                color: inherit;
+87|                font: inherit;
+88|            }
+89|
+90|            /* ── Header ─────────────────────────────────────────────────────────── */
+91|            #header {
+92|                display: flex;
+93|                align-items: center;
+94|                gap: 8px;
+95|                padding: 10px 12px 8px;
+96|                background: var(--surface);
+97|                border-bottom: 1px solid var(--border);
+98|                box-shadow: 0 1px 12px
+99|                    color-mix(in srgb, var(--accent) 12%, transparent);
+100|                flex-shrink: 0;
+101|                -webkit-app-region: drag;
+102|            }
+103|
+104|            #panel-title {
+105|                flex: 1;
+106|                font-weight: 600;
+107|                font-size: 13px;
+108|            }
+109|
+110|            .header-btns {
+111|                display: flex;
+112|                gap: 4px;
+113|                -webkit-app-region: no-drag;
+114|            }
+115|
+116|            /* ── Ghost button ────────────────────────────────────────────────────── */
+117|            .btn-ghost {
+118|                flex: 1;
+119|                padding: 5px 8px;
+120|                border-radius: var(--radius-s);
+121|                background: var(--surface2);
+122|                color: var(--text2);
+123|                font-size: 11px;
+124|                font-weight: 500;
+125|                transition: opacity 0.15s;
+126|            }
+127|            .btn-ghost:hover {
+128|                opacity: 0.8;
+129|            }
+130|
+131|            /* In the header bar, ghost buttons should not stretch */
+132|            .header-btns .btn-ghost {
+133|                flex: 0 0 auto;
+134|            }
+135|
+136|            /* ── Close button ────────────────────────────────────────────────────── */
+137|            .btn-close {
+138|                width: 22px;
+139|                height: 22px;
+140|                border-radius: 50%;
+141|                background: var(--surface2);
+142|                color: var(--text2);
+143|                font-size: 12px;
+144|                display: flex;
+145|                align-items: center;
+146|                justify-content: center;
+147|                transition: background 0.15s;
+148|            }
+149|            .btn-close:hover {
+150|                background: var(--hover);
+151|                color: var(--text);
+152|            }
+153|
+154|            /* ── Current window section ──────────────────────────────────────────── */
+155|            #current {
+156|                padding: 10px 12px;
+157|                background: var(--surface);
+158|                border-bottom: 1px solid var(--border);
+159|                flex-shrink: 0;
+160|                display: flex;
+161|                flex-direction: column;
+162|                justify-content: center;
+163|                gap: 3px;
+164|            }
+165|
+166|            #current-empty {
+167|                color: var(--text3);
+168|                font-style: italic;
+169|                font-size: 12px;
+170|            }
+171|
+172|            #current-app {
+173|                color: var(--accent);
+174|                font-weight: 700;
+175|                font-size: 14px;
+176|                display: none;
+177|            }
+178|
+179|            #current-title {
+180|                color: var(--text);
+181|                font-size: 12px;
+182|                display: none;
+183|                word-break: break-word;
+184|                white-space: pre-wrap;
+185|            }
+186|
+187|            #current-dim {
+188|                color: var(--text2);
+189|                font:
+190|                    11px "SF Mono",
+191|                    Menlo,
+192|                    monospace;
+193|                display: none;
+194|            }
+195|
+196|            /* ── Log area ────────────────────────────────────────────────────────── */
+197|            #log {
+198|                flex: 1;
+199|                overflow-y: auto;
+200|                overflow-x: hidden;
+201|                padding: 4px 0;
+202|                min-height: 0;
+203|                scrollbar-width: thin;
+204|                scrollbar-color: var(--border) transparent;
+205|            }
+206|            #log::-webkit-scrollbar {
+207|                width: 5px;
+208|            }
+209|            #log::-webkit-scrollbar-track {
+210|                background: transparent;
+211|            }
+212|            #log::-webkit-scrollbar-thumb {
+213|                background: var(--border);
+214|                border-radius: var(--radius);
+215|            }
+216|
+217|            /* ── Entry rows ──────────────────────────────────────────────────────── */
+218|            .entry {
+219|                display: flex;
+220|                align-items: center;
+221|                gap: 6px;
+222|                padding: 5px 12px;
+223|                font-size: 12px;
+224|                border-bottom: 1px solid var(--border-dim);
+225|            }
+226|            .entry:hover {
+227|                background: var(--surface);
+228|            }
+229|
+230|            .ts {
+231|                color: var(--text3);
+232|                font:
+233|                    10px "SF Mono",
+234|                    Menlo,
+235|                    monospace;
+236|                flex-shrink: 0;
+237|                min-width: 52px;
+238|            }
+239|
+240|            .entry-dot {
+241|                color: var(--accent);
+242|                flex-shrink: 0;
+243|            }
+244|
+245|            .entry-app {
+246|                color: var(--accent);
+247|                font-weight: 600;
+248|                flex-shrink: 0;
+249|            }
+250|
+251|            .entry-sep {
+252|                color: var(--text3);
+253|                flex-shrink: 0;
+254|                padding: 0 2px;
+255|            }
+256|
+257|            .entry-title {
+258|                flex: 1;
+259|                overflow: hidden;
+260|                text-overflow: ellipsis;
+261|                white-space: nowrap;
+262|                min-width: 0;
+263|            }
+264|
+265|            .dim-pill {
+266|                font:
+267|                    10px "SF Mono",
+268|                    Menlo,
+269|                    monospace;
+270|                padding: 1px 5px;
+271|                border-radius: var(--radius-s);
+272|                background: var(--surface2);
+273|                border: 1px solid var(--border);
+274|                color: var(--text2);
+275|                flex-shrink: 0;
+276|            }
+277|        </style>
+278|    </head>
+279|    <body>
+280|        <!-- Header -->
+281|        <div id="header">
+282|            <span id="panel-title">mudscript — window monitor</span>
+283|            <div class="header-btns">
+284|                <button
+285|                    class="btn-ghost"
+286|                    onmouseenter="playSlot('hover')"
+287|                    onclick="
+288|                        playSlot('interact');
+289|                        clearLog();
+290|                    "
+291|                >
+292|                    Clear
+293|                </button>
+294|                <button
+295|                    class="btn-close"
+296|                    onmouseenter="playSlot('hover')"
+297|                    onclick="
+298|                        playSlot('back');
+299|                        closePanel();
+300|                    "
+301|                >
+302|                    ✕
+303|                </button>
+304|            </div>
+305|        </div>
+306|
+307|        <!-- Current window -->
+308|        <div id="current">
+309|            <span id="current-empty">No focused window</span>
+310|            <span id="current-app"></span>
+311|            <span id="current-title"></span>
+312|            <span id="current-dim"></span>
+313|        </div>
+314|
+315|        <!-- Log -->
+316|        <div id="log"></div>
+317|
+318|        <script>
+319|            "use strict";
+320|
+321|            document.addEventListener("contextmenu", (e) => e.preventDefault());
+322|
+323|            // ── Constants ─────────────────────────────────────────────────────────
+324|            const MAX_ENTRIES = 300;
+325|            const SCROLL_THRESH = 48;
+326|
+327|            // ── Host bridge ───────────────────────────────────────────────────────
+328|            function sendToHost(msg) {
+329|                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
+330|                try {
+331|                    window.webkit.messageHandlers.msWindow.postMessage(s);
+332|                } catch (e) {}
+333|            }
+334|
+335|            function playSlot(slot) {
+336|                sendToHost({ action: "playSlot", slot });
+337|            }
+338|
+339|            // ── Scroll helper ─────────────────────────────────────────────────────
+340|            function isNearBottom() {
+341|                const log = document.getElementById("log");
+342|                return (
+343|                    log.scrollHeight - log.scrollTop - log.clientHeight <=
+344|                    SCROLL_THRESH
+345|                );
+346|            }
+347|
+348|            // ── Current window display ────────────────────────────────────────────
+349|            // entry: { app, title, w?, h? }
+350|            function updateCurrentWindow(entry) {
+351|                const empty = document.getElementById("current-empty");
+352|                const appEl = document.getElementById("current-app");
+353|                const titleEl = document.getElementById("current-title");
+354|                const dimEl = document.getElementById("current-dim");
+355|
+356|                if (!entry || (!entry.app && !entry.title)) {
+357|                    empty.style.display = "";
+358|                    appEl.style.display = "none";
+359|                    titleEl.style.display = "none";
+360|                    dimEl.style.display = "none";
+361|                    return;
+362|                }
+363|
+364|                empty.style.display = "none";
+365|                appEl.style.display = "";
+366|                titleEl.style.display = "";
+367|                dimEl.style.display = "";
+368|
+369|                appEl.textContent = entry.app || "";
+370|                titleEl.textContent = entry.title || "";
+371|                dimEl.textContent =
+372|                    entry.w != null && entry.h != null
+373|                        ? entry.w + "\u00d7" + entry.h + " px"
+374|                        : "";
+375|            }
+376|
+377|            // ── Entry builder ─────────────────────────────────────────────────────
+378|            // Creates .entry with [ts] ● app-span › title-span dim-pill
+379|            function buildRow(entry) {
+380|                const row = document.createElement("div");
+381|                row.className = "entry";
+382|
+383|                const ts = document.createElement("span");
+384|                ts.className = "ts";
+385|                ts.textContent = entry.ts || "";
+386|                row.appendChild(ts);
+387|
+388|                const dot = document.createElement("span");
+389|                dot.className = "entry-dot";
+390|                dot.textContent = "●";
+391|                row.appendChild(dot);
+392|
+393|                const app = document.createElement("span");
+394|                app.className = "entry-app";
+395|                app.textContent = entry.app || "";
+396|                row.appendChild(app);
+397|
+398|                const sep = document.createElement("span");
+399|                sep.className = "entry-sep";
+400|                sep.textContent = "›";
+401|                row.appendChild(sep);
+402|
+403|                const title = document.createElement("span");
+404|                title.className = "entry-title";
+405|                title.textContent = entry.title || "";
+406|                row.appendChild(title);
+407|
+408|                if (entry.w != null && entry.h != null) {
+409|                    const pill = document.createElement("span");
+410|                    pill.className = "dim-pill";
+411|                    pill.textContent = entry.w + "\u00d7" + entry.h;
+412|                    row.appendChild(pill);
+413|                }
+414|
+415|                return row;
+416|            }
+417|
+418|            // ── Public API ────────────────────────────────────────────────────────
+419|            // Appends a row, trims to MAX_ENTRIES, auto-scrolls, updates current
+420|            function appendEntry(entry) {
+421|                const log = document.getElementById("log");
+422|                const atBottom = isNearBottom();
+423|                log.appendChild(buildRow(entry));
+424|                while (log.childElementCount > MAX_ENTRIES) {
+425|                    log.removeChild(log.firstElementChild);
+426|                }
+427|                if (atBottom) log.scrollTop = log.scrollHeight;
+428|                updateCurrentWindow(entry);
+429|            }
+430|
+431|            // Clears log, bulk appends (up to MAX_ENTRIES), scrolls, updates current
+432|            function loadHistory(entries) {
+433|                const log = document.getElementById("log");
+434|                log.innerHTML = "";
+435|                const frag = document.createDocumentFragment();
+436|                (entries || [])
+437|                    .slice(-MAX_ENTRIES)
+438|                    .forEach((e) => frag.appendChild(buildRow(e)));
+439|                log.appendChild(frag);
+440|                log.scrollTop = log.scrollHeight;
+441|                if (entries && entries.length > 0) {
+442|                    updateCurrentWindow(entries[entries.length - 1]);
+443|                }
+444|            }
+445|
+446|            function clearLog() {
+447|                document.getElementById("log").innerHTML = "";
+448|                sendToHost({ action: "clear" });
+449|            }
+450|
+451|            function closePanel() {
+452|                sendToHost({ action: "close" });
+453|            }
+454|
+455|            // ── Drag to move ──────────────────────────────────────────────────────
+456|            (function () {
+457|                let _drag = null;
+458|                document
+459|                    .getElementById("header")
+460|                    .addEventListener("mousedown", (e) => {
+461|                        if (e.target.closest(".header-btns")) return;
+462|                        _drag = { ox: e.screenX, oy: e.screenY };
+463|                        const onMove = (ev) => {
+464|                            if (!_drag) return;
+465|                            sendToHost({
+466|                                action: "move",
+467|                                dx: ev.screenX - _drag.ox,
+468|                                dy: ev.screenY - _drag.oy,
+469|                            });
+470|                            _drag.ox = ev.screenX;
+471|                            _drag.oy = ev.screenY;
+472|                        };
+473|                        const onUp = () => {
+474|                            _drag = null;
+475|                            window.removeEventListener("mousemove", onMove);
+476|                            window.removeEventListener("mouseup", onUp);
+477|                        };
+478|                        window.addEventListener("mousemove", onMove);
+479|                        window.addEventListener("mouseup", onUp);
+480|                    });
+481|            })();
+482|
+483|            // ── Theme injection ───────────────────────────────────────────────────
+            // Parse #rrggbb or #rgb -> { r, g, b }
+            function hexToRgb(hex) {
+                hex = hex.replace(/^#/, "");
+                if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+                const n = parseInt(hex, 16);
+                return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
             }
-            @font-face {
-                font-family: "Almendra";
-                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
-                font-weight: 700;
-                font-style: normal;
-            }
-            @font-face {
-                font-family: "Almendra";
-                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
-                font-weight: 400;
-                font-style: italic;
-            }
-            @font-face {
-                font-family: "Almendra";
-                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
-                font-weight: 700;
-                font-style: italic;
-            }
 
-            /* ── Tokens ─────────────────────────────────────────────────────────── */
-            :root {
-                --bg: #0e0e0e;
-                --surface: #1a1a1a;
-                --surface2: #252525;
-                --hover: #333333;
-                --accent: #cccccc;
-                --accent-hi: #e8e8e8;
-                --success: #888888;
-                --danger-bg: #1a1616;
-                --danger: #d8d8d8;
-                --warning: #aaaaaa;
-                --text: #d8d8d8;
-                --text2: rgba(200, 200, 200, 0.85);
-                --text3: rgba(160, 160, 160, 0.55);
-                --border: rgba(100, 100, 100, 0.55);
-                --border-dim: rgba(100, 100, 100, 0.18);
-                --radius: 2px;
-                --radius-s: 1px;
-            }
-
-            /* ── Reset ──────────────────────────────────────────────────────────── */
-            *,
-            *::before,
-            *::after {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-                user-select: none;
-                -webkit-user-select: none;
-            }
-
-            html,
-            body {
-                width: 100%;
-                height: 100%;
-                overflow: hidden;
-                background: var(--bg);
-                color: var(--text);
-                font-family: Arial, "Almendra", sans-serif;
-                font-size: 13px;
-                line-height: 1.5;
-                -webkit-font-smoothing: antialiased;
-            }
-
-            body {
-                display: flex;
-                flex-direction: column;
-            }
-
-            button {
-                cursor: pointer;
-                border: none;
-                background: none;
-                color: inherit;
-                font: inherit;
-            }
-
-            /* ── Header ─────────────────────────────────────────────────────────── */
-            #header {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 10px 12px 8px;
-                background: var(--surface);
-                border-bottom: 1px solid var(--border);
-                box-shadow: 0 1px 12px
-                    color-mix(in srgb, var(--accent) 12%, transparent);
-                flex-shrink: 0;
-                -webkit-app-region: drag;
-            }
-
-            #panel-title {
-                flex: 1;
-                font-weight: 600;
-                font-size: 13px;
-            }
-
-            .header-btns {
-                display: flex;
-                gap: 4px;
-                -webkit-app-region: no-drag;
-            }
-
-            /* ── Ghost button ────────────────────────────────────────────────────── */
-            .btn-ghost {
-                flex: 1;
-                padding: 5px 8px;
-                border-radius: var(--radius-s);
-                background: var(--surface2);
-                color: var(--text2);
-                font-size: 11px;
-                font-weight: 500;
-                transition: opacity 0.15s;
-            }
-            .btn-ghost:hover {
-                opacity: 0.8;
-            }
-
-            /* In the header bar, ghost buttons should not stretch */
-            .header-btns .btn-ghost {
-                flex: 0 0 auto;
-            }
-
-            /* ── Close button ────────────────────────────────────────────────────── */
-            .btn-close {
-                width: 22px;
-                height: 22px;
-                border-radius: 50%;
-                background: var(--surface2);
-                color: var(--text2);
-                font-size: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: background 0.15s;
-            }
-            .btn-close:hover {
-                background: var(--hover);
-                color: var(--text);
-            }
-
-            /* ── Current window section ──────────────────────────────────────────── */
-            #current {
-                padding: 10px 12px;
-                background: var(--surface);
-                border-bottom: 1px solid var(--border);
-                flex-shrink: 0;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                gap: 3px;
-            }
-
-            #current-empty {
-                color: var(--text3);
-                font-style: italic;
-                font-size: 12px;
-            }
-
-            #current-app {
-                color: var(--accent);
-                font-weight: 700;
-                font-size: 14px;
-                display: none;
-            }
-
-            #current-title {
-                color: var(--text);
-                font-size: 12px;
-                display: none;
-                word-break: break-word;
-                white-space: pre-wrap;
-            }
-
-            #current-dim {
-                color: var(--text2);
-                font:
-                    11px "SF Mono",
-                    Menlo,
-                    monospace;
-                display: none;
-            }
-
-            /* ── Log area ────────────────────────────────────────────────────────── */
-            #log {
-                flex: 1;
-                overflow-y: auto;
-                overflow-x: hidden;
-                padding: 4px 0;
-                min-height: 0;
-                scrollbar-width: thin;
-                scrollbar-color: var(--border) transparent;
-            }
-            #log::-webkit-scrollbar {
-                width: 5px;
-            }
-            #log::-webkit-scrollbar-track {
-                background: transparent;
-            }
-            #log::-webkit-scrollbar-thumb {
-                background: var(--border);
-                border-radius: var(--radius);
-            }
-
-            /* ── Entry rows ──────────────────────────────────────────────────────── */
-            .entry {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                padding: 5px 12px;
-                font-size: 12px;
-                border-bottom: 1px solid var(--border-dim);
-            }
-            .entry:hover {
-                background: var(--surface);
-            }
-
-            .ts {
-                color: var(--text3);
-                font:
-                    10px "SF Mono",
-                    Menlo,
-                    monospace;
-                flex-shrink: 0;
-                min-width: 52px;
-            }
-
-            .entry-dot {
-                color: var(--accent);
-                flex-shrink: 0;
-            }
-
-            .entry-app {
-                color: var(--accent);
-                font-weight: 600;
-                flex-shrink: 0;
-            }
-
-            .entry-sep {
-                color: var(--text3);
-                flex-shrink: 0;
-                padding: 0 2px;
-            }
-
-            .entry-title {
-                flex: 1;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                min-width: 0;
-            }
-
-            .dim-pill {
-                font:
-                    10px "SF Mono",
-                    Menlo,
-                    monospace;
-                padding: 1px 5px;
-                border-radius: var(--radius-s);
-                background: var(--surface2);
-                border: 1px solid var(--border);
-                color: var(--text2);
-                flex-shrink: 0;
-            }
-        </style>
-    </head>
-    <body>
-        <!-- Header -->
-        <div id="header">
-            <span id="panel-title">mudscript — window monitor</span>
-            <div class="header-btns">
-                <button
-                    class="btn-ghost"
-                    onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('interact');
-                        clearLog();
-                    "
-                >
-                    Clear
-                </button>
-                <button
-                    class="btn-close"
-                    onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        closePanel();
-                    "
-                >
-                    ✕
-                </button>
-            </div>
-        </div>
-
-        <!-- Current window -->
-        <div id="current">
-            <span id="current-empty">No focused window</span>
-            <span id="current-app"></span>
-            <span id="current-title"></span>
-            <span id="current-dim"></span>
-        </div>
-
-        <!-- Log -->
-        <div id="log"></div>
-
-        <script>
-            "use strict";
-
-            document.addEventListener("contextmenu", (e) => e.preventDefault());
-
-            // ── Constants ─────────────────────────────────────────────────────────
-            const MAX_ENTRIES = 300;
-            const SCROLL_THRESH = 48;
-
-            // ── Host bridge ───────────────────────────────────────────────────────
-            function sendToHost(msg) {
-                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-                try {
-                    window.webkit.messageHandlers.msWindow.postMessage(s);
-                } catch (e) {}
-            }
-
-            function playSlot(slot) {
-                sendToHost({ action: "playSlot", slot });
-            }
-
-            // ── Scroll helper ─────────────────────────────────────────────────────
-            function isNearBottom() {
-                const log = document.getElementById("log");
-                return (
-                    log.scrollHeight - log.scrollTop - log.clientHeight <=
-                    SCROLL_THRESH
-                );
-            }
-
-            // ── Current window display ────────────────────────────────────────────
-            // entry: { app, title, w?, h? }
-            function updateCurrentWindow(entry) {
-                const empty = document.getElementById("current-empty");
-                const appEl = document.getElementById("current-app");
-                const titleEl = document.getElementById("current-title");
-                const dimEl = document.getElementById("current-dim");
-
-                if (!entry || (!entry.app && !entry.title)) {
-                    empty.style.display = "";
-                    appEl.style.display = "none";
-                    titleEl.style.display = "none";
-                    dimEl.style.display = "none";
-                    return;
-                }
-
-                empty.style.display = "none";
-                appEl.style.display = "";
-                titleEl.style.display = "";
-                dimEl.style.display = "";
-
-                appEl.textContent = entry.app || "";
-                titleEl.textContent = entry.title || "";
-                dimEl.textContent =
-                    entry.w != null && entry.h != null
-                        ? entry.w + "\u00d7" + entry.h + " px"
-                        : "";
-            }
-
-            // ── Entry builder ─────────────────────────────────────────────────────
-            // Creates .entry with [ts] ● app-span › title-span dim-pill
-            function buildRow(entry) {
-                const row = document.createElement("div");
-                row.className = "entry";
-
-                const ts = document.createElement("span");
-                ts.className = "ts";
-                ts.textContent = entry.ts || "";
-                row.appendChild(ts);
-
-                const dot = document.createElement("span");
-                dot.className = "entry-dot";
-                dot.textContent = "●";
-                row.appendChild(dot);
-
-                const app = document.createElement("span");
-                app.className = "entry-app";
-                app.textContent = entry.app || "";
-                row.appendChild(app);
-
-                const sep = document.createElement("span");
-                sep.className = "entry-sep";
-                sep.textContent = "›";
-                row.appendChild(sep);
-
-                const title = document.createElement("span");
-                title.className = "entry-title";
-                title.textContent = entry.title || "";
-                row.appendChild(title);
-
-                if (entry.w != null && entry.h != null) {
-                    const pill = document.createElement("span");
-                    pill.className = "dim-pill";
-                    pill.textContent = entry.w + "\u00d7" + entry.h;
-                    row.appendChild(pill);
-                }
-
-                return row;
-            }
-
-            // ── Public API ────────────────────────────────────────────────────────
-            // Appends a row, trims to MAX_ENTRIES, auto-scrolls, updates current
-            function appendEntry(entry) {
-                const log = document.getElementById("log");
-                const atBottom = isNearBottom();
-                log.appendChild(buildRow(entry));
-                while (log.childElementCount > MAX_ENTRIES) {
-                    log.removeChild(log.firstElementChild);
-                }
-                if (atBottom) log.scrollTop = log.scrollHeight;
-                updateCurrentWindow(entry);
-            }
-
-            // Clears log, bulk appends (up to MAX_ENTRIES), scrolls, updates current
-            function loadHistory(entries) {
-                const log = document.getElementById("log");
-                log.innerHTML = "";
-                const frag = document.createDocumentFragment();
-                (entries || [])
-                    .slice(-MAX_ENTRIES)
-                    .forEach((e) => frag.appendChild(buildRow(e)));
-                log.appendChild(frag);
-                log.scrollTop = log.scrollHeight;
-                if (entries && entries.length > 0) {
-                    updateCurrentWindow(entries[entries.length - 1]);
-                }
-            }
-
-            function clearLog() {
-                document.getElementById("log").innerHTML = "";
-                sendToHost({ action: "clear" });
-            }
-
-            function closePanel() {
-                sendToHost({ action: "close" });
-            }
-
-            // ── Drag to move ──────────────────────────────────────────────────────
-            (function () {
-                let _drag = null;
-                document
-                    .getElementById("header")
-                    .addEventListener("mousedown", (e) => {
-                        if (e.target.closest(".header-btns")) return;
-                        _drag = { ox: e.screenX, oy: e.screenY };
-                        const onMove = (ev) => {
-                            if (!_drag) return;
-                            sendToHost({
-                                action: "move",
-                                dx: ev.screenX - _drag.ox,
-                                dy: ev.screenY - _drag.oy,
-                            });
-                            _drag.ox = ev.screenX;
-                            _drag.oy = ev.screenY;
-                        };
-                        const onUp = () => {
-                            _drag = null;
-                            window.removeEventListener("mousemove", onMove);
-                            window.removeEventListener("mouseup", onUp);
-                        };
-                        window.addEventListener("mousemove", onMove);
-                        window.addEventListener("mouseup", onUp);
-                    });
-            })();
-
-            // ── Theme injection ───────────────────────────────────────────────────
             function applyTheme(t) {
                 if (!t) return;
                 const r = document.documentElement.style;
@@ -495,19 +507,65 @@
                 if (t.danger) r.setProperty("--danger", t.danger);
                 if (t.warning) r.setProperty("--warning", t.warning);
                 if (t.text) r.setProperty("--text", t.text);
+                // Derived: text2/text3 from text
+                if (t.text && !t.text2) {
+                    const c = hexToRgb(t.text);
+                    if (c) r.setProperty("--text2", `rgba(${c.r},${c.g},${c.b},0.85)`);
+                }
+                if (t.text && !t.text3) {
+                    const c = hexToRgb(t.text);
+                    if (c) r.setProperty("--text3", `rgba(${c.r},${c.g},${c.b},0.55)`);
+                }
+                // Derived: border from accent + hover mix
+                if (t.accent && t.hover && !t.border) {
+                    const a = hexToRgb(t.accent);
+                    const h = hexToRgb(t.hover);
+                    if (a && h) {
+                        const mr = Math.round(a.r * 0.5 + h.r * 0.5);
+                        const mg = Math.round(a.g * 0.5 + h.g * 0.5);
+                        const mb = Math.round(a.b * 0.5 + h.b * 0.5);
+                        r.setProperty("--border", `rgba(${mr},${mg},${mb},0.55)`);
+                        r.setProperty("--border-dim", `rgba(${mr},${mg},${mb},0.18)`);
+                    }
+                }
+                // Derived: accent glow
+                if (t.accent && !t.accentGlow) {
+                    const a = hexToRgb(t.accent);
+                    if (a) r.setProperty("--accent-glow", `rgba(${a.r},${a.g},${a.b},0.4)`);
+                }
+                if (t.accent && !t.accentGlowFaint) {
+                    const a = hexToRgb(t.accent);
+                    if (a) r.setProperty("--accent-glow-faint", `rgba(${a.r},${a.g},${a.b},0.12)`);
+                }
+                // Derived: danger glow/border
+                if (t.danger && !t.dangerGlow) {
+                    const d = hexToRgb(t.danger);
+                    if (d) r.setProperty("--danger-glow", `rgba(${d.r},${d.g},${d.b},0.6)`);
+                }
+                if (t.danger && !t.dangerBorder) {
+                    const d = hexToRgb(t.danger);
+                    if (d) r.setProperty("--danger-border", `rgba(${d.r},${d.g},${d.b},0.3)`);
+                }
+                // Explicit overrides
+                if (t.text2) r.setProperty("--text2", t.text2);
+                if (t.text3) r.setProperty("--text3", t.text3);
+                if (t.border) r.setProperty("--border", t.border);
+                if (t.borderDim) r.setProperty("--border-dim", t.borderDim);
+                if (t.accentGlow) r.setProperty("--accent-glow", t.accentGlow);
+                if (t.accentGlowFaint) r.setProperty("--accent-glow-faint", t.accentGlowFaint);
+                if (t.dangerGlow) r.setProperty("--danger-glow", t.dangerGlow);
+                if (t.dangerBorder) r.setProperty("--danger-border", t.dangerBorder);
                 if (t.radius !== undefined) {
                     r.setProperty("--radius", t.radius + "px");
-                    r.setProperty(
-                        "--radius-s",
-                        Math.max(0, t.radius - 1) + "px",
-                    );
+                    r.setProperty("--radius-s", Math.max(0, t.radius - 1) + "px");
                 }
-            }
 
-            // ── Init ──────────────────────────────────────────────────────────────
-            document.addEventListener("DOMContentLoaded", () => {
-                sendToHost({ action: "ready" });
-            });
-        </script>
-    </body>
-</html>
+506|
+507|            // ── Init ──────────────────────────────────────────────────────────────
+508|            document.addEventListener("DOMContentLoaded", () => {
+509|                sendToHost({ action: "ready" });
+510|            });
+511|        </script>
+512|    </body>
+513|</html>
+514|
