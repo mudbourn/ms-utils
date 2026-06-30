@@ -39,14 +39,18 @@ local MsDevTools = {}
     local _devLastConsoleType = nil
     local _lastReadLine       = nil
     local _readRepeatCount    = 0
+    local _lastReadCategory   = nil
 
     local function _flushReadLine()
         if not _lastReadLine then return end
 
-        local catPath = _readablePaths and _readablePaths["macro"]
+        local catPath = _readablePaths and _readablePaths[_lastReadCategory]
 
         if catPath then
             pcall(function()
+                hs.fs.mkdir(_devBaseDir)
+                hs.fs.mkdir(_readDir)
+
                 local f = io.open(catPath, "a")
 
                 if f then
@@ -61,8 +65,9 @@ local MsDevTools = {}
             end)
         end
 
-        _lastReadLine    = nil
-        _readRepeatCount = 0
+        _lastReadLine     = nil
+        _readRepeatCount  = 0
+        _lastReadCategory = nil
     end
 
     local _consolePanel, _watcherPanel, _keysPanel, _windowPanel
@@ -423,8 +428,9 @@ local MsDevTools = {}
                             end
                         end
 
-                        _lastReadLine    = line
-                        _readRepeatCount = 1
+                        _lastReadLine     = line
+                        _readRepeatCount  = 1
+                        _lastReadCategory = entry.category
                     end
                     f:close()
                 end
