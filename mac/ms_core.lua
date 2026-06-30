@@ -150,6 +150,7 @@
             ms._docsURL           = "https://docs-ms.mudbourn.info"  -- opened by Settings › Documentation
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
             ms._updateChannel     = "stable"  -- "stable" (MANIFEST.json) or "testing" (GitHub Actions)
+            ms._branchTrace       = true
             ms._testingWorkflow   = "testing" -- workflow filename (without .yml) for the testing channel
             ms._testingRepo       = "mudbourn/ms-utils"  -- GitHub owner/repo for Actions API
 
@@ -4969,129 +4970,168 @@
                     end
                 end
 
-                -- Log macro step to the .txt log file (always, not gated on panels).
-                -- Uses ms.dev.log → _devWrite with category="macro" so entries
-                -- reach ms_dev_macro.txt without duplicating into live panels.
                 local function _devMacroLog(msg)
                     local co  = coroutine.running()
                     local ctx = co and ms._coroContext[co]
                     if ctx and ctx.cancelled then return end
                     local label = (ctx and ctx.label) or ms._pendingLabel or "macro"
-                    ms.dev.log({ type = "step", category = "macro", msg = "[" .. label .. "] " .. msg })
+
+                    ms.dev.log({
+                        type     = "step",
+                        category = "macro",
+                        msg      = "[" .. label .. "] " .. msg,
+                    })
                 end
 
-                -- ── Branch Tracing ──────────────────────────────────────────────
-                -- Uses debug.sethook on macro coroutines to trace function calls
-                -- and detect loop iterations (backward line jumps).
-                -- Writes directly to the readable macro log to avoid _devWrite
-                -- re-entrance issues (_devBusy guard).
-                local _branchState = {}  -- co -> { depth, prevLine, loopStart, loopCount, label }
+                -- Branch Tracing --
+                    local _branchState = {}
 
-                local function _traceLog(co, msg)
-                    local st = _branchState[co]
-                    if not st then return end
-                    local ts = os.date("%H:%M:%S")
-                    pcall(function()
-                        hs.fs.mkdir(_devBaseDir)
-                        hs.fs.mkdir(_readDir)
-                        local f = io.open(_readablePaths["macro"], "a")
-                        if f then
-                            f:write("[" .. ts .. "] [" .. st.label .. "] " .. msg .. "\n")
-                            f:close()
-                        end
-                    end)
-                end
-
-                local function _startBranchTrace(co, label)
-                    if not co then return end
-                    _branchState[co] = {
-                        depth     = 0,
-                        prevLine  = 0,
-                        loopStart = 0,
-                        loopCount = 0,
-                        label     = label or "macro",
-                    }
-                    debug.sethook(co, function(event, line)
+                    local function _traceLog(co, msg)
                         local st = _branchState[co]
                         if not st then return end
-                        -- Only trace user macro code, not ms_core.lua internals.
-                        local info = debug.getinfo(2, "S")
-                        local src = info and info.source or ""
-                        if src:find("ms_core") or src:find("=[C]") or src == "" then return end
 
-                        local indent = string.rep("  ", st.depth)
-
-                        if event == "call" then
-                            st.depth = st.depth + 1
-                            local fnInfo = debug.getinfo(2, "n")
-                            local name = fnInfo and fnInfo.name or "function"
-                            _traceLog(co, indent .. "START " .. name .. "()")
-
-                        elseif event == "return" or event == "tail return" then
-                            if st.depth > 0 then
-                                st.depth = st.depth - 1
-                                indent = string.rep("  ", st.depth)
-                            end
-                            local fnInfo = debug.getinfo(2, "n")
-                            local name = fnInfo and fnInfo.name or "function"
-                            _traceLog(co, indent .. "END " .. name .. "()")
-
-                        elseif event == "line" and line then
-                            if st.prevLine > 0 and line < st.prevLine and (st.prevLine - line) > 2 then
-                                -- Backward jump: entering or repeating a loop body.
-                                if st.loopStart == 0 then
-                                    st.loopStart = line
-                                    st.loopCount = 1
-                                    _traceLog(co, indent .. "START loop")
-                                else
-                                    st.loopCount = st.loopCount + 1
-                                end
-                            elseif st.loopStart > 0 and line > st.loopStart and (line - st.loopStart) > 10 then
-                                -- Forward jump past loop start = loop exited.
-                                _traceLog(co, indent .. "END loop (" .. st.loopCount .. " iterations)")
-                                st.loopStart = 0
-                                st.loopCount = 0
-                            end
-                            st.prevLine = line
-                        end
-                    end, "crl")  -- c = call, r = return, l = line
-                end
-
-                local function _stopBranchTrace(co)
-                    pcall(debug.sethook, co)
-                    -- Flush any remaining loop state.
-                    local st = _branchState[co]
-                    if st and st.loopStart > 0 then
-                        _traceLog(co, string.rep("  ", st.depth) .. "END loop (" .. st.loopCount .. " iterations)")
+                        table.insert(st.buffer, "[" .. os.date("%H:%M:%S") .. "] [" .. st.label .. "] " .. msg)
                     end
-                    _branchState[co] = nil
-                end
 
-                -- Flush accumulated cam.move calls before logging a different action.
+                    local function _flushTraceBuffer(co)
+                        local st = _branchState[co]
+                        if not st or #st.buffer == 0 then return end
+
+                        pcall(function()
+                            hs.fs.mkdir(_devBaseDir)
+                            hs.fs.mkdir(_readDir)
+                            local f = io.open(_readablePaths["macro"], "a")
+                            if f then
+                                for _, line in ipairs(st.buffer) do
+                                    f:write(line .. "\n")
+                                end
+                                f:close()
+                            end
+                        end)
+
+                        if ms.dev and ms.dev._watcherPanel then
+                            for _, line in ipairs(st.buffer) do
+                                local ok, j = pcall(hs.json.encode, {
+                                    type = "step",
+                                    ts   = os.time(),
+                                    msg  = line,
+                                })
+
+                                if ok then
+                                    pcall(function()
+                                        ms.dev._watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                                    end)
+                                end
+                            end
+                        end
+
+                        st.buffer = {}
+                    end
+
+                    local function _startBranchTrace(co, label)
+                        if not co then return end
+
+                        _branchState[co] = {
+                            depth     = 0,
+                            prevLine  = 0,
+                            loopStart = 0,
+                            loopCount = 0,
+                            label     = label or "macro",
+                            buffer    = {},
+                            isUser    = true,
+                        }
+
+                        debug.sethook(co, function(event, line)
+                            local st = _branchState[co]
+                            if not st then return end
+
+                            if event == "call" then
+                                local info = debug.getinfo(2, "S")
+                                local src = info and info.source or ""
+
+                                if src:find("ms_core") or src:find("=[C]") or src == "" then
+                                    st.isUser = false
+                                    return
+                                end
+
+                                st.isUser = true
+                                st.depth = st.depth + 1
+
+                                local fnInfo = debug.getinfo(2, "n")
+                                local name = fnInfo and fnInfo.name or "function"
+
+                                table.insert(st.buffer, string.rep("  ", st.depth) .. "START " .. name .. "()")
+
+                            elseif event == "return" or event == "tail return" then
+                                if not st.isUser then return end
+                                if st.depth > 0 then st.depth = st.depth - 1 end
+
+                                local fnInfo = debug.getinfo(2, "n")
+                                local name = fnInfo and fnInfo.name or "function"
+
+                                table.insert(st.buffer, string.rep("  ", st.depth) .. "END " .. name .. "()")
+
+                            elseif event == "line" and line then
+                                if not st.isUser then return end
+
+                                if st.prevLine > 0 and line < st.prevLine and (st.prevLine - line) > 2 then
+                                    if st.loopStart == 0 then
+                                        st.loopStart = line
+                                        st.loopCount = 1
+
+                                        table.insert(st.buffer, string.rep("  ", st.depth) .. "START loop")
+                                    else
+                                        st.loopCount = st.loopCount + 1
+                                    end
+                                elseif st.loopStart > 0 and line > st.loopStart and (line - st.loopStart) > 10 then
+                                    table.insert(st.buffer, string.rep("  ", st.depth) .. "END loop (" .. st.loopCount .. " iterations)")
+                                    st.loopStart = 0
+                                    st.loopCount = 0
+                                end
+
+                                st.prevLine = line
+                            end
+                        end, "crl")
+                    end
+
+                    local function _stopBranchTrace(co)
+                        pcall(debug.sethook, co)
+
+                        local st = _branchState[co]
+                        if st and st.loopStart > 0 then
+                            table.insert(st.buffer, string.rep("  ", st.depth) .. "END loop (" .. st.loopCount .. " iterations)")
+                        end
+
+                        _flushTraceBuffer(co)
+                        _branchState[co] = nil
+                    end
+                -- END --
+
                 local function _flushCam()
                     if _camMoveAccum > 0 then
                         if ms.dev._watcherPanel then
                             _watcherStep("cam.move ×" .. _camMoveAccum)
                         end
+
                         _devMacroLog("cam.move ×" .. _camMoveAccum)
                         _camMoveAccum = 0
                     end
                 end
 
-                -- Flush accumulated identical waits (e.g. from a tight loop).
                 local function _flushWait()
                     if _waitAccum > 0 then
                         local msg = "wait " .. _waitDuration .. "ms"
                         if _waitAccum > 1 then msg = msg .. " ×" .. _waitAccum end
+
                         if ms.dev._watcherPanel then
                             _watcherStep(msg)
                         end
+
                         _devMacroLog(msg)
                         _waitAccum = 0
                     end
                 end
 
-                -- Flush all accumulated batched actions (cam moves + waits).
                 local function _flushAll()
                     _flushCam()
                     _flushWait()
@@ -5406,14 +5446,12 @@
             ms.wait = function(ms_time)
                 local co = coroutine.running()
                 if co then
-                    local ctx = ms._coroContext[co]  -- capture context at yield time
-                    -- Flush accumulated cam.move calls before the wait entry.
+                    local ctx = ms._coroContext[co]
                     if ms.dev then _flushCam() end
-                    -- Accumulate identical waits instead of logging each one.
-                    -- Flushes happen when a different action (press/release/type/cam.move)
-                    -- fires, or when the wait duration changes.
+
                     if ms.dev then
                         local msNum = tonumber(ms_time) or 0
+
                         if _waitAccum > 0 and msNum == _waitDuration then
                             _waitAccum = _waitAccum + 1
                         else
@@ -5432,13 +5470,12 @@
                         if coroutine.status(co) == "dead" then
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
-                            -- Stop branch tracing.
                             if ms.dev then _stopBranchTrace(co) end
-                            -- Flush any trailing batched actions (waits, cam moves)
-                            -- that accumulated after the last non-wait action.
                             if ms.dev then _flushAll() end
                         end
                     end)
+                    -- Flush trace buffer before yielding so entries appear live.
+                    if ms._branchTrace then _flushTraceBuffer(co) end
                     coroutine.yield()
                 else
                     -- Intentional blocking fallback for the rare case where ms.wait is called
@@ -5841,28 +5878,32 @@
             ms.fn = function(fn, async)
                 assert(type(fn) == "function", "ms.fn: fn must be a function")
                 if async == false then return fn end
+
                 return function(...)
                     local co  = coroutine.create(fn)
-                    -- Inherit the pending label set by firedFn so ms.wait step entries
-                    -- can identify which macro is running without needing an id param.
-                    local ctx = { cancelled = false, paused = false, label = ms._pendingLabel or "macro" }
+                    local ctx = {
+                        cancelled = false,
+                        paused    = false,
+                        label     = ms._pendingLabel or "macro",
+                    }
                     local label = ms._pendingLabel or "macro"
                     ms._pendingLabel = nil
+
                     ms._coroContext[co]    = ctx
                     ms._activeContexts[ctx] = true
-                    -- Start branch tracing on this coroutine.
-                    if ms.dev then _startBranchTrace(co, label) end
+
+                    if ms.dev and ms._branchTrace then _startBranchTrace(co, label) end
+
                     local ok, err = coroutine.resume(co, ...)
                     if not ok then
                         print("ms.fn error: " .. tostring(err))
                         ms.alert("Macro error — check Hammerspoon console.", 4)
                     end
-                    -- Coroutine finished without ever yielding: clean up immediately.
+
                     if coroutine.status(co) == "dead" then
                         if ms.dev then _stopBranchTrace(co) end
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
-                        -- Flush any trailing batched actions.
                         if ms.dev then _flushAll() end
                     end
                 end
@@ -5924,15 +5965,14 @@
             -- Cancels all active ms.fn macros and releases held keys/buttons.
             -- Called automatically on every setMacros(0).
             ms.cancelMacros = function()
-                -- Mark every live coroutine as cancelled so pending ms.wait /
-                -- ms.sound callbacks don't resume it after this point.
                 for co, ctx in pairs(ms._coroContext) do
                     ctx.cancelled = true
                     if ms.dev then _stopBranchTrace(co) end
                 end
+
                 ms._activeContexts = {}
                 ms._coroContext     = {}
-                -- Flush any trailing batched actions from cancelled macros.
+
                 if ms.dev then _flushAll() end
 
                 -- Release every key currently held by a macro press.
@@ -5998,9 +6038,6 @@
                 end
             end
 
-            -- Plays a sound by path or ms.sounds.* table entry.
-            -- async: true (default) = fire-and-forget; false = yield until complete.
-            -- device: output device name string; nil = system default.
             ms.sound = function(path, async, device)
                 if ms.dev then _flushAll() end
                 if path then
@@ -7026,7 +7063,7 @@
                         local ok, m = pcall(hs.json.decode, f:read("*all")); f:close()
                         local base = (ok and m and m.version) or nil
                         if not base then return nil end
-                        -- Testing channel: show next patch + build number (e.g. "1.2.9-pre.15").
+
                         if ms._updateChannel == "testing" then
                             local maj, min, pat = base:match("^(%d+)%.(%d+)%.(%d+)$")
                             if maj and min and pat then
