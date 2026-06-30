@@ -204,7 +204,10 @@ local MsDevTools = {}
 
         table.sort(list)
 
-        while #list > limit do
+        -- Cap at 5 folders per reload so we never block the main thread.
+        local pruned = 0
+
+        while #list > limit and pruned < 5 do
             local dir = _devArchDir .. list[1]
 
             for _, sub in ipairs({"json", "readable"}) do
@@ -223,10 +226,17 @@ local MsDevTools = {}
 
             hs.fs.rmdir(dir)
             table.remove(list, 1)
+            pruned = pruned + 1
         end
     end
 
     function MsDevTools:_archiveOnReload()
+        -- Prune first so we never accumulate unbounded folders.
+        local limit = (type(self.archiveLimit) == "number" and self.archiveLimit >= 0)
+            and self.archiveLimit or 15
+
+        self:_pruneSessionArchives(limit)
+
         local stamp = os.date("%Y-%m-%d_%H%M%S")
 
         hs.fs.mkdir(_jsonDir)
@@ -239,11 +249,6 @@ local MsDevTools = {}
         for _, p in pairs(_readablePaths) do
             self:_archiveLog(p, stamp, "readable")
         end
-
-        local limit = (type(self.archiveLimit) == "number" and self.archiveLimit >= 0)
-            and self.archiveLimit or 15
-
-        self:_pruneSessionArchives(limit)
     end
 
 -- END --

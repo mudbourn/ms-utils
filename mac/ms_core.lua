@@ -214,11 +214,65 @@
                 require("hs.application")
 
                 -- Developer Tools — MsDevTools.spoon --
-                hs.loadSpoon("MsDevTools")
-                spoon.MsDevTools:init()
+                local _msDevOk, _msDevErr = pcall(function()
+                    hs.loadSpoon("MsDevTools")
+                    spoon.MsDevTools:init()
+                end)
+
+                if not _msDevOk then
+                    print("MsDevTools: load failed — " .. tostring(_msDevErr))
+                end
 
                 -- Developer Tools — populated by MsDevTools:start() --
-                spoon.MsDevTools:start()
+                if spoon.MsDevTools then
+                    spoon.MsDevTools:start()
+                else
+                    ms.dev = {
+                        _consolePanel    = nil,
+                        _watcherPanel    = nil,
+                        _keysPanel       = nil,
+                        _consolePanelPos = nil,
+                        _watcherPanelPos = nil,
+                        _keysPanelPos    = nil,
+                        _activeKeys      = {},
+                        _activeButtons   = {},
+                        _coordMode       = "screen",
+                        _keysReady       = false,
+                    }
+
+                    ms.dev.log = function() end
+                    ms.dev._onMacroFire  = function() end
+                    ms.dev._onKeyEvent   = function() end
+                    ms.dev._onMouseEvent = function() end
+
+                    ms.dev.console = { show = function() end, hide = function() end, toggle = function() end }
+                    ms.dev.watcher = { show = function() end, hide = function() end, toggle = function() end }
+                    ms.dev.keys    = { show = function() end, hide = function() end, toggle = function() end }
+                    ms.dev.window  = { show = function() end, hide = function() end, toggle = function() end }
+
+                    ms.dev.prewarm     = function() end
+                    ms.dev.prewarmStep = function() end
+                    ms.dev.step        = function() end
+                    ms.dev._pushMouseState = function() end
+
+                    -- Stub so spoon.MsDevTools:* calls don't crash.
+                    spoon.MsDevTools = {
+                        flushAll         = function() end,
+                        flushCam         = function() end,
+                        flushWait        = function() end,
+                        watcherStep      = function() end,
+                        macroLog         = function() end,
+                        accCamMove       = function() end,
+                        accWait          = function() end,
+                        startTrace       = function() end,
+                        stopTrace        = function() end,
+                        flushTraceBuffer = function() end,
+                        setTraceSuppress = function() end,
+                        getTraceSuppress = function() return false end,
+                    }
+
+                    print("MsDevTools: running without dev panels (spoon not loaded)")
+                end
 
                 hs.timer.doAfter(0.3, function()
                     local roblox = hs.application.get("Roblox")
