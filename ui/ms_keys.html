@@ -763,6 +763,8 @@
                         mkSpan("arrow arrow-move", "→"),
                         mkSpan("move-name", entry.x + ", " + entry.y),
                     );
+                    row.addEventListener("mouseenter", () => playSlot("hover"));
+                    row.addEventListener("click", _handleEntryClick);
                     return row;
                 }
 
@@ -806,6 +808,8 @@
                     );
                 }
 
+                row.addEventListener("mouseenter", () => playSlot("hover"));
+                row.addEventListener("click", _handleEntryClick);
                 return row;
             }
 

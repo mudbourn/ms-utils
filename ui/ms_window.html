@@ -487,6 +487,8 @@
                     row.appendChild(pill);
                 }
 
+                row.addEventListener("mouseenter", () => playSlot("hover"));
+                row.addEventListener("click", _handleEntryClick);
                 return row;
             }
 

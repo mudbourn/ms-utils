@@ -258,7 +258,14 @@
                 border-bottom: 1px solid var(--border-faint);
             }
             .step:hover {
-                opacity: 0.7;
+                background: var(--surface);
+            }
+            .step.selected {
+                background: var(--hover);
+                outline: 1px solid var(--accent-glow);
+            }
+            .step.selected:hover {
+                background: var(--accent-glow-faint);
             }
             .step-msg {
                 color: var(--text2);
@@ -670,6 +677,8 @@
                     msg.textContent = entry.msg || "";
 
                     row.append(ts, msg);
+                    row.addEventListener("mouseenter", () => playSlot("hover"));
+                    row.addEventListener("click", _handleEntryClick);
                     return row;
                 }
 
@@ -725,6 +734,8 @@
                     row.appendChild(msg);
                 }
 
+                row.addEventListener("mouseenter", () => playSlot("hover"));
+                row.addEventListener("click", _handleEntryClick);
                 return row;
             }
 
