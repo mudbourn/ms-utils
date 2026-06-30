@@ -1343,14 +1343,15 @@
             end
 
             local _slotDefaults = {
-                startup = { "LoadStart", "Load Start" },
-                load    = { "LoadEnd",   "Load End"   },
-                launch  = { "Launch" },
+                startup      = { "LoadStart", "Load Start" },
+                load         = { "LoadEnd",   "Load End"   },
+                launch       = { "Launch" },
+                themeLoaded  = { "ThemeLoaded", "Theme Loaded" },
                 updateAvailable = { "UpdateAvailable", "Update Available" },
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
-                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "startup" and slotId ~= "updateAvailable" then return false end
+                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "startup" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" then return false end
                 local now = hs.timer.absoluteTime()
                 ms._playSlotTimes = ms._playSlotTimes or {}
                 if (now - (ms._playSlotTimes[slotId] or 0)) < 0.05 then return false end
@@ -2259,7 +2260,7 @@
             _announceLoad = function()
                 if _loadAnnounced then return end
                 _loadAnnounced = true
-                pcall(function() ms.playSlot("loadEnd") end)
+                pcall(function() ms.playSlot("load") end)
                 hs.timer.doAfter(0.4, function()
                     ms._startupSoundDone = true
                     pcall(function() ms.playSlot("launch") end)
