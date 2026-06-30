@@ -351,7 +351,7 @@
                                 local function add(label, val)
                                     if val ~= nil and val ~= "" then parts[#parts + 1] = "  " .. label .. ": " .. tostring(val) end
                                 end
-                                local headline = entry.msg or entry.event or entry.type or "log"
+                                local headline = entry.msg or entry.label or entry.event or entry.type or "log"
                                 local first, rest = headline:match("^([^\n]+)\n(.*)$")
                                 if first then headline = first; add("detail", rest:gsub("\n", " | ")) end
                                 add("fromDialog", entry.fromDialog)
@@ -364,6 +364,14 @@
                                 add("channel",     entry.channel)
                                 add("target",      entry.target)
                                 add("format",      entry.format)
+                                add("id",          entry.id)
+                                add("label",       entry.label)
+                                add("parent",      entry.parentLabel)
+                                add("trigger",     entry.trigger)
+                                add("key",         entry.key)
+                                add("keyCode",     entry.keyCode)
+                                add("button",      entry.button)
+                                add("down",        entry.down ~= nil and tostring(entry.down) or nil)
                                 local line = "[" .. entry.ts .. "] " .. headline
                                 if #parts > 0 then line = line .. "\n" .. table.concat(parts, "\n") end
                                 f:write(line .. "\n")
