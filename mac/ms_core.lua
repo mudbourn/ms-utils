@@ -2172,6 +2172,13 @@
         ms._devArchiveLimit   = 15     -- overridden by loadSettings() if previously saved
         ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
         ms.loadSettings()            -- load first so importedSounds/soundAssign are available
+        -- If custom themes disabled, clear loading sound presets at startup
+        if ms._customThemeDisabled then
+            local loadSlots = { "startup", "themeLoaded", "load", "launch" }
+            for _, sid in ipairs(loadSlots) do
+                ms.soundAssign[sid] = nil
+            end
+        end
         ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)
         ms._discoverSounds()
         ms.loadTheme()

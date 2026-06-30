@@ -543,6 +543,11 @@
                 if ms._customThemeDisabled then
                     -- Revert to defaults
                     for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
+                    -- Clear loading sound presets — custom themes off = base sounds only
+                    local loadSlots = { "startup", "themeLoaded", "load", "launch" }
+                    for _, sid in ipairs(loadSlots) do
+                        ms.soundAssign[sid] = nil
+                    end
                 else
                     -- Reload custom theme
                     ms.loadTheme()
