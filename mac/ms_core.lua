@@ -323,13 +323,44 @@
                     local ok, json = pcall(hs.json.encode, entry)
                     if not ok then _devBusy = false; return end
 
-                    -- Write to category-specific log.
+                    -- Write to category-specific log (human-readable + JSON for panel history).
                     local catPath = _catPaths[entry.category]
                     if catPath then
                         pcall(function()
                             hs.fs.mkdir(_devBaseDir)
                             local f = io.open(catPath, "a")
-                            if f then f:write(json .. "\n"); f:close() end
+                            if f then
+                                -- Build human-readable prefix.
+                                local parts = {}
+                                local function add(label, val)
+                                    if val ~= nil and val ~= "" then parts[#parts + 1] = "  " .. label .. ": " .. tostring(val) end
+                                end
+                                local headline = entry.msg or entry.event or entry.type or "log"
+                                -- Multi-line msg: use first line as headline, rest as detail.
+                                local first, rest = headline:match("^([^\n]+)\n(.*)$")
+                                if first then headline = first; add("detail", rest:gsub("\n", " | ")) end
+                                add("fromDialog", entry.fromDialog)
+                                add("to",          entry.to)
+                                add("status",      entry.status)
+                                add("cur",         entry.cur)
+                                add("trusted",     entry.trusted)
+                                add("code",        entry.code)
+                                add("version",     entry.version)
+                                add("channel",     entry.channel)
+                                add("target",      entry.target)
+                                add("format",      entry.format)
+                                local readable = "[" .. entry.ts .. "] " .. headline
+                                if #parts > 0 then readable = readable .. "\n" .. table.concat(parts, "\n") end
+
+                                -- Encode JSON for panel history loader.
+                                local ok2, jsonLine = pcall(hs.json.encode, entry)
+                                if ok2 then
+                                    f:write(readable .. "  // " .. jsonLine .. "\n")
+                                else
+                                    f:write(readable .. "\n")
+                                end
+                                f:close()
+                            end
                         end)
                     end
 
@@ -8133,9 +8164,14 @@
                             local f = io.open(path, "r")
                             if f then
                                 for line in f:lines() do
-                                    local ok, entry = pcall(hs.json.decode, line)
-                                    if ok and entry then
-                                        entries[#entries + 1] = entry
+                                    -- Each line is: [ts] headline  // {json}
+                                    -- Extract the JSON after the "//" marker.
+                                    local jsonStr = line:match("//%s*(%{.+)$")
+                                    if jsonStr then
+                                        local ok, entry = pcall(hs.json.decode, jsonStr)
+                                        if ok and entry then
+                                            entries[#entries + 1] = entry
+                                        end
                                     end
                                 end
                                 f:close()
