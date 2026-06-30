@@ -207,6 +207,22 @@
         queue = {}
     end
 
+    function MsAlert:recolor()
+        local theme      = ms._theme or {}
+        local bgColor    = hexToColor(theme.surface2, { red = 0.11, green = 0.063, blue = 0.047, alpha = 1 })
+        local txtColor   = hexToColor(theme.text,     { red = 0.94, green = 0.87, blue = 0.69, alpha = 1 })
+        local accentColor = hexToColor(theme.accent,   { red = 0.77, green = 0.10, blue = 0.10, alpha = 1 })
+        bgColor.alpha = 0.88
+
+        for _, e in ipairs(queue) do
+            if e.canvas then
+                pcall(function() e.canvas:elementAttribute(1, "fillColor", bgColor) end)
+                pcall(function() e.canvas:elementAttribute(1, "strokeColor", accentColor) end)
+                pcall(function() e.canvas:elementAttribute(2, "textColor", txtColor) end)
+            end
+        end
+    end
+
     function MsAlert:dismissById(id)
         for i = #queue, 1, -1 do
             local e = queue[i]
