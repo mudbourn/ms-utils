@@ -108,10 +108,24 @@ jobs:
           mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
           rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
 
-          # Stamp MANIFEST.json with pre-release version
+          # Stamp MANIFEST.json with pre-release version (bump patch: 1.2.7 → 1.2.8-pre.N)
+          # N = number of commits since the last stable release tag
           if [ -f "$DIST/MANIFEST.json" ]; then
             BASE_VER=$(jq -r '.version // "0.0.0"' "$DIST/MANIFEST.json")
-            PRE_VER="${BASE_VER}-pre.${BUILD_NUM}"
+            # Strip any existing pre-release suffix (e.g. 1.2.8-pre.31 → 1.2.8)
+            BASE_VER=$(echo "$BASE_VER" | sed 's/-pre[.-][0-9]*$//')
+            # Bump patch version (1.2.7 → 1.2.8)
+            BUMPED=$(echo "$BASE_VER" | awk -F. '{$NF=$NF+1; print}' OFS=.)
+            # Count commits since last stable tag
+            LAST_STABLE=$(git tag -l 'v*' --sort=-v:refname | head -1)
+            if [ -n "$LAST_STABLE" ]; then
+              BUILD_REL=$(git rev-list --count "${LAST_STABLE}..HEAD")
+            else
+              BUILD_REL=$BUILD_NUM
+            fi
+            # Ensure at least 1
+            BUILD_REL=$((BUILD_REL > 0 ? BUILD_REL : 1))
+            PRE_VER="${BUMPED}-pre.${BUILD_REL}"
             jq --arg v "$PRE_VER" '.version = $v' "$DIST/MANIFEST.json" > "$DIST/MANIFEST.json.tmp"
             mv "$DIST/MANIFEST.json.tmp" "$DIST/MANIFEST.json"
             echo "Stamped MANIFEST.json: $BASE_VER → $PRE_VER"
@@ -161,7 +175,16 @@ jobs:
 
           if [ -f "$DIST/MANIFEST.json" ]; then
             BASE_VER=$(jq -r '.version // "0.0.0"' "$DIST/MANIFEST.json")
-            PRE_VER="${BASE_VER}-pre.${BUILD_NUM}"
+            BASE_VER=$(echo "$BASE_VER" | sed 's/-pre[.-][0-9]*$//')
+            BUMPED=$(echo "$BASE_VER" | awk -F. '{$NF=$NF+1; print}' OFS=.)
+            LAST_STABLE=$(git tag -l 'v*' --sort=-v:refname | head -1)
+            if [ -n "$LAST_STABLE" ]; then
+              BUILD_REL=$(git rev-list --count "${LAST_STABLE}..HEAD")
+            else
+              BUILD_REL=$BUILD_NUM
+            fi
+            BUILD_REL=$((BUILD_REL > 0 ? BUILD_REL : 1))
+            PRE_VER="${BUMPED}-pre.${BUILD_REL}"
             jq --arg v "$PRE_VER" '.version = $v' "$DIST/MANIFEST.json" > "$DIST/MANIFEST.json.tmp"
             mv "$DIST/MANIFEST.json.tmp" "$DIST/MANIFEST.json"
           fi
@@ -264,7 +287,21 @@ jobs:
           if (Test-Path $manifestPath) {
             $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
             $baseVer = if ($manifest.version) { $manifest.version } else { "0.0.0" }
-            $preVer = "$baseVer-pre.$buildNum"
+            # Strip any existing pre-release suffix (e.g. 1.2.8-pre.31 → 1.2.8)
+            $baseVer = $baseVer -replace '-pre[\.\-]\d+$',''
+            # Bump patch version (1.2.7 → 1.2.8)
+            $parts = $baseVer -split '\.'
+            $parts[-1] = [int]$parts[-1] + 1
+            $bumped = $parts -join '.'
+            # Count commits since last stable tag
+            $lastStable = git tag -l 'v*' --sort=-v:refname | Select-Object -First 1
+            if ($lastStable) {
+              $buildRel = [int](git rev-list --count "$lastStable..HEAD")
+            } else {
+              $buildRel = [int]$buildNum
+            }
+            if ($buildRel -lt 1) { $buildRel = 1 }
+            $preVer = "$bumped-pre.$buildRel"
             $manifest.version = $preVer
             $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath -NoNewline
             Write-Output "Stamped MANIFEST.json: $baseVer -> $preVer"
@@ -315,7 +352,18 @@ jobs:
           if (Test-Path $manifestPath) {
             $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
             $baseVer = if ($manifest.version) { $manifest.version } else { "0.0.0" }
-            $preVer = "$baseVer-pre.$buildNum"
+            $baseVer = $baseVer -replace '-pre[\.\-]\d+$',''
+            $parts = $baseVer -split '\.'
+            $parts[-1] = [int]$parts[-1] + 1
+            $bumped = $parts -join '.'
+            $lastStable = git tag -l 'v*' --sort=-v:refname | Select-Object -First 1
+            if ($lastStable) {
+              $buildRel = [int](git rev-list --count "$lastStable..HEAD")
+            } else {
+              $buildRel = [int]$buildNum
+            }
+            if ($buildRel -lt 1) { $buildRel = 1 }
+            $preVer = "$bumped-pre.$buildRel"
             $manifest.version = $preVer
             $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath -NoNewline
           }
