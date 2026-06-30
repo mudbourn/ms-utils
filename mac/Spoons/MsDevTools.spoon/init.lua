@@ -1,5 +1,5 @@
 -- MsDevTools --
-local MsDevTools = {}
+    local MsDevTools = {}
 
     MsDevTools.name    = "MsDevTools"
     MsDevTools.version = "1.0"

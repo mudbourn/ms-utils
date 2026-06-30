@@ -31,6 +31,12 @@ cp -R "$REPO/mac/Spoons/MsAlert.spoon" "$HS/Spoons/MsAlert.spoon" 2>/dev/null ||
 # Copy MsCamera spoon.
 cp -R "$REPO/mac/Spoons/MsCamera.spoon" "$HS/Spoons/MsCamera.spoon" 2>/dev/null || true
 
+# Copy MsSettings spoon.
+cp -R "$REPO/mac/Spoons/MsSettings.spoon" "$HS/Spoons/MsSettings.spoon" 2>/dev/null || true
+
+# Copy MsUI spoon.
+cp -R "$REPO/mac/Spoons/MsUI.spoon" "$HS/Spoons/MsUI.spoon" 2>/dev/null || true
+
 # Copy guardian agent script.
 cp "$REPO/mac/bin/ms_guardian_agent.sh" "$HS/bin/ms_guardian_agent.sh" 2>/dev/null || true
 

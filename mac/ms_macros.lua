@@ -28,7 +28,7 @@
             type = "divider",
             section = "calibration"
         })
--- END Click Level --
+    -- END Click Level --
 
     -- Slide Setup --
         ms.settings.define({
@@ -75,7 +75,7 @@
             save = true,
             section = "calibration",
         })
--- END Slide Setup --
+    -- END Slide Setup --
 
     -- Lag Simulator --
         ms.settings.define({
@@ -127,7 +127,7 @@
             save = true,
             section = "calibration",
         })
--- END Lag Simulator --
+    -- END Lag Simulator --
 
     -- Quick Slide --
         ms.settings.define({
@@ -166,7 +166,7 @@
             save = true,
             section = "calibration",
         })
--- END Quick Slide --
+    -- END Quick Slide --
 -- END Pack Settings --
 
 -- Combat Warriors Macros --
@@ -311,7 +311,7 @@
                 label = "Jump Low",
                 mod   = "x",
             })
--- END High Leap Assist --
+        -- END High Leap Assist --
 
         -- Throw Trick --
             local ThrowTrickFunction = ms.fn(function()
@@ -419,7 +419,7 @@
                 label = "Throw Low",
                 mod   = "v",
             })
--- END Throw Trick --
+        -- END Throw Trick --
 
         -- Swing Cancel --
             local FakeSwingFunction = ms.fn(function()
@@ -442,7 +442,7 @@
                     button = 4,
                 },
             })
--- END Swing Cancel --
+        -- END Swing Cancel --
 
         -- Quick Reset --
             local QuickResetFunction = ms.fn(function()
@@ -475,7 +475,7 @@
                     key  = "escape",
                 },
             })
--- END Quick Reset --
+        -- END Quick Reset --
 
         -- Quick Slide --
             local QuickSlideFunction = ms.fn(function()
@@ -502,7 +502,7 @@
                     key  = "z",
                 },
             })
--- END Quick Slide --
+        -- END Quick Slide --
 
         -- Slide Setup --
             local SlideSetupFunction = ms.fn(function()
@@ -564,7 +564,7 @@
                     key  = "\\",
                 },
             })
--- END Slide Setup --
+        -- END Slide Setup --
 
         -- Action Spammer --
             local ActionSpammerFunction = ms.fn(function()
@@ -602,7 +602,7 @@
                     button = 2,
                 },
             })
--- END Action Spammer --
+        -- END Action Spammer --
 
         -- Load Second Account (PRIVATE SERVER, MUST HAVE PSCMDS) --
             local SpawnAltFunction = ms.fn(function()
@@ -643,6 +643,6 @@
                 label = "Load Second Account",
                 mod   = "alt",
             })
--- END Load Second Account (PRIVATE SERVER, MUST HAVE PSCMDS) --
+        -- END Load Second Account --
     -- END Macro Functions --
 -- END Combat Warriors Macros --
