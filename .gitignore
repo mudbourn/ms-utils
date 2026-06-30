@@ -1,18 +1,12 @@
-# Per-user trust baseline — never commit; each user generates their own
-data/.ms_trusted_hash
-
-# Per-user runtime settings
-data/ms_settings.json
-data/ms_settings_default.json
-data/ms_theme.json
-
-# Developer tool logs
-data/ms_dev.log
-data/ms_dev_logs/
-data/guardian_agent.log
+# Runtime files — generated per-user, never commit
+data/
 
 # Backup archives
 backups/
+
+# Development artifacts / agent notes
+ignore/
+.hermes/
 
 # macOS
 .DS_Store
@@ -23,11 +17,3 @@ backups/
 # Compiled AHK binary — not tracked
 *.exe
 *.exe.manifest
-
-# Development planning docs — not shipped
-docs/WINDOWS_PORT_PLAN.md
-docs/WINDOWS_AHK2_DEV.md
-
-# LLM agent instructions — not shipped
-writing_style.txt
-.hermes/plans/2026-06-30_spoon-extraction.md

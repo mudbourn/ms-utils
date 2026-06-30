@@ -159,6 +159,7 @@
                 if data.qrOptions.ui       ~= nil then qr.ui       = (data.qrOptions.ui       == true) end
             end
             if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
+            if data.customThemeDisabled ~= nil then ms._customThemeDisabled = (data.customThemeDisabled == true) end
             if data.devArchiveLimit ~= nil then
                 local n = tonumber(data.devArchiveLimit)
                 if n and n >= 0 and n <= 50 then ms._devArchiveLimit = math.floor(n) end
@@ -292,6 +293,7 @@
                 soundAssign      = ms.soundAssign,
                 importedSounds   = ms.importedSounds or {},
                 skipDevPrewarm   = ms._skipDevPrewarm or false,
+                customThemeDisabled = ms._customThemeDisabled or false,
                 devArchiveLimit  = ms._devArchiveLimit or 15,
                 updateChannel    = ms._updateChannel or "stable",
                 quickReloaded    = ms._quickReloaded or 0,
@@ -520,11 +522,15 @@
             ms.cam.updateAnchor()
             ms.cam.updateMultiplier()
             ms.socdApply()
+            ms.ui.hide()
+            pcall(function() ms.dev.console.hide() end)
+            pcall(function() ms.dev.watcher.hide() end)
+            pcall(function() ms.dev.keys.hide() end)
+            pcall(function() ms.dev.window.hide() end)
             if not ms._quickReloading then
                 ms.playSlot("update")
+                ms.alert("UI reloaded.", 4, true)
             end
-            ms.ui.hide()
-            hs.timer.doAfter(0.15, function() ms.ui.show() end)
         end
 
         ms.quickReload = function()
@@ -540,13 +546,42 @@
                 ui       = true,
             }
 
+            -- 1. Reload macros (handles its own Roblox refocus)
             if qr.macros then ms.ui._actions.reloadMacros() end
 
+            -- 2. Reload theme (just the theme data, no UI)
             if qr.theme then ms.loadTheme() end
 
+            -- 3. Reload settings (rebind, no UI)
             if qr.settings then ms.reloadSettings() end
 
+            -- 4. Reload UI (full rebuild, closes all UI)
             if qr.ui then ms.reloadUI() end
+
+            -- 5. UI side effects (after all reloads complete)
+            if qr.ui then
+                -- UI: everything already closed by reloadUI, nothing to reopen
+
+            elseif qr.theme then
+                -- Theme: close and reopen settings + dev tools
+                ms.ui.hide()
+                pcall(function() ms.dev.console.hide() end)
+                pcall(function() ms.dev.watcher.hide() end)
+                pcall(function() ms.dev.keys.hide() end)
+                pcall(function() ms.dev.window.hide() end)
+                hs.timer.doAfter(0.15, function()
+                    ms.ui.show()
+                    pcall(function() ms.dev.console.show() end)
+                    pcall(function() ms.dev.watcher.show() end)
+                    pcall(function() ms.dev.keys.show() end)
+                    pcall(function() ms.dev.window.show() end)
+                end)
+
+            elseif qr.settings then
+                -- Settings: close and reopen settings panel only
+                ms.ui.hide()
+                hs.timer.doAfter(0.15, function() ms.ui.show() end)
+            end
 
             ms._quickReloading = false
 
@@ -731,6 +766,7 @@
             ms.dev.log({ type = "system", event = "theme_load" })
             if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
             for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
+            if ms._customThemeDisabled then return end
             local f = io.open(themePath, "r")
             if not f then return end
             local content = f:read("*all"); f:close()
@@ -1422,6 +1458,28 @@
                     end
                 end
             end
+            -- Bundle fonts referenced by the theme
+            local fontsCopied = 0
+            do
+                local fontName = (ms._theme and ms._theme.font) or nil
+                if type(fontName) == "string" and #fontName > 0 and not fontName:find("[/\\]") then
+                    local fontsSrc = hs.configdir .. "/ui/fonts/"
+                    if hs.fs.attributes(fontsSrc) then
+                        local fontsDir = tmpDir .. "fonts/"
+                        local pattern = fontName:lower():gsub("%-", "%%-")
+                        for file in hs.fs.dir(fontsSrc) do
+                            if file ~= "." and file ~= ".." then
+                                local lower = file:lower()
+                                if lower:match("^" .. pattern) and (lower:match("%.ttf$") or lower:match("%.otf$")) then
+                                    os.execute("mkdir -p " .. sq(fontsDir))
+                                    hs.execute("/bin/cp " .. sq(fontsSrc .. file) .. " " .. sq(fontsDir .. file))
+                                    fontsCopied = fontsCopied + 1
+                                end
+                            end
+                        end
+                    end
+                end
+            end
             hs.execute("cd " .. sq(tmpDir) .. " && zip -r " .. sq(outPath) .. " . 2>/dev/null")
             os.execute("rm -rf " .. sq(tmpDir))
             if hs.fs.attributes(outPath) then
@@ -1429,6 +1487,9 @@
                 local msg = "Exported " .. outName .. " to ~/Downloads/"
                 if soundsCopied > 0 then
                     msg = msg .. "\n" .. soundsCopied .. " sound" .. (soundsCopied > 1 and "s" or "") .. " bundled."
+                end
+                if fontsCopied > 0 then
+                    msg = msg .. "\n" .. fontsCopied .. " font" .. (fontsCopied > 1 and "s" or "") .. " bundled."
                 end
                 ms.alert(msg, 5, true)
             else
@@ -1545,6 +1606,32 @@
                         ms._discoverSounds()
                     end
                 end
+                -- Auto-install fonts from package
+                local fontsAdded = 0
+                do
+                    local fontsDir = tmpDir .. "fonts/"
+                    if hs.fs.attributes(fontsDir) then
+                        local dstDir = os.getenv("HOME") .. "/Library/Fonts/"
+                        hs.fs.mkdir(dstDir)
+                        for file in hs.fs.dir(fontsDir) do
+                            if file ~= "." and file ~= ".." then
+                                local ext = file:match("%.([^%.]+)$")
+                                if ext == "ttf" or ext == "otf" or ext == "woff" or ext == "woff2" then
+                                    local srcFont = fontsDir .. file
+                                    local dstFont = dstDir .. file
+                                    if not hs.fs.attributes(dstFont) then
+                                        local ff = io.open(srcFont, "rb")
+                                        if ff then
+                                            local fdata = ff:read("*all"); ff:close()
+                                            local of = io.open(dstFont, "wb")
+                                            if of then of:write(fdata); of:close(); fontsAdded = fontsAdded + 1 end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
                 os.execute("rm -rf " .. sq(tmpDir))
                 if roblox then pcall(function() roblox:activate() end) end
                 ms.playSlot("update")
@@ -1552,6 +1639,9 @@
                     local msg = "\"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles."
                     if #soundsAdded > 0 then
                         msg = msg .. "\n" .. #soundsAdded .. " sound" .. (#soundsAdded > 1 and "s" or "") .. " added to library."
+                    end
+                    if fontsAdded > 0 then
+                        msg = msg .. "\n" .. fontsAdded .. " font" .. (fontsAdded > 1 and "s" or "") .. " installed."
                     end
                     ms.alert(msg, 6, true)
                     ms._profilesDirty = true

@@ -4,6 +4,73 @@
             ms = {}
             if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
 
+        -- Loading Screen (created early so _lUpdate is available during spoon loading) --
+            local _lWebView, _lFadingOut, _lFadeTimer
+            local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad
+            local _needsIntegrityWarning = false
+            do
+                local sf  = hs.screen.mainScreen():frame()
+                local lw, lh = 300, 104
+                local lx  = sf.x + math.floor((sf.w - lw) / 2)
+                local ly  = sf.y + sf.h - 150 - lh
+
+                local _ucLoading = hs.webview.usercontent.new("loading")
+                _ucLoading:setCallback(function(message)
+                    local ok, data = pcall(hs.json.decode, message.body)
+                    if not ok or type(data) ~= "table" then return end
+                    if data.action == "toggleSkipPreload" then
+                        ms._skipDevPrewarm = not ms._skipDevPrewarm
+                        pcall(function() ms.saveSettings() end)
+                        if ms._skipDevPrewarm and not _lFadingOut then
+                            _lUpdate(100, "Developer tools skipped.")
+                            hs.timer.doAfter(0.8, _lFadeOut)
+                        end
+                    end
+                end)
+
+                local htmlPath = hs.configdir .. "/ui/ms_loading.html"
+                local baseURL  = "file://" .. hs.configdir .. "/ui/"
+
+                _lWebView = hs.webview.new({ x=lx, y=ly, w=lw, h=lh }, {}, _ucLoading)
+                pcall(function() _lWebView:windowStyle(0) end)
+                pcall(function() _lWebView:level(hs.canvas.windowLevels.popUpMenu or 25) end)
+                pcall(function() _lWebView:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                pcall(function() _lWebView:allowTextEntry(false) end)
+                pcall(function() _lWebView:shadow(false) end)
+                _lWebView:alpha(0)
+
+                _lWebView:navigationCallback(function(action, wv, navType, err)
+                    if navType == "didFinishLoad" then
+                        local themeJson = hs.json.encode(ms._theme or {})
+                        wv:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                        wv:evaluateJavaScript(
+                            "setSkipPreloadState(" .. (ms._skipDevPrewarm and "true" or "false") .. ")")
+                        wv:show()
+                        local step, steps = 0, 6
+                        local t = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
+                            step = step + 1
+                            if _lWebView then _lWebView:alpha(step / steps) end
+                            if step >= steps and t then t:stop() end
+                        end)
+                    end
+                end)
+
+                _lUpdate = function(pct, msg)
+                    if not _lWebView then return end
+                    local js = string.format("setProgress(%d, %s)",
+                        pct,
+                        msg and hs.json.encode(msg) or "null")
+                    _lWebView:evaluateJavaScript(js)
+                end
+
+                local f = io.open(htmlPath, "r")
+                if f then
+                    local html = f:read("*all"); f:close()
+                    _lWebView:html(html, baseURL)
+                end
+            end
+        -- END Loading Screen --
+
             -- Guardian (moved to MsGuardian.spoon) --
             -- END Guardian --
 
@@ -59,10 +126,12 @@
             -- END Font installation --
 
             -- MsGuardian (tamper check) --
+                _lUpdate(3, "Configuring Guardian\u{2026}")
                 pcall(function() hs.loadSpoon("MsGuardian"); spoon.MsGuardian:check() end)
             -- END MsGuardian (tamper check) --
 
             -- MsDevTools (logging & dev panels) --
+                _lUpdate(6, "Configuring Dev Tools\u{2026}")
                 local _msDevOk, _msDevErr = pcall(function()
                     hs.loadSpoon("MsDevTools")
                     spoon.MsDevTools:init()
@@ -123,6 +192,7 @@
             -- END MsDevTools (logging & dev panels) --
 
             -- MsAlert (toast notifications) --
+                _lUpdate(9, "Configuring Alerts\u{2026}")
                 local _msAlertOk, _msAlertErr = pcall(function()
                     hs.loadSpoon("MsAlert")
                 end)
@@ -147,6 +217,7 @@
             -- END MsAlert (toast notifications) --
 
             -- MsCamera (camera engine) --
+                _lUpdate(12, "Configuring Camera\u{2026}")
                 local _msCamOk, _msCamErr = pcall(function()
                     hs.loadSpoon("MsCamera")
                 end)
@@ -177,6 +248,7 @@
             -- END MsCamera (camera engine) --
 
             -- MsSettings (settings menu & profiles) --
+                _lUpdate(15, "Configuring Settings\u{2026}")
                 local _msSettingsOk, _msSettingsErr = pcall(function()
                     hs.loadSpoon("MsSettings")
                 end)
@@ -240,6 +312,7 @@
             -- END MsSettings (settings menu & profiles) --
 
             -- MsUI (webview settings panel) --
+                _lUpdate(18, "Configuring UI\u{2026}")
                 local _msUIOk, _msUIErr = pcall(function()
                     hs.loadSpoon("MsUI")
                 end)
@@ -391,20 +464,20 @@
                 ms._userMenuDefs     = {}
                 ms._hiddenFeatures   = {}
                 ms._themeDefaults = {
-                    bg       = "#060402",
-                    surface  = "#100806",
-                    surface2 = "#1c100c",
-                    hover    = "#301610",
-                    accent   = "#c41a1a",
-                    accentHi = "#e52424",
-                    success  = "#4a7820",
-                    dangerBg = "#1e0608",
-                    danger   = "#d42020",
-                    warning  = "#c47820",
-                    text     = "#f0ddb0",
-                    radius   = 3,
-                    font     = "Almendra",
-                    fadeMs   = 150,
+                    bg       = "#0e0e0e",
+                    surface  = "#1a1a1a",
+                    surface2 = "#252525",
+                    hover    = "#333333",
+                    accent   = "#cccccc",
+                    accentHi = "#e8e8e8",
+                    success  = "#888888",
+                    dangerBg = "#1a1616",
+                    danger   = "#d8d8d8",
+                    warning  = "#aaaaaa",
+                    text     = "#d8d8d8",
+                    radius   = 2,
+                    font     = "Arial",
+                    fadeMs   = 100,
                 }
                 ms._theme = {}
                 for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
@@ -2145,123 +2218,28 @@
         BindValidity = 0  -- block macros during loading; _announceLoad re-enables when toasts fire
         ms._startupSoundDone = false  -- suppresses all non-load sounds until _announceLoad runs
 
-        -- Startup Loading Indicator --
-            local _lCanvas, _lBarMax, _lBarY, _lFadingOut, _lFadeTimer
-            local _lUpdate, _lFadeOut, _loadAnnounced, _announceLoad
-            local _needsIntegrityWarning = false  -- set by the integrity timer; shown after announce toasts
-            do
-                local sf  = hs.screen.mainScreen():frame()
-                local lw, lh = 300, 104
-                local lx  = sf.x + math.floor((sf.w - lw) / 2)
-                local ly  = sf.y + sf.h - 150 - lh  -- bottom edge aligns with toast baseline
-                _lBarMax  = lw - 32
-                _lBarY    = 62
-                local function _themeColor(hex, fallR, fallG, fallB, alpha)
-                    local r, g, b = (hex or ""):match("^#?(%x%x)(%x%x)(%x%x)$")
-                    if r then
-                        return {
-                            red   = tonumber(r, 16) / 255,
-                            green = tonumber(g, 16) / 255,
-                            blue  = tonumber(b, 16) / 255,
-                            alpha = alpha or 1.0,
-                        }
-                    end
-                    return { red = fallR, green = fallG, blue = fallB, alpha = alpha or 1.0 }
-                end
-                local _t = ms._theme or {}
-                local clrBg     = _themeColor(_t.bg,       0.024, 0.016, 0.008, 0.95)
-                local clrAccent = _themeColor(_t.accent,   0.769, 0.102, 0.102, 1.0)
-                local clrText   = _themeColor(_t.text,     0.941, 0.867, 0.690, 1.0)
-                local clrText2  = _themeColor(_t.warning,  0.824, 0.647, 0.392, 0.72)
-                local clrTrack  = _themeColor(_t.surface2, 0.063, 0.039, 0.024, 1.0)
-                local clrBorder = _themeColor(_t.hover,    0.510, 0.196, 0.086, 0.55)
-                local _titleFont = (type(_t.font) == "string" and #_t.font > 0
-                    and not _t.font:find("[/\\]"))
-                    and _t.font or "Almendra"
-                _lCanvas = hs.canvas.new({ x=lx, y=ly, w=lw, h=lh })
-                _lCanvas:level(hs.canvas.windowLevels.popUpMenu or 25)
-                _lCanvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
-                _lCanvas:alpha(0)
-                _lCanvas:appendElements(
-                    { type="rectangle", action="strokeAndFill",
-                      fillColor=clrBg, strokeColor=clrBorder, strokeWidth=1,
-                      roundedRectRadii={ xRadius=5, yRadius=5 } },
-                    { type="rectangle", action="fill", fillColor=clrAccent,
-                      frame={ x=0, y=0, w=lw, h=2 },
-                      roundedRectRadii={ xRadius=5, yRadius=5 } },
-                    { type="text", text="mudscript",
-                      frame={ x=16, y=13, w=lw-32, h=22 },
-                      textFont=_titleFont, textSize=15,
-                      textColor=clrText, textAlignment="left" },
-                    { type="text", text="Starting up\xe2\x80\xa6",
-                      frame={ x=16, y=37, w=lw-32, h=16 },
-                      textFont="Helvetica Neue", textSize=11,
-                      textColor=clrText2, textAlignment="left" },
-                    { type="rectangle", action="fill", fillColor=clrTrack,
-                      frame={ x=16, y=_lBarY, w=_lBarMax, h=3 },
-                      roundedRectRadii={ xRadius=1.5, yRadius=1.5 } },
-                    { type="rectangle", action="fill", fillColor=clrAccent,
-                      frame={ x=16, y=_lBarY, w=0, h=3 },
-                      roundedRectRadii={ xRadius=1.5, yRadius=1.5 } },
-                    { type="rectangle", action="fill", fillColor=clrBorder,
-                      frame={ x=16, y=75, w=_lBarMax, h=1 } },
-                    { type="rectangle", action="fill",
-                      fillColor={ red=0, green=0, blue=0, alpha=0 },
-                      frame={ x=16, y=80, w=_lBarMax, h=18 },
-                      trackMouseDown=true },
-                    { type="text",
-                      text=(ms._skipDevPrewarm and "\xe2\x98\x91" or "\xe2\x98\x90"),
-                      frame={ x=17, y=80, w=18, h=18 },
-                      textFont="Helvetica Neue", textSize=13,
-                      textColor=clrText2, textAlignment="left" },
-                    { type="text", text="Skip dev tool preloading",
-                      frame={ x=36, y=83, w=_lBarMax-22, h=14 },
-                      textFont="Helvetica Neue", textSize=11,
-                      textColor=(ms._skipDevPrewarm and clrText or clrText2),
-                      textAlignment="left" },
-                    { type="text",
-                      text=(ms.macroMeta and ms.macroMeta.name) or "",
-                      frame={ x=16, y=15, w=lw-32, h=18 },
-                      textFont="Helvetica Neue", textSize=10,
-                      textColor=clrText2, textAlignment="right" }
-                )
-                _lCanvas:show()
-                ms.playSlot("startup")  -- loading sequence start sound
-                local function _lfade()
-                    local step, steps = 0, 6
-                    local t = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                        step = step + 1
-                        if _lCanvas then _lCanvas:alpha(step / steps) end
-                        if step >= steps and t then t:stop() end
-                    end)
-                end
-                _lfade()
-                _lCanvas:mouseCallback(function(canvas, event, id, x, y)
-                    if event ~= "mouseDown" or id ~= 8 then return end
-                    ms._skipDevPrewarm = not ms._skipDevPrewarm
-                    pcall(ms.saveSettings)
-                    canvas[9].text       = ms._skipDevPrewarm and "\xe2\x98\x91" or "\xe2\x98\x90"
-                    canvas[10].textColor = ms._skipDevPrewarm and clrText or clrText2
-                    if ms._skipDevPrewarm and not _lFadingOut then
-                        _lUpdate(100, "Developer tools skipped.")
-                        hs.timer.doAfter(0.8, _lFadeOut)
+        -- Loading Screen — Fade, Announce & Timers --
+            _lUpdate(20, "Initializing\u{2026}")
+
+            _lFadeOut = function()
+                if not _lWebView or _lFadingOut then return end
+                _lFadingOut = true
+                local step, steps = 0, 6
+                _lFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
+                    step = step + 1
+                    if _lWebView then _lWebView:alpha(1 - (step / steps)) end
+                    if step >= steps then
+                        if _lFadeTimer then _lFadeTimer:stop(); _lFadeTimer = nil end
+                        if _lWebView then _lWebView:delete(); _lWebView = nil end
+                        hs.timer.doAfter(0.1, _announceLoad)
                     end
                 end)
-            end
-
-            _lUpdate = function(pct, msg)
-                if not _lCanvas then return end
-                _lCanvas[4].text  = msg
-                _lCanvas[6].frame = {
-                    x=16, y=_lBarY,
-                    w=math.max(4, math.floor(_lBarMax * pct / 100)), h=3,
-                }
             end
 
             _announceLoad = function()
                 if _loadAnnounced then return end
                 _loadAnnounced = true
-                pcall(function() ms.playSlot("load") end)
+                pcall(function() ms.playSlot("loadEnd") end)
                 hs.timer.doAfter(0.4, function()
                     ms._startupSoundDone = true
                     pcall(function() ms.playSlot("launch") end)
@@ -2277,6 +2255,11 @@
                             ms.alert(msg, 3, true)
                         end
                     end)
+                    -- Re-inject theme now that MsSettings has loaded it
+                    if _lWebView then
+                        local themeJson = hs.json.encode(ms._theme or {})
+                        _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                    end
                     ms._loadComplete = true
                     ms.dev.log({ type = "system", event = "startup_complete" })
                     if ms._robloxActive then ms.setMacros(1, true) end
@@ -2298,56 +2281,65 @@
                 end)
             end
 
-            _lFadeOut = function()
-                if not _lCanvas or _lFadingOut then return end
-                _lFadingOut = true
-                local step, steps = 0, 6
-                _lFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                    step = step + 1
-                    if _lCanvas then _lCanvas:alpha(1 - (step / steps)) end
-                    if step >= steps then
-                        if _lFadeTimer then _lFadeTimer:stop(); _lFadeTimer = nil end
-                        if _lCanvas then _lCanvas:delete(); _lCanvas = nil end
-                        hs.timer.doAfter(0.1, _announceLoad)
-                    end
-                end)
+            -- Set profile name on loading screen
+            if ms.macroMeta and ms.macroMeta.name and _lWebView then
+                _lWebView:evaluateJavaScript("setProfileName(" ..
+                    hs.json.encode(ms.macroMeta.name) .. ")")
             end
 
             hs.timer.doAfter(0, function()
                 ms.ui.prebuild()
-                _lUpdate(18, "Building UI state cache\xe2\x80\xa6")
+                _lUpdate(25, "Building UI state cache\u{2026}")
             end)
             hs.timer.doAfter(0.3, function()
+                _lUpdate(32, "Preparing settings panel\u{2026}")
+            end)
+            hs.timer.doAfter(0.5, function()
                 ms.ui.prewarm()
-                _lUpdate(32, "Loading settings panel\xe2\x80\xa6")
+                _lUpdate(40, "Loading settings panel\u{2026}")
+            end)
+            hs.timer.doAfter(0.8, function()
+                _lUpdate(48, "Applying theme\u{2026}")
+                -- Re-inject theme now that it's loaded
+                if _lWebView then
+                    local themeJson = hs.json.encode(ms._theme or {})
+                    _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                end
+                pcall(function() ms.playSlot("themeLoaded") end)
+            end)
+            hs.timer.doAfter(1.3, function()
+                _lUpdate(55, "Seeding integrity hash\u{2026}")
             end)
             hs.timer.doAfter(2.0, function()
                 if ms._skipDevPrewarm then return end
-                _lUpdate(50, "Loading console\xe2\x80\xa6")
+                _lUpdate(62, "Loading console\u{2026}")
                 hs.timer.doAfter(0, function()
                     if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("console") end) end
                 end)
             end)
             hs.timer.doAfter(2.6, function()
                 if ms._skipDevPrewarm then return end
-                _lUpdate(62, "Loading macro monitor\xe2\x80\xa6")
+                _lUpdate(72, "Loading macro monitor\u{2026}")
                 hs.timer.doAfter(0, function()
                     if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("watcher") end) end
                 end)
             end)
             hs.timer.doAfter(3.2, function()
                 if ms._skipDevPrewarm then return end
-                _lUpdate(75, "Loading input monitor\xe2\x80\xa6")
+                _lUpdate(82, "Loading input monitor\u{2026}")
                 hs.timer.doAfter(0, function()
                     if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("keys") end) end
                 end)
             end)
             hs.timer.doAfter(3.8, function()
                 if ms._skipDevPrewarm then return end
-                _lUpdate(88, "Loading window monitor\xe2\x80\xa6")
+                _lUpdate(90, "Loading window monitor\u{2026}")
                 hs.timer.doAfter(0, function()
                     if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("window") end) end
                 end)
+            end)
+            hs.timer.doAfter(4.2, function()
+                if not _lFadingOut then _lUpdate(96, "Finalizing\u{2026}") end
             end)
             hs.timer.doAfter(4.6, function()
                 if not _lFadingOut then
@@ -2356,7 +2348,7 @@
                 end
             end)
             hs.timer.doAfter(8, function()
-                if _lCanvas and not _lFadingOut then _lFadeOut() end
+                if _lWebView and not _lFadingOut then _lFadeOut() end
                 ms._startupSoundDone = true
             end)
             hs.timer.doAfter(3, function()

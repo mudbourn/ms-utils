@@ -30,34 +30,24 @@
                 font-weight: 700;
                 font-style: italic;
             }
-            /* ── Tokens — Devil May Cry 3 palette ───────────────────────────── */
-            /* ── Tokens — Devil May Cry 3 ──────────────────────────────── */
+            /* ── Tokens ──────────────────────────────────────────────────────────────── */
             :root {
-                /* Depths of the Temen-ni-gru */
-                --bg: #060402; /* void */
-                --surface: #100806; /* ancient stone */
-                --surface2: #1c100c; /* raised surface */
-                --hover: #301610; /* ember hover */
-
-                /* Dante red / Vergil steel */
-                --accent: #c41a1a; /* crimson */
-                --accent-hi: #e52424; /* bright combat flash */
-
-                /* Status colours */
-                --success: #4a7820; /* hunter green */
-                --danger-bg: #1e0608; /* blood shadow bg */
-                --danger: #d42020; /* open wound */
-                --warning: #c47820; /* hellfire amber */
-
-                /* Text — aged manuscript */
-                --text: #f0ddb0; /* parchment */
-                --text2: rgba(210, 165, 100, 0.85);
-                --text3: rgba(160, 105, 60, 0.55);
-
-                /* Structure */
-                --border: rgba(130, 50, 22, 0.55);
-                --radius: 3px; /* sharp — industrial Gothic */
-                --radius-s: 2px;
+                --bg: #0e0e0e;
+                --surface: #1a1a1a;
+                --surface2: #252525;
+                --hover: #333333;
+                --accent: #cccccc;
+                --accent-hi: #e8e8e8;
+                --success: #888888;
+                --danger-bg: #1a1616;
+                --danger: #d8d8d8;
+                --warning: #aaaaaa;
+                --text: #d8d8d8;
+                --text2: rgba(200, 200, 200, 0.85);
+                --text3: rgba(160, 160, 160, 0.55);
+                --border: rgba(100, 100, 100, 0.55);
+                --radius: 2px;
+                --radius-s: 1px;
             }
 
             /* ── Reset ───────────────────────────────────────────────────────── */
@@ -77,7 +67,7 @@
                 background: var(--bg);
             }
             body {
-                font-family: "Almendra", Palatino, Georgia, serif;
+                font-family: Arial, "Almendra", sans-serif;
                 font-size: 13px;
                 color: var(--text);
                 -webkit-font-smoothing: antialiased;
@@ -2710,6 +2700,32 @@
                 );
 
                 body.appendChild(divider());
+
+                // Custom theme toggle
+                const customTheme = S.customThemeEnabled !== false;
+                body.appendChild(
+                    row(
+                        "Custom theme",
+                        "Load ms_theme.json colors and font",
+                        h(
+                            "button",
+                            {
+                                cls:
+                                    "btn-macro " +
+                                    (customTheme ? "btn-enable" : "btn-disable"),
+                                onmouseenter: () => playSlot("hover"),
+                                onclick: () => {
+                                    playSlot("interact");
+                                    sendToHost({
+                                        action: "setCustomTheme",
+                                        value: !customTheme,
+                                    });
+                                },
+                            },
+                            customTheme ? "ON" : "OFF",
+                        ),
+                    ),
+                );
 
                 // Preload dev tools on startup toggle
                 const preload = S.preloadDevTools !== false;

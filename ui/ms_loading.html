@@ -31,17 +31,17 @@
                 font-style: italic;
             }
 
-            /* ── Tokens — Devil May Cry 3 palette ───────────────────────────── */
+            /* ── Tokens ─────────────────────────────────────────────────────── */
             :root {
-                --bg: #060402;
-                --surface: #100806;
-                --surface2: #1c100c;
-                --hover: #301610;
-                --accent: #c41a1a;
-                --accent-hi: #e52424;
-                --warning: #c47820;
-                --text: #f0ddb0;
-                --radius: 3px;
+                --bg: #0e0e0e;
+                --surface: #1a1a1a;
+                --surface2: #252525;
+                --hover: #333333;
+                --accent: #cccccc;
+                --accent-hi: #e8e8e8;
+                --warning: #aaaaaa;
+                --text: #d8d8d8;
+                --radius: 2px;
             }
 
             /* ── Reset ──────────────────────────────────────────────────────── */
@@ -57,7 +57,7 @@
                 height: 100%;
                 overflow: hidden;
                 background: var(--bg);
-                font-family: "Almendra", Palatino, Georgia, serif;
+                font-family: Arial, "Almendra", sans-serif;
                 font-size: 13px;
                 color: var(--text);
                 -webkit-font-smoothing: antialiased;
@@ -91,10 +91,23 @@
                 position: absolute;
                 top: 13px;
                 left: 16px;
-                right: 16px;
                 font-size: 15px;
                 font-weight: 700;
                 color: var(--text);
+            }
+
+            /* ── Profile name (top-right) ───────────────────────────────────── */
+            #profile-name {
+                position: absolute;
+                top: 15px;
+                right: 16px;
+                font-size: 10px;
+                color: var(--warning);
+                text-align: right;
+                max-width: 50%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
             /* ── Status ─────────────────────────────────────────────────────── */
@@ -130,17 +143,68 @@
                 background: var(--accent);
                 transition: width 0.15s ease;
             }
+
+            /* ── Separator ──────────────────────────────────────────────────── */
+            #separator {
+                position: absolute;
+                left: 16px;
+                right: 16px;
+                bottom: 40px;
+                height: 1px;
+                background: var(--hover);
+            }
+
+            /* ── Checkbox row ───────────────────────────────────────────────── */
+            #checkbox-row {
+                position: absolute;
+                left: 16px;
+                right: 16px;
+                bottom: 16px;
+                height: 18px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+            #check-glyph {
+                font-size: 13px;
+                color: var(--warning);
+                line-height: 1;
+            }
+            #check-label {
+                font-size: 11px;
+                font-style: italic;
+                color: var(--warning);
+            }
         </style>
     </head>
     <body>
         <div id="panel">
             <div id="title">mudscript</div>
+            <div id="profile-name"></div>
             <div id="status">Starting up…</div>
             <div id="track"></div>
             <div id="fill"></div>
+            <div id="separator"></div>
+            <div id="checkbox-row" onclick="toggleSkipPreload()">
+                <span id="check-glyph">☐</span>
+                <span id="check-label">Skip dev tool preloading</span>
+            </div>
         </div>
 
         <script>
+            /* ── Host communication ─────────────────────────────────────────── */
+            function sendToHost(msg) {
+                const s = JSON.stringify(msg);
+                if (window.chrome && window.chrome.webview)
+                    window.chrome.webview.postMessage(s);
+                else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.loading)
+                    window.webkit.messageHandlers.loading.postMessage(s);
+            }
+
+            /* ── Theme injection ─────────────────────────────────────────────── */
             function applyTheme(t) {
                 if (!t) return;
                 const r = document.documentElement.style;
@@ -155,13 +219,40 @@
                 if (t.radius) r.setProperty("--radius", t.radius + "px");
                 if (t.font)
                     document.body.style.fontFamily =
-                        t.font + ', "Almendra", serif';
+                        t.font + ', "Almendra", Arial, sans-serif';
             }
 
+            /* ── Progress ────────────────────────────────────────────────────── */
             function setProgress(pct, msg) {
                 document.getElementById("fill").style.width =
                     Math.max(0, Math.min(100, pct)) + "%";
                 if (msg) document.getElementById("status").textContent = msg;
+            }
+
+            /* ── Skip preloading checkbox ────────────────────────────────────── */
+            var _skipPreload = false;
+
+            function toggleSkipPreload() {
+                _skipPreload = !_skipPreload;
+                updateCheckbox();
+                sendToHost({ action: "toggleSkipPreload" });
+            }
+
+            function setSkipPreloadState(checked) {
+                _skipPreload = !!checked;
+                updateCheckbox();
+            }
+
+            function updateCheckbox() {
+                document.getElementById("check-glyph").textContent = _skipPreload ? "☑" : "☐";
+                document.getElementById("check-label").style.color = _skipPreload
+                    ? "var(--text)" : "var(--warning)";
+            }
+
+            /* ── Profile name ────────────────────────────────────────────────── */
+            function setProfileName(name) {
+                var el = document.getElementById("profile-name");
+                if (el && name) el.textContent = name;
             }
         </script>
     </body>

@@ -279,6 +279,7 @@
                 userMenus               = userMenus,
                 hiddenFeatures          = ms._hiddenFeatures,
                 preloadDevTools         = not (ms._skipDevPrewarm or false),
+                customThemeEnabled      = not (ms._customThemeDisabled or false),
                 devArchiveLimit         = ms._devArchiveLimit or 15,
                 updateChannel           = ms._updateChannel or "stable",
                 qrOptions               = ms._qrOptions or {
@@ -444,19 +445,16 @@
                     ms.playSlot("update")
                     ms.alert("Macros reloaded.", 4, true)
                 end
-                ms.ui.hide()
+                -- Roblox unfocus/refocus (macro-specific)
                 hs.timer.doAfter(0.15, function()
-                    ms.ui.show()
-                    hs.timer.doAfter(0.35, function()
-                        pcall(function()
-                            local app = ms._targetApp and hs.application.get(ms._targetApp)
-                            if app then
-                                app:hide()
-                                hs.timer.doAfter(0.15, function()
-                                    pcall(function() app:activate() end)
-                                end)
-                            end
-                        end)
+                    pcall(function()
+                        local app = ms._targetApp and hs.application.get(ms._targetApp)
+                        if app then
+                            app:hide()
+                            hs.timer.doAfter(0.15, function()
+                                pcall(function() app:activate() end)
+                            end)
+                        end
                     end)
                 end)
             end,
@@ -502,6 +500,20 @@
                 ms._skipDevPrewarm = not (data.value and true or false)
                 ms.saveSettings()
                 ms.playSlot("update")
+                ms.ui.refresh()
+            end,
+
+            setCustomTheme = function(data)
+                ms._customThemeDisabled = not (data.value and true or false)
+                ms.saveSettings()
+                ms.playSlot("update")
+                if ms._customThemeDisabled then
+                    -- Revert to defaults
+                    for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
+                else
+                    -- Reload custom theme
+                    ms.loadTheme()
+                end
                 ms.ui.refresh()
             end,
 
