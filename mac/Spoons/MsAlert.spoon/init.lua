@@ -246,9 +246,11 @@
 
                 e.msg = msg
 
-                -- Move to top of queue so it appears above all other toasts
-                table.remove(queue, i)
-                table.insert(queue, e)
+                -- Move to top only if not low-priority
+                if e.priority ~= "low" then
+                    table.remove(queue, i)
+                    table.insert(queue, e)
+                end
 
                 self:_redraw(e)
 
@@ -384,15 +386,21 @@
         end
 
         local entry = {
-            msg    = msg,
-            canvas = nil,
-            timer  = nil,
-            h      = nil,
-            id     = opts and opts.id or nil,
-            source = src,
+            msg      = msg,
+            canvas   = nil,
+            timer    = nil,
+            h        = nil,
+            id       = opts and opts.id or nil,
+            source   = src,
+            priority = opts and opts.priority or "normal",
         }
 
-        table.insert(queue, entry)
+        -- Low-priority toasts go to the bottom of the queue
+        if entry.priority == "low" then
+            table.insert(queue, 1, entry)
+        else
+            table.insert(queue, entry)
+        end
         self:_redraw(entry)
 
         entry.timer = hs.timer.doAfter(duration, function()

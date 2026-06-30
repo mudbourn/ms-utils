@@ -1050,12 +1050,12 @@
                     if state == 1 then
                         _stateSound = ms.playSlot("enabled")
                         if not ms.alert.updateById("_state", "Macros enabled!", 3) then
-                            ms.alert("Macros enabled!",  3, true, { id = "_state", source = "system" })
+                            ms.alert("Macros enabled!",  3, true, { id = "_state", source = "system", priority = "low" })
                         end
                     else
                         _stateSound = ms.playSlot("disabled")
                         if not ms.alert.updateById("_state", "Macros disabled.", 3) then
-                            ms.alert("Macros disabled.", 3, true, { id = "_state", source = "system" })
+                            ms.alert("Macros disabled.", 3, true, { id = "_state", source = "system", priority = "low" })
                         end
                     end
                 end)
@@ -2289,16 +2289,16 @@
                 _G._loadTimers.announceBody = hs.timer.doAfter(0.4, function()
                     ms._startupSoundDone = true
                     pcall(function() ms.playSlot("launch") end)
-                    ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true)
+                    ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true, { priority = "low" })
                     _G._loadTimers.announce3 = hs.timer.doAfter(3, function()
-                        ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 3, true)
+                        ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 3, true, { priority = "low" })
                     end)
                     _G._loadTimers.announce6 = hs.timer.doAfter(6, function()
                         if ms.macroMeta then
                             local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
                             if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
                             if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
-                            ms.alert(msg, 3, true)
+                            ms.alert(msg, 3, true, { priority = "low" })
                         end
                     end)
                     -- Re-inject theme now that MsSettings has loaded it

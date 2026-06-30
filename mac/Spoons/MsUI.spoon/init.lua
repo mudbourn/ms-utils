@@ -507,7 +507,7 @@
                 pcall(function() ms.alert:recolor() end)
                 pcall(function() ms.dev:recolor() end)
                 ms.playSlot("update")
-                ms.alert("Theme reloaded.", 4, true)
+                ms.alert("Theme reloaded.", 4, true, { priority = "low" })
                 ms.ui.hide()
                 hs.timer.doAfter(0.15, function() ms.ui.show() end)
             end,

@@ -594,10 +594,9 @@
             hs.timer.doAfter(1.0, function()
                 if anySelected then
                     ms.playSlot("update")
-                    ms.alert("Quick Reload complete.", 5, true)
+                    ms.alert("Quick Reload complete.", 5, true, { priority = "low" })
                 else
-                    ms.playSlot("alert")
-                    ms.alert("Quick Reload: no options selected.", 5, true)
+                    ms.alert("Quick Reload: no options selected.", 5, true, { priority = "low" })
                 end
             end)
         end
