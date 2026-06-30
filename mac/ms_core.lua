@@ -6871,7 +6871,21 @@
                         local f = io.open(p, "r")
                         if not f then return nil end
                         local ok, m = pcall(hs.json.decode, f:read("*all")); f:close()
-                        return (ok and m and m.version) or nil
+                        local base = (ok and m and m.version) or nil
+                        if not base then return nil end
+                        -- Testing channel: show next patch + build number (e.g. "1.2.9-pre.15").
+                        if ms._updateChannel == "testing" then
+                            local maj, min, pat = base:match("^(%d+)%.(%d+)%.(%d+)$")
+                            if maj and min and pat then
+                                local nextVer = maj .. "." .. min .. "." .. tostring(tonumber(pat) + 1)
+                                local buildPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_build_num"
+                                local bf = io.open(buildPath, "r")
+                                local buildNum = 0
+                                if bf then buildNum = tonumber(bf:read("*all")) or 0; bf:close() end
+                                return nextVer .. "-pre." .. tostring(buildNum)
+                            end
+                        end
+                        return base
                     end)(),
                 }
             end
