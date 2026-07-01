@@ -1500,6 +1500,20 @@
                     end
                 end
             end
+            -- Bundle macro sounds
+            local macroDir = tmpDir .. "macro/"
+            local macroCopied = 0
+            for name, soundPath in pairs(ms.macroSounds or {}) do
+                if hs.fs.attributes(soundPath) then
+                    local filename = soundPath:match("([^/\\]+)$")
+                    if filename and not bundledFiles[filename] then
+                        os.execute("mkdir -p " .. sq(macroDir))
+                        hs.execute("/bin/cp " .. sq(soundPath) .. " " .. sq(macroDir .. filename))
+                        bundledFiles[filename] = true
+                        macroCopied = macroCopied + 1
+                    end
+                end
+            end
             -- Bundle fonts referenced by the theme
             local fontsCopied = 0
             do
@@ -1529,6 +1543,9 @@
                 local msg = "Exported " .. outName .. " to ~/Downloads/"
                 if soundsCopied > 0 then
                     msg = msg .. "\n" .. soundsCopied .. " sound" .. (soundsCopied > 1 and "s" or "") .. " bundled."
+                end
+                if macroCopied > 0 then
+                    msg = msg .. "\n" .. macroCopied .. " macro sound" .. (macroCopied > 1 and "s" or "") .. " bundled."
                 end
                 if fontsCopied > 0 then
                     msg = msg .. "\n" .. fontsCopied .. " font" .. (fontsCopied > 1 and "s" or "") .. " bundled."
@@ -1648,6 +1665,34 @@
                         ms._discoverSounds()
                     end
                 end
+                -- Import macro sounds
+                local macroSrc = tmpDir .. "macro/"
+                local macroAdded = {}
+                if hs.fs.attributes(macroSrc) then
+                    hs.fs.mkdir(SoundMacroDir)
+                    for file in hs.fs.dir(macroSrc) do
+                        if file ~= "." and file ~= ".." then
+                            local importName = file:match("^(.+)%.[^%.]+$") or file
+                            local srcSnd = macroSrc .. file
+                            local dstSnd = SoundMacroDir .. file
+                            if not hs.fs.attributes(dstSnd) then
+                                local sf = io.open(srcSnd, "rb")
+                                if sf then
+                                    local data = sf:read("*all"); sf:close()
+                                    local out = io.open(dstSnd, "wb")
+                                    if out then
+                                        out:write(data); out:close()
+                                        table.insert(macroAdded, importName)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if #macroAdded > 0 then
+                        ms._soundsDirty = true
+                        ms._discoverSounds()
+                    end
+                end
                 -- Auto-install fonts from package
                 local fontsAdded = 0
                 do
@@ -1681,6 +1726,9 @@
                     local msg = "\"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles."
                     if #soundsAdded > 0 then
                         msg = msg .. "\n" .. #soundsAdded .. " sound" .. (#soundsAdded > 1 and "s" or "") .. " added to library."
+                    end
+                    if #macroAdded > 0 then
+                        msg = msg .. "\n" .. #macroAdded .. " macro sound" .. (#macroAdded > 1 and "s" or "") .. " added."
                     end
                     if fontsAdded > 0 then
                         msg = msg .. "\n" .. fontsAdded .. " font" .. (fontsAdded > 1 and "s" or "") .. " installed."

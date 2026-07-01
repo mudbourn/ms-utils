@@ -385,7 +385,9 @@
             SoundLib = os.getenv("HOME") .. "/.hammerspoon/sounds/"
             SoundDefaultsDir = SoundLib .. "defaults/"
             SoundActiveDir   = SoundLib .. "active/"
+            SoundMacroDir    = SoundLib .. "macro/"
             ms.sounds          = {}
+            ms.macroSounds     = {}
             ms.importedSounds  = {}
             ms.soundEnabled    = true
             ms.soundVolume     = 100
@@ -1278,16 +1280,18 @@
             ms._discoverSounds = function()
                 if not ms._soundsDirty then return end
                 ms._soundsDirty = false
-                ms.sounds = {}
+                ms.sounds      = {}
+                ms.macroSounds = {}
 
-                -- Helper: scan a directory for .wav files
-                local function scanDir(dir)
+                -- Helper: scan a directory for .wav files into a target table
+                local function scanDir(dir, target)
+                    target = target or ms.sounds
                     if not hs.fs.attributes(dir) then return end
                     for file in hs.fs.dir(dir) do
                         if file ~= "." and file ~= ".." then
                             local name = file:match("^(.+)%.[^%.]+$")
                             if name then
-                                ms.sounds[name] = dir .. file
+                                target[name] = dir .. file
                             end
                         end
                     end
@@ -1296,10 +1300,13 @@
                 -- Always load defaults
                 scanDir(SoundDefaultsDir)
 
-                -- Load active profile sounds only when custom themes are enabled
+                -- Active profile sounds (gated by custom theme setting)
                 if not ms._customThemeDisabled then
                     scanDir(SoundActiveDir)
                 end
+
+                -- Macro-specific sounds (separate category)
+                scanDir(SoundMacroDir, ms.macroSounds)
 
                 -- Imported sounds (MSPKG) also gated by custom theme setting
                 for name, filename in pairs(ms.importedSounds or {}) do
@@ -1314,6 +1321,10 @@
 
             ms.sound = function(path, async, device)
                 if ms.dev then spoon.MsDevTools:flushAll() end
+                -- Resolve name to path if not a file path
+                if path and not path:match("[/\\]") then
+                    path = ms.sounds[path] or ms.macroSounds[path] or path
+                end
                 if path then
                     local fname = tostring(path):match("([^/\\]+)$") or tostring(path)
                     -- Dedup: skip if same sound was logged last time
@@ -1387,9 +1398,12 @@
                 local assigned = ms.soundAssign and ms.soundAssign[slotId]
                 local path
                 if assigned then
-                    path = (ms.sounds and ms.sounds[assigned]) or assigned
+                    path = (ms.sounds and ms.sounds[assigned])
+                        or (ms.macroSounds and ms.macroSounds[assigned])
+                        or assigned
                 else
                     path = ms.sounds and ms.sounds[slotId]
+                    if not path then path = ms.macroSounds and ms.macroSounds[slotId] end
                     if not path then
                         local candidates = _slotDefaults[slotId]
                         if candidates then
