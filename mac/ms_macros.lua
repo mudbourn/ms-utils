@@ -332,9 +332,14 @@
                     local JumpHigh = function()
                         if ms.isSub("hidJumpHigh") then
                             ms.sound(JumpHighSound, true)
-                            ms.HidMouse("DragRelN", 120, 750, "Center", -3145, 0)
+                            for i = 1, 60 do
+                                ms.HidMouse(-3145, 0)
+                                ms.wait(1)
+                                ms.HidMouse(-3145, 0)
+                                ms.wait(.5)
+                            end
                             ms.wait(50)
-                            ms.HidMouse("DragRel", "Center", 262, 0)
+                            ms.HidMouse(262, 0)
                             return true
                         end
                         return false
@@ -343,9 +348,14 @@
                     local JumpLow = function()
                         if ms.isSub("hidJumpLow") then
                             ms.sound(JumpLowSound, true)
-                            ms.HidMouse("DragRelN", 28, 750, "Center", -370, 0)
+                            for i = 1, 14 do
+                                ms.HidMouse(-370, 0)
+                                ms.wait(1)
+                                ms.HidMouse(-370, 0)
+                                ms.wait(.5)
+                            end
                             ms.wait(50)
-                            ms.HidMouse("DragRel", "Center", 308, 0)
+                            ms.HidMouse(308, 0)
                             return true
                         end
                         return false
@@ -353,9 +363,14 @@
 
                     local JumpDefault = function()
                         ms.sound(JumpNormalSound, true)
-                        ms.HidMouse("DragRelN", 28, 750, "Center", -185, 0)
+                        for i = 1, 14 do
+                            ms.HidMouse(-185, 0)
+                            ms.wait(1)
+                            ms.HidMouse(-185, 0)
+                            ms.wait(.5)
+                        end
                         ms.wait(50)
-                        ms.HidMouse("DragRel", "Center", -69, 0)
+                        ms.HidMouse(-69, 0)
                     end
 
                     if not JumpHigh() then

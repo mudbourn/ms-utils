@@ -956,48 +956,37 @@
                 end
             end
 
-            ms.HidMouse = function(operation, ...)
+            ms.HidMouse = function(dx, dy, count, delayUs, btn)
+                dx       = math.floor(tonumber(dx) or 0)
+                dy       = math.floor(tonumber(dy) or 0)
+                count    = math.floor(tonumber(count) or 1)
+                delayUs  = math.floor(tonumber(delayUs) or 750)
+                btn      = btn or "Center"
+                local BTNS = { Left="left", Right="right", Center="middle",
+                               Button4="other", Button5="other" }
+                assert(BTNS[btn], "ms.HidMouse: unknown button '" .. tostring(btn) .. "'")
                 if ms.dev then spoon.MsDevTools:flushAll() end
                 if ms.dev._watcherPanel then
-                    spoon.MsDevTools:watcherStep("HidMouse " .. tostring(operation))
+                    spoon.MsDevTools:watcherStep(string.format("HidMouse %d,%d ×%d", dx, dy, count))
                 end
                 if ms.dev then
-                    spoon.MsDevTools:macroLog("HidMouse " .. tostring(operation))
+                    spoon.MsDevTools:macroLog(string.format("HidMouse %d,%d ×%d", dx, dy, count))
                 end
-                if operation == "DragRel" then
-                    local btn, dx, dy = ...
-                    local BTNS = { Left="left", Right="right", Center="middle",
-                                   Button4="other", Button5="other" }
-                    assert(BTNS[btn], "ms.HidMouse DragRel: unknown button '" .. tostring(btn) .. "'")
-                    local pos = hs.mouse.absolutePosition()
-                    local ax, ay = pos.x, pos.y
-                    _hidSend(string.format("dragrel %d %d %d %d %s",
-                        math.floor(tonumber(dx) or 0),
-                        math.floor(tonumber(dy) or 0),
-                        math.floor(ax), math.floor(ay),
-                        BTNS[btn]))
-                elseif operation == "DragRelN" then
-                    -- DragRelN(count, delayUs, button, dx, dy)
-                    -- Fires <count> drag events with <delayUs> µs gap in one batch.
-                    local count, delayUs, btn, dx, dy = ...
-                    local BTNS = { Left="left", Right="right", Center="middle",
-                                   Button4="other", Button5="other" }
-                    assert(BTNS[btn], "ms.HidMouse DragRelN: unknown button '" .. tostring(btn) .. "'")
-                    local pos = hs.mouse.absolutePosition()
-                    _hidSend(string.format("dragreln %d %d %d %d %d %d %s",
-                        math.floor(tonumber(count) or 1),
-                        math.floor(tonumber(delayUs) or 0),
-                        math.floor(tonumber(dx) or 0),
-                        math.floor(tonumber(dy) or 0),
-                        math.floor(pos.x), math.floor(pos.y),
-                        BTNS[btn]))
-                elseif operation == "MoveRel" then
-                    local dx, dy = ...
-                    _hidSend(string.format("mouserel %d %d",
-                        math.floor(tonumber(dx) or 0),
-                        math.floor(tonumber(dy) or 0)))
+                local pos = hs.mouse.absolutePosition()
+                local px, py = math.floor(pos.x), math.floor(pos.y)
+                local b = BTNS[btn]
+                if count <= 1 then
+                    _hidSend(string.format("dragreln 1 %d %d %d %d %d %s",
+                        delayUs, dx, dy, px, py, b))
                 else
-                    error("ms.HidMouse: unknown operation '" .. tostring(operation) .. "'")
+                    -- Build batch: one write, daemon processes all, one response
+                    local lines = {"batch"}
+                    for i = 1, count do
+                        lines[#lines + 1] = string.format("dragreln 1 %d %d %d %d %d %s",
+                            delayUs, dx, dy, px, py, b)
+                    end
+                    lines[#lines + 1] = "end"
+                    _hidSend(table.concat(lines, "\n"))
                 end
             end
             -- END HidMouse --

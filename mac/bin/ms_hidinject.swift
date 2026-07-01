@@ -220,8 +220,8 @@ let mode = args[1].lowercased()
 
 if mode == "daemon" {
     // ── Daemon mode: read commands from stdin, one per line ──────────
-    // Each line: "command arg1 arg2 ..."
-    // Response:  "ok\n" or "err: message\n"
+    // Normal line: "command arg1 arg2 ..." → "ok\n" or "err: message\n"
+    // "batch" → reads lines until "end", executes all, single "ok\n"
     // EOF → exit cleanly.
     fputs("ready\n", stdout)
     fflush(stdout)
@@ -229,13 +229,30 @@ if mode == "daemon" {
     while let line = readLine() {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { continue }
-        let parts = trimmed.split(separator: " ").map(String.init)
-        if let err = executeCommand(parts) {
-            fputs("err: \(err)\n", stdout)
-        } else {
+
+        if trimmed == "batch" {
+            // Collect lines until "end", execute all, respond once
+            var batch: [[String]] = []
+            while let bline = readLine() {
+                let btrim = bline.trimmingCharacters(in: .whitespaces)
+                if btrim == "end" { break }
+                if btrim.isEmpty { continue }
+                batch.append(btrim.split(separator: " ").map(String.init))
+            }
+            for parts in batch {
+                _ = executeCommand(parts)
+            }
             fputs("ok\n", stdout)
+            fflush(stdout)
+        } else {
+            let parts = trimmed.split(separator: " ").map(String.init)
+            if let err = executeCommand(parts) {
+                fputs("err: \(err)\n", stdout)
+            } else {
+                fputs("ok\n", stdout)
+            }
+            fflush(stdout)
         }
-        fflush(stdout)
     }
     exit(0)
 } else {
