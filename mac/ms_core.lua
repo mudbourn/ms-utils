@@ -70,10 +70,17 @@
                 end
             -- END Font installation --
 
-            -- MsGuardian (tamper check) --
+            -- MsGuardian (integrity check) --
                 _lUpdate(3, "Configuring Guardian\u{2026}")
                 pcall(function() hs.loadSpoon("MsGuardian"); spoon.MsGuardian:check() end)
-            -- END MsGuardian (tamper check) --
+                -- Guardian tether: all spoons check this flag
+                ms.checkGuardian = function(name)
+                    if _G._guardianPassed then return true end
+                    print("INTEGRITY ERROR: " .. (name or "spoon") .. " halted — Guardian did not pass.")
+                    ms.alert("\u{26a0} Integrity Error\n" .. (name or "Module") .. " refused to start.\nGuardian check did not pass.", 10)
+                    return false
+                end
+            -- END MsGuardian (integrity check) --
 
             -- MsDevTools (logging & dev panels) --
                 _lUpdate(6, "Configuring Dev Tools\u{2026}")
@@ -2168,6 +2175,9 @@
             ms._systemActions["showTamperWarning"] = function()
                 ms.showGuardian()
             end
+            ms._systemActions["showIntegrityError"] = function()
+                ms.showGuardian()
+            end
         end
 
         for _, id in ipairs(ms.registry._defList) do
@@ -2319,7 +2329,7 @@
                     if ms._robloxActive then ms.setMacros(1, true) end
                     _G._loadTimers.integrityWarn = hs.timer.doAfter(10, function()
                         if _needsIntegrityWarning then
-                            ms.alert("\xe2\x9a\xa0 No trusted hash on record.\nSettings \xe2\x86\x92 Developer \xe2\x86\x92 Trust Current Version.", 10)
+                            ms.alert("\u{26a0} Integrity Error\nNo trusted manifest on record.\nSettings \u{2192} Developer \u{2192} Trust Current Version.", 10)
                         else
                             local _checkFn = (ms._updateChannel == "testing")
                                 and ms.integrity.checkForUpdateBeta

@@ -7,11 +7,11 @@
 #
 # Checks all files in the trusted manifest (ms_core.lua + spoons).
 # If any file's SHA-256 no longer matches the stored trusted hash,
-# Hammerspoon is killed before it can finish reloading the tampered config,
+# Hammerspoon is killed before it can finish reloading the modified config,
 # and a system notification is shown.
 #
 # This layer operates independently of the in-process check, so it
-# catches tampering even when the process has been bypassed.
+# catches integrity violations even when the process has been bypassed.
 
 HAMMERSPOON_DIR="$HOME/.hammerspoon"
 TRUST="$HAMMERSPOON_DIR/data/.ms_trusted_hash"
@@ -56,7 +56,7 @@ if echo "$RAW" | grep -qE '^[[:space:]]*[0-9a-fA-F]{64}[[:space:]]*$'; then
 
     log "MISMATCH — expected ${trusted:0:16}… got ${current:0:16}… — killing Hammerspoon."
     killall Hammerspoon 2>/dev/null
-    osascript -e 'display notification "ms_core.lua hash mismatch — Hammerspoon has been stopped.\nVerify the file before restarting." with title "mudscript Guardian" subtitle "Tamper Detected" sound name "Basso"' 2>/dev/null
+    osascript -e 'display notification "ms_core.lua integrity error — Hammerspoon has been stopped.\nVerify the file before restarting." with title "mudscript Guardian" subtitle "Integrity Error" sound name "Basso"' 2>/dev/null
     exit 1
 fi
 
@@ -120,10 +120,10 @@ GOT=$(echo "$FIRST" | cut -d'|' -f3)
 
 log "MISMATCH — $FILE: expected ${EXPECTED:0:16}… got ${GOT:0:16}… — killing Hammerspoon."
 
-# Kill Hammerspoon before it finishes reloading the tampered config.
+# Kill Hammerspoon before it finishes reloading the modified config.
 killall Hammerspoon 2>/dev/null
 
 # Notify the user.
-osascript -e "display notification \"$FILE hash mismatch — Hammerspoon has been stopped.\nVerify the file before restarting.\" with title \"mudscript Guardian\" subtitle \"Tamper Detected\" sound name \"Basso\"" 2>/dev/null
+osascript -e "display notification \"$FILE integrity error — Hammerspoon has been stopped.\nVerify the file before restarting.\" with title \"mudscript Guardian\" subtitle \"Integrity Error\" sound name \"Basso\"" 2>/dev/null
 
 exit 1

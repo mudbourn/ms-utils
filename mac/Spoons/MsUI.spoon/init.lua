@@ -14,6 +14,7 @@
     function MsUI:start()
         if not _G.ms then return end
         local ms = _G.ms
+        if ms.checkGuardian and not ms.checkGuardian("MsUI") then return end
 
         -- Run the webview panel initialization
         self:_initPanel(ms)
@@ -468,6 +469,9 @@
                 ms._systemActions = {}
                 if ms._userSettingIndex["showTamperWarning"] then
                     ms._systemActions["showTamperWarning"] = function()
+                        ms.showGuardian()
+                    end
+                    ms._systemActions["showIntegrityError"] = function()
                         ms.showGuardian()
                     end
                 end
@@ -958,7 +962,7 @@
 
             deleteTrustedHash = function()
                 ms.integrity.deleteTrustedHash()
-                ms.alert("Trusted hash deleted.\nTamper protection is now OFF until you re-trust.", 5)
+                ms.alert("Trusted manifest deleted.\nIntegrity protection is now OFF until you re-trust.", 5)
                 ms.ui.refresh()
             end,
 

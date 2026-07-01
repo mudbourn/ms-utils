@@ -1,4 +1,4 @@
--- mudscript pre-load tamper check — see DOCS_MAC.md § 20 for the full security model.
+-- mudscript pre-load integrity check — see DOCS_MAC.md § 20 for the full security model.
 
 local _obj = {
     name    = "MsGuardian",
@@ -360,13 +360,13 @@ YQIDAQAB
                 hs.focus()
 
                 local _choice = hs.dialog.blockAlert(
-                    "\xe2\x9a\xa0 ms_core.lua Modified \xe2\x80\x94 mudscript Did Not Load",
-                    "Hash mismatch. Delete trusted hash and reload?",
+                    "\u{26a0} Integrity Error \u{2014} mudscript Did Not Load",
+                    "File hash mismatch detected. Delete trusted manifest and reload?",
                     "Keep Blocked",
-                    "Delete Hash & Reload"
+                    "Delete Manifest & Reload"
                 )
 
-                if _choice == "Delete Hash & Reload" then
+                if _choice == "Delete Manifest & Reload" then
                     os.remove(_trustPath); hs.reload()
                 end
             end
@@ -374,19 +374,24 @@ YQIDAQAB
             hs.focus()
 
             local _choice = hs.dialog.blockAlert(
-                "\xe2\x9a\xa0 ms_core.lua Modified \xe2\x80\x94 mudscript Did Not Load",
-                "Hash mismatch. Delete trusted hash and reload?",
+                "\u{26a0} Integrity Error \u{2014} mudscript Did Not Load",
+                "File hash mismatch detected. Delete trusted manifest and reload?",
                 "Keep Blocked",
-                "Delete Hash & Reload"
+                "Delete Manifest & Reload"
             )
 
-            if _choice == "Delete Hash & Reload" then
+            if _choice == "Delete Manifest & Reload" then
                 os.remove(_trustPath); hs.reload()
             end
         end
         end -- if not _manifestOk
     end
 -- END Integrity Check --
+
+-- Set guardian tether flag — all spoons check for this
+    if not _blocked then
+        _G._guardianPassed = true
+    end
 
 -- Load Core --
     if not _blocked then

@@ -14,6 +14,7 @@
     function MsSettings:start()
         if not _G.ms then return end
         local ms = _G.ms
+        if ms.checkGuardian and not ms.checkGuardian("MsSettings") then return end
 
         -- Run the settings menu initialization
         self:_initSettingsMenu(ms)
@@ -512,6 +513,9 @@
             ms._systemActions = {}
             if ms._userSettingIndex["showTamperWarning"] then
                 ms._systemActions["showTamperWarning"] = function()
+                    ms.showGuardian()
+                end
+                ms._systemActions["showIntegrityError"] = function()
                     ms.showGuardian()
                 end
             end

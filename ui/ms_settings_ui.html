@@ -2923,16 +2923,16 @@
                 if (status === "trusted")
                     statusPill = h(
                         "span",
-                        { cls: "pill success" },
+                        { cls: "pill success", style: "font-weight:600" },
                         "Trusted",
                     );
                 else if (status === "mismatch")
                     statusPill = h(
                         "span",
-                        { cls: "pill danger" },
+                        { cls: "pill danger", style: "font-weight:600" },
                         "⚠ Mismatch",
                     );
-                else statusPill = h("span", { cls: "pill" }, "Not set");
+                else statusPill = h("span", { cls: "pill", style: "font-weight:600" }, "Not set");
                 body.appendChild(row("System Integrity", hash, statusPill));
 
                 // Trust row — greyed when trusted
@@ -2988,7 +2988,7 @@
                                 async () => {
                                     const r = await openModal(
                                         "Delete Trusted Hash",
-                                        "This removes tamper protection entirely.\n\n" +
+                                        "This removes integrity protection entirely.\n\n" +
                                             "From this point on mudscript will load ANY version of ms_core.lua " +
                                             "without warning — including maliciously modified ones.\n\n" +
                                             "You are on your own. Proceed only if you know what you are doing.",

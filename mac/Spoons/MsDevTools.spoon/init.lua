@@ -127,6 +127,7 @@
 
     function MsDevTools:start()
         if not ms then return end
+        if ms.checkGuardian and not ms.checkGuardian("MsDevTools") then return end
 
         _cacheDevHTML()
 
