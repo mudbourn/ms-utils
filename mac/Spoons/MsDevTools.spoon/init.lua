@@ -455,7 +455,7 @@
 
         local t = entry.type
 
-        if _consolePanel and t ~= "mousemove" then
+        if _consolePanel and t ~= "mousemove" and t ~= "step" then
             local send = false
 
             if t == "key" or t == "mouse" or t == "macro" or t == "sound" then
