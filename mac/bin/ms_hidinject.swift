@@ -2,15 +2,21 @@ import Foundation
 import CoreGraphics
 
 // Usage:
+//   hidinject daemon                          — persistent stdin mode
 //   hidinject key <keycode> [cmd] [shift] [alt] [ctrl]
 //   hidinject mouse <x> <y>
 //   hidinject mouserel <dx> <dy>
 //   hidinject click <x> <y> [left|right|middle]
 //   hidinject mdown <x> <y> [left|right|middle]
 //   hidinject mup <x> <y> [left|right|middle]
-//   hidinject dragrel <dx> <dy> [left|right|middle]
+//   hidinject dragrel <dx> <dy> <anchorX> <anchorY> [left|right|middle]
 
 let tap: CGEventTapLocation = .cghidEventTap
+
+guard let src = CGEventSource(stateID: .hidSystemState) else {
+    fputs("Failed to create event source\n", stderr)
+    exit(1)
+}
 
 func flagsForMods(_ mods: [String]) -> CGEventFlags {
     var flags: CGEventFlags = []
@@ -34,164 +40,179 @@ func mouseButtonFor(_ name: String) -> CGMouseButton {
     }
 }
 
-func fail(_ msg: String) -> Never {
-    fputs(msg + "\n", stderr)
+// ── Command executor ─────────────────────────────────────────────────
+// Returns nil on success, error string on failure.
+func executeCommand(_ args: [String]) -> String? {
+    guard args.count >= 1 else { return "empty command" }
+    let cmd = args[0].lowercased()
+
+    switch cmd {
+
+    case "key":
+        guard args.count >= 2, let keycode = Int(args[1]) else {
+            return "Usage: key <keycode> [cmd] [shift] [alt] [ctrl]"
+        }
+        let mods  = Array(args.dropFirst(2))
+        let flags = flagsForMods(mods)
+        let down = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(keycode), keyDown: true)!
+        let up   = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(keycode), keyDown: false)!
+        down.flags = flags
+        up.flags   = flags
+        down.post(tap: tap)
+        Thread.sleep(forTimeInterval: 0.05)
+        up.post(tap: tap)
+
+    case "mouse":
+        guard args.count >= 3,
+              let x = Double(args[1]), let y = Double(args[2]) else {
+            return "Usage: mouse <x> <y>"
+        }
+        let pos = CGPoint(x: x, y: y)
+        let move = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
+                           mouseCursorPosition: pos, mouseButton: .left)!
+        move.post(tap: tap)
+
+    case "mouserel":
+        guard args.count >= 3,
+              let dx = Double(args[1]), let dy = Double(args[2]) else {
+            return "Usage: mouserel <dx> <dy>"
+        }
+        let cur = CGEvent(source: nil)?.location ?? CGPoint.zero
+        let pos = CGPoint(x: cur.x + dx, y: cur.y + dy)
+        let move = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
+                           mouseCursorPosition: pos, mouseButton: .left)!
+        move.post(tap: tap)
+
+    case "click":
+        guard args.count >= 3,
+              let x = Double(args[1]), let y = Double(args[2]) else {
+            return "Usage: click <x> <y> [left|right|middle]"
+        }
+        let btn = args.count >= 4 ? mouseButtonFor(args[3]) : .left
+        let pos = CGPoint(x: x, y: y)
+        let (downType, upType): (CGEventType, CGEventType) = {
+            switch btn {
+            case .right:  return (.rightMouseDown, .rightMouseUp)
+            case .center: return (.otherMouseDown, .otherMouseUp)
+            default:      return (.leftMouseDown, .leftMouseUp)
+            }
+        }()
+        let move = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
+                           mouseCursorPosition: pos, mouseButton: .left)!
+        move.post(tap: tap)
+        Thread.sleep(forTimeInterval: 0.01)
+        let down = CGEvent(mouseEventSource: src, mouseType: downType,
+                           mouseCursorPosition: pos, mouseButton: btn)!
+        let up   = CGEvent(mouseEventSource: src, mouseType: upType,
+                           mouseCursorPosition: pos, mouseButton: btn)!
+        down.post(tap: tap)
+        Thread.sleep(forTimeInterval: 0.02)
+        up.post(tap: tap)
+
+    case "mdown":
+        guard args.count >= 3,
+              let x = Double(args[1]), let y = Double(args[2]) else {
+            return "Usage: mdown <x> <y> [left|right|middle]"
+        }
+        let btn = args.count >= 4 ? mouseButtonFor(args[3]) : .left
+        let pos = CGPoint(x: x, y: y)
+        let downType: CGEventType = {
+            switch btn {
+            case .right:  return .rightMouseDown
+            case .center: return .otherMouseDown
+            default:      return .leftMouseDown
+            }
+        }()
+        let move = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
+                           mouseCursorPosition: pos, mouseButton: .left)!
+        move.post(tap: tap)
+        Thread.sleep(forTimeInterval: 0.01)
+        let down = CGEvent(mouseEventSource: src, mouseType: downType,
+                           mouseCursorPosition: pos, mouseButton: btn)!
+        down.post(tap: tap)
+
+    case "mup":
+        guard args.count >= 3,
+              let x = Double(args[1]), let y = Double(args[2]) else {
+            return "Usage: mup <x> <y> [left|right|middle]"
+        }
+        let btn = args.count >= 4 ? mouseButtonFor(args[3]) : .left
+        let pos = CGPoint(x: x, y: y)
+        let upType: CGEventType = {
+            switch btn {
+            case .right:  return .rightMouseUp
+            case .center: return .otherMouseUp
+            default:      return .leftMouseUp
+            }
+        }()
+        let up = CGEvent(mouseEventSource: src, mouseType: upType,
+                         mouseCursorPosition: pos, mouseButton: btn)!
+        up.post(tap: tap)
+
+    case "dragrel":
+        // dragrel <dx> <dy> <anchorX> <anchorY> [left|right|middle]
+        guard args.count >= 5,
+              let dx = Double(args[1]), let dy = Double(args[2]),
+              let anchorX = Double(args[3]), let anchorY = Double(args[4]) else {
+            return "Usage: dragrel <dx> <dy> <anchorX> <anchorY> [left|right|middle]"
+        }
+        let dBtn = args.count >= 6 ? mouseButtonFor(args[5]) : .center
+        let anchor = CGPoint(x: anchorX, y: anchorY)
+        let dragType: CGEventType = {
+            switch dBtn {
+            case .right:  return .rightMouseDragged
+            case .center: return .otherMouseDragged
+            default:      return .leftMouseDragged
+            }
+        }()
+        let drag = CGEvent(mouseEventSource: src, mouseType: dragType,
+                           mouseCursorPosition: anchor, mouseButton: dBtn)!
+        // kCGMouseEventDeltaX = 4, kCGMouseEventDeltaY = 5
+        drag.setIntegerValueField(CGEventField(rawValue: 4)!, value: Int64(dx))
+        drag.setIntegerValueField(CGEventField(rawValue: 5)!, value: Int64(dy))
+        drag.post(tap: tap)
+
+    default:
+        return "Unknown command: \(cmd)"
+    }
+    return nil
+}
+
+// ── Entry point ──────────────────────────────────────────────────────
+let args = CommandLine.arguments
+guard args.count >= 2 else {
+    fputs("Usage: hidinject <daemon|key|mouse|mouserel|click|mdown|mup|dragrel> ...\n", stderr)
     exit(1)
 }
 
-let args = CommandLine.arguments
-guard args.count >= 2 else {
-    fail("Usage: hidinject <key|mouse|mouserel|click|mdown|mup|dragrel> ...")
+let mode = args[1].lowercased()
+
+if mode == "daemon" {
+    // ── Daemon mode: read commands from stdin, one per line ──────────
+    // Each line: "command arg1 arg2 ..."
+    // Response:  "ok\n" or "err: message\n"
+    // EOF → exit cleanly.
+    fputs("ready\n", stdout)
+    fflush(stdout)
+
+    while let line = readLine() {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { continue }
+        let parts = trimmed.split(separator: " ").map(String.init)
+        if let err = executeCommand(parts) {
+            fputs("err: \(err)\n", stdout)
+        } else {
+            fputs("ok\n", stdout)
+        }
+        fflush(stdout)
+    }
+    exit(0)
+} else {
+    // ── One-shot mode ────────────────────────────────────────────────
+    let cmdArgs = Array(args.dropFirst(1))
+    if let err = executeCommand(cmdArgs) {
+        fputs(err + "\n", stderr)
+        exit(1)
+    }
+    exit(0)
 }
-
-guard let src = CGEventSource(stateID: .hidSystemState) else {
-    fail("Failed to create event source")
-}
-
-let cmd = args[1].lowercased()
-
-switch cmd {
-
-// ── Keyboard ──────────────────────────────────────────────────────────────
-case "key":
-    guard args.count >= 3, let keycode = Int(args[2]) else {
-        fail("Usage: hidinject key <keycode> [cmd] [shift] [alt] [ctrl]")
-    }
-    let mods  = Array(args.dropFirst(3))
-    let flags = flagsForMods(mods)
-    Thread.sleep(forTimeInterval: 0.02)
-
-    let down = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(keycode), keyDown: true)!
-    let up   = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(keycode), keyDown: false)!
-    down.flags = flags
-    up.flags   = flags
-    down.post(tap: tap)
-    Thread.sleep(forTimeInterval: 0.05)
-    up.post(tap: tap)
-
-// ── Mouse move (absolute) ─────────────────────────────────────────────────
-case "mouse":
-    guard args.count >= 4,
-          let x = Double(args[2]), let y = Double(args[3]) else {
-        fail("Usage: hidinject mouse <x> <y>")
-    }
-    let pos = CGPoint(x: x, y: y)
-    let move = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
-                       mouseCursorPosition: pos, mouseButton: .left)!
-    move.post(tap: tap)
-
-// ── Mouse move (relative) ─────────────────────────────────────────────────
-case "mouserel":
-    guard args.count >= 4,
-          let dx = Double(args[2]), let dy = Double(args[3]) else {
-        fail("Usage: hidinject mouserel <dx> <dy>")
-    }
-    let cur = CGEvent(source: nil)?.location ?? CGPoint.zero
-    let pos = CGPoint(x: cur.x + dx, y: cur.y + dy)
-    let move = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
-                       mouseCursorPosition: pos, mouseButton: .left)!
-    move.post(tap: tap)
-
-// ── Mouse click (down + up) ───────────────────────────────────────────────
-case "click":
-    guard args.count >= 4,
-          let x = Double(args[2]), let y = Double(args[3]) else {
-        fail("Usage: hidinject click <x> <y> [left|right|middle]")
-    }
-    let btn = args.count >= 5 ? mouseButtonFor(args[4]) : .left
-    let pos = CGPoint(x: x, y: y)
-    let (downType, upType): (CGEventType, CGEventType) = {
-        switch btn {
-        case .right:  return (.rightMouseDown, .rightMouseUp)
-        case .center: return (.otherMouseDown, .otherMouseUp)
-        default:      return (.leftMouseDown, .leftMouseUp)
-        }
-    }()
-
-    // Move to position first
-    let move = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
-                       mouseCursorPosition: pos, mouseButton: .left)!
-    move.post(tap: tap)
-    Thread.sleep(forTimeInterval: 0.01)
-
-    let down = CGEvent(mouseEventSource: src, mouseType: downType,
-                       mouseCursorPosition: pos, mouseButton: btn)!
-    let up   = CGEvent(mouseEventSource: src, mouseType: upType,
-                       mouseCursorPosition: pos, mouseButton: btn)!
-    down.post(tap: tap)
-    Thread.sleep(forTimeInterval: 0.02)
-    up.post(tap: tap)
-
-// ── Mouse button down ─────────────────────────────────────────────────────
-case "mdown":
-    guard args.count >= 4,
-          let x = Double(args[2]), let y = Double(args[3]) else {
-        fail("Usage: hidinject mdown <x> <y> [left|right|middle]")
-    }
-    let btn = args.count >= 5 ? mouseButtonFor(args[4]) : .left
-    let pos = CGPoint(x: x, y: y)
-    let downType: CGEventType = {
-        switch btn {
-        case .right:  return .rightMouseDown
-        case .center: return .otherMouseDown
-        default:      return .leftMouseDown
-        }
-    }()
-    let move = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
-                       mouseCursorPosition: pos, mouseButton: .left)!
-    move.post(tap: tap)
-    Thread.sleep(forTimeInterval: 0.01)
-    let down = CGEvent(mouseEventSource: src, mouseType: downType,
-                       mouseCursorPosition: pos, mouseButton: btn)!
-    down.post(tap: tap)
-
-// ── Mouse button up ───────────────────────────────────────────────────────
-case "mup":
-    guard args.count >= 4,
-          let x = Double(args[2]), let y = Double(args[3]) else {
-        fail("Usage: hidinject mup <x> <y> [left|right|middle]")
-    }
-    let btn = args.count >= 5 ? mouseButtonFor(args[4]) : .left
-    let pos = CGPoint(x: x, y: y)
-    let upType: CGEventType = {
-        switch btn {
-        case .right:  return .rightMouseUp
-        case .center: return .otherMouseUp
-        default:      return .leftMouseUp
-        }
-    }()
-    let up = CGEvent(mouseEventSource: src, mouseType: upType,
-                     mouseCursorPosition: pos, mouseButton: btn)!
-    up.post(tap: tap)
-
-// ── Relative drag (camera move) ─────────────────────────────────────
-// Posts an otherMouseDragged event at the anchor position with explicit
-// delta fields.  Cursor does NOT move — game reads the deltas.
-// Usage: hidinject dragrel <dx> <dy> <anchorX> <anchorY> [left|right|middle]
-case "dragrel":
-    guard args.count >= 6,
-          let dx = Double(args[2]), let dy = Double(args[3]),
-          let anchorX = Double(args[4]), let anchorY = Double(args[5]) else {
-        fail("Usage: hidinject dragrel <dx> <dy> <anchorX> <anchorY> [left|right|middle]")
-    }
-    let dBtn = args.count >= 7 ? mouseButtonFor(args[6]) : .center
-    let anchor = CGPoint(x: anchorX, y: anchorY)
-    let dragType: CGEventType = {
-        switch dBtn {
-        case .right:  return .rightMouseDragged
-        case .center: return .otherMouseDragged
-        default:      return .leftMouseDragged
-        }
-    }()
-    let drag = CGEvent(mouseEventSource: src, mouseType: dragType,
-                       mouseCursorPosition: anchor, mouseButton: dBtn)!
-    // kCGMouseEventDeltaX = 4, kCGMouseEventDeltaY = 5
-    drag.setIntegerValueField(CGEventField(rawValue: 4)!, value: Int64(dx))
-    drag.setIntegerValueField(CGEventField(rawValue: 5)!, value: Int64(dy))
-    drag.post(tap: tap)
-
-default:
-    fail("Unknown command: \(cmd)\nAvailable: key, mouse, mouserel, click, mdown, mup, dragrel")
-}
-
-exit(0)

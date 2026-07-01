@@ -925,12 +925,38 @@
             --
             -- ms.HidMouse("DragRel", "Center", dx, dy)  — drag w/ button held
             -- ms.HidMouse("MoveRel", dx, dy)             — cursor move
-            ms.HidMouse = function(operation, ...)
-                local HIDINJECT = os.getenv("HOME") .. "/bin/hidinject"
-                local function run(args)
-                    local cmd = HIDINJECT .. " " .. table.concat(args, " ")
-                    hs.execute(cmd)
+            ms._hidDaemon = nil  -- persistent hidinject process
+            ms._hidReady  = false
+
+            local function _hidStart()
+                if ms._hidDaemon then return end
+                local bin = os.getenv("HOME") .. "/bin/hidinject"
+                ms._hidDaemon = hs.task.new(bin, function() end, function(_, stream, data)
+                    if stream == "stdout" and data then
+                        for line in data:gmatch("[^\n]+") do
+                            if line == "ready" then ms._hidReady = true end
+                        end
+                    end
+                    return false  -- keep stdin open
+                end, {"daemon"})
+                ms._hidDaemon:start()
+            end
+
+            local function _hidSend(cmd)
+                _hidStart()
+                if not ms._hidReady then
+                    -- daemon not ready yet, fall back to one-shot
+                    hs.execute(os.getenv("HOME") .. "/bin/hidinject " .. cmd)
+                    return
                 end
+                local t = ms._hidDaemon
+                if t then
+                    t:setCallback(function(_, stream, data) return false end)
+                    t:write(cmd .. "\n")
+                end
+            end
+
+            ms.HidMouse = function(operation, ...)
                 if ms.dev then spoon.MsDevTools:flushAll() end
                 if ms.dev._watcherPanel then
                     spoon.MsDevTools:watcherStep("HidMouse " .. tostring(operation))
@@ -943,24 +969,18 @@
                     local BTNS = { Left="left", Right="right", Center="middle",
                                    Button4="other", Button5="other" }
                     assert(BTNS[btn], "ms.HidMouse DragRel: unknown button '" .. tostring(btn) .. "'")
-                    -- Anchor at camera center (or current mouse pos as fallback)
-                    local anchor = ms.cam and ms.cam.anchor
-                    local ax, ay
-                    if anchor then
-                        ax, ay = anchor.x, anchor.y
-                    else
-                        local pos = hs.mouse.absolutePosition()
-                        ax, ay = pos.x, pos.y
-                    end
-                    run({"dragrel", tostring(math.floor(tonumber(dx) or 0)),
-                                    tostring(math.floor(tonumber(dy) or 0)),
-                                    tostring(math.floor(ax)),
-                                    tostring(math.floor(ay)),
-                                    BTNS[btn]})
+                    local pos = hs.mouse.absolutePosition()
+                    local ax, ay = pos.x, pos.y
+                    _hidSend(string.format("dragrel %d %d %d %d %s",
+                        math.floor(tonumber(dx) or 0),
+                        math.floor(tonumber(dy) or 0),
+                        math.floor(ax), math.floor(ay),
+                        BTNS[btn]))
                 elseif operation == "MoveRel" then
                     local dx, dy = ...
-                    run({"mouserel", tostring(math.floor(tonumber(dx) or 0)),
-                                     tostring(math.floor(tonumber(dy) or 0))})
+                    _hidSend(string.format("mouserel %d %d",
+                        math.floor(tonumber(dx) or 0),
+                        math.floor(tonumber(dy) or 0)))
                 else
                     error("ms.HidMouse: unknown operation '" .. tostring(operation) .. "'")
                 end
