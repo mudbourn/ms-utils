@@ -650,8 +650,15 @@
                 for (const el of _getEntries()) {
                     if (_selected.has(el)) {
                         const ts = el.querySelector(".ts")?.textContent || "";
-                        const msg = el.querySelector(".msg, .step-msg, .entry-app, .entry-title, .key-name, .mouse-name, .move-name, .scroll-name")?.textContent || "";
-                        lines.push(`[${ts}] ${msg}`.trim());
+                        const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
+                        const arrow = el.querySelector(".arrow")?.textContent || "";
+                        const name = el.querySelector(".key-name, .mouse-name, .scroll-name, .move-name")?.textContent || "";
+                        const dim = el.querySelector(".dim")?.textContent || "";
+                        const parts = [ts, `[${badge}]`];
+                        if (arrow) parts.push(arrow);
+                        if (name) parts.push(name);
+                        if (dim) parts.push(dim.trim());
+                        lines.push(parts.join(" "));
                     }
                 }
                 const text = lines.join("\n");

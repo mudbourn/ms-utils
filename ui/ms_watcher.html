@@ -512,8 +512,18 @@
                 for (const el of _getEntries()) {
                     if (_selected.has(el)) {
                         const ts = el.querySelector(".ts")?.textContent || "";
-                        const msg = el.querySelector(".msg, .step-msg, .entry-app, .entry-title, .key-name, .mouse-name, .move-name, .scroll-name")?.textContent || "";
-                        lines.push(`[${ts}] ${msg}`.trim());
+                        const stepMsg = el.querySelector(".step-msg")?.textContent || "";
+                        const badge = el.querySelector(".badge")?.textContent || "";
+                        const msg = el.querySelector(".msg")?.textContent || "";
+                        const pill = el.querySelector(".pill")?.textContent || "";
+                        if (stepMsg) {
+                            lines.push(`${ts} ${stepMsg}`);
+                        } else if (badge) {
+                            const b = badge.toUpperCase();
+                            lines.push(msg ? `${ts} [${b}] ${msg}` : `${ts} [${b}]`);
+                        } else {
+                            lines.push(msg ? `${ts} ${msg}` : ts);
+                        }
                     }
                 }
                 const text = lines.join("\n");

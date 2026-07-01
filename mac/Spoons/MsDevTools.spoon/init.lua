@@ -600,7 +600,7 @@
 
         local ok, j = pcall(hs.json.encode, {
             type = "step",
-            ts   = os.time(),
+            ts   = os.date("%H:%M:%S"),
             msg  = "[" .. label .. "] " .. msg,
         })
 
@@ -716,7 +716,7 @@
             for _, line in ipairs(st.buffer) do
                 local ok, j = pcall(hs.json.encode, {
                     type = "step",
-                    ts   = os.time(),
+                    ts   = os.date("%H:%M:%S"),
                     msg  = line,
                 })
 
@@ -1069,6 +1069,9 @@
 
         _consoleOpen = true
 
+        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+        if ms.ui and ms.ui.refresh then pcall(function() ms.ui.refresh() end) end
+
         ms.playSlot("settingsOpen")
 
         _consolePanel:show()
@@ -1087,6 +1090,9 @@
 
     function MsDevTools:hideConsole()
         _consoleOpen = false
+
+        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+        if ms.ui and ms.ui.refresh then pcall(function() ms.ui.refresh() end) end
 
         if _consolePanel then
             ms.playSlot("settingsClose")
@@ -1189,6 +1195,9 @@
 
         _watcherOpen = true
 
+        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+        if ms.ui and ms.ui.refresh then pcall(function() ms.ui.refresh() end) end
+
         ms.playSlot("settingsOpen")
 
         _watcherPanel:show()
@@ -1207,6 +1216,9 @@
 
     function MsDevTools:hideWatcher()
         _watcherOpen = false
+
+        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+        if ms.ui and ms.ui.refresh then pcall(function() ms.ui.refresh() end) end
 
         if _watcherPanel then
             ms.playSlot("settingsClose")
@@ -1342,6 +1354,9 @@
         _keysOpen  = true
         _keysReady = true
 
+        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+        if ms.ui and ms.ui.refresh then pcall(function() ms.ui.refresh() end) end
+
         ms.playSlot("settingsOpen")
 
         _keysPanel:show()
@@ -1391,6 +1406,9 @@
 
         _keysReady = false
         _keysOpen  = false
+
+        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+        if ms.ui and ms.ui.refresh then pcall(function() ms.ui.refresh() end) end
 
         if _keysPanel then
             ms.playSlot("settingsClose")
@@ -1515,7 +1533,7 @@
                 local wf    = win:frame()
                 local ok2, j2 = pcall(hs.json.encode, {
                     type  = "focus",
-                    ts    = os.time(),
+                    ts    = os.date("%H:%M:%S"),
                     app   = app,
                     title = title,
                     w     = math.floor(wf.w),
@@ -1540,6 +1558,9 @@
         end
 
         _windowOpen = true
+
+        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+        if ms.ui and ms.ui.refresh then pcall(function() ms.ui.refresh() end) end
 
         ms.playSlot("settingsOpen")
 
@@ -1613,6 +1634,9 @@
         end
 
         _windowOpen = false
+
+        if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+        if ms.ui and ms.ui.refresh then pcall(function() ms.ui.refresh() end) end
 
         if _windowPanel then
             ms.playSlot("settingsClose")

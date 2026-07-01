@@ -321,6 +321,10 @@
                     settings = true,
                     ui       = true,
                 },
+                consoleOpen             = ms.dev._consoleOpen or false,
+                watcherOpen             = ms.dev._watcherOpen or false,
+                keysOpen                = ms.dev._keysOpen or false,
+                windowOpen              = ms.dev._windowOpen or false,
                 theme                   = themeOut,
                 msVersion               = (function()
                     local p = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"

@@ -2789,7 +2789,7 @@
             function buildDeveloper(body) {
                 body.appendChild(
                     btnRow(
-                        actionBtn("Window Monitor", "", () =>
+                        actionBtn("Window Monitor", S.windowOpen ? "accent" : "", () =>
                             sendToHost({ action: "openWindowMonitor" }),
                         ),
                         actionBtn("Edit Macros", "", () =>
@@ -2799,7 +2799,7 @@
                 );
                 body.appendChild(
                     btnRow(
-                        actionBtn("Open Console", "", () =>
+                        actionBtn("Console", S.consoleOpen ? "accent" : "", () =>
                             sendToHost({ action: "openConsole" }),
                         ),
                         actionBtn("Edit Theme", "", () =>
@@ -2809,10 +2809,10 @@
                 );
                 body.appendChild(
                     btnRow(
-                        actionBtn("Macro Monitor", "", () =>
+                        actionBtn("Macro Monitor", S.watcherOpen ? "accent" : "", () =>
                             sendToHost({ action: "openWatcher" }),
                         ),
-                        actionBtn("Input Monitor", "", () =>
+                        actionBtn("Input Monitor", S.keysOpen ? "accent" : "", () =>
                             sendToHost({ action: "openKeys" }),
                         ),
                     ),

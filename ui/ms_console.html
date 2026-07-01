@@ -539,9 +539,10 @@
                 const lines = [];
                 for (const el of _getEntries()) {
                     if (_selected.has(el)) {
-                        const badge = el.querySelector(".badge")?.textContent || "";
+                        const ts = el.querySelector(".ts")?.textContent || "";
+                        const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
                         const msg = el.querySelector(".msg")?.textContent || "";
-                        lines.push(msg ? `${badge} ${msg}` : badge);
+                        lines.push(msg ? `${ts} [${badge}] ${msg}` : `${ts} [${badge}]`);
                     }
                 }
                 const text = lines.join("\n");

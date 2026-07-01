@@ -425,8 +425,13 @@
                 for (const el of _getEntries()) {
                     if (_selected.has(el)) {
                         const ts = el.querySelector(".ts")?.textContent || "";
-                        const msg = el.querySelector(".msg, .step-msg, .entry-app, .entry-title, .key-name, .mouse-name, .move-name, .scroll-name")?.textContent || "";
-                        lines.push(`[${ts}] ${msg}`.trim());
+                        const app = el.querySelector(".entry-app")?.textContent || "";
+                        const title = el.querySelector(".entry-title")?.textContent || "";
+                        const dim = el.querySelector(".dim-pill")?.textContent || "";
+                        const parts = [ts, app];
+                        if (title) parts.push(title);
+                        if (dim) parts.push(dim);
+                        lines.push(parts.join(" "));
                     }
                 }
                 const text = lines.join("\n");
