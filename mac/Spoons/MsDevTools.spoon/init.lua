@@ -433,7 +433,7 @@
         if _consolePanel and t ~= "mousemove" then
             local send = false
 
-            if t == "key" or t == "mouse" or t == "macro" then
+            if t == "key" or t == "mouse" or t == "macro" or t == "sound" then
                 if _devLastConsoleType ~= t then
                     _devLastConsoleType = t
                     send = true
@@ -450,7 +450,7 @@
             end
         end
 
-        if _watcherPanel and (t == "macro" or t == "print" or t == "error" or t == "system") then
+        if _watcherPanel and (t == "macro" or t == "print" or t == "error" or t == "system" or t == "sound") then
             pcall(function()
                 _watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
             end)
@@ -1288,7 +1288,15 @@
         _keysReady    = false
 
         panel:navigationCallback(function(_, action)
-            if action ~= "didNavigate" then return end
+            if action == "navigating" then return end
+
+            hs.timer.doAfter(0, function()
+                local tj = _devThemeJS()
+
+                if tj ~= "" then
+                    pcall(function() panel:evaluateJavaScript(tj) end)
+                end
+            end)
 
             if not _keysReady then
                 _keysReady = true
@@ -1605,8 +1613,8 @@
     end
 
     function MsDevTools:recolor()
-        local themeJson = hs.json.encode(ms._theme or {})
-        local js = "applyTheme(" .. themeJson .. ")"
+        local js = _devThemeJS()
+        if js == "" then return end
         if _consolePanel then pcall(function() _consolePanel:evaluateJavaScript(js) end) end
         if _watcherPanel then pcall(function() _watcherPanel:evaluateJavaScript(js) end) end
         if _keysPanel    then pcall(function() _keysPanel:evaluateJavaScript(js) end) end

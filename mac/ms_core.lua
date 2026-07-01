@@ -1310,12 +1310,12 @@
                 if ms.dev then spoon.MsDevTools:flushAll() end
                 if path then
                     local fname = tostring(path):match("([^/\\]+)$") or tostring(path)
-                    local logMsg = "sound " .. fname
-                    -- Dedup: skip if same message was logged last time
-                    if logMsg ~= ms._lastSoundLog then
-                        ms._lastSoundLog = logMsg
-                        if ms.dev._watcherPanel then spoon.MsDevTools:watcherStep(logMsg) end
-                        if ms.dev then spoon.MsDevTools:macroLog(logMsg) end
+                    -- Dedup: skip if same sound was logged last time
+                    if fname ~= ms._lastSoundLog then
+                        ms._lastSoundLog = fname
+                        if ms.dev then
+                            ms.dev:log({ type = "sound", msg = fname, category = "macro" })
+                        end
                     end
                 end
                 if not ms.soundEnabled then return end
