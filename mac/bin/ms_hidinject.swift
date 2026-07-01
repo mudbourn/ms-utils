@@ -172,6 +172,37 @@ func executeCommand(_ args: [String]) -> String? {
         drag.setIntegerValueField(CGEventField(rawValue: 5)!, value: Int64(dy))
         drag.post(tap: tap)
 
+    case "dragreln":
+        // dragreln <count> <delayUs> <dx> <dy> <anchorX> <anchorY> [left|right|middle]
+        // Fires <count> dragrel events with <delayUs> microseconds between each.
+        guard args.count >= 7,
+              let count = Int(args[1]), let delayUs = Int(args[2]),
+              let dx = Double(args[3]), let dy = Double(args[4]),
+              let anchorX = Double(args[5]), let anchorY = Double(args[6]) else {
+            return "Usage: dragreln <count> <delayUs> <dx> <dy> <anchorX> <anchorY> [button]"
+        }
+        let dnBtn = args.count >= 8 ? mouseButtonFor(args[7]) : .center
+        let dnAnchor = CGPoint(x: anchorX, y: anchorY)
+        let dnDragType: CGEventType = {
+            switch dnBtn {
+            case .right:  return .rightMouseDragged
+            case .center: return .otherMouseDragged
+            default:      return .leftMouseDragged
+            }
+        }()
+        let dnFieldX = CGEventField(rawValue: 4)!
+        let dnFieldY = CGEventField(rawValue: 5)!
+        for _ in 0..<count {
+            let dnDrag = CGEvent(mouseEventSource: src, mouseType: dnDragType,
+                                 mouseCursorPosition: dnAnchor, mouseButton: dnBtn)!
+            dnDrag.setIntegerValueField(dnFieldX, value: Int64(dx))
+            dnDrag.setIntegerValueField(dnFieldY, value: Int64(dy))
+            dnDrag.post(tap: tap)
+            if delayUs > 0 {
+                usleep(UInt32(delayUs))
+            }
+        }
+
     default:
         return "Unknown command: \(cmd)"
     }
