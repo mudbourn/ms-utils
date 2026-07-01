@@ -604,7 +604,12 @@
                 hs.timer.doAfter(0.5, function()
                     pcall(function()
                         local app = ms._targetApp and hs.application.get(ms._targetApp)
-                        if app then app:activate() end
+                        if app then
+                            app:hide()
+                            hs.timer.doAfter(0.15, function()
+                                pcall(function() app:activate() end)
+                            end)
+                        end
                     end)
                 end)
             end
