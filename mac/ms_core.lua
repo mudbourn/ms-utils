@@ -943,8 +943,20 @@
                     local BTNS = { Left="left", Right="right", Center="middle",
                                    Button4="other", Button5="other" }
                     assert(BTNS[btn], "ms.HidMouse DragRel: unknown button '" .. tostring(btn) .. "'")
+                    -- Anchor at camera center (or current mouse pos as fallback)
+                    local anchor = ms.cam and ms.cam.anchor
+                    local ax, ay
+                    if anchor then
+                        ax, ay = anchor.x, anchor.y
+                    else
+                        local pos = hs.mouse.absolutePosition()
+                        ax, ay = pos.x, pos.y
+                    end
                     run({"dragrel", tostring(math.floor(tonumber(dx) or 0)),
-                                    tostring(math.floor(tonumber(dy) or 0)), BTNS[btn]})
+                                    tostring(math.floor(tonumber(dy) or 0)),
+                                    tostring(math.floor(ax)),
+                                    tostring(math.floor(ay)),
+                                    BTNS[btn]})
                 elseif operation == "MoveRel" then
                     local dx, dy = ...
                     run({"mouserel", tostring(math.floor(tonumber(dx) or 0)),

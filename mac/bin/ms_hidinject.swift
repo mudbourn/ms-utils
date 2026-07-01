@@ -165,14 +165,17 @@ case "mup":
     up.post(tap: tap)
 
 // ── Relative drag (camera move) ─────────────────────────────────────
+// Posts an otherMouseDragged event at the anchor position with explicit
+// delta fields.  Cursor does NOT move — game reads the deltas.
+// Usage: hidinject dragrel <dx> <dy> <anchorX> <anchorY> [left|right|middle]
 case "dragrel":
-    guard args.count >= 4,
-          let dx = Double(args[2]), let dy = Double(args[3]) else {
-        fail("Usage: hidinject dragrel <dx> <dy> [left|right|middle]")
+    guard args.count >= 6,
+          let dx = Double(args[2]), let dy = Double(args[3]),
+          let anchorX = Double(args[4]), let anchorY = Double(args[5]) else {
+        fail("Usage: hidinject dragrel <dx> <dy> <anchorX> <anchorY> [left|right|middle]")
     }
-    let dBtn = args.count >= 5 ? mouseButtonFor(args[4]) : .right
-    let cur = CGEvent(source: nil)?.location ?? CGPoint.zero
-    let newPos = CGPoint(x: cur.x + dx, y: cur.y + dy)
+    let dBtn = args.count >= 7 ? mouseButtonFor(args[6]) : .center
+    let anchor = CGPoint(x: anchorX, y: anchorY)
     let dragType: CGEventType = {
         switch dBtn {
         case .right:  return .rightMouseDragged
@@ -181,7 +184,10 @@ case "dragrel":
         }
     }()
     let drag = CGEvent(mouseEventSource: src, mouseType: dragType,
-                       mouseCursorPosition: newPos, mouseButton: dBtn)!
+                       mouseCursorPosition: anchor, mouseButton: dBtn)!
+    // CGEventField rawValue 1 = mouseEventDeltaX, 2 = mouseEventDeltaY
+    drag.setIntegerValueField(CGEventField(rawValue: 1)!, value: Int64(dx))
+    drag.setIntegerValueField(CGEventField(rawValue: 2)!, value: Int64(dy))
     drag.post(tap: tap)
 
 default:
