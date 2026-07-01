@@ -881,7 +881,7 @@
                     and ms.integrity.check() == "trusted"
 
             elseif feature == "hidinject" then
-                return hs.fs.attributes(home .. "/bin/hidinject") ~= nil
+                return hs.fs.attributes(home .. "/.local/bin/hidinject") ~= nil
 
             end
             return false

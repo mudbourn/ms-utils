@@ -930,7 +930,7 @@
 
             local function _hidStart()
                 if ms._hidDaemon then return end
-                local bin = os.getenv("HOME") .. "/bin/hidinject"
+                local bin = os.getenv("HOME") .. "/.local/bin/hidinject"
                 ms._hidDaemon = hs.task.new(bin, function() end, function(_, stream, data)
                     if stream == "stdout" and data then
                         for line in data:gmatch("[^\n]+") do
@@ -946,7 +946,7 @@
                 _hidStart()
                 if not ms._hidReady then
                     -- daemon not ready yet, fall back to one-shot
-                    hs.execute(os.getenv("HOME") .. "/bin/hidinject " .. cmd)
+                    hs.execute(os.getenv("HOME") .. "/.local/bin/hidinject " .. cmd)
                     return
                 end
                 local t = ms._hidDaemon
@@ -975,6 +975,21 @@
                         math.floor(tonumber(dx) or 0),
                         math.floor(tonumber(dy) or 0),
                         math.floor(ax), math.floor(ay),
+                        BTNS[btn]))
+                elseif operation == "DragRelN" then
+                    -- DragRelN(count, delayUs, button, dx, dy)
+                    -- Fires <count> drag events with <delayUs> µs gap in one batch.
+                    local count, delayUs, btn, dx, dy = ...
+                    local BTNS = { Left="left", Right="right", Center="middle",
+                                   Button4="other", Button5="other" }
+                    assert(BTNS[btn], "ms.HidMouse DragRelN: unknown button '" .. tostring(btn) .. "'")
+                    local pos = hs.mouse.absolutePosition()
+                    _hidSend(string.format("dragreln %d %d %d %d %d %d %s",
+                        math.floor(tonumber(count) or 1),
+                        math.floor(tonumber(delayUs) or 0),
+                        math.floor(tonumber(dx) or 0),
+                        math.floor(tonumber(dy) or 0),
+                        math.floor(pos.x), math.floor(pos.y),
                         BTNS[btn]))
                 elseif operation == "MoveRel" then
                     local dx, dy = ...

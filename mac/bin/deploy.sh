@@ -37,7 +37,8 @@ done
 cp "$REPO/mac/bin/ms_guardian_agent.sh" "$HS/bin/ms_guardian_agent.sh" 2>/dev/null || true
 
 # Copy hidinject binary.
-cp "$REPO/mac/bin/hidinject" "$HS/bin/hidinject" 2>/dev/null || true
+mkdir -p "$HOME/.local/bin"
+cp "$REPO/mac/bin/hidinject" "$HOME/.local/bin/hidinject" 2>/dev/null || true
 
 # Copy sounds (defaults + active + macro).
 if [ -d "$REPO/sounds" ]; then
