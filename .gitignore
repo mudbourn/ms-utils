@@ -18,3 +18,6 @@ ignore/
 # Compiled AHK binary — not tracked
 *.exe
 *.exe.manifest
+
+# Rust build artifacts
+mac/bin/hidinject-rs/target/

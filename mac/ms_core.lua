@@ -928,10 +928,11 @@
             ms._hidDaemon = nil  -- persistent hidinject process
             ms._hidReady  = false
 
+            local HIDINJECT_BIN = os.getenv("HOME") .. "/Documents/GitHub/ms-utils/mac/bin/hidinject-rs/target/release/hidinject"
+
             local function _hidStart()
                 if ms._hidDaemon then return end
-                local bin = os.getenv("HOME") .. "/.local/bin/hidinject"
-                ms._hidDaemon = hs.task.new(bin, function() end, function(_, stream, data)
+                ms._hidDaemon = hs.task.new(HIDINJECT_BIN, function() end, function(_, stream, data)
                     if stream == "stdout" and data then
                         for line in data:gmatch("[^\n]+") do
                             if line == "ready" then ms._hidReady = true end
