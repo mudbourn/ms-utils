@@ -82,6 +82,23 @@
     local _branchState   = {}
 
     local _devFadeTimers = {}
+    local _htmlCache = {}
+
+    local function _cacheDevHTML()
+        local files = {
+            console = _home .. "/.hammerspoon/ui/ms_console.html",
+            watcher = _home .. "/.hammerspoon/ui/ms_watcher.html",
+            keys    = _home .. "/.hammerspoon/ui/ms_keys.html",
+            window  = _home .. "/.hammerspoon/ui/ms_window.html",
+        }
+        for name, path in pairs(files) do
+            local f = io.open(path, "r")
+            if f then
+                _htmlCache[name] = f:read("*all")
+                f:close()
+            end
+        end
+    end
 -- END State --
 
 -- Lifecycle --
@@ -110,6 +127,8 @@
 
     function MsDevTools:start()
         if not ms then return end
+
+        _cacheDevHTML()
 
         ms.dev = {
             _consolePanel    = nil,
@@ -1004,11 +1023,8 @@
         pcall(function() panel:allowTextEntry(true) end)
         pcall(function() panel:shadow(true) end)
 
-        local f = io.open(_home .. "/.hammerspoon/ui/ms_console.html", "r")
-
-        if f then
-            panel:html(f:read("*all"), _devBase)
-            f:close()
+        if _htmlCache["console"] then
+            panel:html(_htmlCache["console"], _devBase)
         end
 
         _consolePanelPos = { x = x, y = y, w = w, h = h }
@@ -1131,11 +1147,8 @@
         pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
         pcall(function() panel:shadow(true) end)
 
-        local f = io.open(_home .. "/.hammerspoon/ui/ms_watcher.html", "r")
-
-        if f then
-            panel:html(f:read("*all"), _devBase)
-            f:close()
+        if _htmlCache["watcher"] then
+            panel:html(_htmlCache["watcher"], _devBase)
         end
 
         _watcherPanelPos = { x = x, y = y, w = w, h = h }
@@ -1277,12 +1290,9 @@
         pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
         pcall(function() panel:shadow(true) end)
 
-        local f = io.open(_home .. "/.hammerspoon/ui/ms_keys.html", "r")
+        if not _htmlCache["keys"] then return nil end
 
-        if not f then return nil end
-
-        panel:html(f:read("*all"), _devBase)
-        f:close()
+        panel:html(_htmlCache["keys"], _devBase)
 
         _keysPanelPos = { x = x, y = y, w = w, h = h }
         _keysReady    = false
@@ -1463,11 +1473,8 @@
         pcall(function() panel:allowTextEntry(true) end)
         pcall(function() panel:shadow(true) end)
 
-        local f = io.open(_home .. "/.hammerspoon/ui/ms_window.html", "r")
-
-        if f then
-            panel:html(f:read("*all"), _devBase)
-            f:close()
+        if _htmlCache["window"] then
+            panel:html(_htmlCache["window"], _devBase)
         end
 
         _windowPanelPos = { x = x, y = y, w = w, h = h }
@@ -1534,6 +1541,24 @@
         pcall(function() _windowPanel:bringToFront(true) end)
 
         _devFadeIn(_windowPanel, "window")
+
+        -- Push current window immediately (don't wait for poller)
+        local win = hs.window.focusedWindow()
+        if win then
+            local app   = (win:application() and win:application():name()) or "?"
+            local title = win:title() or ""
+            local f     = win:frame()
+            self:_pushWindowEvent({
+                type  = "focus",
+                ts    = os.time(),
+                app   = app,
+                title = title,
+                w     = math.floor(f.w),
+                h     = math.floor(f.h),
+                x     = math.floor(f.x),
+                y     = math.floor(f.y),
+            })
+        end
 
         if _windowPoller then _windowPoller:stop() end
 

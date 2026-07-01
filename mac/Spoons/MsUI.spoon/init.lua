@@ -374,6 +374,10 @@
             if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
         end
 
+        ms.ui._precacheHTML = function()
+            _loadPanelHTML()
+        end
+
         local function _emptyToNil(s) if s == nil or s == "" then return nil end; return s end
 
         ms.ui._actions = {
@@ -1594,11 +1598,8 @@
             if not ms.ui._panel then
                 ms.ui._panel = _buildPanel()
             end
-            hs.timer.doAfter(2, function()
-                if ms.ui._panel and not ms.ui._open then
-                    ms.ui.refresh()
-                end
-            end)
+            -- The WebView's 'ready' callback calls ms.ui.refresh()
+            -- automatically when the HTML finishes parsing.
         end
     -- END UI State Cache --
 
