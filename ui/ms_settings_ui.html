@@ -1767,39 +1767,41 @@
                         );
                     }
 
-                    // Right-click context menu
-                    r.addEventListener("contextmenu", (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        playSlot("interact");
-                        const items = [
-                            {
-                                icon: "",
-                                label: "Rebind\u2026",
-                                action: () =>
-                                    sendToHost({
-                                        action: "startRebind",
-                                        id: m.id,
-                                        systemBind: m.systemBind || false,
-                                    }),
-                            },
-                        ];
-                        if (m.bind) {
-                            items.push("divider");
-                            items.push({
-                                icon: "",
-                                label: "Reset Bind",
-                                danger: true,
-                                action: () =>
-                                    sendToHost({
-                                        action: "resetBind",
-                                        id: m.id,
-                                        systemBind: m.systemBind || false,
-                                    }),
-                            });
-                        }
-                        showCtxMenu(e.clientX, e.clientY, items, m.label);
-                    });
+                    // Right-click context menu (skip for non-rebindable system macros)
+                    if (!(m.group === "system" && !m.systemBind)) {
+                        r.addEventListener("contextmenu", (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            playSlot("interact");
+                            const items = [
+                                {
+                                    icon: "",
+                                    label: "Rebind\u2026",
+                                    action: () =>
+                                        sendToHost({
+                                            action: "startRebind",
+                                            id: m.id,
+                                            systemBind: m.systemBind || false,
+                                        }),
+                                },
+                            ];
+                            if (m.bind) {
+                                items.push("divider");
+                                items.push({
+                                    icon: "",
+                                    label: "Reset Bind",
+                                    danger: true,
+                                    action: () =>
+                                        sendToHost({
+                                            action: "resetBind",
+                                            id: m.id,
+                                            systemBind: m.systemBind || false,
+                                        }),
+                                });
+                            }
+                            showCtxMenu(e.clientX, e.clientY, items, m.label);
+                        });
+                    }
 
                     return r;
                 }

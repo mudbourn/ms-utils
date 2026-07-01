@@ -203,6 +203,7 @@
         ms.dev._pushMouseState = function(x, y)
             self:pushMouseState(x, y)
         end
+        _pushMouseState = ms.dev._pushMouseState
 
         self._origPrint = print
 

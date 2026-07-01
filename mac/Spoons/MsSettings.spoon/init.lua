@@ -464,8 +464,8 @@
             end
             ms.saveSettings()
             ms.bind.rebind()
-            ms.cam.updateAnchor()
-            ms.cam.updateMultiplier()
+            -- ms.legacycam.updateAnchor()
+            -- ms.legacycam.updateMultiplier()
             ms.socdApply()
             return true
         end
@@ -473,8 +473,8 @@
         ms.reloadSettings = function()
             ms.loadSettings()
             ms.bind.rebind()
-            ms.cam.updateAnchor()
-            ms.cam.updateMultiplier()
+            -- ms.legacycam.updateAnchor()
+            -- ms.legacycam.updateMultiplier()
             ms.socdApply()
             if not ms._quickReloading then
                 ms.playSlot("update")
@@ -523,8 +523,8 @@
             ms.loadTheme()
             if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
             ms.bind.rebind()
-            ms.cam.updateAnchor()
-            ms.cam.updateMultiplier()
+            -- ms.legacycam.updateAnchor()
+            -- ms.legacycam.updateMultiplier()
             ms.socdApply()
             ms.ui.hide()
             pcall(function() ms.dev.console.hide() end)
@@ -944,6 +944,20 @@
             return true
         end
 
+        local function moveDirContents(src, dst)
+            if not hs.fs.attributes(src) then return 0 end
+            os.execute("mkdir -p '" .. dst:gsub("'", "'\\''") .. "'")
+            local moved = 0
+            for file in hs.fs.dir(src) do
+                if file ~= "." and file ~= ".." then
+                    if os.rename(src .. file, dst .. file) then
+                        moved = moved + 1
+                    end
+                end
+            end
+            return moved
+        end
+
         local function readMacroMeta(filePath)
             local captured = {}
             local dummyFn  = function() end
@@ -1071,6 +1085,10 @@
             local hadSettings = hs.fs.attributes(jsonPath)   and moveFile(jsonPath,    profilesPath .. currentName .. "/ms_settings.json")
             local hadDefaults = hs.fs.attributes(defaultPath) and moveFile(defaultPath, profilesPath .. currentName .. "/ms_settings_default.json")
             local hadTheme    = hs.fs.attributes(themePath)   and moveFile(themePath,   profilesPath .. currentName .. "/ms_theme.json")
+            -- Archive current profile's sounds
+            local curSoundsDir = profilesPath .. currentName .. "/sounds/"
+            moveDirContents(SoundActiveDir, curSoundsDir .. "active/")
+            moveDirContents(SoundMacroDir,  curSoundsDir .. "macro/")
 
             ok, err = moveFile(profilesPath .. targetName .. "/ms_macros.lua", macrosPath)
             if not ok then
@@ -1078,6 +1096,8 @@
                 if hadSettings then moveFile(profilesPath .. currentName .. "/ms_settings.json",         jsonPath)    end
                 if hadDefaults then moveFile(profilesPath .. currentName .. "/ms_settings_default.json", defaultPath) end
                 if hadTheme    then moveFile(profilesPath .. currentName .. "/ms_theme.json",            themePath)   end
+                moveDirContents(profilesPath .. currentName .. "/sounds/active/", SoundActiveDir)
+                moveDirContents(profilesPath .. currentName .. "/sounds/macro/",  SoundMacroDir)
                 ms.alert("Profile switch failed: could not activate \"" .. targetName .. "\".\n" .. tostring(err), 5)
                 return
             end
@@ -1090,6 +1110,10 @@
             if hs.fs.attributes(profilesPath .. targetName .. "/ms_theme.json") then
                 moveFile(profilesPath .. targetName .. "/ms_theme.json", themePath)
             end
+            -- Restore target profile's sounds
+            local tgtSoundsDir = profilesPath .. targetName .. "/sounds/"
+            moveDirContents(tgtSoundsDir .. "active/", SoundActiveDir)
+            moveDirContents(tgtSoundsDir .. "macro/",  SoundMacroDir)
 
             ms.alert("Switched to \"" .. targetName .. "\".\nReloading in 3 seconds...", 4)
             ms.dev.log({
@@ -4073,7 +4097,7 @@
                                 if num and num >= 0.1 and num <= 4 then
                                     CUR_CAM_SENS = num
                                     ms.saveSettings()
-                                    ms.cam.updateMultiplier()
+                                    -- ms.legacycam.updateMultiplier()
                                     ms.playSlot("update")
                                     ms.alert("Sensitivity set to " .. tostring(num), 2, true)
                                     ms.ui.refresh()
@@ -4087,7 +4111,7 @@
                         local default = (ms.macroDefaults and ms.macroDefaults.sensitivity) or 1.5
                         CUR_CAM_SENS = default
                         ms.saveSettings()
-                        ms.cam.updateMultiplier()
+                        -- ms.legacycam.updateMultiplier()
                         ms.playSlot("reset")
                         ms.alert("Sensitivity reset to " .. tostring(default), 2, true)
                     end },

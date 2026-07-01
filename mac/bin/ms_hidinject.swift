@@ -173,31 +173,25 @@ func executeCommand(_ args: [String]) -> String? {
         drag.post(tap: tap)
 
     case "dragreln":
-        // dragreln <count> <delayUs> <dx> <dy> <anchorX> <anchorY> [left|right|middle]
-        // Fires <count> dragrel events with <delayUs> microseconds between each.
+        // dragreln <count> <delayUs> <dx> <dy> <anchorX> <anchorY>
         guard args.count >= 7,
               let count = Int(args[1]), let delayUs = Int(args[2]),
               let dx = Double(args[3]), let dy = Double(args[4]),
               let anchorX = Double(args[5]), let anchorY = Double(args[6]) else {
-            return "Usage: dragreln <count> <delayUs> <dx> <dy> <anchorX> <anchorY> [button]"
+            return "Usage: dragreln <count> <delayUs> <dx> <dy> <anchorX> <anchorY>"
         }
-        let dnBtn = args.count >= 8 ? mouseButtonFor(args[7]) : .center
         let dnAnchor = CGPoint(x: anchorX, y: anchorY)
-        let dnDragType: CGEventType = {
-            switch dnBtn {
-            case .right:  return .rightMouseDragged
-            case .center: return .otherMouseDragged
-            default:      return .leftMouseDragged
-            }
-        }()
         let dnFieldX = CGEventField(rawValue: 4)!
         let dnFieldY = CGEventField(rawValue: 5)!
+        let dnFieldBtn = CGEventField(rawValue: 3)!
         for _ in 0..<count {
-            let dnDrag = CGEvent(mouseEventSource: src, mouseType: dnDragType,
-                                 mouseCursorPosition: dnAnchor, mouseButton: dnBtn)!
-            dnDrag.setIntegerValueField(dnFieldX, value: Int64(dx))
-            dnDrag.setIntegerValueField(dnFieldY, value: Int64(dy))
-            dnDrag.post(tap: tap)
+            if let dnDrag = CGEvent(mouseEventSource: src, mouseType: .otherMouseDragged,
+                                     mouseCursorPosition: dnAnchor, mouseButton: .center) {
+                dnDrag.setIntegerValueField(dnFieldBtn, value: 5)
+                dnDrag.setIntegerValueField(dnFieldX, value: Int64(dx))
+                dnDrag.setIntegerValueField(dnFieldY, value: Int64(dy))
+                dnDrag.post(tap: tap)
+            }
             if delayUs > 0 {
                 usleep(UInt32(delayUs))
             }
@@ -231,7 +225,6 @@ if mode == "daemon" {
         if trimmed.isEmpty { continue }
 
         if trimmed == "batch" {
-            // Collect lines until "end", execute all, respond once
             var batch: [[String]] = []
             while let bline = readLine() {
                 let btrim = bline.trimmingCharacters(in: .whitespaces)
@@ -242,16 +235,9 @@ if mode == "daemon" {
             for parts in batch {
                 _ = executeCommand(parts)
             }
-            fputs("ok\n", stdout)
-            fflush(stdout)
         } else {
             let parts = trimmed.split(separator: " ").map(String.init)
-            if let err = executeCommand(parts) {
-                fputs("err: \(err)\n", stdout)
-            } else {
-                fputs("ok\n", stdout)
-            }
-            fflush(stdout)
+            let _ = executeCommand(parts)
         }
     }
     exit(0)

@@ -63,6 +63,7 @@ extern "C" {
         keyDown: bool,
     ) -> CGEventRef;
     fn CGEventPost(tap: CGEventTapLocation, event: CGEventRef);
+    fn CGEventPostToPid(pid: c_int, event: CGEventRef);
     fn CGEventSetIntegerValueField(event: CGEventRef, field: CGEventField, value: i64);
     fn CGEventGetLocation(event: CGEventRef) -> CGPoint;
     fn CGEventSetFlags(event: CGEventRef, flags: CGEventFlags);
@@ -145,6 +146,19 @@ fn release_event(ev: CGEventRef) {
     }
 }
 
+// Global target PID — when set, events go to this process via CGEventPostToPid
+static mut TARGET_PID: c_int = 0;
+
+fn post_event(ev: CGEventRef) {
+    unsafe {
+        if TARGET_PID > 0 {
+            CGEventPostToPid(TARGET_PID, ev);
+        } else {
+            post_event(ev);
+        }
+    }
+}
+
 // ── Command executor ─────────────────────────────────────────────────
 fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
     if args.is_empty() { return Err("empty command".into()); }
@@ -160,9 +174,9 @@ fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
                 let up = CGEventCreateKeyboardEvent(src, keycode, false);
                 CGEventSetFlags(down, flags);
                 CGEventSetFlags(up, flags);
-                CGEventPost(K_CG_HID_EVENT_TAP, down);
+                post_event(down);
                 std::thread::sleep(std::time::Duration::from_millis(50));
-                CGEventPost(K_CG_HID_EVENT_TAP, up);
+                post_event(up);
                 release_event(down);
                 release_event(up);
             }
@@ -172,7 +186,7 @@ fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
             let y: c_double = args.get(2).ok_or("Usage: mouse <x> <y>")?.parse().map_err(|_| "bad y")?;
             unsafe {
                 let ev = CGEventCreateMouseEvent(src, K_CG_EVENT_MOUSE_MOVED, CGPoint { x, y }, K_CG_MOUSE_BUTTON_LEFT);
-                CGEventPost(K_CG_HID_EVENT_TAP, ev);
+                post_event(ev);
                 release_event(ev);
             }
         }
@@ -183,7 +197,7 @@ fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
             let pos = CGPoint { x: cur.x + dx, y: cur.y + dy };
             unsafe {
                 let ev = CGEventCreateMouseEvent(src, K_CG_EVENT_MOUSE_MOVED, pos, K_CG_MOUSE_BUTTON_LEFT);
-                CGEventPost(K_CG_HID_EVENT_TAP, ev);
+                post_event(ev);
                 release_event(ev);
             }
         }
@@ -195,15 +209,15 @@ fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
             let pos = CGPoint { x, y };
             unsafe {
                 let mv = CGEventCreateMouseEvent(src, K_CG_EVENT_MOUSE_MOVED, pos, K_CG_MOUSE_BUTTON_LEFT);
-                CGEventPost(K_CG_HID_EVENT_TAP, mv);
+                post_event(mv);
                 release_event(mv);
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 let down = CGEventCreateMouseEvent(src, down_t, pos, btn);
-                CGEventPost(K_CG_HID_EVENT_TAP, down);
+                post_event(down);
                 release_event(down);
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 let up = CGEventCreateMouseEvent(src, up_t, pos, btn);
-                CGEventPost(K_CG_HID_EVENT_TAP, up);
+                post_event(up);
                 release_event(up);
             }
         }
@@ -215,11 +229,11 @@ fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
             let pos = CGPoint { x, y };
             unsafe {
                 let mv = CGEventCreateMouseEvent(src, K_CG_EVENT_MOUSE_MOVED, pos, K_CG_MOUSE_BUTTON_LEFT);
-                CGEventPost(K_CG_HID_EVENT_TAP, mv);
+                post_event(mv);
                 release_event(mv);
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 let down = CGEventCreateMouseEvent(src, down_t, pos, btn);
-                CGEventPost(K_CG_HID_EVENT_TAP, down);
+                post_event(down);
                 release_event(down);
             }
         }
@@ -231,7 +245,7 @@ fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
             let pos = CGPoint { x, y };
             unsafe {
                 let up = CGEventCreateMouseEvent(src, up_t, pos, btn);
-                CGEventPost(K_CG_HID_EVENT_TAP, up);
+                post_event(up);
                 release_event(up);
             }
         }
@@ -252,7 +266,7 @@ fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
                 let ev = CGEventCreateMouseEvent(src, drag_t, anchor, btn);
                 CGEventSetIntegerValueField(ev, FIELD_DELTA_X, dx as i64);
                 CGEventSetIntegerValueField(ev, FIELD_DELTA_Y, dy as i64);
-                CGEventPost(K_CG_HID_EVENT_TAP, ev);
+                post_event(ev);
                 release_event(ev);
             }
         }
@@ -282,13 +296,21 @@ fn execute_command(src: CGEventSourceRef, args: &[&str]) -> Result<(), String> {
                     let ev = CGEventCreateMouseEvent(src, drag_t, anchor, btn);
                     CGEventSetIntegerValueField(ev, FIELD_DELTA_X, dx as i64);
                     CGEventSetIntegerValueField(ev, FIELD_DELTA_Y, dy as i64);
-                    CGEventPost(K_CG_HID_EVENT_TAP, ev);
+                    post_event(ev);
                     release_event(ev);
                 }
                 if delay_us > 0 {
                     std::thread::sleep(delay);
                 }
             }
+        }
+        "setpid" => {
+            // setpid <pid> — set target process for event delivery
+            let pid: c_int = args.get(1)
+                .ok_or("Usage: setpid <pid>")?
+                .parse()
+                .map_err(|_| "bad pid")?;
+            unsafe { TARGET_PID = pid; }
         }
         other => return Err(format!("Unknown command: {}", other)),
     }
@@ -310,6 +332,12 @@ fn main() {
     }
 
     if args[1] == "daemon" {
+        // Optional: hidinject daemon [pid]
+        if args.len() >= 3 {
+            if let Ok(pid) = args[2].parse::<c_int>() {
+                unsafe { TARGET_PID = pid; }
+            }
+        }
         // ── Daemon mode ──────────────────────────────────────────────
         let stdout = io::stdout();
         let mut out = stdout.lock();
@@ -338,12 +366,12 @@ fn main() {
                     let parts: Vec<&str> = btrim.split_whitespace().collect();
                     let _ = execute_command(src, &parts);
                 }
-                let _ = writeln!(out, "ok");
+                
                 let _ = out.flush();
             } else {
                 let parts: Vec<&str> = trimmed.split_whitespace().collect();
                 match execute_command(src, &parts) {
-                    Ok(()) => { let _ = writeln!(out, "ok"); }
+                    Ok(()) => {  }
                     Err(e) => { let _ = writeln!(out, "err: {}", e); }
                 }
                 let _ = out.flush();

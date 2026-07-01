@@ -180,7 +180,8 @@
         local SpawnAltSound      = SoundMacroDir .. "SpawnAlt.wav"
         local ThrowTrickEndSound = SoundMacroDir .. "ThrowTrickEnd.wav"
         local ActionSpammerSound = SoundMacroDir .. "TimeSlower.wav"
-
+        local CheckTimer = nil
+        local CheckRunning = 0
 
         local getD1 = function()
             local d1  = 40
@@ -211,79 +212,167 @@
             end
             return d3
         end
+
+        local JumpHigh = function()
+            if ms.isSub("jumpHigh") then
+                ms.sound(JumpHighSound, true)
+                for i = 1, 60 do
+                    ms.cam(-3145, 0)
+                    ms.wait(1)
+                    ms.cam(-3145, 0)
+                    ms.wait(.5)
+                end
+                return true
+            end
+            return false
+        end
+
+        local JumpLow = function()
+            if ms.isSub("jumpLow") then
+                ms.sound(JumpLowSound, true)
+                for i = 1, 14 do
+                    ms.cam(-370 * 0.6, 0)
+                    ms.wait(1)
+                    ms.cam(-370 * 0.6, 0)
+                    ms.wait(.5)
+                end
+                return true
+            end
+            return false
+        end
+
+        local _movementTimer = nil
+
+        local MovementChecker = function()
+            if CheckRunning == 0 then
+                CheckRunning = 1
+                local function check()
+                    if CheckRunning == 0 then return end
+                    local moving = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
+                    if not moving then
+                        ms.press("w")
+                    end
+                    _movementTimer = ms.after(5, check)
+                end
+                check()
+            end
+        end
+
+        local EndMovementChecker = function()
+            CheckRunning = 0
+            if _movementTimer then
+                _movementTimer:stop()
+                _movementTimer = nil
+            end
+            local moving = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
+            if not moving then
+                ms.release("w")
+            end
+        end
+
+        local JumpDefault = function()
+            ms.sound(JumpNormalSound, true)
+            for i = 1, 14 do
+                ms.cam(-185 * 0.6, 0)
+                ms.wait(1)
+                ms.cam(-185 * 0.6, 0)
+                ms.wait(.5)
+            end
+        end
+
+        local ThrowLow = function()
+            if ms.isSub("throwLow") then
+                for i = 1, 15 do
+                    ms.cam(-400 * 0.6, 0)
+                    ms.wait(1)
+                    ms.cam(-400 * 0.6, 0)
+                    ms.wait(1)
+                end
+                for i2 = 1, 30 do
+                    ms.cam(8, 0)
+                    ms.wait(1)
+                    ms.cam(8, 0)
+                    ms.wait(.5)
+                end
+                for i2 = 1, 180 do
+                    ms.release("x")
+                    ms.cam(8, 0)
+                    ms.wait(1)
+                    ms.cam(8, 0)
+                    ms.wait(1)
+                end
+                ms.wait(5)
+                ms.release("space")
+                EndMovementChecker()
+                ms.wait(20)
+                ms.scroll("down", 2000)
+                ms.sound(ThrowTrickEndSound, true)
+                ms.wait(3000)
+                EndMovementChecker()
+                return true
+            end
+            return false
+        end
+
+        local ThrowDefault = function()
+            for i = 1, 60 do
+                ms.cam(-3145, 0)
+                ms.wait(2)
+                ms.cam(-3145, 0)
+                ms.wait(2)
+            end
+            for i2 = 1, 150 do
+                ms.cam(8, 0)
+                ms.wait(1)
+                ms.cam(8, 0)
+                ms.wait(.5)
+            end
+            for i2 = 1, 150 do
+                ms.release("x")
+                ms.cam(10, 0)
+                ms.wait(1)
+                ms.cam(9, 0)
+                ms.wait(1)
+            end
+            ms.wait(5)
+            ms.release("space")
+            EndMovementChecker()
+            ms.wait(20)
+            ms.scroll("down", 2000)
+            ms.sound(ThrowTrickEndSound, true)
+            ms.wait(3000)
+            EndMovementChecker()
+        end
+
     -- END Helper Variables & Functions --
 
     -- Macro Functions --
         -- High Leap Assist --
             local HighLeapAssistFunction = ms.fn(function()
-                local MovingCheck = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
-                if not MovingCheck then
-                    ms.press("w")
-                    ms.wait(10)
-                end
+                MovementChecker()
+                ms.cam.reset()
                 for i = 1, 5 do
-                    ms.type("e")
+                    ms.type("e", nil, nil, 7)
                     ms.wait(1)
                 end
                 ms.wait(30)
                 for i = 1, 2 do
-                    ms.type("space")
+                    ms.type("space", nil, nil, 10)
                 end
                 ms.wait(10)
-                    local JumpHigh = function()
-                        if ms.isSub("jumpHigh") then
-                            ms.sound(JumpHighSound, true)
-                            for i = 1, 60 do
-                                ms.cam.move(0, -3145)
-                                ms.wait(1)
-                                ms.cam.move(0, -3145)
-                                ms.wait(.5)
-                            end
-                            ms.wait(50)
-                            ms.cam.move(0, 262)
-                            return true
-                        end
-                        return false
-                    end
 
-                    local JumpLow = function()
-                        if ms.isSub("jumpLow") then
-                            ms.sound(JumpLowSound, true)
-                            for i = 1, 14 do
-                                ms.cam.move(0, -370)
-                                ms.wait(1)
-                                ms.cam.move(0, -370)
-                                ms.wait(.5)
-                            end
-                            ms.wait(50)
-                            ms.cam.move(0, 308)
-                            return true
-                        end
-                        return false
+                if not JumpHigh() then
+                    if not JumpLow() then
+                        JumpDefault()
                     end
+                end
+                ms.cam.rebalance()
 
-                    local JumpDefault = function()
-                        ms.sound(JumpNormalSound, true)
-                        for i = 1, 14 do
-                            ms.cam.move(0, -185)
-                            ms.wait(1)
-                            ms.cam.move(0, -185)
-                            ms.wait(.5)
-                        end
-                        ms.wait(50)
-                        ms.cam.move(0, -69)
-                    end
-
-                    if not JumpHigh() then
-                        if not JumpLow() then
-                            JumpDefault()
-                        end
-                    end
-                    ms.release("space")
-                    ms.wait(100)
-                    if not MovingCheck then ms.release("w") end
-                    ms.wait(20)
-                    ms.wait(600)
+                ms.release("space")
+                ms.wait(100)
+                EndMovementChecker()
+                ms.wait(3000)
+                EndMovementChecker()
             end)
 
             ms.bind.define("superJump", function()
@@ -313,106 +402,21 @@
             })
         -- END High Leap Assist --
 
-        -- HidInject Super Jump (test) --
-            local HidJumpFunction = ms.fn(function()
-                local MovingCheck = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
-                if not MovingCheck then
-                    ms.press("w")
-                    ms.wait(10)
-                end
-                for i = 1, 5 do
-                    ms.type("e")
-                    ms.wait(1)
-                end
-                ms.wait(30)
-                for i = 1, 2 do
-                    ms.type("space")
-                end
-                ms.wait(10)
-                    local JumpHigh = function()
-                        if ms.isSub("hidJumpHigh") then
-                            ms.sound(JumpHighSound, true)
-                            ms.HidMouse(-3145, 0, 120, 750)
-                            ms.wait(50)
-                            ms.HidMouse(262, 0)
-                            return true
-                        end
-                        return false
-                    end
-
-                    local JumpLow = function()
-                        if ms.isSub("hidJumpLow") then
-                            ms.sound(JumpLowSound, true)
-                            ms.HidMouse(-370, 0, 28, 750)
-                            ms.wait(50)
-                            ms.HidMouse(308, 0)
-                            return true
-                        end
-                        return false
-                    end
-
-                    local JumpDefault = function()
-                        ms.sound(JumpNormalSound, true)
-                        ms.HidMouse(-185, 0, 28, 750)
-                        ms.wait(50)
-                        ms.HidMouse(-69, 0)
-                    end
-
-                    if not JumpHigh() then
-                        if not JumpLow() then
-                            JumpDefault()
-                        end
-                    end
-                    ms.release("space")
-                    ms.wait(100)
-                    if not MovingCheck then ms.release("w") end
-                    ms.wait(20)
-                    ms.wait(600)
-            end)
-
-            ms.bind.define("hidSuperJump", function()
-                HidJumpFunction()
-            end, {
-                group    = "optional",
-                label    = "Hid Super Jump (test)",
-                default  = {
-                    type   = "mouse",
-                    button = 3,
-                },
-            })
-
-            ms.bind.define("hidJumpHigh", HidJumpFunction, {
-                sub   = "hidSuperJump",
-                label = "Hid Jump High",
-                mod   = "v",
-            })
-
-            ms.bind.define("hidJumpLow",  HidJumpFunction, {
-                sub   = "hidSuperJump",
-                label = "Hid Jump Low",
-                mod   = "x",
-            })
-        -- END HidInject Super Jump --
-
         -- Throw Trick --
             local ThrowTrickFunction = ms.fn(function()
                 ms.sound(ThrowTrickSound, true)
                 ms.press("x")
                 for i = 1, 5 do
-                    ms.cam.move(-60, 0)
+                    ms.cam(0, -60)
                     ms.wait(1)
                 end
                 ms.wait(50)
                 for i = 1, 4 do
-                    ms.cam.move(16, 0)
+                    ms.cam(0, 16)
                     ms.wait(1)
                 end
                 ms.scroll("up", 2000)
-                local MovingCheck = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
-                if not MovingCheck then
-                    ms.press("w")
-                    ms.wait(10)
-                end
+                MovementChecker()
                 for i = 1, 5 do
                     ms.type("e")
                     ms.wait(1)
@@ -422,70 +426,7 @@
                     ms.type("space")
                 end
                 ms.wait(50)
-                local ThrowLow = function()
-                    if ms.isSub("throwLow") then
-                        for i = 1, 15 do
-                            ms.cam.move(0, -400)
-                            ms.wait(1)
-                            ms.cam.move(0, -400)
-                            ms.wait(1)
-                        end
-                        for i2 = 1, 30 do
-                            ms.cam.move(0, 8)
-                            ms.wait(1)
-                            ms.cam.move(0, 8)
-                            ms.wait(.5)
-                        end
-                        for i2 = 1, 180 do
-                            ms.release("x")
-                            ms.cam.move(0, 8)
-                            ms.wait(1)
-                            ms.cam.move(0, 8)
-                            ms.wait(1)
-                        end
-                        ms.wait(5)
-                        ms.release("space")
-                        ms.wait(100)
-                        if not MovingCheck then ms.release("w") end
-                        ms.wait(20)
-                        if not ms.keystate("shift") then ms.release("shift") end
-                        ms.scroll("down", 2000)
-                        ms.sound(ThrowTrickEndSound, true)
-                        ms.wait(3000)
 
-                        return true
-                    end
-                    return false
-                end
-                local ThrowDefault = function()
-                    for i = 1, 60 do
-                        ms.cam.move(0, -3145)
-                        ms.wait(2)
-                        ms.cam.move(0, -3145)
-                        ms.wait(2)
-                    end
-                    for i2 = 1, 150 do
-                        ms.cam.move(0, 8)
-                        ms.wait(1)
-                        ms.cam.move(0, 8)
-                        ms.wait(.5)
-                    end
-                    for i2 = 1, 150 do
-                        ms.release("x")
-                        ms.cam.move(0, 10)
-                        ms.wait(1)
-                        ms.cam.move(0, 9)
-                        ms.wait(1)
-                    end
-                    ms.wait(5)
-                    ms.release("space")
-                    ms.wait(20)
-                    if not MovingCheck then ms.release("w") end
-                    ms.wait(20)
-                    ms.scroll("down", 2000)
-                    ms.sound(ThrowTrickEndSound, true)
-                    ms.wait(3000)
-                end
                 if not ThrowLow() then ThrowDefault() end
             end)
 
@@ -557,95 +498,6 @@
                 },
             })
         -- END Quick Reset --
-
-        -- Quick Slide --
-            local QuickSlideFunction = ms.fn(function()
-                ms.Mouse(Release, Right, Mouse, 0, 0)
-                ms.type("z")
-                ms.wait(8)
-                ms.press("w")
-                ms.wait(8)
-                ms.release("w")
-                ms.wait(12)
-                ms.Mouse(Click, Left, WindowTL,
-                    ms.settings.get("qsClickX"),
-                    ms.settings.get("qsClickY"))
-                ms.sound(QuickSlideSound, true)
-                ms.wait(200)
-            end)
-
-            ms.bind.define("quickSG", QuickSlideFunction, {
-                group   = "optional",
-                label   = "Quick Slide",
-                default = {
-                    type = "key",
-                    mods = {"alt"},
-                    key  = "z",
-                },
-            })
-        -- END Quick Slide --
-
-        -- Slide Setup --
-            local SlideSetupFunction = ms.fn(function()
-                ms.sound(SlideSetupSound, true)
-                local d1 = getD1()
-                local d2 = getD2()
-                ms.press("shift")
-                ms.press("w")
-                ms.press("space")
-                ms.wait(15)
-                for i = 1, 5 do
-                    ms.type("e")
-                    ms.wait(3)
-                end
-                ms.wait(15)
-                for i = 2, 15 do
-                    ms.cam.move(1, -245)
-                    ms.wait(1)
-                    ms.cam.move(-1, -245)
-                    ms.wait(1)
-                end
-                ms.wait(30)
-                ms.release("w")
-                ms.release("shift")
-                ms.release("space")
-                ms.wait(5)
-                ms.press("c")
-                ms.Mouse(Move, Left, WindowCenter, 0, 50)
-                ms.type("z")
-                ms.wait(200)
-                local sgMX = ms.settings.get("sgMenuX")
-                local sgMY = ms.settings.get("sgMenuY")
-                local sgIX = ms.settings.get("sgItemX")
-                for i = 1, 2 do
-                    ms.Mouse(Click, Left, WindowTL, sgMX, sgMY)
-                    ms.wait(10)
-                end
-                ms.wait(20)
-                for i = 1, 3 do
-                    ms.Mouse(Click, Left, WindowTL, sgIX, d1)
-                    ms.wait(30)
-                    ms.release("c")
-                end
-                for i = 1, 15 do
-                    ms.Mouse(Click, Left, WindowTL, sgIX, d2)
-                    ms.wait(30)
-                end
-                ms.wait(400)
-                ms.type("z")
-                ms.wait(2000)
-            end)
-
-            ms.bind.define("sgSetup", SlideSetupFunction, {
-                group   = "optional",
-                label   = "Slide Setup",
-                default = {
-                    type = "key",
-                    mods = {"alt"},
-                    key  = "\\",
-                },
-            })
-        -- END Slide Setup --
 
         -- Action Spammer --
             local ActionSpammerFunction = ms.fn(function()

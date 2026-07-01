@@ -455,9 +455,14 @@
                     ms.alert("Reload failed:\n" .. tostring(loadErr), 6)
                     return
                 end
-                local ok, runErr = pcall(chunk)
+                local ok, runErr = xpcall(chunk, debug.traceback)
                 if not ok then
-                    ms.alert("Reload failed:\n" .. tostring(runErr), 6)
+                    local tb = tostring(runErr)
+                    print("═══ ms_macros.lua reload error ═══\n" .. tb)
+                    if ms.dev and ms.dev.log then
+                        ms.dev.log({ type = "error", event = "reload_error", msg = tb })
+                    end
+                    ms.alert("Reload failed — see console", 6)
                     return
                 end
                 if not next(ms.registry._defs) then
@@ -482,8 +487,8 @@
                 ms.loadSettings()
                 if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
                 ms.bind.rebind()
-                ms.cam.updateAnchor()
-                ms.cam.updateMultiplier()
+                -- ms.legacycam.updateAnchor()
+                -- ms.legacycam.updateMultiplier()
                 ms.socdApply()
                 if not ms._quickReloading then
                     ms.playSlot("update")
@@ -510,8 +515,8 @@
             reloadSettings = function()
                 ms.loadSettings()
                 ms.bind.rebind()
-                ms.cam.updateAnchor()
-                ms.cam.updateMultiplier()
+                -- ms.legacycam.updateAnchor()
+                -- ms.legacycam.updateMultiplier()
                 ms.socdApply()
                 ms.playSlot("update")
                 ms.alert("Settings reloaded.", 4, true)
@@ -615,7 +620,7 @@
                 if num and num >= 0.1 and num <= 4 then
                     CUR_CAM_SENS = num
                     ms.saveSettings()
-                    ms.cam.updateMultiplier()
+                    -- ms.legacycam.updateMultiplier()
                     ms.playSlot("update")
                 end
                 ms.ui.refresh()
@@ -1274,7 +1279,7 @@
                 local def = ms.macroDefaults or {}
                 if key == "sensitivity" then
                     CUR_CAM_SENS = tonumber(def.sensitivity) or 1.5
-                    ms.saveSettings(); ms.cam.updateMultiplier()
+                    ms.saveSettings(); -- ms.legacycam.updateMultiplier()
                 elseif key == "trackpadMode" then
                     ms.trackpadMode = (def.trackpadMode == true)
                     ms.saveSettings(); ms.bind.rebind()

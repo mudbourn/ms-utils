@@ -179,10 +179,10 @@
                 end
 
                 if spoon.MsCamera then
-                    ms.cam = spoon.MsCamera
-                    ms.cam._setupWatcher()
+                    ms.legacycam = spoon.MsCamera
+                    -- ms.legacycam._setupWatcher()  -- opt-in: call manually if needed
                 else
-                    ms.cam = {
+                    ms.legacycam = {
                         anchor     = nil,
                         button     = 5,
                         cachedMult = 1.0,
@@ -197,6 +197,9 @@
 
                     print("MsCamera: running without camera engine (spoon not loaded)")
                 end
+
+                -- ms.legacycam available as fallback
+                -- ms.cam is the primary camera engine
             -- END MsCamera (camera engine) --
 
             -- MsSettings (settings menu & profiles) --
@@ -668,7 +671,7 @@
                     ev:post()
                 end
 
-                ms.type = function(key, mods, hidinject)
+                ms.type = function(key, mods, hidinject, holdMs)
                     if ms.dev then spoon.MsDevTools:flushAll() end
                     if ms.dev._watcherPanel then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
@@ -681,7 +684,7 @@
                     local _saved = spoon.MsDevTools:getTraceSuppress()
                     spoon.MsDevTools:setTraceSuppress(true)
                     ms.press(key, mods, hidinject)
-                    ms.wait(15)
+                    ms.wait(holdMs or 15)
                     ms.release(key, mods, hidinject)
                     spoon.MsDevTools:setTraceSuppress(_saved)  -- restore rather than reset; safe across cancellation
                 end
@@ -918,72 +921,57 @@
                 end
             end
 
-            -- [HidMouse — raw relative input via hidinject binary] --
-            -- macOS DllCall equivalent for camera control.
-            -- Sends raw CGEvents through cghidEventTap — same layer
-            -- AHK targets with SendInput.  No Hammerspoon eventtap.
+            -- ms.cam — camera drag via CGEvent --
             --
-            -- ms.HidMouse("DragRel", "Center", dx, dy)  — drag w/ button held
-            -- ms.HidMouse("MoveRel", dx, dy)             — cursor move
-            ms._hidDaemon = nil  -- persistent hidinject process
-            ms._hidReady  = false
 
-            local HIDINJECT_BIN = os.getenv("HOME") .. "/Documents/GitHub/ms-utils/mac/bin/hidinject-rs/target/release/hidinject"
+            local _camEvType  = hs.eventtap.event.types.otherMouseDragged
+            local _camBtn     = hs.eventtap.event.properties.mouseEventButtonNumber
+            local _camDx      = hs.eventtap.event.properties.mouseEventDeltaX
+            local _camDy      = hs.eventtap.event.properties.mouseEventDeltaY
+            local _camTotalX  = 0
+            local _camTotalY  = 0
+            local _camRebalancing = false
 
-            local function _hidStart()
-                if ms._hidDaemon then return end
-                ms._hidDaemon = hs.task.new(HIDINJECT_BIN, function() end, function(_, stream, data)
-                    if stream == "stdout" and data then
-                        for line in data:gmatch("[^\n]+") do
-                            if line == "ready" then ms._hidReady = true end
-                        end
+            ms.cam = setmetatable({}, {
+                __call = function(_, dx, dy)
+                    dx = math.floor(dx + 0.5)
+                    dy = math.floor(dy + 0.5)
+                    local pos = hs.mouse.absolutePosition()
+                    local ev  = hs.eventtap.event.newMouseEvent(_camEvType, pos)
+                    ev:setProperty(_camBtn, 5)
+                    ev:setProperty(_camDx, dx)
+                    ev:setProperty(_camDy, dy)
+                    ev:post()
+                    if not _camRebalancing then
+                        _camTotalX = _camTotalX + dx
+                        _camTotalY = _camTotalY + dy
                     end
-                    return false  -- keep stdin open
-                end, {"daemon"})
-                ms._hidDaemon:start()
+                end,
+            })
+
+            ms.cam.rebalance = function()
+                if _camTotalX == 0 and _camTotalY == 0 then return end
+                _camRebalancing = true
+                ms.cam(-_camTotalX, -_camTotalY)
+                _camTotalX = 0
+                _camTotalY = 0
+                _camRebalancing = false
             end
 
-            local function _hidSend(cmd)
-                _hidStart()
-                if not ms._hidReady then
-                    -- daemon not ready yet, fall back to one-shot
-                    hs.execute(os.getenv("HOME") .. "/.local/bin/hidinject " .. cmd)
-                    return
-                end
-                local t = ms._hidDaemon
-                if t then
-                    t:setCallback(function(_, stream, data) return false end)
-                    t:write(cmd .. "\n")
-                end
+            ms.cam.reset = function()
+                _camTotalX = 0
+                _camTotalY = 0
             end
 
-            ms.HidMouse = function(dx, dy, count, delayUs, btn)
-                dx       = math.floor(tonumber(dx) or 0)
-                dy       = math.floor(tonumber(dy) or 0)
-                count    = math.floor(tonumber(count) or 1)
-                delayUs  = math.floor(tonumber(delayUs) or 750)
-                btn      = btn or "Center"
-                local BTNS = { Left="left", Right="right", Center="middle",
-                               Button4="other", Button5="other" }
-                assert(BTNS[btn], "ms.HidMouse: unknown button '" .. tostring(btn) .. "'")
-                if ms.dev then spoon.MsDevTools:flushAll() end
-                if ms.dev._watcherPanel then
-                    spoon.MsDevTools:watcherStep(string.format("HidMouse %d,%d ×%d", dx, dy, count))
-                end
-                if ms.dev then
-                    spoon.MsDevTools:macroLog(string.format("HidMouse %d,%d ×%d", dx, dy, count))
-                end
-                local pos = hs.mouse.absolutePosition()
-                _hidSend(string.format("dragreln %d %d %d %d %d %d %s",
-                    count, delayUs, dx, dy,
-                    math.floor(pos.x), math.floor(pos.y),
-                    BTNS[btn]))
-            end
-            -- END HidMouse --
+            -- END ms.cam --
 
         -- END 4. Mouse Actions --
 
         -- 5. Timing --
+            ms.after = function(ms_time, fn)
+                return hs.timer.doAfter(ms_time / 1000, fn)
+            end
+
             ms.wait = function(ms_time)
                 local co = coroutine.running()
                 if co then
@@ -1137,7 +1125,7 @@
                 if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                 if state == 1 and BindValidity ~= 1 then
                     BindValidity = 1
-                    pcall(function() ms.cam.enable() end)
+                    pcall(function() end)  -- ms.legacycam.enable() opt-in
                     ms.dev.log({ type = "system", event = "macros_enabled" })
                     if not silent then _doNotify(1) end
                 elseif state == 0 and BindValidity ~= 0 then
@@ -1148,7 +1136,7 @@
                         if timer and timer.stop then timer:stop() end
                     end
                     ms.running = {}
-                    pcall(function() ms.cam.disable() end)
+                    pcall(function() end)  -- ms.legacycam.disable() opt-in
                     ms.dev.log({ type = "system", event = "macros_disabled" })
                     if not silent then _doNotify(0) end
                 end
@@ -1162,11 +1150,11 @@
                         ms._inputOpen = false
                         ms._robloxActive = true
                         ms.dev.log({ type = "system", event = "roblox_focus", fromDialog = fromDialog or false })
-                        ms.cam._setupWatcher()
+                        -- ms.legacycam._setupWatcher()  -- opt-in
                         if not ms._loadComplete then return end
                         if fromDialog then
                             BindValidity = 1
-                            pcall(function() ms.cam.enable() end)
+                            -- pcall(function() ms.legacycam.enable() end)  -- opt-in
                         else
                             ms.setMacros(1)
                         end
@@ -1180,7 +1168,7 @@
                         end
                     end
                 elseif ms._targetApp and eventType == hs.application.watcher.launched and appName == ms._targetApp then
-                    ms.cam._setupWatcher()
+                    -- ms.legacycam._setupWatcher()
                 end
             end):start()
             _G.__ms_appWatcher = ms._appWatcher  -- survives reload (lives outside the ms table) so next load's stop-guard can find this generation
@@ -1189,8 +1177,8 @@
                 local frontApp = hs.application.frontmostApplication()
                 if ms._targetApp and frontApp and frontApp:name() == ms._targetApp then
                     ms._robloxActive = true
-                    ms.cam._setupWatcher()
-                    ms.cam.enable()
+                    -- ms.legacycam._setupWatcher()
+                    -- ms.legacycam.enable()
                 end
             end)
 
@@ -1223,7 +1211,6 @@
                 if async == false then return fn end
 
                 return function(...)
-                    local co  = coroutine.create(fn)
                     local ctx = {
                         cancelled = false,
                         paused    = false,
@@ -1232,6 +1219,18 @@
                     local label = ms._pendingLabel or "macro"
                     ms._pendingLabel = nil
 
+                    local coBody = function(...)
+                        local xok, xerr = xpcall(fn, debug.traceback, ...)
+                        if not xok then
+                            local tb = tostring(xerr)
+                            print("═══ ms.fn error [" .. label .. "] ═══\n" .. tb)
+                            if ms.dev and ms.dev.log then
+                                ms.dev.log({ type = "error", event = "macro_error", macro = label, msg = tb })
+                            end
+                            ms.alert("Macro error [" .. label .. "] — see console", 6)
+                        end
+                    end
+                    local co = coroutine.create(coBody)
                     ms._coroContext[co]    = ctx
                     ms._activeContexts[ctx] = true
 
@@ -1239,8 +1238,7 @@
 
                     local ok, err = coroutine.resume(co, ...)
                     if not ok then
-                        print("ms.fn error: " .. tostring(err))
-                        ms.alert("Macro error — check Hammerspoon console.", 4)
+                        print("═══ ms.fn resume error [" .. label .. "] ═══\n" .. tostring(err))
                     end
 
                     if coroutine.status(co) == "dead" then
@@ -1270,7 +1268,7 @@
                     if coroutine.status(co) ~= "suspended" then return end
                     local ok, err = coroutine.resume(co)
                     if not ok then
-                        print("ms.resume error: " .. tostring(err))
+                        print("═══ ms.resume error [" .. (ctx.label or "?") .. "] ═══\n" .. tostring(err))
                     end
                     if coroutine.status(co) == "dead" then
                         if ms.dev then spoon.MsDevTools:stopTrace(co) end
@@ -2271,7 +2269,7 @@
         ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)
         ms._discoverSounds()
         ms.loadTheme()
-        ms.cam.updateMultiplier()
+        -- ms.legacycam.updateMultiplier()  -- opt-in: call manually if needed
         os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
         ms.bind._registerSystemBinds()
         ms.bind.rebind()
