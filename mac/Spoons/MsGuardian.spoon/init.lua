@@ -28,26 +28,86 @@ YQIDAQAB
 
 -- Helpers --
     local function _hashFile(path)
-        local out = hs.execute("shasum -a 256 '" .. path:gsub("'", "'\\'") .. "' 2>/dev/null")
+        local out = hs.execute("shasum -a 256 '" .. path:gsub("'", "'\\''") .. "' 2>/dev/null")
 
         return (out and #out >= 64) and out:sub(1, 64):lower() or nil
     end
 
-    local function _readTrusted()
+    -- Returns: table {relativePath = hash64} or nil
+    -- Handles both old single-hash format and new JSON manifest format
+    local function _readTrustedManifest()
         local _paths = { _trustPath, _home .. "/.hammerspoon/.ms_trusted_hash" }
 
         for _, _p in ipairs(_paths) do
             local f = io.open(_p, "r")
-
             if f then
-                local h = f:read("*all"); f:close()
-                h = h and h:match("^%s*([0-9a-fA-F]+)%s*$")
-
-                if h and #h == 64 then return h:lower() end
+                local raw = f:read("*all"); f:close()
+                if raw and raw ~= "" then
+                    -- Old format: single hex hash
+                    local single = raw:match("^%s*([0-9a-fA-F]+)%s*$")
+                    if single and #single == 64 then
+                        return { ["ms_core.lua"] = single:lower() }
+                    end
+                    -- New format: JSON manifest
+                    local ok, tbl = pcall(hs.json.decode, raw)
+                    if ok and type(tbl) == "table" then
+                        local norm = {}
+                        for k, v in pairs(tbl) do
+                            if type(v) == "string" and #v == 64 then
+                                local rel = k:gsub(".*/%.hammerspoon/", "")
+                                norm[rel] = v:lower()
+                            end
+                        end
+                        if next(norm) then return norm end
+                    end
+                end
             end
         end
 
         return nil
+    end
+
+    -- Backward compat: returns ms_core.lua hash
+    local function _readTrusted()
+        local m = _readTrustedManifest()
+        return m and m["ms_core.lua"] or nil
+    end
+
+    -- Discover all spoon init files
+    local function _trackedFiles()
+        local files = { _corePath }
+        local spoonDir = _home .. "/.hammerspoon/Spoons/"
+        local ok, iter, dir_obj = pcall(hs.fs.dir, spoonDir)
+        if ok and iter then
+            for entry in iter, dir_obj do
+                if entry ~= "." and entry ~= ".." then
+                    local init = spoonDir .. entry .. "/init.lua"
+                    if hs.fs.attributes(init) then
+                        files[#files + 1] = init
+                    end
+                end
+            end
+            dir_obj:close()
+        end
+        table.sort(files)
+        return files
+    end
+
+    -- Check all files against manifest. Returns: "ok", "mismatch", "uninitialized"
+    -- On mismatch, returns second value = filename that failed
+    local function _checkAll(manifest)
+        if not manifest then return "uninitialized" end
+        local files = _trackedFiles()
+        for _, absPath in ipairs(files) do
+            local rel = absPath:gsub(".*/%.hammerspoon/", "")
+            local expected = manifest[rel]
+            if expected then
+                local cur = _hashFile(absPath)
+                if not cur then return "error", rel end
+                if cur ~= expected then return "mismatch", rel end
+            end
+        end
+        return "ok"
     end
 
     -- Verify MANIFEST.json RSA-2048 signature.  Returns true only if the
@@ -95,34 +155,51 @@ YQIDAQAB
 -- END Helpers --
 
 -- Integrity Check --
-    local _cur     = _hashFile(_corePath)
-    local _trusted = _readTrusted()
+    local _manifest = _readTrustedManifest()
+    local _checkResult, _failedFile = _checkAll(_manifest)
     local _blocked = false
 
-    if _cur == nil then
-        print("Guardian: could not hash ms_core.lua (shasum unavailable?); skipping check.")
+    if _checkResult == "uninitialized" then
+        print("Guardian: no trusted manifest — skipping check.")
 
-    elseif _trusted and _cur ~= _trusted then
-        -- Hash mismatch. Check if MANIFEST.json confirms the current file
+    elseif _checkResult == "error" then
+        print("Guardian: could not hash " .. (_failedFile or "unknown") .. "; skipping check.")
+
+    elseif _checkResult == "mismatch" then
+        -- Hash mismatch. Check if MANIFEST.json confirms the current core
         -- is a legitimate update (sha256 matches AND signature is valid).
-        -- If so, auto-seed and pass through — no user intervention needed.
+        -- If so, auto-seed all files and pass through.
         local _manifestOk = false
         do
+            local _cur = _hashFile(_corePath)
             local _mPath = _home .. "/.hammerspoon/MANIFEST.json"
             local _mf = io.open(_mPath, "r")
-            if _mf then
+            if _mf and _cur then
                 local _raw = _mf:read("*all"); _mf:close()
-                local _ok, _manifest = pcall(hs.json.decode, _raw)
-                if _ok and type(_manifest) == "table"
-                    and type(_manifest.sha256) == "string"
-                    and #_manifest.sha256 == 64
-                    and _manifest.sha256:lower() == _cur:lower()
-                    and _verifyManifestSignature(_manifest) then
-                    -- MANIFEST confirms the current file is legit and signed. Auto-seed.
-                    local _wf = io.open(_trustPath, "w")
-                    if _wf then _wf:write(_cur .. "\n"); _wf:close() end
+                local _ok, _m = pcall(hs.json.decode, _raw)
+                if _ok and type(_m) == "table"
+                    and type(_m.sha256) == "string"
+                    and #_m.sha256 == 64
+                    and _m.sha256:lower() == _cur:lower()
+                    and _verifyManifestSignature(_m) then
+                    -- MANIFEST confirms the current file is legit and signed.
+                    -- Re-seed all tracked files.
+                    local files = _trackedFiles()
+                    local newManifest = {}
+                    for _, absPath in ipairs(files) do
+                        local h = _hashFile(absPath)
+                        if h then
+                            local rel = absPath:gsub(".*/%.hammerspoon/", "")
+                            newManifest[rel] = h
+                        end
+                    end
+                    local ok2, json = pcall(hs.json.encode, newManifest)
+                    if ok2 then
+                        local _wf = io.open(_trustPath, "w")
+                        if _wf then _wf:write(json .. "\n"); _wf:close() end
+                    end
                     _manifestOk = true
-                    print("Guardian: hash mismatch but signed MANIFEST.json confirms update — auto-seeded.")
+                    print("Guardian: hash mismatch but signed MANIFEST.json confirms update — auto-seeded all files.")
                 end
             end
         end

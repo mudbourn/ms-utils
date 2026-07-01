@@ -23,12 +23,13 @@
         <string>%%AGENT_PATH%%</string>
     </array>
 
-    <!-- Fire once at login and again whenever ms_core.lua changes. -->
+    <!-- Fire once at login and again whenever ms_core.lua or spoons change. -->
     <key>RunAtLoad</key>
     <true/>
     <key>WatchPaths</key>
     <array>
         <string>%%CORE_PATH%%</string>
+        <string>%%SPOONS_DIR%%</string>
     </array>
 
     <key>StandardOutPath</key>

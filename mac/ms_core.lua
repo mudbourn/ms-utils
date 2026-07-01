@@ -2442,6 +2442,7 @@
                 print("[startup] t=3: integrity check")
                 pcall(function()
                     if ms.integrity.check() ~= "uninitialized" then return end
+                    -- First install: try to seed from MANIFEST.json
                     local _mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
                     local _mf    = io.open(_mPath, "r")
                     if _mf then
@@ -2451,8 +2452,9 @@
                             and #_manifest.sha256 == 64 then
                             local _cur = ms.integrity.hashFile(corePath)
                             if _cur and _cur:lower() == _manifest.sha256:lower() then
-                                ms.integrity.writeTrustedHash(_cur)
-                                return  -- clean install — seeded silently, no alert needed
+                                -- MANIFEST matches — seal all tracked files
+                                ms.integrity.trustCurrent()
+                                return
                             end
                         end
                     end

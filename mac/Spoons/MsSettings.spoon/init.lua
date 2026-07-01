@@ -1716,29 +1716,84 @@
     -- System Integrity --
         ms.integrity = {}
 
+        -- Files to track — ms_core.lua + all spoon init files
+        local _integrityFiles = nil
+        ms.integrity.trackedFiles = function()
+            if _integrityFiles then return _integrityFiles end
+            local hsDir = os.getenv("HOME") .. "/.hammerspoon/"
+            _integrityFiles = { hsDir .. "ms_core.lua" }
+            local spoonDir = hsDir .. "Spoons/"
+            local ok, iter, dir_obj = pcall(hs.fs.dir, spoonDir)
+            if ok and iter then
+                for entry in iter, dir_obj do
+                    if entry ~= "." and entry ~= ".." then
+                        local init = spoonDir .. entry .. "/init.lua"
+                        if hs.fs.attributes(init) then
+                            _integrityFiles[#_integrityFiles + 1] = init
+                        end
+                    end
+                end
+                dir_obj:close()
+            end
+            table.sort(_integrityFiles)
+            return _integrityFiles
+        end
+
         ms.integrity.hashFile = function(path)
-            local escaped = "'" .. path:gsub("'", "'\\'") .. "'"
+            local escaped = "'" .. path:gsub("'", "'\\''") .. "'"
             local out = hs.execute("shasum -a 256 " .. escaped .. " 2>/dev/null")
             if out and #out >= 64 then return out:sub(1, 64):lower() end
             return nil
         end
 
-        ms.integrity.readTrustedHash = function()
+        -- Returns: table {relativePath = hash64} or nil
+        -- Backward compat: if file contains a single 64-char hex line (old format),
+        -- returns {"ms_core.lua" = hash}
+        ms.integrity.readTrustedManifest = function()
             local f = io.open(trustedHashPath, "r")
             if not f then return nil end
-            local h = f:read("*all"); f:close()
-            h = h and h:match("^%s*([0-9a-fA-F]+)%s*$")
-            return (h and #h == 64) and h:lower() or nil
+            local raw = f:read("*all"); f:close()
+            if not raw or raw == "" then return nil end
+
+            -- Old format: single hex hash
+            local single = raw:match("^%s*([0-9a-fA-F]+)%s*$")
+            if single and #single == 64 then
+                return { ["ms_core.lua"] = single:lower() }
+            end
+
+            -- New format: JSON object
+            local ok, tbl = pcall(hs.json.decode, raw)
+            if ok and type(tbl) == "table" then
+                -- Normalize keys to relative paths and values to lowercase
+                local norm = {}
+                for k, v in pairs(tbl) do
+                    if type(v) == "string" and #v == 64 then
+                        local rel = k:gsub(".*/%.hammerspoon/", "")
+                        norm[rel] = v:lower()
+                    end
+                end
+                return next(norm) and norm or nil
+            end
+
+            return nil
         end
 
-        ms.integrity.writeTrustedHash = function(hash)
+        -- Writes a manifest table {relativePath = hash64}
+        ms.integrity.writeTrustedManifest = function(manifest)
+            local ok, json = pcall(hs.json.encode, manifest)
+            if not ok then
+                ms.dev.log({ type = "error", event = "hash_seed_failed" })
+                return false
+            end
             local f = io.open(trustedHashPath, "w")
             if f then
-                f:write(hash .. "\n"); f:close()
+                f:write(json .. "\n"); f:close()
+                local n = 0
+                for _ in pairs(manifest) do n = n + 1 end
                 ms.dev.log({
-                    type  = "system",
-                    event = "hash_seeded",
-                    hash  = hash:sub(1,16) .. "…",
+                    type    = "system",
+                    event   = "manifest_seeded",
+                    files   = n,
                 })
                 return true
             end
@@ -1746,70 +1801,146 @@
             return false
         end
 
+        -- Backward compat: readTrustedHash returns the ms_core.lua hash
+        ms.integrity.readTrustedHash = function()
+            local m = ms.integrity.readTrustedManifest()
+            return m and m["ms_core.lua"] or nil
+        end
+
+        -- Backward compat: writeTrustedHash writes a single ms_core.lua entry
+        ms.integrity.writeTrustedHash = function(hash)
+            return ms.integrity.writeTrustedManifest({ ["ms_core.lua"] = hash })
+        end
+
         ms.integrity.deleteTrustedHash = function()
             return os.remove(trustedHashPath) ~= nil
         end
 
         local _intCache         = {
-            status  = nil,
-            cur     = nil,
-            trusted = nil,
+            status  = nil,   -- "trusted" | "mismatch" | "uninitialized"
+            details = nil,   -- {relPath = {cur=hash, trusted=hash, status=...}}
             t       = 0,
         }
-        local _intHashInProgress = false  -- guard against concurrent hs.task runs
+        local _intHashInProgress = false
+
         ms.integrity.invalidateCache = function()
             _intCache.t = 0
             ms.dev.log({ type = "system", event = "integrity_cache_invalidated" })
         end
+
+        -- Check all tracked files against the trusted manifest
         ms.integrity.check = function()
             local now = os.time()
             if _intCache.status ~= nil and (now - _intCache.t) < 60 then
-                return _intCache.status, _intCache.cur, _intCache.trusted
+                local d = _intCache.details and _intCache.details["ms_core.lua"]
+                return _intCache.status, d and d.cur, d and d.trusted
             end
-            if not _intHashInProgress then
-                _intHashInProgress = true
+            if _intHashInProgress then
+                local d = _intCache.details and _intCache.details["ms_core.lua"]
+                return _intCache.status or "uninitialized", d and d.cur, d and d.trusted
+            end
+
+            _intHashInProgress = true
+            local files = ms.integrity.trackedFiles()
+            local trusted = ms.integrity.readTrustedManifest()
+            local details = {}
+            local allOk = true
+            local anyMismatch = false
+            local pending = #files
+            local done = false
+
+            if pending == 0 then
+                _intHashInProgress = false
+                _intCache = { status = "uninitialized", details = {}, t = now }
+                return "uninitialized"
+            end
+
+            for _, absPath in ipairs(files) do
+                local rel = absPath:gsub(".*/%.hammerspoon/", "")
                 local _t = hs.task.new("/usr/bin/shasum", function(_, out, _)
-                    _intHashInProgress = false
-                    local cur     = (out and #out >= 64) and out:sub(1, 64):lower() or nil
-                    local trusted = ms.integrity.readTrustedHash()
-                    local status
-                    if not trusted        then status = "uninitialized"
-                    elseif cur == trusted then status = "trusted"
-                    else                       status = "mismatch" end
-                    _intCache = {
-                        status  = status,
-                        cur     = cur,
-                        trusted = trusted,
-                        t       = os.time(),
-                    }
-                    ms.dev.log({
-                        type    = "system",
-                        event   = "integrity_check",
-                        status  = status,
-                        cur     = cur     and cur:sub(1,16) .. "…" or nil,
-                        trusted = trusted and trusted:sub(1,16) .. "…" or nil,
-                    })
-                    if status == "mismatch" then hs.reload() end
-                end, {"-a", "256", corePath})
-                if _t then _t:start() else _intHashInProgress = false end
+                    local cur = (out and #out >= 64) and out:sub(1, 64):lower() or nil
+                    local tru = trusted and trusted[rel] or nil
+                    local fileStatus
+                    if not tru then
+                        fileStatus = "unknown"
+                    elseif cur == tru then
+                        fileStatus = "ok"
+                    else
+                        fileStatus = "mismatch"
+                        anyMismatch = true
+                        allOk = false
+                    end
+                    details[rel] = { cur = cur, trusted = tru, status = fileStatus }
+
+                    pending = pending - 1
+                    if pending == 0 and not done then
+                        done = true
+                        _intHashInProgress = false
+                        local status
+                        if not trusted then
+                            status = "uninitialized"
+                        elseif anyMismatch then
+                            status = "mismatch"
+                        else
+                            status = "trusted"
+                        end
+                        _intCache = {
+                            status  = status,
+                            details = details,
+                            t       = os.time(),
+                        }
+                        ms.dev.log({
+                            type    = "system",
+                            event   = "integrity_check",
+                            status  = status,
+                            files   = #files,
+                            matched = not anyMismatch,
+                        })
+                        if status == "mismatch" then hs.reload() end
+                    end
+                end, {"-a", "256", absPath})
+                if _t then
+                    _t:start()
+                else
+                    details[rel] = { cur = nil, trusted = trusted and trusted[rel] or nil, status = "error" }
+                    allOk = false
+                    pending = pending - 1
+                end
             end
-            return _intCache.status or "uninitialized", _intCache.cur, _intCache.trusted
+
+            -- Return current cached status while async checks run
+            return _intCache.status or "uninitialized"
         end
 
+        -- Trust all currently tracked files
         ms.integrity.trustCurrent = function()
-            local hash = ms.integrity.hashFile(corePath)
-            if not hash then
-                ms.alert("System integrity: could not hash ms_core.lua.", 4)
+            local files = ms.integrity.trackedFiles()
+            local manifest = {}
+            local failed = false
+            for _, absPath in ipairs(files) do
+                local hash = ms.integrity.hashFile(absPath)
+                if not hash then
+                    failed = true
+                    break
+                end
+                local rel = absPath:gsub(".*/%.hammerspoon/", "")
+                manifest[rel] = hash
+            end
+            if failed then
+                ms.alert("System integrity: could not hash one or more files.", 4)
                 return false
             end
-            if ms.integrity.writeTrustedHash(hash) then
-                ms.integrity.invalidateCache()  -- force fresh check on next open
-                ms.alert("Trusted hash saved.\n" .. hash:sub(1, 16) .. "\xe2\x80\xa6", 4, true)
+            if ms.integrity.writeTrustedManifest(manifest) then
+                ms.integrity.invalidateCache()
+                local n = 0
+                for _ in pairs(manifest) do n = n + 1 end
+                ms.alert("Trusted manifest saved.\n" .. n .. " files sealed.", 4, true)
                 return true
             end
-            ms.alert("System integrity: could not write trusted hash file.", 4)
+            ms.alert("System integrity: could not write trusted manifest.", 4)
             return false
         end
+
 
         local function _applyBundleUpdate(bundleDir, timestamp)
             local hsDir = os.getenv("HOME") .. "/.hammerspoon/"
