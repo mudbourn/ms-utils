@@ -185,9 +185,9 @@ case "dragrel":
     }()
     let drag = CGEvent(mouseEventSource: src, mouseType: dragType,
                        mouseCursorPosition: anchor, mouseButton: dBtn)!
-    // CGEventField rawValue 1 = mouseEventDeltaX, 2 = mouseEventDeltaY
-    drag.setIntegerValueField(CGEventField(rawValue: 1)!, value: Int64(dx))
-    drag.setIntegerValueField(CGEventField(rawValue: 2)!, value: Int64(dy))
+    // kCGMouseEventDeltaX = 4, kCGMouseEventDeltaY = 5
+    drag.setIntegerValueField(CGEventField(rawValue: 4)!, value: Int64(dx))
+    drag.setIntegerValueField(CGEventField(rawValue: 5)!, value: Int64(dy))
     drag.post(tap: tap)
 
 default:
