@@ -78,6 +78,10 @@ if [ -f "$SCRIPT_DIR/ms_core.lua" ] && [ -f "$SCRIPT_DIR/init.lua" ]; then
         mkdir -p "$HS/profiles"
         cp -R "$SCRIPT_DIR/../profiles/Default" "$HS/profiles/"
     fi
+    # Include bundled .mspkg profile packs.
+    for pkg in "$SCRIPT_DIR"/../*.mspkg; do
+        [ -f "$pkg" ] && cp "$pkg" "$HS/"
+    done
     rm -f "$HS/install.sh"
     echo "   ✓ Files copied from $SCRIPT_DIR"
 else

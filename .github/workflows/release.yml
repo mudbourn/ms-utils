@@ -56,10 +56,14 @@ jobs:
           if [ -d "sounds" ]; then
             cp sounds/*.wav "$DIST/sounds/" 2>/dev/null || true
           fi
+          # Include the default profile and bundled .mspkg packs.
           if [ -d "profiles/Default" ]; then
             mkdir -p "$DIST/profiles"
             cp -R profiles/Default "$DIST/profiles/"
           fi
+          for pkg in *.mspkg; do
+            [ -f "$pkg" ] && cp "$pkg" "$DIST/"
+          done
           rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
 
           # Legacy hash: ms_core.lua only (computed before MANIFEST exists in archive)
