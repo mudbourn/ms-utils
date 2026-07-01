@@ -1634,16 +1634,34 @@
                 end
                 local soundsDir = tmpDir .. "sounds/"
                 local soundsAdded = {}
+                local soundDest = SoundActiveDir -- default to theming
                 if hs.fs.attributes(soundsDir) then
-                    local slibDir = SoundActiveDir:match("^(.-)[/\\]*$") or SoundActiveDir
+                    -- Check if there are any sounds to import
+                    local hasSounds = false
+                    for file in hs.fs.dir(soundsDir) do
+                        if file ~= "." and file ~= ".." then
+                            hasSounds = true; break
+                        end
+                    end
+                    -- Prompt user for import type
+                    if hasSounds then
+                        local btn = hs.dialog.blockAlert(
+                            "Import Sounds",
+                            "How should these sounds be imported?",
+                            "Theming Sounds",
+                            "Macro Sounds"
+                        )
+                        if btn == 2 then soundDest = SoundMacroDir end
+                    end
+                    local slibDir = soundDest:match("^(.-)[/\\]*$") or soundDest
                     if not hs.fs.attributes(slibDir) then
-                        hs.execute("mkdir -p '" .. SoundActiveDir .. "'")
+                        hs.execute("mkdir -p '" .. soundDest .. "'")
                     end
                     for file in hs.fs.dir(soundsDir) do
                         if file ~= "." and file ~= ".." then
                             local importName = file:match("^(.+)%.[^%.]+$") or file
                             local srcSnd = soundsDir .. file
-                            local dstSnd = SoundActiveDir .. file
+                            local dstSnd = soundDest .. file
                             if not hs.fs.attributes(dstSnd) then
                                 local sf = io.open(srcSnd, "rb")
                                 if sf then
@@ -1651,8 +1669,10 @@
                                     local out = io.open(dstSnd, "wb")
                                     if out then
                                         out:write(data); out:close()
-                                        ms.importedSounds = ms.importedSounds or {}
-                                        ms.importedSounds[importName] = file
+                                        if soundDest == SoundActiveDir then
+                                            ms.importedSounds = ms.importedSounds or {}
+                                            ms.importedSounds[importName] = file
+                                        end
                                         table.insert(soundsAdded, importName)
                                     end
                                 end
