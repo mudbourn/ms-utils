@@ -149,6 +149,10 @@
                 elseif k == "_watcherPanel" then return _watcherPanel
                 elseif k == "_keysPanel"    then return _keysPanel
                 elseif k == "_keysReady"    then return _keysReady
+                elseif k == "_consoleOpen"  then return _consoleOpen
+                elseif k == "_watcherOpen"  then return _watcherOpen
+                elseif k == "_keysOpen"     then return _keysOpen
+                elseif k == "_windowOpen"   then return _windowOpen
                 end
             end,
         })
@@ -1023,10 +1027,6 @@
         pcall(function() panel:allowTextEntry(true) end)
         pcall(function() panel:shadow(true) end)
 
-        if _htmlCache["console"] then
-            panel:html(_htmlCache["console"], _devBase)
-        end
-
         _consolePanelPos = { x = x, y = y, w = w, h = h }
 
         panel:navigationCallback(function(_, action)
@@ -1040,6 +1040,10 @@
                 end
             end)
         end)
+
+        if _htmlCache["console"] then
+            panel:html(_htmlCache["console"], _devBase)
+        end
 
         return panel
     end
@@ -1065,12 +1069,6 @@
             if not _consolePanel or not _consoleOpen then return end
 
             _loadDevHistory(_consolePanel, {"macro", "console", "error", "system", "input"})
-
-            local tj = _devThemeJS()
-
-            if tj ~= "" then
-                pcall(function() _consolePanel:evaluateJavaScript(tj) end)
-            end
         end)
     end
 
@@ -1147,10 +1145,6 @@
         pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
         pcall(function() panel:shadow(true) end)
 
-        if _htmlCache["watcher"] then
-            panel:html(_htmlCache["watcher"], _devBase)
-        end
-
         _watcherPanelPos = { x = x, y = y, w = w, h = h }
 
         panel:navigationCallback(function(_, action)
@@ -1164,6 +1158,10 @@
                 end
             end)
         end)
+
+        if _htmlCache["watcher"] then
+            panel:html(_htmlCache["watcher"], _devBase)
+        end
 
         return panel
     end
@@ -1189,12 +1187,6 @@
             if not _watcherPanel or not _watcherOpen then return end
 
             _loadDevHistory(_watcherPanel, {"macro", "error", "system"})
-
-            local tj = _devThemeJS()
-
-            if tj ~= "" then
-                pcall(function() _watcherPanel:evaluateJavaScript(tj) end)
-            end
         end)
     end
 
@@ -1292,8 +1284,6 @@
 
         if not _htmlCache["keys"] then return nil end
 
-        panel:html(_htmlCache["keys"], _devBase)
-
         _keysPanelPos = { x = x, y = y, w = w, h = h }
         _keysReady    = false
 
@@ -1319,6 +1309,8 @@
                 }
             end
         end)
+
+        panel:html(_htmlCache["keys"], _devBase)
 
         return panel
     end
@@ -1347,12 +1339,6 @@
             _loadDevHistory(_keysPanel, {"input"})
 
             pcall(function() _pushMouseState() end)
-
-            local tj = _devThemeJS()
-
-            if tj ~= "" then
-                pcall(function() _keysPanel:evaluateJavaScript(tj) end)
-            end
         end)
 
         if _mousePoller then _mousePoller:stop() end
@@ -1473,10 +1459,6 @@
         pcall(function() panel:allowTextEntry(true) end)
         pcall(function() panel:shadow(true) end)
 
-        if _htmlCache["window"] then
-            panel:html(_htmlCache["window"], _devBase)
-        end
-
         _windowPanelPos = { x = x, y = y, w = w, h = h }
 
         panel:navigationCallback(function(_, action)
@@ -1488,38 +1470,43 @@
                 if tj ~= "" then
                     pcall(function() panel:evaluateJavaScript(tj) end)
                 end
-
-                if #_windowHistory > 0 then
-                    local ok, j = pcall(hs.json.encode, _windowHistory)
-
-                    if ok then
-                        pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end)
-                    end
-                end
-
-                local win = hs.window.focusedWindow()
-
-                if win then
-                    local app   = (win:application() and win:application():name()) or "?"
-                    local title = win:title() or ""
-                    local wf    = win:frame()
-
-                    local ok2, j2 = pcall(hs.json.encode, {
-                        type  = "focus",
-                        ts    = os.time(),
-                        app   = app,
-                        title = title,
-                        w     = math.floor(wf.w),
-                        h     = math.floor(wf.h),
-                        x     = math.floor(wf.x),
-                        y     = math.floor(wf.y),
-                    })
-
-                    if ok2 then
-                        pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end)
-                    end
-                end
             end)
+        end)
+
+        if _htmlCache["window"] then
+            panel:html(_htmlCache["window"], _devBase)
+        end
+
+        -- Load history and current window state once on build
+        hs.timer.doAfter(0.05, function()
+            if not _windowPanel then return end
+
+            if #_windowHistory > 0 then
+                local ok, j = pcall(hs.json.encode, _windowHistory)
+                if ok then
+                    pcall(function() panel:evaluateJavaScript("loadHistory(" .. j .. ")") end)
+                end
+            end
+
+            local win = hs.window.focusedWindow()
+            if win then
+                local app   = (win:application() and win:application():name()) or "?"
+                local title = win:title() or ""
+                local wf    = win:frame()
+                local ok2, j2 = pcall(hs.json.encode, {
+                    type  = "focus",
+                    ts    = os.time(),
+                    app   = app,
+                    title = title,
+                    w     = math.floor(wf.w),
+                    h     = math.floor(wf.h),
+                    x     = math.floor(wf.x),
+                    y     = math.floor(wf.y),
+                })
+                if ok2 then
+                    pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end)
+                end
+            end
         end)
 
         return panel

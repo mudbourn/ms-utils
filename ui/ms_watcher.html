@@ -371,6 +371,17 @@
             <span id="panel-title">mudscript — macro monitor</span>
             <div class="header-btns">
                 <button
+                    id="pause-btn"
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        togglePause();
+                    "
+                >
+                    Pause
+                </button>
+                <button
                     class="btn-ghost"
                     id="filter-btn"
                     onmouseenter="playSlot('hover')"
@@ -412,7 +423,15 @@
         <script>
             "use strict";
 
-            // ── Selection state ───────────────────────────────────────────────────
+            // ── Pause state ──────────────────────────────────────────────────────
+            let _paused = false;
+            function togglePause() {
+                _paused = !_paused;
+                const btn = document.getElementById("pause-btn");
+                if (btn) btn.textContent = _paused ? "Resume" : "Pause";
+            }
+
+            const _selected = new Set();
             const _selected = new Set();
             let _lastClicked = null;
 
@@ -744,6 +763,7 @@
 
             // ── Public API ─────────────────────────────────────────────────────
             function appendEntry(entry) {
+                if (_paused) return;
                 const log = document.getElementById("log");
                 const atBottom = isNearBottom(log);
                 log.appendChild(buildRow(entry));

@@ -981,23 +981,23 @@
                             document.getElementById('reloadDropdown').classList.toggle('open');
                         "
                     >
-                        ↺ Reload Options ▾
+                        Reload Options ▾
                     </button>
                     <div class="reload-dd-menu" id="reloadMenu">
                         <div class="reload-dd-row">
-                            <span class="qr-check checked" data-qr="macros" onclick="event.stopPropagation(); toggleQR(this);">✓</span>
+                            <span class="qr-check checked" data-qr="macros" onclick="event.stopPropagation(); toggleQR(this);"></span>
                             <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
                         </div>
                         <div class="reload-dd-row">
-                            <span class="qr-check checked" data-qr="theme" onclick="event.stopPropagation(); toggleQR(this);">✓</span>
+                            <span class="qr-check checked" data-qr="theme" onclick="event.stopPropagation(); toggleQR(this);"></span>
                             <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
                         </div>
                         <div class="reload-dd-row">
-                            <span class="qr-check checked" data-qr="settings" onclick="event.stopPropagation(); toggleQR(this);">✓</span>
+                            <span class="qr-check checked" data-qr="settings" onclick="event.stopPropagation(); toggleQR(this);"></span>
                             <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
                         </div>
                         <div class="reload-dd-row">
-                            <span class="qr-check checked" data-qr="ui" onclick="event.stopPropagation(); toggleQR(this);">✓</span>
+                            <span class="qr-check checked" data-qr="ui" onclick="event.stopPropagation(); toggleQR(this);"></span>
                             <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
                         </div>
                         <div class="reload-dd-sep"></div>
@@ -1012,7 +1012,7 @@
                         sendToHost({ action: 'quickReload' });
                     "
                 >
-                    ↺ Quick Reload
+                    Quick Reload
                 </button>
             </div>
 
@@ -1148,7 +1148,6 @@
                 if (!key) return;
                 const now = !el.classList.contains("checked");
                 el.classList.toggle("checked", now);
-                el.textContent = now ? "✓" : "";
                 playSlot("interact");
                 sendToHost({ action: "setQROption", key: key, value: now });
             }
@@ -1159,7 +1158,6 @@
                     const key = el.dataset.qr;
                     const on = qr[key] !== false;
                     el.classList.toggle("checked", on);
-                    el.textContent = on ? "✓" : "";
                 });
             }
 
@@ -2926,7 +2924,7 @@
                     statusPill = h(
                         "span",
                         { cls: "pill success" },
-                        "✓ Trusted",
+                        "Trusted",
                     );
                 else if (status === "mismatch")
                     statusPill = h(
@@ -2949,7 +2947,7 @@
                         "div",
                         { cls: "row-label" },
                         trusted
-                            ? "✓ Trust Current Version"
+                            ? "Trust Current Version"
                             : "Trust Current Version…",
                     ),
                 );

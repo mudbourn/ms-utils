@@ -563,27 +563,47 @@
                 -- UI: everything already closed by reloadUI, nothing to reopen
 
             elseif qr.theme then
-                -- Theme: close and reopen settings + dev tools
+                -- Theme: close and reopen only what was open
+                local wasOpen = {
+                    ui       = ms.ui._open,
+                    console  = ms.dev._consoleOpen,
+                    watcher  = ms.dev._watcherOpen,
+                    keys     = ms.dev._keysOpen,
+                    window   = ms.dev._windowOpen,
+                }
                 ms.ui.hide()
                 pcall(function() ms.dev.console.hide() end)
                 pcall(function() ms.dev.watcher.hide() end)
                 pcall(function() ms.dev.keys.hide() end)
                 pcall(function() ms.dev.window.hide() end)
                 hs.timer.doAfter(0.15, function()
-                    ms.ui.show()
-                    pcall(function() ms.dev.console.show() end)
-                    pcall(function() ms.dev.watcher.show() end)
-                    pcall(function() ms.dev.keys.show() end)
-                    pcall(function() ms.dev.window.show() end)
+                    if wasOpen.ui then ms.ui.show() end
+                    if wasOpen.console then pcall(function() ms.dev.console.show() end) end
+                    if wasOpen.watcher then pcall(function() ms.dev.watcher.show() end) end
+                    if wasOpen.keys then pcall(function() ms.dev.keys.show() end) end
+                    if wasOpen.window then pcall(function() ms.dev.window.show() end) end
                 end)
 
             elseif qr.settings then
-                -- Settings: close and reopen settings panel only
+                -- Settings: close and reopen settings panel only (if it was open)
+                local wasOpen = ms.ui._open
                 ms.ui.hide()
-                hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                if wasOpen then
+                    hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                end
             end
 
             ms._quickReloading = false
+
+            -- Roblox refocus (after UI operations have settled)
+            if qr.macros then
+                hs.timer.doAfter(0.5, function()
+                    pcall(function()
+                        local app = ms._targetApp and hs.application.get(ms._targetApp)
+                        if app then app:activate() end
+                    end)
+                end)
+            end
 
             if ms._quickReloaded == 1 then
                 ms._quickReloaded = 0

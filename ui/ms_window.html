@@ -289,6 +289,17 @@
             <span id="panel-title">mudscript — window monitor</span>
             <div class="header-btns">
                 <button
+                    id="pause-btn"
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        togglePause();
+                    "
+                >
+                    Pause
+                </button>
+                <button
                     class="btn-ghost"
                     onmouseenter="playSlot('hover')"
                     onclick="
@@ -325,7 +336,15 @@
         <script>
             "use strict";
 
-            // ── Selection state ───────────────────────────────────────────────────
+            // ── Pause state ──────────────────────────────────────────────────────
+            let _paused = false;
+            function togglePause() {
+                _paused = !_paused;
+                const btn = document.getElementById("pause-btn");
+                if (btn) btn.textContent = _paused ? "Resume" : "Pause";
+            }
+
+            const _selected = new Set();
             const _selected = new Set();
             let _lastClicked = null;
 
@@ -494,6 +513,7 @@
             // ── Public API ────────────────────────────────────────────────────────
             // Appends a row, trims to MAX_ENTRIES, auto-scrolls, updates current
             function appendEntry(entry) {
+                if (_paused) return;
                 const log = document.getElementById("log");
                 const atBottom = isNearBottom();
                 log.appendChild(buildRow(entry));
