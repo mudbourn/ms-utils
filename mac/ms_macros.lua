@@ -332,12 +332,7 @@
                     local JumpHigh = function()
                         if ms.isSub("hidJumpHigh") then
                             ms.sound(JumpHighSound, true)
-                            for i = 1, 60 do
-                                ms.HidMouse(-3145, 0)
-                                ms.wait(1)
-                                ms.HidMouse(-3145, 0)
-                                ms.wait(.5)
-                            end
+                            ms.HidMouse(-3145, 0, 120, 750)
                             ms.wait(50)
                             ms.HidMouse(262, 0)
                             return true
@@ -348,12 +343,7 @@
                     local JumpLow = function()
                         if ms.isSub("hidJumpLow") then
                             ms.sound(JumpLowSound, true)
-                            for i = 1, 14 do
-                                ms.HidMouse(-370, 0)
-                                ms.wait(1)
-                                ms.HidMouse(-370, 0)
-                                ms.wait(.5)
-                            end
+                            ms.HidMouse(-370, 0, 28, 750)
                             ms.wait(50)
                             ms.HidMouse(308, 0)
                             return true
@@ -363,12 +353,7 @@
 
                     local JumpDefault = function()
                         ms.sound(JumpNormalSound, true)
-                        for i = 1, 14 do
-                            ms.HidMouse(-185, 0)
-                            ms.wait(1)
-                            ms.HidMouse(-185, 0)
-                            ms.wait(.5)
-                        end
+                        ms.HidMouse(-185, 0, 28, 750)
                         ms.wait(50)
                         ms.HidMouse(-69, 0)
                     end

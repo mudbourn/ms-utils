@@ -973,21 +973,10 @@
                     spoon.MsDevTools:macroLog(string.format("HidMouse %d,%d ×%d", dx, dy, count))
                 end
                 local pos = hs.mouse.absolutePosition()
-                local px, py = math.floor(pos.x), math.floor(pos.y)
-                local b = BTNS[btn]
-                if count <= 1 then
-                    _hidSend(string.format("dragreln 1 %d %d %d %d %d %s",
-                        delayUs, dx, dy, px, py, b))
-                else
-                    -- Build batch: one write, daemon processes all, one response
-                    local lines = {"batch"}
-                    for i = 1, count do
-                        lines[#lines + 1] = string.format("dragreln 1 %d %d %d %d %d %s",
-                            delayUs, dx, dy, px, py, b)
-                    end
-                    lines[#lines + 1] = "end"
-                    _hidSend(table.concat(lines, "\n"))
-                end
+                _hidSend(string.format("dragreln %d %d %d %d %d %d %s",
+                    count, delayUs, dx, dy,
+                    math.floor(pos.x), math.floor(pos.y),
+                    BTNS[btn]))
             end
             -- END HidMouse --
 
