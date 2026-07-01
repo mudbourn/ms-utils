@@ -1314,7 +1314,7 @@
                     if fname ~= ms._lastSoundLog then
                         ms._lastSoundLog = fname
                         if ms.dev then
-                            ms.dev:log({ type = "sound", msg = fname, category = "macro" })
+                            ms.dev.log({ type = "sound", msg = fname, category = "macro" })
                         end
                     end
                 end
