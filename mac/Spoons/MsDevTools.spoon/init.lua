@@ -34,6 +34,7 @@
 
     local _devBusy            = false
     local _devLastConsoleType = nil
+    local _consoleMacroActive = false
     local _lastReadLine       = nil
     local _readRepeatCount    = 0
     local _lastReadCategory   = nil
@@ -458,13 +459,21 @@
         if _consolePanel and t ~= "mousemove" and t ~= "step" then
             local send = false
 
-            if t == "key" or t == "mouse" or t == "macro" or t == "sound" then
+            if t == "macro" then
+                _devLastConsoleType = t
+                _consoleMacroActive = true
+                send = true
+            elseif _consoleMacroActive and (t == "key" or t == "mouse" or t == "sound") then
+                -- Suppress input/sound noise while macro is active
+                send = false
+            elseif t == "key" or t == "mouse" or t == "sound" then
                 if _devLastConsoleType ~= t then
                     _devLastConsoleType = t
                     send = true
                 end
             else
                 _devLastConsoleType = nil
+                _consoleMacroActive = false
                 send = true
             end
 
