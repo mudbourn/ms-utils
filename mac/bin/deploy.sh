@@ -16,29 +16,37 @@ touch "$SENTINEL"
 # Copy core file.
 cp "$REPO/mac/ms_core.lua" "$HS/ms_core.lua"
 
-# Copy UI files if they changed.
-cp "$REPO/ui/ms_settings_ui.html" "$HS/ui/ms_settings_ui.html" 2>/dev/null || true
+# Copy all UI HTML files.
+mkdir -p "$HS/ui"
+for f in "$REPO/ui/"*.html; do
+    cp "$f" "$HS/ui/$(basename "$f")" 2>/dev/null || true
+done
 
-# Copy Guardian spoon.
-cp -R "$REPO/mac/Spoons/MsGuardian.spoon" "$HS/Spoons/MsGuardian.spoon" 2>/dev/null || true
+# Copy UI fonts.
+if [ -d "$REPO/ui/fonts" ]; then
+    mkdir -p "$HS/ui/fonts"
+    cp -R "$REPO/ui/fonts/"* "$HS/ui/fonts/" 2>/dev/null || true
+fi
 
-# Copy MsDevTools spoon.
-cp -R "$REPO/mac/Spoons/MsDevTools.spoon" "$HS/Spoons/MsDevTools.spoon" 2>/dev/null || true
-
-# Copy MsAlert spoon.
-cp -R "$REPO/mac/Spoons/MsAlert.spoon" "$HS/Spoons/MsAlert.spoon" 2>/dev/null || true
-
-# Copy MsCamera spoon.
-cp -R "$REPO/mac/Spoons/MsCamera.spoon" "$HS/Spoons/MsCamera.spoon" 2>/dev/null || true
-
-# Copy MsSettings spoon.
-cp -R "$REPO/mac/Spoons/MsSettings.spoon" "$HS/Spoons/MsSettings.spoon" 2>/dev/null || true
-
-# Copy MsUI spoon.
-cp -R "$REPO/mac/Spoons/MsUI.spoon" "$HS/Spoons/MsUI.spoon" 2>/dev/null || true
+# Copy all spoons.
+for spoon in "$REPO/mac/Spoons/"*.spoon; do
+    cp -R "$spoon" "$HS/Spoons/$(basename "$spoon")" 2>/dev/null || true
+done
 
 # Copy guardian agent script.
 cp "$REPO/mac/bin/ms_guardian_agent.sh" "$HS/bin/ms_guardian_agent.sh" 2>/dev/null || true
+
+# Copy hidinject binary.
+cp "$REPO/mac/bin/hidinject" "$HS/bin/hidinject" 2>/dev/null || true
+
+# Copy sounds (defaults + active + macro).
+if [ -d "$REPO/sounds" ]; then
+    mkdir -p "$HS/sounds/defaults" "$HS/sounds/active" "$HS/sounds/macro"
+    # Default sounds — always bundled, never overwritten by profile imports.
+    if [ -d "$REPO/sounds/Default" ]; then
+        cp -R "$REPO/sounds/Default/"* "$HS/sounds/defaults/" 2>/dev/null || true
+    fi
+fi
 
 # Copy MANIFEST.json so version tracking stays in sync.
 cp "$REPO/MANIFEST.json" "$HS/MANIFEST.json" 2>/dev/null || true

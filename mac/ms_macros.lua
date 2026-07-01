@@ -313,6 +313,102 @@
             })
         -- END High Leap Assist --
 
+        -- HidInject Super Jump (test) --
+            local HidJumpFunction = ms.fn(function()
+                local MovingCheck = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
+                if not MovingCheck then
+                    ms.press("w")
+                    ms.wait(10)
+                end
+                for i = 1, 5 do
+                    ms.type("e")
+                    ms.wait(1)
+                end
+                ms.wait(30)
+                for i = 1, 2 do
+                    ms.type("space")
+                end
+                ms.wait(10)
+                    local JumpHigh = function()
+                        if ms.isSub("hidJumpHigh") then
+                            ms.sound(JumpHighSound, true)
+                            for i = 1, 60 do
+                                ms.HidMouse("DragRel", "Center", -3145, 0)
+                                ms.wait(1)
+                                ms.HidMouse("DragRel", "Center", -3145, 0)
+                                ms.wait(.5)
+                            end
+                            ms.wait(50)
+                            ms.HidMouse("DragRel", "Center", 262, 0)
+                            return true
+                        end
+                        return false
+                    end
+
+                    local JumpLow = function()
+                        if ms.isSub("hidJumpLow") then
+                            ms.sound(JumpLowSound, true)
+                            for i = 1, 14 do
+                                ms.HidMouse("DragRel", "Center", -370, 0)
+                                ms.wait(1)
+                                ms.HidMouse("DragRel", "Center", -370, 0)
+                                ms.wait(.5)
+                            end
+                            ms.wait(50)
+                            ms.HidMouse("DragRel", "Center", 308, 0)
+                            return true
+                        end
+                        return false
+                    end
+
+                    local JumpDefault = function()
+                        ms.sound(JumpNormalSound, true)
+                        for i = 1, 14 do
+                            ms.HidMouse("DragRel", "Center", -185, 0)
+                            ms.wait(1)
+                            ms.HidMouse("DragRel", "Center", -185, 0)
+                            ms.wait(.5)
+                        end
+                        ms.wait(50)
+                        ms.HidMouse("DragRel", "Center", -69, 0)
+                    end
+
+                    if not JumpHigh() then
+                        if not JumpLow() then
+                            JumpDefault()
+                        end
+                    end
+                    ms.release("space")
+                    ms.wait(100)
+                    if not MovingCheck then ms.release("w") end
+                    ms.wait(20)
+                    ms.wait(600)
+            end)
+
+            ms.bind.define("hidSuperJump", function()
+                HidJumpFunction()
+            end, {
+                group    = "optional",
+                label    = "Hid Super Jump (test)",
+                default  = {
+                    type   = "mouse",
+                    button = 3,
+                },
+            })
+
+            ms.bind.define("hidJumpHigh", HidJumpFunction, {
+                sub   = "hidSuperJump",
+                label = "Hid Jump High",
+                mod   = "v",
+            })
+
+            ms.bind.define("hidJumpLow",  HidJumpFunction, {
+                sub   = "hidSuperJump",
+                label = "Hid Jump Low",
+                mod   = "x",
+            })
+        -- END HidInject Super Jump --
+
         -- Throw Trick --
             local ThrowTrickFunction = ms.fn(function()
                 ms.sound(ThrowTrickSound, true)

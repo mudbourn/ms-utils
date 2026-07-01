@@ -917,6 +917,44 @@
                     ms._macroHeldButtons[btn] = nil
                 end
             end
+
+            -- [HidMouse — raw relative input via hidinject binary] --
+            -- macOS DllCall equivalent for camera control.
+            -- Sends raw CGEvents through cghidEventTap — same layer
+            -- AHK targets with SendInput.  No Hammerspoon eventtap.
+            --
+            -- ms.HidMouse("DragRel", "Center", dx, dy)  — drag w/ button held
+            -- ms.HidMouse("MoveRel", dx, dy)             — cursor move
+            ms.HidMouse = function(operation, ...)
+                local HIDINJECT = os.getenv("HOME") .. "/bin/hidinject"
+                local function run(args)
+                    local cmd = HIDINJECT .. " " .. table.concat(args, " ")
+                    hs.execute(cmd)
+                end
+                if ms.dev then spoon.MsDevTools:flushAll() end
+                if ms.dev._watcherPanel then
+                    spoon.MsDevTools:watcherStep("HidMouse " .. tostring(operation))
+                end
+                if ms.dev then
+                    spoon.MsDevTools:macroLog("HidMouse " .. tostring(operation))
+                end
+                if operation == "DragRel" then
+                    local btn, dx, dy = ...
+                    local BTNS = { Left="left", Right="right", Center="middle",
+                                   Button4="other", Button5="other" }
+                    assert(BTNS[btn], "ms.HidMouse DragRel: unknown button '" .. tostring(btn) .. "'")
+                    run({"dragrel", tostring(math.floor(tonumber(dx) or 0)),
+                                    tostring(math.floor(tonumber(dy) or 0)), BTNS[btn]})
+                elseif operation == "MoveRel" then
+                    local dx, dy = ...
+                    run({"mouserel", tostring(math.floor(tonumber(dx) or 0)),
+                                     tostring(math.floor(tonumber(dy) or 0))})
+                else
+                    error("ms.HidMouse: unknown operation '" .. tostring(operation) .. "'")
+                end
+            end
+            -- END HidMouse --
+
         -- END 4. Mouse Actions --
 
         -- 5. Timing --
