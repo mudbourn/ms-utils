@@ -48,6 +48,14 @@ jobs:
             [ -d "$d" ] && cp -R "$d" "$DIST/"
           done
           mkdir -p "$DIST/data" "$DIST/sounds"
+          # Include default settings so fresh installs have sound assignments and QR options.
+          for f in data/ms_settings.json data/ms_settings_default.json; do
+            [ -f "$f" ] && cp "$f" "$DIST/data/"
+          done
+          # Include default sounds so fresh installs have audio feedback.
+          if [ -d "sounds" ]; then
+            cp sounds/*.wav "$DIST/sounds/" 2>/dev/null || true
+          fi
           if [ -d "profiles/Default" ]; then
             mkdir -p "$DIST/profiles"
             cp -R profiles/Default "$DIST/profiles/"

@@ -64,6 +64,20 @@ if [ -f "$SCRIPT_DIR/ms_core.lua" ] && [ -f "$SCRIPT_DIR/init.lua" ]; then
     cp -R "$SCRIPT_DIR"/* "$HS/"
     # MANIFEST.json lives at the repo root (one level up from mac/)
     [ -f "$SCRIPT_DIR/../MANIFEST.json" ] && cp "$SCRIPT_DIR/../MANIFEST.json" "$HS/"
+    # Include default settings and sounds from the repo root.
+    if [ -d "$SCRIPT_DIR/../data" ]; then
+        mkdir -p "$HS/data"
+        cp "$SCRIPT_DIR/../data/"*.json "$HS/data/" 2>/dev/null || true
+    fi
+    if [ -d "$SCRIPT_DIR/../sounds" ]; then
+        mkdir -p "$HS/sounds"
+        cp "$SCRIPT_DIR/../sounds/"*.wav "$HS/sounds/" 2>/dev/null || true
+    fi
+    # Include the default profile if it exists.
+    if [ -d "$SCRIPT_DIR/../profiles/Default" ]; then
+        mkdir -p "$HS/profiles"
+        cp -R "$SCRIPT_DIR/../profiles/Default" "$HS/profiles/"
+    fi
     rm -f "$HS/install.sh"
     echo "   ✓ Files copied from $SCRIPT_DIR"
 else

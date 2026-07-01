@@ -1,105 +1,85 @@
 {
+  "customThemeDisabled" : false,
   "socdMode" : "lastWins",
+  "skipDevPrewarm" : false,
+  "socdEnabled" : false,
+  "trackpadMode" : false,
   "soundEnabled" : true,
-  "importedSounds" : {},
+  "importedSounds" : [
+
+  ],
   "sensitivity" : 1.5,
   "soundVolume" : 100,
   "soundAssign" : {
-    "themeLoaded" : "ThemeLoaded",
-    "loadEnd" : "LoadEnd",
+    "startup" : "LoadStart",
     "launch" : "Launch",
-    "alert" : "Alert",
-    "back" : "Back",
+    "updateAvailable" : "UpdateAvailable",
     "hover" : "Hover",
-    "interact" : "Interact",
-    "disabled" : "MacrosOff",
-    "enabled" : "MacrosOn",
-    "reset" : "Reset",
+    "back" : "Back",
     "settingsClose" : "SettingsClose",
-    "settingsOpen" : "SettingsOpen",
+    "disabled" : "MacrosOff",
     "update" : "Update",
-    "updateAvailable" : "UpdateAvailable"
+    "themeLoaded" : "ThemeLoaded",
+    "settingsOpen" : "SettingsOpen",
+    "interact" : "Interact",
+    "enabled" : "MacrosOn",
+    "load" : "LoadEnd",
+    "alert" : "Alert",
+    "reset" : "Reset"
   },
-  "trackpadMode" : false,
+  "qrOptions" : {
+    "settings" : true,
+    "ui" : true,
+    "theme" : true,
+    "macros" : true
+  },
+  "quickReloaded" : 0,
+  "updateChannel" : "stable",
   "trackpadHoldKeys" : {
     "right" : "j",
     "left" : "n"
   },
-  "socdEnabled" : false,
   "independentBinds" : false,
   "macros" : {
-    "fakeSwing" : {
-      "enabled" : true
+    "__quickReload" : {
+      "bind" : {
+        "type" : "key",
+        "mods" : [
+
+        ],
+        "key" : "g"
+      }
     },
-    "sgSetup" : {
-      "enabled" : true
+    "__fullReload" : {
+      "bind" : {
+        "type" : "key",
+        "mods" : [
+
+        ],
+        "key" : "n"
+      }
     },
-    "frameDump" : {
-      "enabled" : true
+    "__panicButton" : {
+      "bind" : {
+        "type" : "key",
+        "mods" : [
+
+        ],
+        "key" : "l"
+      }
     },
     "spawnAlt" : {
       "enabled" : false
     },
-    "mouseClickTest" : {
-      "enabled" : true
-    },
-    "helloWorld" : {
-      "enabled" : true
-    },
-    "waitAndPress" : {
-      "enabled" : true
-    },
-    "stateDump" : {
-      "enabled" : true,
-      "bind" : {
-        "key" : "g",
-        "mods" : {
-          "launch" : "Launch2"
-        },
-        "type" : "key"
-      }
-    },
-    "cameraSweep" : {
-      "enabled" : true
-    },
-    "quickReset" : {
-      "enabled" : true
-    },
-    "repeatLoop" : {
-      "enabled" : true
-    },
-    "keyHoldTest" : {
-      "enabled" : true,
-      "bind" : {
-        "key" : "h",
-        "mods" : {
-          "launch" : "Launch2"
-        },
-        "type" : "key"
-      }
-    },
-    "quickSG" : {
-      "enabled" : true
-    },
-    "superJump" : {
-      "enabled" : true
-    },
-    "mousePos" : {
+    "NewMacro1" : {
       "enabled" : true
     }
   },
-  "skipDevPrewarm" : false,
-  "user" : {
-    "qsClickY" : 680,
-    "sgMenuY" : 37,
-    "sgMenuX" : 445,
-    "qsClickX" : 920,
-    "spamMoveY" : 34,
-    "clickLevel" : 3,
-    "sgItemX" : 467,
-    "spamClickX" : 452,
-    "spamMoveX" : 437
-  },
-  "devArchiveLimit" : 15,
-  "quickReloaded" : 0
+  "user" : [
+
+  ],
+  "systemBinds" : [
+
+  ],
+  "devArchiveLimit" : 15
 }
