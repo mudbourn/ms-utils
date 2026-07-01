@@ -252,11 +252,11 @@
             }
 
             .badge-macro {
-                background: color-mix(in srgb, var(--accent) 20%, transparent);
-                color: var(--accent);
+                background: color-mix(in srgb, var(--success) 20%, transparent);
+                color: var(--success);
                 border-color: color-mix(
                     in srgb,
-                    var(--accent) 45%,
+                    var(--success) 45%,
                     transparent
                 );
             }
@@ -699,7 +699,7 @@
                 const msgEl = document.createElement("span");
                 msgEl.className = "msg";
 
-                if (type === "key" || type === "mouse") {
+                if (type === "key" || type === "mouse" || type === "sound") {
                     msgEl.textContent = "";
                 } else if (type === "macro") {
                     msgEl.textContent = entry.parentLabel
