@@ -336,7 +336,6 @@
             ms._menuVisible  = false
             ms._menuFnFired  = false
             ms._menuHoverWatcher = nil
-            ms._playSlotTimes    = {}
             ms._slotHandles      = {}
             ms._currentFlags     = {}
             ms._pendingReopenToSound = false
@@ -1379,15 +1378,9 @@
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
                 if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "startup" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" then return false end
-                local now = hs.timer.absoluteTime()
-                ms._playSlotTimes = ms._playSlotTimes or {}
-                if (now - (ms._playSlotTimes[slotId] or 0)) < 0.05 then return false end
-                ms._playSlotTimes[slotId] = now
                 ms._slotHandles = ms._slotHandles or {}
-                -- If this slot is already playing, don't restart — let it finish
+                -- Stop any currently-playing instance of this slot and replay on top
                 if ms._slotHandles[slotId] then
-                    local ok, playing = pcall(function() return ms._slotHandles[slotId]:isPlaying() end)
-                    if ok and playing then return ms._slotHandles[slotId] end
                     pcall(function() ms._slotHandles[slotId]:stop() end)
                     ms._slotHandles[slotId] = nil
                 end

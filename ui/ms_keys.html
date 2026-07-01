@@ -446,6 +446,40 @@
                     Menlo,
                     monospace;
             }
+
+            /* ── Context menu ─────────────────────────────────────────────── */
+            #ctx-menu {
+                position: fixed;
+                min-width: 140px;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-s);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+                z-index: 150;
+                overflow: hidden;
+                display: none;
+            }
+            #ctx-menu.open { display: block; }
+            .ctx-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 7px 10px;
+                font-size: 12px;
+                color: var(--text2);
+                cursor: pointer;
+                transition: background 0.1s, color 0.1s;
+                user-select: none;
+            }
+            .ctx-item:hover {
+                background: var(--hover);
+                color: var(--text);
+            }
+            .ctx-divider {
+                height: 1px;
+                background: var(--border);
+                margin: 2px 0;
+            }
         </style>
     </head>
     <body>
@@ -558,6 +592,8 @@
             <div id="mouse-log" class="log"></div>
         </div>
 
+        <div id="ctx-menu"></div>
+
         <script>
             "use strict";
 
@@ -624,18 +660,71 @@
             }
 
 
-            // Right-click on entries: copy selected
+            // ── Context menu ─────────────────────────────────────────────────────
+            function closeCtxMenu() {
+                document.getElementById("ctx-menu").classList.remove("open");
+            }
+
+            function showCtxMenu(x, y, items) {
+                const el = document.getElementById("ctx-menu");
+                el.innerHTML = "";
+                for (const item of items) {
+                    if (item === "divider") {
+                        const d = document.createElement("div");
+                        d.className = "ctx-divider";
+                        el.appendChild(d);
+                        continue;
+                    }
+                    const row = document.createElement("div");
+                    row.className = "ctx-item";
+                    row.textContent = item.label;
+                    row.addEventListener("mouseenter", () => playSlot("hover"));
+                    row.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        playSlot("interact");
+                        closeCtxMenu();
+                        item.action();
+                    });
+                    el.appendChild(row);
+                }
+                el.classList.add("open");
+                const mw = el.offsetWidth || 140;
+                const mh = el.offsetHeight || 80;
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                el.style.left = Math.min(x, vw - mw - 4) + "px";
+                el.style.top = Math.min(y, vh - mh - 4) + "px";
+            }
+
+            // Suppress native context menu everywhere, show custom menu
             document.addEventListener("contextmenu", (e) => {
-                const row = e.target.closest(".entry, .step");
-                if (!row) return;
                 e.preventDefault();
-                if (!_selected.has(row)) {
+                const row = e.target.closest(".entry");
+                const items = [];
+                if (row && !_selected.has(row)) {
                     _selected.clear();
                     _selected.add(row);
                     _updateSelectionVisuals();
                 }
-                _copySelected();
+                if (_selected.size > 0) {
+                    items.push({ label: "Copy", action: _copySelected });
+                    items.push("divider");
+                }
+                items.push({ label: "Select All", action: _selectAll });
+                items.push({ label: "Clear", action: clearLog });
+                showCtxMenu(e.clientX, e.clientY, items);
             });
+
+            document.addEventListener("click", () => closeCtxMenu());
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") closeCtxMenu();
+            });
+
+            function _selectAll() {
+                _selected.clear();
+                for (const el of _getEntries()) _selected.add(el);
+                _updateSelectionVisuals();
+            }
 
             // ── Host communication ─────────────────────────────────────────────
             function sendToHost(msg) {
@@ -832,6 +921,7 @@
 
             // ── Route entries to the correct log ──────────────────────────────
             function appendEntry(entry) {
+                if (_paused) return;
                 if (entry.type === "key" && entry.down)
                     flagKey(entry.key || "?");
                 if (entry.type === "mouse" && entry.down)
@@ -995,6 +1085,11 @@
                         r.setProperty("--border-dim", `rgba(${mr},${mg},${mb},0.18)`);
                     }
                 }
+                // Panel-specific: mouse/scroll tokens derived from warning/success
+                if (t.warning) r.setProperty("--mouse", t.warning);
+                if (t.success) r.setProperty("--scroll", t.success);
+                if (t.mouse) r.setProperty("--mouse", t.mouse);
+                if (t.scroll) r.setProperty("--scroll", t.scroll);
                 // Derived: accent glow
                 if (t.accent && !t.accentGlow) {
                     const a = hexToRgb(t.accent);
