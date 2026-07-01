@@ -615,6 +615,15 @@
             document.addEventListener("click", () => closeCtxMenu());
             document.addEventListener("keydown", (e) => {
                 if (e.key === "Escape") closeCtxMenu();
+                const inInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+                if ((e.metaKey || e.ctrlKey) && e.key === "a" && !inInput) {
+                    e.preventDefault();
+                    _selectAll();
+                }
+                if ((e.metaKey || e.ctrlKey) && e.key === "c" && !inInput && _selected.size > 0) {
+                    e.preventDefault();
+                    _copySelected();
+                }
             });
 
             // ── Constants ─────────────────────────────────────────────────────────

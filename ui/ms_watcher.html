@@ -596,6 +596,14 @@
             document.addEventListener("click", () => closeCtxMenu());
             document.addEventListener("keydown", (e) => {
                 if (e.key === "Escape") closeCtxMenu();
+                if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+                    e.preventDefault();
+                    _selectAll();
+                }
+                if ((e.metaKey || e.ctrlKey) && e.key === "c" && _selected.size > 0) {
+                    e.preventDefault();
+                    _copySelected();
+                }
             });
 
             // ── Host communication ─────────────────────────────────────────────

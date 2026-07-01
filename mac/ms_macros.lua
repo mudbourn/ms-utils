@@ -171,15 +171,15 @@
 
 -- Combat Warriors Macros --
     -- Helper Variables & Functions --
-        local QuickSlideSound    = SoundLib .. "QuickSlide.wav"
-        local JumpLowSound       = SoundLib .. "JumpLow.wav"
-        local JumpHighSound      = SoundLib .. "JumpHigh.wav"
-        local SlideSetupSound    = SoundLib .. "SlideSetup.wav"
-        local JumpNormalSound    = SoundLib .. "JumpNormal.wav"
-        local ThrowTrickSound    = SoundLib .. "ThrowTrick.wav"
-        local SpawnAltSound      = SoundLib .. "SpawnAlt.wav"
-        local ThrowTrickEndSound = SoundLib .. "ThrowTrickEnd.wav"
-        local ActionSpammerSound = SoundLib .. "TimeSlower.wav"
+        local QuickSlideSound    = SoundMacroDir .. "QuickSlide.wav"
+        local JumpLowSound       = SoundMacroDir .. "JumpLow.wav"
+        local JumpHighSound      = SoundMacroDir .. "JumpHigh.wav"
+        local SlideSetupSound    = SoundMacroDir .. "SlideSetup.wav"
+        local JumpNormalSound    = SoundMacroDir .. "JumpNormal.wav"
+        local ThrowTrickSound    = SoundMacroDir .. "ThrowTrick.wav"
+        local SpawnAltSound      = SoundMacroDir .. "SpawnAlt.wav"
+        local ThrowTrickEndSound = SoundMacroDir .. "ThrowTrickEnd.wav"
+        local ActionSpammerSound = SoundMacroDir .. "TimeSlower.wav"
 
 
         local getD1 = function()

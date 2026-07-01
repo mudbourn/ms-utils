@@ -1162,6 +1162,7 @@
         pcall(function() panel:windowStyle(0) end)
         pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
         pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+        pcall(function() panel:allowTextEntry(true) end)
         pcall(function() panel:shadow(true) end)
 
         _watcherPanelPos = { x = x, y = y, w = w, h = h }
@@ -1308,6 +1309,7 @@
         pcall(function() panel:windowStyle(0) end)
         pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
         pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+        pcall(function() panel:allowTextEntry(true) end)
         pcall(function() panel:shadow(true) end)
 
         if not _htmlCache["keys"] then return nil end
