@@ -2386,30 +2386,34 @@
             end)
             _G._timers[6] = hs.timer.doAfter(t5, function()
                 print("[startup] t=" .. t5 .. ": console")
+                if ms._skipDevPrewarm then return end
                 _lUpdate(62, "Loading console\u{2026}")
                 _G._timers[60] = hs.timer.doAfter(0, function()
-                    pcall(function() ms.dev.prewarmStep("console") end)
+                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("console") end) end
                 end)
             end)
             _G._timers[7] = hs.timer.doAfter(t6, function()
                 print("[startup] t=" .. t6 .. ": watcher")
+                if ms._skipDevPrewarm then return end
                 _lUpdate(72, "Loading macro monitor\u{2026}")
                 _G._timers[70] = hs.timer.doAfter(0, function()
-                    pcall(function() ms.dev.prewarmStep("watcher") end)
+                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("watcher") end) end
                 end)
             end)
             _G._timers[8] = hs.timer.doAfter(t7, function()
                 print("[startup] t=" .. t7 .. ": keys")
+                if ms._skipDevPrewarm then return end
                 _lUpdate(82, "Loading input monitor\u{2026}")
                 _G._timers[80] = hs.timer.doAfter(0, function()
-                    pcall(function() ms.dev.prewarmStep("keys") end)
+                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("keys") end) end
                 end)
             end)
             _G._timers[9] = hs.timer.doAfter(t8, function()
                 print("[startup] t=" .. t8 .. ": window")
+                if ms._skipDevPrewarm then return end
                 _lUpdate(90, "Loading window monitor\u{2026}")
                 _G._timers[90] = hs.timer.doAfter(0, function()
-                    pcall(function() ms.dev.prewarmStep("window") end)
+                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("window") end) end
                 end)
             end)
             _G._timers[10] = hs.timer.doAfter(t9, function()
