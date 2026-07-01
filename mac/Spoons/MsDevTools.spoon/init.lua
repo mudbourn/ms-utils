@@ -154,6 +154,7 @@
                 elseif k == "_watcherOpen"  then return _watcherOpen
                 elseif k == "_keysOpen"     then return _keysOpen
                 elseif k == "_windowOpen"   then return _windowOpen
+                elseif k == "recolor"       then return function() self:recolor() end
                 end
             end,
         })
@@ -1033,7 +1034,8 @@
         panel:navigationCallback(function(_, action)
             if action == "navigating" then return end
 
-            hs.timer.doAfter(0, function()
+            _devFadeTimers["_themeConsole"] = hs.timer.doAfter(0, function()
+                _devFadeTimers["_themeConsole"] = nil
                 local tj = _devThemeJS()
 
                 if tj ~= "" then
@@ -1066,7 +1068,8 @@
 
         _devFadeIn(_consolePanel, "console")
 
-        hs.timer.doAfter(0.1, function()
+        _devFadeTimers["_histConsole"] = hs.timer.doAfter(0.1, function()
+            _devFadeTimers["_histConsole"] = nil
             if not _consolePanel or not _consoleOpen then return end
 
             _loadDevHistory(_consolePanel, {"macro", "console", "error", "system", "input"})
@@ -1151,7 +1154,8 @@
         panel:navigationCallback(function(_, action)
             if action == "navigating" then return end
 
-            hs.timer.doAfter(0, function()
+            _devFadeTimers["_themeWatcher"] = hs.timer.doAfter(0, function()
+                _devFadeTimers["_themeWatcher"] = nil
                 local tj = _devThemeJS()
 
                 if tj ~= "" then
@@ -1184,7 +1188,8 @@
 
         _devFadeIn(_watcherPanel, "watcher")
 
-        hs.timer.doAfter(0.1, function()
+        _devFadeTimers["_histWatcher"] = hs.timer.doAfter(0.1, function()
+            _devFadeTimers["_histWatcher"] = nil
             if not _watcherPanel or not _watcherOpen then return end
 
             _loadDevHistory(_watcherPanel, {"macro", "error", "system"})
@@ -1246,7 +1251,8 @@
             elseif data.action == "setCoordMode" then
                 _coordMode = data.mode or "screen"
 
-                hs.timer.doAfter(0.01, function()
+                _devFadeTimers["_coordPush"] = hs.timer.doAfter(0.01, function()
+                    _devFadeTimers["_coordPush"] = nil
                     if _keysPanel then
                         pcall(function() _pushMouseState() end)
                     end
@@ -1291,7 +1297,8 @@
         panel:navigationCallback(function(_, action)
             if action == "navigating" then return end
 
-            hs.timer.doAfter(0, function()
+            _devFadeTimers["_themeKeys"] = hs.timer.doAfter(0, function()
+                _devFadeTimers["_themeKeys"] = nil
                 local tj = _devThemeJS()
 
                 if tj ~= "" then
@@ -1334,7 +1341,8 @@
 
         _devFadeIn(_keysPanel, "keys")
 
-        hs.timer.doAfter(0.1, function()
+        _devFadeTimers["_histKeys"] = hs.timer.doAfter(0.1, function()
+            _devFadeTimers["_histKeys"] = nil
             if not _keysPanel or not _keysOpen then return end
 
             _loadDevHistory(_keysPanel, {"input"})
@@ -1465,7 +1473,8 @@
         panel:navigationCallback(function(_, action)
             if action == "navigating" then return end
 
-            hs.timer.doAfter(0, function()
+            _devFadeTimers["_themeWindow"] = hs.timer.doAfter(0, function()
+                _devFadeTimers["_themeWindow"] = nil
                 local tj = _devThemeJS()
 
                 if tj ~= "" then
@@ -1479,7 +1488,8 @@
         end
 
         -- Load history and current window state once on build
-        hs.timer.doAfter(0.05, function()
+        _devFadeTimers["_histWindow"] = hs.timer.doAfter(0.05, function()
+            _devFadeTimers["_histWindow"] = nil
             if not _windowPanel then return end
 
             if #_windowHistory > 0 then
