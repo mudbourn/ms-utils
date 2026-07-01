@@ -808,6 +808,97 @@
                 ms._mouseCallbacks[button] = { fn = clickFn, swallow = swallow, hidinject = hidinject, system = isSystem or false }
             end
 
+            -- ms.scrollBind(direction, fn) — listen for scroll wheel up/down and fire callback
+            ms._scrollCallbacks = ms._scrollCallbacks or {}
+            ms.scrollBind = function(direction, fn)
+                if not ms._scrollListener then
+                    ms._scrollCallbacks = {}
+                    ms._scrollListener = hs.eventtap.new({
+                        hs.eventtap.event.types.scrollWheel,
+                    }, function(event)
+                        if BindValidity ~= 1 then return false end
+                        local dy = event:getProperty(hs.eventtap.event.properties.scrollWheelEventDeltaAxis1)
+                        local dir = dy > 0 and "up" or "down"
+                        local cb = ms._scrollCallbacks[dir]
+                        if cb then
+                            local co = coroutine.create(cb)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.scrollBind callback error: " .. tostring(err)) end
+                        end
+                        return false
+                    end):start()
+                end
+                ms._scrollCallbacks[direction] = fn
+                return {
+                    delete = function()
+                        ms._scrollCallbacks[direction] = nil
+                    end,
+                }
+            end
+
+            -- Gamepad reader — background process using ms_gc_read binary
+            ms._gamepadTask = nil
+            ms._gamepadCallbacks = {}  -- [buttonName] = fn
+            ms._gamepadConnected = false
+
+            ms.gamepadStart = function()
+                if ms._gamepadTask then return end
+                local bin = os.getenv("HOME") .. "/.local/bin/ms_gc_read"
+                ms._gamepadCallbacks = {}
+                ms._gamepadTask = hs.task.new(bin, function() end, function(task, stdOut, stdErr)
+                    if not stdOut or stdOut == "" then return true end
+                    -- Parse JSON line
+                    local ok, ev = pcall(function() return hs.json.decode(stdOut) end)
+                    if not ok or not ev or not ev.e then return true end
+                    if ev.e == "connect" then
+                        ms._gamepadConnected = true
+                        if ms.dev and ms.dev._watcherPanel then
+                            spoon.MsDevTools:watcherStep("gamepad connected: " .. (ev.c or "?"))
+                        end
+                    elseif ev.e == "disconnect" then
+                        ms._gamepadConnected = false
+                    elseif ev.e == "press" then
+                        -- Route to rebind capture if active, otherwise to bound button
+                        local rebindCb = ms._gamepadCallbacks._rebind
+                        if rebindCb then
+                            rebindCb(ev.b)
+                        else
+                            local cb = ms._gamepadCallbacks[ev.b]
+                            if cb then
+                                local co = coroutine.create(cb)
+                                local ok2, err = coroutine.resume(co)
+                                if not ok2 then print("ms.gamepad callback error: " .. tostring(err)) end
+                            end
+                        end
+                    end
+                    return true
+                end)
+                ms._gamepadTask:start()
+            end
+
+            ms.gamepadStop = function()
+                if ms._gamepadTask then
+                    ms._gamepadTask:terminate()
+                    ms._gamepadTask = nil
+                    ms._gamepadCallbacks = {}
+                    ms._gamepadConnected = false
+                end
+            end
+
+            -- ms.gamepadBind(buttonName, fn) — listen for a gamepad button press (requires gamepadEnabled)
+            ms.gamepadBind = function(button, fn)
+                if not ms.gamepadEnabled then
+                    return { delete = function() end }
+                end
+                if not ms._gamepadTask then ms.gamepadStart() end
+                ms._gamepadCallbacks[button] = fn
+                return {
+                    delete = function()
+                        ms._gamepadCallbacks[button] = nil
+                    end,
+                }
+            end
+
 
             ms.Mouse = function(operation, button, reference, ...)
                 local OPS  = { Move=true, Click=true, DoubleClick=true,
@@ -1658,6 +1749,11 @@
                 local c = ms.systemBinds.effective(id)
                 if not c then return "( unset )" end
                 if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
+                if c.type == "scroll" then
+                    local d = c.direction or "?"
+                    return "Scroll " .. d:sub(1,1):upper() .. d:sub(2)
+                end
+                if c.type == "gamepad" then return "Pad " .. (c.button or "?"):upper() end
                 local parts = {}
                 for _, m in ipairs(c.mods or {}) do table.insert(parts, m:sub(1, 1):upper() .. m:sub(2)) end
                 table.insert(parts, (c.key or ""):upper())
@@ -1687,6 +1783,20 @@
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, true)
+                    elseif c.type == "scroll" then
+                        ms.systemBinds._handles[id] = ms.scrollBind(c.direction, function()
+                            if not ms._robloxActive then return end
+                            local co = coroutine.create(action)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.systemBind error: " .. tostring(err)) end
+                        end)
+                    elseif c.type == "gamepad" then
+                        ms.systemBinds._handles[id] = ms.gamepadBind(c.button, function()
+                            if not ms._robloxActive then return end
+                            local co = coroutine.create(action)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.systemBind error: " .. tostring(err)) end
+                        end)
                     end
                     ::sysBindContinue::
                 end
@@ -1723,6 +1833,13 @@
                 end
                 ms.bindHandles = {}
                 ms._mouseCallbacks = {}
+                ms._scrollCallbacks = {}
+                if ms._scrollListener then
+                    ms._scrollListener:stop()
+                    ms._scrollListener = nil
+                end
+                ms._gamepadCallbacks = {}
+                ms.gamepadStop()
             end
 
             ms.bind.rebind = function()
@@ -1731,6 +1848,8 @@
                 local function bindKey(c)
                     if not c then return nil end
                     if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
+                    if c.type == "scroll" then return "scroll:" .. (c.direction or "up") end
+                    if c.type == "gamepad" then return "gamepad:" .. (c.button or "?") end
                     local mods = {}
                     for _, m in ipairs(c.mods or {}) do table.insert(mods, m) end
                     table.sort(mods)
@@ -1808,7 +1927,10 @@
                                 ms._activeSub = id
                                 if ms.dev then
                                     local _pd = ms.registry._defs[def.sub]
-                                    local _trig = c.type=="mouse" and ("M"..c.button) or (function()
+                                    local _trig = (function()
+                                        if c.type == "mouse" then return "M" .. c.button end
+                                        if c.type == "scroll" then return "S:" .. (c.direction or "?") end
+                                        if c.type == "gamepad" then return "G:" .. (c.button or "?") end
                                         local _p = {}
                                         for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
                                         _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
@@ -1822,6 +1944,10 @@
                                 ms.mouse(c.button, false, firedFn)
                             elseif c.type == "key" then
                                 ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
+                            elseif c.type == "scroll" then
+                                ms.bindHandles[id] = ms.scrollBind(c.direction, firedFn)
+                            elseif c.type == "gamepad" then
+                                ms.bindHandles[id] = ms.gamepadBind(c.button, firedFn)
                             end
                         end
                     else
@@ -1837,7 +1963,10 @@
                             end)
                             ms._activeSub = nil  -- clear sub-item state before root bind fires
                             if ms.dev then
-                                local _trig = c.type=="mouse" and ("M"..c.button) or (function()
+                                local _trig = (function()
+                                    if c.type == "mouse" then return "M" .. c.button end
+                                    if c.type == "scroll" then return "S:" .. (c.direction or "?") end
+                                    if c.type == "gamepad" then return "G:" .. (c.button or "?") end
                                     local _p = {}
                                     for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
                                     _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
@@ -1851,6 +1980,10 @@
                             ms.mouse(c.button, false, firedFn)
                         elseif c.type == "key" then
                             ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
+                        elseif c.type == "scroll" then
+                            ms.bindHandles[id] = ms.scrollBind(c.direction, firedFn)
+                        elseif c.type == "gamepad" then
+                            ms.bindHandles[id] = ms.gamepadBind(c.button, firedFn)
                         end
                     end
 
@@ -1899,6 +2032,20 @@
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, true)
+                    elseif c.type == "scroll" then
+                        ms._systemBindHandles[id] = ms.scrollBind(c.direction, function()
+                            if not ms._robloxActive then return end
+                            local co = coroutine.create(fn)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.systemBind error: " .. tostring(err)) end
+                        end)
+                    elseif c.type == "gamepad" then
+                        ms._systemBindHandles[id] = ms.gamepadBind(c.button, function()
+                            if not ms._robloxActive then return end
+                            local co = coroutine.create(fn)
+                            local ok, err = coroutine.resume(co)
+                            if not ok then print("ms.systemBind error: " .. tostring(err)) end
+                        end)
                     end
                     ::sysContinue::
                 end
@@ -1911,6 +2058,8 @@
                 local function key(cfg)
                     if not cfg then return nil end
                     if cfg.type == "mouse" then return "mouse:" .. tostring(cfg.button) end
+                    if cfg.type == "scroll" then return "scroll:" .. (cfg.direction or "up") end
+                    if cfg.type == "gamepad" then return "gamepad:" .. (cfg.button or "?") end
                     local mods = {}; for _, m in ipairs(cfg.mods or {}) do table.insert(mods, m) end
                     table.sort(mods)
                     return "key:" .. table.concat(mods, ",") .. ":" .. (cfg.key or "")
@@ -2552,7 +2701,7 @@
                 loadfinish = 1
             end)
 
-            _G._integrityPollTimer = hs.timer.doEvery(5, function()
+            _G._integrityPollTimer = hs.timer.doEvery(180, function()
                 if loadfinish ~= 1 then return end  -- skip startup grace period
                 if ms._updateInProgress then return end  -- skip during updates
                 ms.integrity.check()

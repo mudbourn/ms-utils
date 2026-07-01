@@ -52,6 +52,11 @@
         local function _bindDisplay(c)
             if not c then return nil end
             if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
+            if c.type == "scroll" then
+                local d = c.direction or "?"
+                return "Scroll " .. d:sub(1,1):upper() .. d:sub(2)
+            end
+            if c.type == "gamepad" then return "Pad " .. (c.button or "?"):upper() end
             local parts = {}
             for _, m in ipairs(c.mods or {}) do
                 table.insert(parts, m:sub(1, 1):upper() .. m:sub(2))
@@ -658,6 +663,8 @@
                     local function bindKey(c)
                         if not c then return nil end
                         if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
+                        if c.type == "scroll" then return "scroll:" .. (c.direction or "up") end
+                        if c.type == "gamepad" then return "gamepad:" .. (c.button or "?") end
                         local mods = {}
                         for _, m in ipairs(c.mods or {}) do table.insert(mods, m) end
                         table.sort(mods)
@@ -1015,6 +1022,11 @@
                     local function bindDisplay(c)
                         if not c then return "unset" end
                         if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
+                        if c.type == "scroll" then
+                            local d = c.direction or "?"
+                            return "Scroll " .. d:sub(1,1):upper() .. d:sub(2)
+                        end
+                        if c.type == "gamepad" then return "Pad " .. (c.button or "?"):upper() end
                         local parts = {}
                         for _, m in ipairs(c.mods or {}) do table.insert(parts, m) end
                         table.insert(parts, c.key or "")
@@ -1023,7 +1035,7 @@
 
                     ms.alert("Rebinding: " .. label
                         .. "\nCurrent: " .. bindDisplay(curBind)
-                        .. "\nPress your new key or mouse button.\nEscape to cancel.", 15, false, { id = "_rebind" })
+                        .. "\nPress your new key, mouse button, scroll, or controller button.\nEscape to cancel.", 15, false, { id = "_rebind" })
 
                     ms._inputOpen = true
                     ms.ui._open   = false
@@ -1048,8 +1060,12 @@
                         hs.eventtap.event.types.leftMouseDown,
                         hs.eventtap.event.types.rightMouseDown,
                         hs.eventtap.event.types.otherMouseDown,
+                        hs.eventtap.event.types.scrollWheel,
                     }, function(event)
-                        capture:stop(); capture = nil; cancelTimer:stop()
+                        if capture then capture:stop(); capture = nil end
+                        cancelTimer:stop()
+                        -- Clear gamepad capture
+                        if ms._gamepadCallbacks then ms._gamepadCallbacks._rebind = nil end
 
                         local parsed, bindStr2
                         local t = event:getType()
@@ -1080,6 +1096,11 @@
                                 table.insert(parts, keyStr)
                                 bindStr2 = table.concat(parts, "+")
                             end
+                        elseif t == hs.eventtap.event.types.scrollWheel then
+                            local dy = event:getProperty(hs.eventtap.event.properties.scrollWheelEventDeltaAxis1)
+                            local dir = dy > 0 and "up" or "down"
+                            parsed   = { type = "scroll", direction = dir }
+                            bindStr2 = "Scroll " .. dir:sub(1,1):upper() .. dir:sub(2)
                         else
                             local btn
                             if     t == hs.eventtap.event.types.leftMouseDown  then btn = 0
@@ -1122,8 +1143,46 @@
                         return true
                     end)
 
+                    -- Start gamepad capture alongside eventtap (if enabled)
+                    if ms.gamepadEnabled then
+                    if not ms._gamepadTask then ms.gamepadStart() end
+                    local _prevGpCb = ms._gamepadCallbacks._rebind
+                    ms._gamepadCallbacks._rebind = function(btn)
+                        if capture then capture:stop(); capture = nil end
+                        cancelTimer:stop()
+                        ms._gamepadCallbacks._rebind = nil
+                        local gparsed = { type = "gamepad", button = btn }
+                        local gbindStr = "Pad " .. btn:upper()
+                        ms.playSlot("interact")
+                        ms._inputOpen = false
+                        ms.ui.modal({
+                            title   = "Confirm Rebind",
+                            msg     = "Set \"" .. label .. "\" to:  " .. gbindStr,
+                            confirm = "Confirm",
+                            cancel  = "Cancel",
+                        }, function(r)
+                            if r.confirmed then
+                                ms.systemBinds._config[data.id] = gparsed
+                                ms.saveSettings()
+                                ms.playSlot("update")
+                                ms.systemBinds.rebind()
+                                restorePanel()
+                                hs.timer.doAfter(0.2, function()
+                                    ms.alert(label .. " rebound to: " .. gbindStr, 3, true, { id = "_rebind" })
+                                    ms.ui.refresh()
+                                end)
+                            else
+                                ms.alert("Rebind cancelled.", 2, false, { id = "_rebind" })
+                                restorePanel()
+                                ms.ui.refresh()
+                            end
+                        end)
+                    end
+                    end -- gamepadEnabled
+
                     capture:start()
                     cancelTimer = hs.timer.doAfter(15, function()
+                        ms._gamepadCallbacks._rebind = nil
                         if capture then
                             capture:stop(); capture = nil
                             ms._inputOpen = false
@@ -1142,15 +1201,20 @@
                 local function bindDisplay(c)
                     if not c then return "unset" end
                     if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
-                    local parts = {}
-                    for _, m in ipairs(c.mods or {}) do table.insert(parts, m) end
-                    table.insert(parts, c.key or "")
-                    return table.concat(parts, "+")
-                end
+                    if c.type == "scroll" then
+                                           local d = c.direction or "?"
+                                           return "Scroll " .. d:sub(1,1):upper() .. d:sub(2)
+                                       end
+                                       if c.type == "gamepad" then return "Pad " .. (c.button or "?"):upper() end
+                                       local parts = {}
+                                       for _, m in ipairs(c.mods or {}) do table.insert(parts, m) end
+                                       table.insert(parts, c.key or "")
+                                       return table.concat(parts, "+")
+                                       end
 
-                ms.alert("Rebinding: " .. label
-                    .. "\nCurrent: " .. bindDisplay(ms.effectiveBind(data.id))
-                    .. "\nPress your new key or mouse button.\nEscape to cancel.", 15, false, { id = "_rebind" })
+                                       ms.alert("Rebinding: " .. label
+                                           .. "\nCurrent: " .. bindDisplay(ms.effectiveBind(data.id))
+                                           .. "\nPress your new key, mouse button, scroll, or controller button.\nEscape to cancel.", 15, false, { id = "_rebind" })
 
                 ms._inputOpen = true
                 ms.ui._open   = false
@@ -1175,8 +1239,11 @@
                     hs.eventtap.event.types.leftMouseDown,
                     hs.eventtap.event.types.rightMouseDown,
                     hs.eventtap.event.types.otherMouseDown,
+                    hs.eventtap.event.types.scrollWheel,
                 }, function(event)
-                    capture:stop(); capture = nil; cancelTimer:stop()
+                    if capture then capture:stop(); capture = nil end
+                    cancelTimer:stop()
+                    if ms._gamepadCallbacks then ms._gamepadCallbacks._rebind = nil end
 
                     local parsed, bindStr2
                     local t = event:getType()
@@ -1207,6 +1274,11 @@
                             table.insert(parts, keyStr)
                             bindStr2 = table.concat(parts, "+")
                         end
+                    elseif t == hs.eventtap.event.types.scrollWheel then
+                        local dy = event:getProperty(hs.eventtap.event.properties.scrollWheelEventDeltaAxis1)
+                        local dir = dy > 0 and "up" or "down"
+                        parsed   = { type = "scroll", direction = dir }
+                        bindStr2 = "Scroll " .. dir:sub(1,1):upper() .. dir:sub(2)
                     else
                         local btn
                         if     t == hs.eventtap.event.types.leftMouseDown  then btn = 0
@@ -1262,8 +1334,58 @@
                     return true
                 end)
 
+                -- Start gamepad capture alongside eventtap (if enabled)
+                if ms.gamepadEnabled then
+                if not ms._gamepadTask then ms.gamepadStart() end
+                ms._gamepadCallbacks._rebind = function(btn)
+                    if capture then capture:stop(); capture = nil end
+                    cancelTimer:stop()
+                    ms._gamepadCallbacks._rebind = nil
+                    local gparsed = { type = "gamepad", button = btn }
+                    local gbindStr = "Pad " .. btn:upper()
+                    local conflictId = ms.bind.siblingConflict(data.id, gparsed)
+                    if conflictId then
+                        local cLabel = (ms.registry._defs[conflictId] and ms.registry._defs[conflictId].label) or conflictId
+                        ms.playSlot("alert")
+                        ms._inputOpen = false
+                        ms.alert("Bind Conflict: \"" .. gbindStr .. "\" is already used by \"" .. cLabel .. "\".\nChoose a different input.", 4, false, { id = "_rebind" })
+                        restorePanel()
+                        return
+                    end
+                    ms.playSlot("interact")
+                    ms._inputOpen = false
+                    ms.ui.modal({
+                        title   = "Confirm Rebind",
+                        msg     = "Set \"" .. label .. "\" to:  " .. gbindStr,
+                        confirm = "Confirm",
+                        cancel  = "Cancel",
+                    }, function(r)
+                        if r.confirmed then
+                            if def.sub then
+                                ms.subBinds[data.id] = gparsed
+                            else
+                                ms.bindConfig[data.id] = gparsed
+                            end
+                            ms.saveSettings()
+                            ms.playSlot("update")
+                            ms.bind.rebind()
+                            restorePanel()
+                            hs.timer.doAfter(0.2, function()
+                                ms.alert(label .. " rebound to: " .. gbindStr, 3, true, { id = "_rebind" })
+                                ms.ui.refresh()
+                            end)
+                        else
+                            ms.alert("Rebind cancelled.", 2, false, { id = "_rebind" })
+                            restorePanel()
+                            ms.ui.refresh()
+                        end
+                    end)
+                end
+                end -- gamepadEnabled
+
                 capture:start()
                 cancelTimer = hs.timer.doAfter(15, function()
+                    ms._gamepadCallbacks._rebind = nil
                     if capture then
                         capture:stop(); capture = nil
                         ms._inputOpen = false

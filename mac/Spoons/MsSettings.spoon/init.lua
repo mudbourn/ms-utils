@@ -40,6 +40,10 @@
         ms.parseBind = function(str)
             local btn = str:match("^mouse:(%d+)$")
             if btn then return {type="mouse", button=tonumber(btn)} end
+            local dir = str:match("^scroll:(%w+)$")
+            if dir and (dir == "up" or dir == "down") then return {type="scroll", direction=dir} end
+            local gp = str:match("^gamepad:(%w+)$")
+            if gp then return {type="gamepad", button=gp} end
             local mods = {}
             local parts = {}
             for part in str:gmatch("[^+]+") do
@@ -80,6 +84,7 @@
             trackpad         = true,
             independentBinds = true,
             sensitivity      = true,
+            gamepad          = true,
         }
         local function _validateUserValue(def, value)
             if def.type == "toggle" then
@@ -113,6 +118,7 @@
                 end
             end
             if data.trackpadMode     ~= nil then ms.trackpadMode           = (data.trackpadMode     == true) end
+            if data.gamepadEnabled   ~= nil then ms.gamepadEnabled         = (data.gamepadEnabled   == true) end
             if data.socdEnabled      ~= nil then ms.socdEnabled            = (data.socdEnabled      == true) end
             if data.independentBinds ~= nil then ms.independentBindsEnabled = (data.independentBinds == true) end
             if data.socdMode then
@@ -282,6 +288,7 @@
             local data = {
                 sensitivity      = CUR_CAM_SENS,
                 trackpadMode     = ms.trackpadMode,
+                gamepadEnabled   = ms.gamepadEnabled,
                 socdEnabled      = ms.socdEnabled,
                 socdMode         = ms.socdMode or "lastWins",
                 independentBinds = ms.independentBindsEnabled,
@@ -323,6 +330,10 @@
                     if cfg.type ~= def.type then
                         isDifferent = true
                     elseif cfg.type == "mouse" and cfg.button ~= def.button then
+                        isDifferent = true
+                    elseif cfg.type == "scroll" and cfg.direction ~= def.direction then
+                        isDifferent = true
+                    elseif cfg.type == "gamepad" and cfg.button ~= def.button then
                         isDifferent = true
                     elseif cfg.type == "key" then
                         local cfgMods = table.concat(cfg.mods or {}, "+")
@@ -893,6 +904,7 @@
             local data = {
                 sensitivity      = 1.5,
                 trackpadMode     = false,
+                gamepadEnabled   = false,
                 socdEnabled      = false,
                 socdMode         = "lastWins",
                 independentBinds = false,
@@ -2960,6 +2972,11 @@
             local function bindStr(c)
                 if not c then return "( unset )" end
                 if c.type == "mouse" then return "( Mouse " .. c.button .. " )" end
+                if c.type == "scroll" then
+                    local d = c.direction or "?"
+                    return "( Scroll " .. d:sub(1,1):upper() .. d:sub(2) .. " )"
+                end
+                if c.type == "gamepad" then return "( Pad " .. (c.button or "?"):upper() .. " )" end
                 local parts = {}
                 for _, m in ipairs(c.mods or {}) do table.insert(parts, m) end
                 table.insert(parts, c.key)
@@ -4013,6 +4030,8 @@
                         local function _bk(c)
                             if not c then return nil end
                             if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
+                            if c.type == "scroll" then return "scroll:" .. (c.direction or "up") end
+                            if c.type == "gamepad" then return "gamepad:" .. (c.button or "?") end
                             local m = {}; for _, v in ipairs(c.mods or {}) do table.insert(m, v) end
                             table.sort(m); return "key:" .. table.concat(m, ",") .. ":" .. (c.key or "")
                         end
@@ -4053,6 +4072,15 @@
                         ms.alert("Trackpad / Pen Mode: " .. (ms.trackpadMode and "ON" or "OFF"), 2, true)
                     end },
                     { title = "Trackpad Hold Keys", menu = buildTrackpadHoldSubmenu() },
+                    { title = "-" },
+                    { title = (ms.gamepadEnabled and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Controller / Gamepad Input", fn = function()
+                        ms.gamepadEnabled = not ms.gamepadEnabled
+                        if not ms.gamepadEnabled then ms.gamepadStop() end
+                        ms.saveSettings()
+                        ms.bind.rebind()
+                        ms.playSlot("update")
+                        ms.alert("Controller Input: " .. (ms.gamepadEnabled and "ON" or "OFF"), 2, true)
+                    end },
                     { title = "-" },
                     { title = (ms.socdEnabled and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " SOCD Cleaning", fn = function()
                         ms.socdEnabled = not ms.socdEnabled
