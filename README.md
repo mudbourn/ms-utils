@@ -40,6 +40,7 @@ There are a lot of macro tools out there that are either too complicated, too li
 2. **Protects you from bad actors.** The Guardian system verifies that the code you're running is the code I released. If someone tries to modify it and redistribute it as their own, you'll know.
 3. **Respects your time.** The visual builder means you don't have to write code if you don't want to. The live tools mean you can see exactly what's happening.
 4. **Grows with you.** Start with the visual builder, graduate to writing Lua — the same API supports both.
+5. **FOSS, first and foremost.** Software can and should be free and open source for anyone to do what they wish with it. I used to struggle to find good macro software for macOS that was free when I was younger, that never needed to be the case then, and I intend for it to not be now.
 
 I'm not interested in building a tool that hides what it does. If you can't understand what a macro tool is doing, you shouldn't trust it.
 
