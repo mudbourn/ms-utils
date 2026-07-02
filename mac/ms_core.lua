@@ -168,40 +168,6 @@
                 end
             -- END MsAlert (toast notifications) --
 
-            -- MsCamera (camera engine) --
-                _lUpdate(12, "Configuring Camera\u{2026}")
-                local _msCamOk, _msCamErr = pcall(function()
-                    hs.loadSpoon("MsCamera")
-                end)
-
-                if not _msCamOk then
-                    print("MsCamera: load failed — " .. tostring(_msCamErr))
-                end
-
-                if spoon.MsCamera then
-                    ms.legacycam = spoon.MsCamera
-                    -- ms.legacycam._setupWatcher()  -- opt-in: call manually if needed
-                else
-                    ms.legacycam = {
-                        anchor     = nil,
-                        button     = 5,
-                        cachedMult = 1.0,
-                        updateMultiplier = function() end,
-                        updateAnchor     = function() end,
-                        scheduleUpdate   = function() end,
-                        enable           = function() end,
-                        disable          = function() end,
-                        move             = function() end,
-                        _setupWatcher    = function() end,
-                    }
-
-                    print("MsCamera: running without camera engine (spoon not loaded)")
-                end
-
-                -- ms.legacycam available as fallback
-                -- ms.cam is the primary camera engine
-            -- END MsCamera (camera engine) --
-
             -- MsSettings (settings menu & profiles) --
                 _lUpdate(15, "Configuring Settings\u{2026}")
                 local _msSettingsOk, _msSettingsErr = pcall(function()
@@ -686,7 +652,6 @@
                 return false
             end):start()
 
-
                 ms.press = function(key, mods, hidinject)
                     if ms.dev then spoon.MsDevTools:flushAll() end
                     if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
@@ -959,7 +924,6 @@
                     end,
                 }
             end
-
 
             ms.Mouse = function(operation, button, reference, ...)
                 local OPS  = { Move=true, Click=true, DoubleClick=true,
@@ -1277,7 +1241,7 @@
                 if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                 if state == 1 and BindValidity ~= 1 then
                     BindValidity = 1
-                    pcall(function() end)  -- ms.legacycam.enable() opt-in
+
                     ms.dev.log({ type = "system", event = "macros_enabled" })
                     if not silent then _doNotify(1) end
                 elseif state == 0 and BindValidity ~= 0 then
@@ -1288,7 +1252,7 @@
                         if timer and timer.stop then timer:stop() end
                     end
                     ms.running = {}
-                    pcall(function() end)  -- ms.legacycam.disable() opt-in
+
                     ms.dev.log({ type = "system", event = "macros_disabled" })
                     if not silent then _doNotify(0) end
                 end
@@ -1302,11 +1266,11 @@
                         ms._inputOpen = false
                         ms._robloxActive = true
                         ms.dev.log({ type = "system", event = "roblox_focus", fromDialog = fromDialog or false })
-                        -- ms.legacycam._setupWatcher()  -- opt-in
+
                         if not ms._loadComplete then return end
                         if fromDialog then
                             BindValidity = 1
-                            -- pcall(function() ms.legacycam.enable() end)  -- opt-in
+
                         else
                             ms.setMacros(1)
                         end
@@ -1320,7 +1284,6 @@
                         end
                     end
                 elseif ms._targetApp and eventType == hs.application.watcher.launched and appName == ms._targetApp then
-                    -- ms.legacycam._setupWatcher()
                 end
             end):start()
             _G.__ms_appWatcher = ms._appWatcher  -- survives reload (lives outside the ms table) so next load's stop-guard can find this generation
@@ -1329,8 +1292,7 @@
                 local frontApp = hs.application.frontmostApplication()
                 if ms._targetApp and frontApp and frontApp:name() == ms._targetApp then
                     ms._robloxActive = true
-                    -- ms.legacycam._setupWatcher()
-                    -- ms.legacycam.enable()
+
                 end
             end)
 
@@ -1880,6 +1842,84 @@
                 _clipWatcher = hs.pasteboard.watcher.new(callback)
                 _clipWatcher:start()
                 return _clipWatcher
+            end
+
+            -- Animated mouse movement (interpolated over duration)
+            ms.moveMouse = function(x, y, ref, durationMs)
+                durationMs = durationMs or 200
+                local targetX, targetY = ms.resolvePoint(x, y, ref or "Absolute")
+                local startPos = hs.mouse.absolutePosition()
+                local startX, startY = startPos.x, startPos.y
+                local dx = targetX - startX
+                local dy = targetY - startY
+                local steps = math.max(10, math.floor(durationMs / 16))
+                local step = 0
+                local timer = hs.timer.doEvery(0.016, function()
+                    step = step + 1
+                    local t = math.min(step / steps, 1)
+                    -- Ease out cubic
+                    t = 1 - (1 - t) ^ 3
+                    hs.mouse.absolutePosition({
+                        x = startX + dx * t,
+                        y = startY + dy * t,
+                    })
+                    if step >= steps then
+                        hs.mouse.absolutePosition({ x = targetX, y = targetY })
+                        return false -- stop timer
+                    end
+                end)
+                return timer
+            end
+
+            -- Multi-point drag: press at points[1], drag through points[2..N], release
+            ms.dragPath = function(points, button, ref, delayMs)
+                if not points or #points < 2 then return end
+                button = button or "Left"
+                delayMs = delayMs or 10
+                local btnNum = button == "Right" and 1 or (button == "Middle" and 2 or 0)
+                local downType = btnNum == 1 and hs.eventtap.event.types.rightMouseDown
+                    or (btnNum == 2 and hs.eventtap.event.types.otherMouseDown
+                    or hs.eventtap.event.types.leftMouseDown)
+                local upType = btnNum == 1 and hs.eventtap.event.types.rightMouseUp
+                    or (btnNum == 2 and hs.eventtap.event.types.otherMouseUp
+                    or hs.eventtap.event.types.leftMouseUp)
+                local dragType = btnNum == 1 and hs.eventtap.event.types.rightMouseDragged
+                    or (btnNum == 2 and hs.eventtap.event.types.otherMouseDragged
+                    or hs.eventtap.event.types.leftMouseDragged)
+
+                -- Resolve first point and press
+                local x1, y1 = ms.resolvePoint(points[1][1], points[1][2], ref or "Absolute")
+                hs.mouse.absolutePosition({ x = x1, y = y1 })
+                local downEv = hs.eventtap.event.newMouseEvent(downType, { x = x1, y = y1 })
+                if btnNum > 0 then downEv:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btnNum) end
+                downEv:post()
+                ms.wait(delayMs)
+
+                -- Drag through remaining points
+                for i = 2, #points do
+                    local px, py = ms.resolvePoint(points[i][1], points[i][2], ref or "Absolute")
+                    hs.mouse.absolutePosition({ x = px, y = py })
+                    local dragEv = hs.eventtap.event.newMouseEvent(dragType, { x = px, y = py })
+                    if btnNum > 0 then dragEv:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btnNum) end
+                    dragEv:post()
+                    ms.wait(delayMs)
+                end
+
+                -- Release
+                local finalPos = hs.mouse.absolutePosition()
+                local upEv = hs.eventtap.event.newMouseEvent(upType, finalPos)
+                if btnNum > 0 then upEv:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btnNum) end
+                upEv:post()
+            end
+
+            -- Native macOS notification
+            ms.notify = function(title, subTitle, infoText)
+                local note = hs.notify.new({
+                    title = title or "mudscript",
+                    subTitle = subTitle or "",
+                    informativeText = infoText or "",
+                }):send()
+                return note
             end
 
         -- END 8. Utilities --
@@ -4170,7 +4210,7 @@
         ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)
         ms._discoverSounds()
         ms.loadTheme()
-        -- ms.legacycam.updateMultiplier()  -- opt-in: call manually if needed
+
         os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
         ms.bind._registerSystemBinds()
         ms.bind.rebind()
@@ -4458,7 +4498,6 @@
                     ms.integrity.trustCurrent()
                 end)
             end)
-
 
             if roblox then roblox:activate() end
 
