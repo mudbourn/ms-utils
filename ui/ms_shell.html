@@ -597,6 +597,269 @@
             opacity: 1;
             transform: translateY(0);
         }
+
+        /* ── Macro Toolbar ─────────────────────────────────────────────── */
+        .macro-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border-dim);
+            background: var(--surface);
+            flex-shrink: 0;
+        }
+
+        .macro-select {
+            background: var(--surface2);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 11px;
+            padding: 4px 8px;
+            outline: none;
+            font-family: inherit;
+            cursor: pointer;
+            min-width: 120px;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .macro-select:focus {
+            border-color: var(--accent);
+        }
+
+        .macro-toolbar-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--surface2);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius);
+            color: var(--text2);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 10px;
+            cursor: pointer;
+            transition: background 0.1s, border-color 0.1s, color 0.1s;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .macro-toolbar-btn:hover {
+            background: var(--hover);
+            border-color: var(--border);
+            color: var(--text);
+        }
+
+        .macro-toolbar-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg);
+        }
+
+        .macro-toolbar-btn.primary:hover {
+            opacity: 0.85;
+        }
+
+        .macro-toolbar-btn.danger:hover {
+            background: var(--danger-bg);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .macro-toolbar-spacer {
+            flex: 1;
+        }
+
+        .macro-name-input {
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            color: var(--accent-hi);
+            font-size: 12px;
+            font-weight: 700;
+            padding: 3px 6px;
+            outline: none;
+            width: 140px;
+            font-family: inherit;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .macro-name-input:hover {
+            border-color: var(--border-dim);
+        }
+
+        .macro-name-input:focus {
+            border-color: var(--accent);
+            background: var(--surface2);
+        }
+
+        /* ── Macros Layout: step canvas + fn-picker overlay ───────────── */
+        .macros-layout {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .macros-main {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .macros-step-area {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .macros-step-area .step-canvas {
+            flex: 1;
+        }
+
+        /* Floating add-step button */
+        .macros-add-step-btn {
+            position: absolute;
+            bottom: 14px;
+            right: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: var(--radius);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 7px 14px;
+            cursor: pointer;
+            transition: opacity 0.15s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            z-index: 20;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        .macros-add-step-btn:hover {
+            opacity: 0.85;
+        }
+
+        .macros-add-step-btn svg {
+            width: 12px;
+            height: 12px;
+        }
+        .macros-add-step-btn svg path {
+            stroke: var(--bg);
+            fill: none;
+        }
+
+        /* Fn-picker overlay (slides in from right) */
+        .fn-picker-overlay {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 440px;
+            max-width: 70%;
+            background: var(--surface);
+            border-left: 1px solid var(--border-dim);
+            box-shadow: -4px 0 16px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            z-index: 30;
+            transform: translateX(100%);
+            transition: transform 0.2s ease;
+        }
+
+        .fn-picker-overlay.open {
+            transform: translateX(0);
+        }
+
+        .fn-picker-overlay .fn-picker {
+            width: 100%;
+            height: 100%;
+        }
+
+        .fn-picker-overlay .fn-picker-list {
+            width: 180px;
+            min-width: 180px;
+        }
+
+        .fn-picker-overlay-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border-dim);
+            flex-shrink: 0;
+        }
+
+        .fn-picker-overlay-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text3);
+        }
+
+        .fn-picker-overlay-close {
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius);
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.1s, background 0.1s;
+        }
+
+        .fn-picker-overlay-close:hover {
+            opacity: 1;
+            background: var(--hover);
+        }
+
+        .fn-picker-overlay-close svg {
+            width: 14px;
+            height: 14px;
+        }
+        .fn-picker-overlay-close svg path {
+            stroke: var(--text);
+            fill: none;
+        }
+
+        /* Step param editor panel (slides up from bottom) */
+        .step-param-editor {
+            border-top: 1px solid var(--border-dim);
+            background: var(--surface);
+            padding: 10px 12px;
+            flex-shrink: 0;
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .step-param-editor.open {
+            display: block;
+        }
+
+        .step-param-editor-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text3);
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
@@ -1562,5 +1825,914 @@
 
     })();
     </script>
-</body>
-</html>
+    <!-- ════════════════════════════════════════════════════════════════════
+     Step Canvas + Macro Management
+     ════════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function() {
+    "use strict";
+
+    var _svgCache = {};
+    var SVG_BASE = "./svg/";
+
+    /* ── SVG loader (inline, no module needed) ───────────────────── */
+    function _fetchSVG(name) {
+        if (_svgCache[name]) return Promise.resolve(_svgCache[name]);
+        return new Promise(function(resolve) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", SVG_BASE + name + ".svg", true);
+            xhr.onload = function() {
+                var raw = xhr.responseText || "";
+                var inner = raw.replace(/<\?xml[^>]*\?>/g, "").replace(/<!--[\s\S]*?-->/g, "").trim();
+                _svgCache[name] = inner;
+                resolve(inner);
+            };
+            xhr.onerror = function() { resolve(""); };
+            xhr.send();
+        });
+    }
+
+    /* ── Action → icon mapping ───────────────────────────────────── */
+    var ACTION_ICON = {
+        "ms.type":"keyboard","ms.press":"keyboard","ms.hold":"keyboard","ms.release":"keyboard",
+        "ms.wait":"timer","ms.copy":"clipboard","ms.paste":"clipboard",
+        "ms.cam":"camera","ms.cam.rebalance":"camera","ms.cam.reset":"camera",
+        "ms.click":"click","ms.scroll":"scroll","ms.move":"move","ms.select":"select",
+        "ms.search":"search","ms.record":"record","ms.stop":"stop","ms.pause":"pause",
+        "ms.play":"play","ms.save":"save","ms.load":"upload","ms.alert":"alert",
+        "ms.refresh":"refresh","ms.pixelScan":"pixelscan","ms.window":"window",
+        "ms.input":"inputs","ms.variable":"variable","ms.watch":"watcher",
+        "if":"branch","for":"loop","while":"repeat","else":"branch"
+    };
+
+    function iconFor(action) { return ACTION_ICON[action] || "macros"; }
+
+    /* ── Param summary ───────────────────────────────────────────── */
+    function paramSummary(action, params) {
+        if (!params) return "";
+        var keys = Object.keys(params);
+        if (keys.length === 0) return "";
+        if (action === "if" || action === "while") return params.condition || "";
+        if (action === "for") return (params.var||"i") + " = " + (params.from||1) + " → " + (params.to||1);
+        var parts = [];
+        for (var i = 0; i < Math.min(keys.length, 2); i++) {
+            var k = keys[i], v = params[k];
+            if (Array.isArray(v)) { if (v.length === 0) continue; v = v.join("+"); }
+            if (typeof v === "string" && v.length > 16) v = v.slice(0,14) + "…";
+            parts.push(k + ": " + v);
+        }
+        return parts.join(", ");
+    }
+
+    /* ── Step ID generator ───────────────────────────────────────── */
+    var _idCounter = 0;
+    function nextId() { return "_s" + (++_idCounter) + "_" + Date.now().toString(36); }
+
+    function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+    /* ── CSS for step blocks (injected once) ─────────────────────── */
+    var _blockCSS = false;
+    function injectBlockCSS() {
+        if (_blockCSS) return;
+        _blockCSS = true;
+        var s = document.createElement("style");
+        s.textContent = [
+            ".step-canvas{display:flex;flex-direction:column;gap:2px;padding:8px;min-height:100%;overflow-y:auto;position:relative}",
+            ".step-canvas::-webkit-scrollbar{width:4px}",
+            ".step-canvas::-webkit-scrollbar-track{background:transparent}",
+            ".step-canvas::-webkit-scrollbar-thumb{background:var(--border-dim);border-radius:2px}",
+            ".step-canvas::-webkit-scrollbar-thumb:hover{background:var(--border)}",
+            ".step-canvas-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text3);font-size:11px;padding:40px 20px;text-align:center;gap:6px;user-select:none}",
+            ".step-canvas-empty-icon{font-size:28px;opacity:0.25}",
+            ".step-block{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surface);border:1px solid var(--border-dim);border-radius:var(--radius);cursor:default;transition:background .1s,border-color .15s,box-shadow .15s;position:relative;user-select:none;min-height:32px}",
+            ".step-block:hover{background:var(--surface2);border-color:var(--border)}",
+            ".step-block.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-glow-faint,rgba(196,26,26,.12))}",
+            ".step-block.drag-over-above::before{content:'';position:absolute;top:-3px;left:4px;right:4px;height:2px;background:var(--accent);border-radius:1px;z-index:10}",
+            ".step-block.drag-over-below::after{content:'';position:absolute;bottom:-3px;left:4px;right:4px;height:2px;background:var(--accent);border-radius:1px;z-index:10}",
+            ".step-block.drag-over-nest{border-color:var(--accent);background:var(--accent-glow-faint,rgba(196,26,26,.12))}",
+            ".step-block.dragging{opacity:.4}",
+            ".step-drag-handle{width:14px;height:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:grab;opacity:.35;transition:opacity .15s}",
+            ".step-drag-handle:hover{opacity:.8}.step-drag-handle:active{cursor:grabbing}",
+            ".step-drag-handle svg{width:14px;height:14px}",
+            ".step-drag-handle svg path,.step-drag-handle svg g{stroke:var(--text);fill:none}",
+            ".step-icon{width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}",
+            ".step-icon svg{width:14px;height:14px}",
+            ".step-icon svg path,.step-icon svg g,.step-icon svg circle,.step-icon svg rect{stroke:var(--accent);fill:none}",
+            ".step-action-name{font-family:\"SF Mono\",\"Menlo\",\"Consolas\",monospace;font-size:11px;color:var(--text);font-weight:600;white-space:nowrap;flex-shrink:0}",
+            ".step-params{font-family:\"SF Mono\",\"Menlo\",\"Consolas\",monospace;font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}",
+            ".step-actions{display:flex;align-items:center;gap:2px;flex-shrink:0;opacity:0;transition:opacity .15s}",
+            ".step-block:hover .step-actions{opacity:1}",
+            ".step-action-btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-s);cursor:pointer;opacity:.5;transition:opacity .1s,background .1s}",
+            ".step-action-btn:hover{opacity:1;background:var(--hover)}",
+            ".step-action-btn svg{width:12px;height:12px}",
+            ".step-action-btn svg path,.step-action-btn svg g{stroke:var(--text);fill:none}",
+            ".step-action-btn.del:hover{background:var(--danger-bg)}",
+            ".step-action-btn.del:hover svg path,.step-action-btn.del:hover svg g{stroke:var(--danger)}",
+            ".step-block-container{display:flex;flex-direction:column}",
+            ".step-nest-body{margin-left:20px;border-left:2px solid var(--border-dim);padding-left:8px;padding-top:2px;padding-bottom:2px;display:flex;flex-direction:column;gap:2px;min-height:28px;position:relative}",
+            ".step-nest-body.drag-target{border-left-color:var(--accent);background:var(--accent-glow-faint,rgba(196,26,26,.06));border-radius:var(--radius)}",
+            ".step-nest-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);padding:2px 0 0}",
+            ".step-nest-body-empty{font-size:10px;color:var(--text3);font-style:italic;padding:4px 0;opacity:.6}",
+            ".step-nest-toggle{width:14px;height:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.5;transition:opacity .15s,transform .15s;font-size:10px;color:var(--text)}",
+            ".step-nest-toggle:hover{opacity:1}",
+            ".step-nest-toggle.collapsed{transform:rotate(-90deg)}",
+            ".step-nest-toggle svg{width:12px;height:12px}",
+            ".step-nest-toggle svg path{stroke:var(--text);fill:none}",
+            ".step-nest-body.collapsed{display:none}"
+        ].join("\n");
+        document.head.appendChild(s);
+    }
+
+    /* ── StepCanvas class (IIFE version) ─────────────────────────── */
+    function StepCanvas(container, opts) {
+        injectBlockCSS();
+        this._el = container;
+        this._onChange = (opts && opts.onChange) || function(){};
+        this._onSelect = (opts && opts.onSelect) || function(){};
+        this._steps = [];
+        this._map = {};
+        this._selId = null;
+        this._dragId = null;
+        this._root = document.createElement("div");
+        this._root.className = "step-canvas";
+        this._el.appendChild(this._root);
+        this._renderEmpty();
+        this._preloadIcons();
+    }
+
+    StepCanvas.prototype._preloadIcons = function() {
+        var needed = ["drag","close","chevdown","macros"];
+        for (var a in ACTION_ICON) { if (needed.indexOf(ACTION_ICON[a]) === -1) needed.push(ACTION_ICON[a]); }
+        var self = this;
+        var chain = Promise.resolve();
+        needed.forEach(function(n) { chain = chain.then(function(){ return _fetchSVG(n); }); });
+    };
+
+    StepCanvas.prototype._assignIds = function(steps) {
+        for (var i = 0; i < steps.length; i++) {
+            var s = steps[i];
+            if (!s._sid) s._sid = nextId();
+            this._map[s._sid] = s;
+            if (s.then) this._assignIds(s.then);
+            if (s.else) this._assignIds(s.else);
+            if (s.body) this._assignIds(s.body);
+        }
+    };
+
+    StepCanvas.prototype.load = function(steps) {
+        this._steps = steps || [];
+        this._map = {};
+        this._assignIds(this._steps);
+        this._selId = null;
+        this._render();
+    };
+
+    StepCanvas.prototype.addStep = function(def, afterId) {
+        var step = deepClone(def);
+        step._sid = nextId();
+        this._map[step._sid] = step;
+        if (afterId) {
+            var idx = this._findIdx(this._steps, afterId);
+            if (idx !== -1) this._steps.splice(idx+1, 0, step);
+            else this._steps.push(step);
+        } else {
+            this._steps.push(step);
+        }
+        this._render();
+        this._fireChange();
+    };
+
+    StepCanvas.prototype.removeStep = function(sid) {
+        if (this._removeFrom(this._steps, sid)) {
+            delete this._map[sid];
+            if (this._selId === sid) this._selId = null;
+            this._render();
+            this._fireChange();
+        }
+    };
+
+    StepCanvas.prototype._removeFrom = function(list, sid) {
+        for (var i = 0; i < list.length; i++) {
+            if (list[i]._sid === sid) { list.splice(i,1); return true; }
+            var s = list[i];
+            if (s.then && this._removeFrom(s.then, sid)) return true;
+            if (s.else && this._removeFrom(s.else, sid)) return true;
+            if (s.body && this._removeFrom(s.body, sid)) return true;
+        }
+        return false;
+    };
+
+    StepCanvas.prototype._findIdx = function(list, sid) {
+        for (var i = 0; i < list.length; i++) { if (list[i]._sid === sid) return i; }
+        return -1;
+    };
+
+    StepCanvas.prototype.moveStep = function(dragId, targetId, pos) {
+        var step = this._map[dragId];
+        if (!step) return;
+        this._removeFrom(this._steps, dragId);
+        if (pos === "nest") {
+            var tgt = this._map[targetId];
+            if (tgt) {
+                if (tgt.action === "if") { if(!tgt.then) tgt.then=[]; tgt.then.push(step); }
+                else { if(!tgt.body) tgt.body=[]; tgt.body.push(step); }
+            }
+        } else {
+            var ti = this._findIdx(this._steps, targetId);
+            if (ti !== -1) this._steps.splice(pos==="above"?ti:ti+1, 0, step);
+            else this._steps.push(step);
+        }
+        this._render();
+        this._fireChange();
+    };
+
+    StepCanvas.prototype.serialize = function() {
+        return this._strip(deepClone(this._steps));
+    };
+
+    StepCanvas.prototype._strip = function(steps) {
+        for (var i=0;i<steps.length;i++) {
+            delete steps[i]._sid;
+            if (steps[i].then) this._strip(steps[i].then);
+            if (steps[i].else) this._strip(steps[i].else);
+            if (steps[i].body) this._strip(steps[i].body);
+        }
+        return steps;
+    };
+
+    StepCanvas.prototype._fireChange = function() { this._onChange(this.serialize()); };
+
+    StepCanvas.prototype._render = function() {
+        this._root.innerHTML = "";
+        if (this._steps.length === 0) { this._renderEmpty(); return; }
+        for (var i=0;i<this._steps.length;i++) {
+            this._root.appendChild(this._renderStep(this._steps[i]));
+        }
+    };
+
+    StepCanvas.prototype._renderEmpty = function() {
+        this._root.innerHTML = "";
+        var d = document.createElement("div");
+        d.className = "step-canvas-empty";
+        d.innerHTML = '<span class="step-canvas-empty-icon">▶</span>No steps yet<br><span style="font-size:10px">Click <b>+ Add Step</b> to begin</span>';
+        this._root.appendChild(d);
+    };
+
+    StepCanvas.prototype._isContainer = function(s) {
+        return s.action==="if" || s.action==="for" || s.action==="while";
+    };
+
+    StepCanvas.prototype._renderStep = function(step) {
+        return this._isContainer(step) ? this._renderContainer(step) : this._renderLeaf(step);
+    };
+
+    StepCanvas.prototype._renderLeaf = function(step) {
+        var self = this;
+        var el = document.createElement("div");
+        el.className = "step-block" + (step._sid===this._selId?" selected":"");
+        el.setAttribute("data-sid", step._sid);
+        el.setAttribute("draggable","true");
+
+        var h = document.createElement("div");
+        h.className = "step-drag-handle";
+        h.innerHTML = _svgCache["drag"] || "⠿";
+        el.appendChild(h);
+
+        var ic = document.createElement("div");
+        ic.className = "step-icon";
+        ic.innerHTML = _svgCache[iconFor(step.action)] || "";
+        el.appendChild(ic);
+
+        var nm = document.createElement("span");
+        nm.className = "step-action-name";
+        nm.textContent = step.action;
+        el.appendChild(nm);
+
+        var pm = document.createElement("span");
+        pm.className = "step-params";
+        pm.textContent = paramSummary(step.action, step.params);
+        el.appendChild(pm);
+
+        var acts = document.createElement("div");
+        acts.className = "step-actions";
+        var db = document.createElement("div");
+        db.className = "step-action-btn del";
+        db.innerHTML = _svgCache["close"] || "×";
+        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeStep(step._sid); });
+        acts.appendChild(db);
+        el.appendChild(acts);
+
+        el.addEventListener("click", function(e) {
+            if (e.target.closest(".step-action-btn") || e.target.closest(".step-drag-handle")) return;
+            self._selectStep(step._sid);
+        });
+
+        this._wireDrag(el, step);
+        return el;
+    };
+
+    StepCanvas.prototype._renderContainer = function(step) {
+        var self = this;
+        var wrap = document.createElement("div");
+        wrap.className = "step-block-container";
+        wrap.setAttribute("data-sid", step._sid);
+
+        var header = document.createElement("div");
+        header.className = "step-block" + (step._sid===this._selId?" selected":"");
+        header.setAttribute("data-sid", step._sid);
+        header.setAttribute("draggable","true");
+
+        var h = document.createElement("div");
+        h.className = "step-drag-handle";
+        h.innerHTML = _svgCache["drag"] || "⠿";
+        header.appendChild(h);
+
+        var tg = document.createElement("div");
+        tg.className = "step-nest-toggle";
+        tg.innerHTML = _svgCache["chevdown"] || "▾";
+        tg.addEventListener("click", function(e) {
+            e.stopPropagation();
+            tg.classList.toggle("collapsed");
+            var b = wrap.querySelector(".step-nest-body");
+            if (b) b.classList.toggle("collapsed");
+        });
+        header.appendChild(tg);
+
+        var ic = document.createElement("div");
+        ic.className = "step-icon";
+        ic.innerHTML = _svgCache[iconFor(step.action)] || "";
+        header.appendChild(ic);
+
+        var nm = document.createElement("span");
+        nm.className = "step-action-name";
+        nm.textContent = step.action;
+        header.appendChild(nm);
+
+        var pm = document.createElement("span");
+        pm.className = "step-params";
+        pm.textContent = paramSummary(step.action, step.params);
+        header.appendChild(pm);
+
+        var acts = document.createElement("div");
+        acts.className = "step-actions";
+        var db = document.createElement("div");
+        db.className = "step-action-btn del";
+        db.innerHTML = _svgCache["close"] || "×";
+        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeStep(step._sid); });
+        acts.appendChild(db);
+        header.appendChild(acts);
+
+        header.addEventListener("click", function(e) {
+            if (e.target.closest(".step-action-btn")||e.target.closest(".step-drag-handle")||e.target.closest(".step-nest-toggle")) return;
+            self._selectStep(step._sid);
+        });
+        this._wireDrag(header, step);
+
+        wrap.appendChild(header);
+
+        if (step.action === "if") {
+            var tl = document.createElement("div"); tl.className="step-nest-label"; tl.textContent="then"; wrap.appendChild(tl);
+            wrap.appendChild(this._renderNest(step.then||[], "then", step));
+            var el2 = document.createElement("div"); el2.className="step-nest-label"; el2.textContent="else"; wrap.appendChild(el2);
+            wrap.appendChild(this._renderNest(step.else||[], "else", step));
+        } else {
+            wrap.appendChild(this._renderNest(step.body||[], "body", step));
+        }
+        return wrap;
+    };
+
+    StepCanvas.prototype._renderNest = function(steps, branch, parent) {
+        var self = this;
+        var body = document.createElement("div");
+        body.className = "step-nest-body";
+        body.setAttribute("data-nest-parent", parent._sid);
+        body.setAttribute("data-nest-branch", branch);
+
+        if (steps.length === 0) {
+            var emp = document.createElement("div");
+            emp.className = "step-nest-body-empty";
+            emp.textContent = "empty";
+            body.appendChild(emp);
+        } else {
+            for (var i=0;i<steps.length;i++) body.appendChild(this._renderStep(steps[i]));
+        }
+
+        body.addEventListener("dragover", function(e) {
+            if (!self._dragId) return; e.preventDefault(); e.stopPropagation();
+            e.dataTransfer.dropEffect = "move"; body.classList.add("drag-target");
+        });
+        body.addEventListener("dragleave", function() { body.classList.remove("drag-target"); });
+        body.addEventListener("drop", function(e) {
+            e.preventDefault(); e.stopPropagation();
+            if (!self._dragId) return;
+            var step = self._map[self._dragId]; if (!step) return;
+            self._removeFrom(self._steps, self._dragId);
+            if (branch==="then") { if(!parent.then)parent.then=[]; parent.then.push(step); }
+            else if (branch==="else") { if(!parent.else)parent.else=[]; parent.else.push(step); }
+            else { if(!parent.body)parent.body=[]; parent.body.push(step); }
+            body.classList.remove("drag-target");
+            self._dragId = null;
+            self._render(); self._fireChange();
+        });
+        return body;
+    };
+
+    StepCanvas.prototype._selectStep = function(sid) {
+        this._selId = sid;
+        var prev = this._root.querySelector(".step-block.selected");
+        if (prev) prev.classList.remove("selected");
+        var el = this._root.querySelector('[data-sid="'+sid+'"] > .step-block[data-sid="'+sid+'"], .step-block[data-sid="'+sid+'"]');
+        if (el) el.classList.add("selected");
+        this._onSelect(sid, this._map[sid]);
+    };
+
+    StepCanvas.prototype._isDesc = function(pid, cid) {
+        var p = this._map[pid]; if (!p) return false;
+        var ch = [].concat(p.then||[], p.else||[], p.body||[]);
+        for (var i=0;i<ch.length;i++) {
+            if (ch[i]._sid===cid) return true;
+            if (this._isDesc(ch[i]._sid, cid)) return true;
+        }
+        return false;
+    };
+
+    StepCanvas.prototype._wireDrag = function(el, step) {
+        var self = this;
+        el.addEventListener("dragstart", function(e) {
+            self._dragId = step._sid;
+            el.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", step._sid);
+            var ghost = el.cloneNode(true);
+            ghost.style.width = el.offsetWidth + "px"; ghost.style.opacity = "0.7";
+            ghost.style.position = "absolute"; ghost.style.top = "-1000px";
+            document.body.appendChild(ghost);
+            e.dataTransfer.setDragImage(ghost, 10, 10);
+            requestAnimationFrame(function() { ghost.remove(); });
+        });
+        el.addEventListener("dragend", function() {
+            self._dragId = null; el.classList.remove("dragging");
+            self._clearDrops();
+        });
+        el.addEventListener("dragover", function(e) {
+            if (!self._dragId || self._dragId === step._sid) return;
+            e.preventDefault(); e.dataTransfer.dropEffect = "move";
+            var rect = el.getBoundingClientRect();
+            var y = e.clientY - rect.top, h = rect.height;
+            var isC = self._isContainer(step);
+            el.classList.remove("drag-over-above","drag-over-below","drag-over-nest");
+            if (isC && y > h*0.3 && y < h*0.7) el.classList.add("drag-over-nest");
+            else if (y < h/2) el.classList.add("drag-over-above");
+            else el.classList.add("drag-over-below");
+        });
+        el.addEventListener("dragleave", function() {
+            el.classList.remove("drag-over-above","drag-over-below","drag-over-nest");
+        });
+        el.addEventListener("drop", function(e) {
+            e.preventDefault(); e.stopPropagation();
+            if (!self._dragId || self._dragId === step._sid) return;
+            var rect = el.getBoundingClientRect();
+            var y = e.clientY - rect.top, h = rect.height;
+            var isC = self._isContainer(step);
+            var pos;
+            if (isC && y > h*0.3 && y < h*0.7) pos = "nest";
+            else if (y < h/2) pos = "above";
+            else pos = "below";
+            if (pos === "nest" && self._isDesc(step._sid, self._dragId)) { self._clearDrops(); return; }
+            self.moveStep(self._dragId, step._sid, pos);
+            self._clearDrops();
+        });
+    };
+
+    StepCanvas.prototype._clearDrops = function() {
+        this._root.querySelectorAll(".drag-over-above,.drag-over-below,.drag-over-nest").forEach(function(el) {
+            el.classList.remove("drag-over-above","drag-over-below","drag-over-nest");
+        });
+        this._root.querySelectorAll(".drag-target").forEach(function(el) { el.classList.remove("drag-target"); });
+    };
+
+    StepCanvas.prototype.updateStep = function(sid, params) {
+        var s = this._map[sid]; if (!s) return;
+        for (var k in params) { if (params.hasOwnProperty(k)) s.params[k] = params[k]; }
+        this._render(); this._fireChange();
+    };
+
+    StepCanvas.prototype.getSelectedId = function() { return this._selId; };
+    StepCanvas.prototype.getSelectedStep = function() { return this._selId ? this._map[this._selId] : null; };
+
+    /* ── Macro Management State ──────────────────────────────────── */
+    var _currentMacroId = null;
+    var _currentMacroDef = null;
+    var _macroDirty = false;
+    var _canvas = null;
+
+    /* ── Layout Setup ────────────────────────────────────────────── */
+    var slot = document.getElementById("slot-macros");
+    if (!slot) return;
+
+    // The existing function picker is already in slot-macros as a .fn-picker child.
+    // We restructure: wrap it in a layout with toolbar + step canvas + overlay.
+
+    var existingPicker = slot.querySelector(".fn-picker");
+
+    // Create the macros layout wrapper
+    var layout = document.createElement("div");
+    layout.className = "macros-layout";
+
+    // ── Toolbar ──
+    var toolbar = document.createElement("div");
+    toolbar.className = "macro-toolbar";
+
+    var macroLabel = document.createElement("span");
+    macroLabel.style.cssText = "font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-right:4px";
+    macroLabel.textContent = "Macro";
+    toolbar.appendChild(macroLabel);
+
+    var macroSelect = document.createElement("select");
+    macroSelect.className = "macro-select";
+    toolbar.appendChild(macroSelect);
+
+    var nameInput = document.createElement("input");
+    nameInput.className = "macro-name-input";
+    nameInput.type = "text";
+    nameInput.placeholder = "Macro name";
+    nameInput.setAttribute("spellcheck", "false");
+    toolbar.appendChild(nameInput);
+
+    var spacer = document.createElement("div");
+    spacer.className = "macro-toolbar-spacer";
+    toolbar.appendChild(spacer);
+
+    // New macro button
+    var newBtn = document.createElement("button");
+    newBtn.className = "macro-toolbar-btn";
+    newBtn.textContent = "New";
+    toolbar.appendChild(newBtn);
+
+    // Save button
+    var saveBtn = document.createElement("button");
+    saveBtn.className = "macro-toolbar-btn primary";
+    saveBtn.textContent = "Save";
+    toolbar.appendChild(saveBtn);
+
+    // Test Run button
+    var testBtn = document.createElement("button");
+    testBtn.className = "macro-toolbar-btn";
+    testBtn.textContent = "▶ Test";
+    testBtn.title = "Test Run (Phase 5)";
+    toolbar.appendChild(testBtn);
+
+    // Delete button
+    var delMacroBtn = document.createElement("button");
+    delMacroBtn.className = "macro-toolbar-btn danger";
+    delMacroBtn.textContent = "🗑";
+    delMacroBtn.title = "Delete macro";
+    toolbar.appendChild(delMacroBtn);
+
+    // ── Main area ──
+    var mainArea = document.createElement("div");
+    mainArea.className = "macros-main";
+
+    // Step canvas area
+    var stepArea = document.createElement("div");
+    stepArea.className = "macros-step-area";
+    // Canvas container (StepCanvas will be mounted here)
+    var canvasContainer = document.createElement("div");
+    canvasContainer.style.cssText = "flex:1;overflow:hidden;position:relative";
+    stepArea.appendChild(canvasContainer);
+
+    // Param editor panel (shown when a step is selected)
+    var paramEditor = document.createElement("div");
+    paramEditor.className = "step-param-editor";
+    stepArea.appendChild(paramEditor);
+
+    mainArea.appendChild(stepArea);
+
+    // Floating add-step button
+    var addStepBtn = document.createElement("button");
+    addStepBtn.className = "macros-add-step-btn";
+    addStepBtn.innerHTML = (_svgCache["add"] || "+") + " Add Step";
+    stepArea.appendChild(addStepBtn);
+
+    // Fn-picker overlay (the existing picker, restructured)
+    var overlay = document.createElement("div");
+    overlay.className = "fn-picker-overlay";
+
+    var overlayHeader = document.createElement("div");
+    overlayHeader.className = "fn-picker-overlay-header";
+    var overlayTitle = document.createElement("span");
+    overlayTitle.className = "fn-picker-overlay-title";
+    overlayTitle.textContent = "Add Step";
+    overlayHeader.appendChild(overlayTitle);
+    var overlayClose = document.createElement("div");
+    overlayClose.className = "fn-picker-overlay-close";
+    overlayClose.innerHTML = (_svgCache["close"] || "✕");
+    overlayClose.addEventListener("click", function() { closeFnOverlay(); });
+    overlayHeader.appendChild(overlayClose);
+    overlay.appendChild(overlayHeader);
+
+    // Move existing picker into overlay
+    if (existingPicker) {
+        existingPicker.style.width = "100%";
+        existingPicker.style.height = "100%";
+        existingPicker.style.flex = "1";
+        overlay.appendChild(existingPicker);
+    }
+    mainArea.appendChild(overlay);
+
+    // Assemble layout
+    layout.appendChild(toolbar);
+    layout.appendChild(mainArea);
+    slot.appendChild(layout);
+
+    // ── Step Canvas instance ──
+    _canvas = new StepCanvas(canvasContainer, {
+        onChange: function(steps) {
+            _macroDirty = true;
+            updateSaveBtnState();
+        },
+        onSelect: function(sid, step) {
+            renderParamEditor(sid, step);
+        }
+    });
+
+    /* ── Preload add icon ────────────────────────────────────────── */
+    _fetchSVG("add").then(function(svg) {
+        if (svg) addStepBtn.innerHTML = svg + " Add Step";
+    });
+    _fetchSVG("close").then(function(svg) {
+        if (svg) overlayClose.innerHTML = svg;
+    });
+
+    /* ── Fn-picker overlay toggle ────────────────────────────────── */
+    function openFnOverlay() {
+        overlay.classList.add("open");
+    }
+    function closeFnOverlay() {
+        overlay.classList.remove("open");
+    }
+    addStepBtn.addEventListener("click", function() {
+        openFnOverlay();
+    });
+
+    /* ── When function picker adds a step, close overlay and add to canvas ── */
+    // Monkey-patch the existing addToMacro to also feed the canvas
+    if (window.fnPicker) {
+        var origShowToast = window.fnPicker.showToast;
+    }
+
+    /* ── Macro select / management ───────────────────────────────── */
+    function refreshMacroList() {
+        // Ask Lua for the list of macros
+        if (window.shellPost) {
+            shellPost("macros", "listMacros", {});
+        }
+    }
+
+    function setMacroList(ids) {
+        macroSelect.innerHTML = "";
+        var none = document.createElement("option");
+        none.value = "";
+        none.textContent = "— Select —";
+        macroSelect.appendChild(none);
+
+        for (var i = 0; i < ids.length; i++) {
+            var opt = document.createElement("option");
+            opt.value = ids[i];
+            opt.textContent = ids[i];
+            macroSelect.appendChild(opt);
+        }
+
+        if (_currentMacroId) {
+            macroSelect.value = _currentMacroId;
+        }
+    }
+
+    function loadMacro(macroId) {
+        if (!macroId) {
+            _currentMacroId = null;
+            _currentMacroDef = null;
+            _canvas.load([]);
+            nameInput.value = "";
+            _macroDirty = false;
+            updateSaveBtnState();
+            return;
+        }
+        // Ask Lua for the macro definition
+        if (window.shellPost) {
+            shellPost("macros", "getMacro", { id: macroId });
+        }
+    }
+
+    function setMacroDef(def) {
+        _currentMacroId = def.id;
+        _currentMacroDef = def;
+        nameInput.value = def.name || def.id || "";
+        _canvas.load(def.steps || []);
+        _macroDirty = false;
+        updateSaveBtnState();
+        macroSelect.value = def.id;
+    }
+
+    function saveMacro() {
+        if (!_currentMacroId) {
+            // Create new
+            var name = nameInput.value.trim();
+            if (!name) {
+                nameInput.focus();
+                return;
+            }
+            _currentMacroId = name.replace(/[^a-zA-Z0-9_]/g, "_");
+        }
+
+        var name = nameInput.value.trim() || _currentMacroId;
+        var def = {
+            id: _currentMacroId,
+            name: name,
+            author: "User",
+            steps: _canvas.serialize()
+        };
+
+        if (window.shellPost) {
+            shellPost("macros", "saveMacro", { id: _currentMacroId, def: def });
+        }
+        _macroDirty = false;
+        updateSaveBtnState();
+    }
+
+    function deleteMacro() {
+        if (!_currentMacroId) return;
+        if (window.shellPost) {
+            shellPost("macros", "deleteMacro", { id: _currentMacroId });
+        }
+        _currentMacroId = null;
+        _currentMacroDef = null;
+        _canvas.load([]);
+        nameInput.value = "";
+        _macroDirty = false;
+        updateSaveBtnState();
+        refreshMacroList();
+    }
+
+    function updateSaveBtnState() {
+        saveBtn.style.opacity = _macroDirty ? "1" : "0.5";
+    }
+
+    /* ── Param Editor (for selected step) ────────────────────────── */
+    function renderParamEditor(sid, step) {
+        paramEditor.innerHTML = "";
+        if (!step) { paramEditor.classList.remove("open"); return; }
+
+        paramEditor.classList.add("open");
+
+        var title = document.createElement("div");
+        title.className = "step-param-editor-title";
+        title.textContent = step.action + " — Parameters";
+        paramEditor.appendChild(title);
+
+        var params = step.params || {};
+        var keys = Object.keys(params);
+
+        for (var i = 0; i < keys.length; i++) {
+            (function(key) {
+                var val = params[key];
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:4px";
+
+                var lbl = document.createElement("span");
+                lbl.style.cssText = "font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);width:70px;flex-shrink:0";
+                lbl.textContent = key;
+                row.appendChild(lbl);
+
+                var inp = document.createElement("input");
+                inp.type = "text";
+                inp.value = Array.isArray(val) ? JSON.stringify(val) : (val !== undefined ? String(val) : "");
+                inp.style.cssText = "flex:1;background:var(--surface2);border:1px solid var(--border-dim);border-radius:var(--radius);color:var(--text);font-size:11px;padding:3px 6px;outline:none;font-family:\"SF Mono\",\"Menlo\",\"Consolas\",monospace;user-select:text;-webkit-user-select:text";
+                inp.addEventListener("input", function() {
+                    var v = inp.value;
+                    // Try to parse arrays/numbers
+                    if (v.startsWith("[") || v.startsWith("{")) {
+                        try { v = JSON.parse(v); } catch(_) {}
+                    } else if (/^\d+$/.test(v)) {
+                        v = parseInt(v, 10);
+                    } else if (/^\d+\.\d+$/.test(v)) {
+                        v = parseFloat(v);
+                    }
+                    _canvas.updateStep(sid, (function(o){ o[key]=v; return o; })({}));
+                });
+                inp.addEventListener("keydown", function(e) { e.stopPropagation(); });
+                row.appendChild(inp);
+
+                paramEditor.appendChild(row);
+            })(keys[i]);
+        }
+    }
+
+    /* ── Wire toolbar buttons ────────────────────────────────────── */
+    newBtn.addEventListener("click", function() {
+        _currentMacroId = null;
+        _currentMacroDef = null;
+        _canvas.load([]);
+        nameInput.value = "";
+        nameInput.focus();
+        _macroDirty = false;
+        updateSaveBtnState();
+        macroSelect.value = "";
+    });
+
+    saveBtn.addEventListener("click", function() { saveMacro(); });
+    testBtn.addEventListener("click", function() {
+        // Placeholder for Phase 5
+        if (window.fnPicker) fnPicker.showToast("Test Run — coming in Phase 5");
+    });
+    delMacroBtn.addEventListener("click", function() {
+        if (_currentMacroId) deleteMacro();
+    });
+
+    macroSelect.addEventListener("change", function() {
+        var id = macroSelect.value;
+        loadMacro(id);
+    });
+
+    nameInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
+    nameInput.addEventListener("input", function() {
+        _macroDirty = true;
+        updateSaveBtnState();
+    });
+
+    /* ── Panel handler (Lua → JS dispatch) ───────────────────────── */
+    // Extend the existing macros panel handler to also handle step-canvas messages
+    var existingHandler = slot._handler;
+    window.registerPanel("macros", function(action, body) {
+        // Handle step-canvas specific messages
+        if (action === "addStep" && body) {
+            _canvas.addStep(body);
+            _macroDirty = true;
+            updateSaveBtnState();
+            return;
+        }
+        if (action === "macroList" && Array.isArray(body)) {
+            setMacroList(body);
+            return;
+        }
+        if (action === "macroDef" && body) {
+            setMacroDef(body);
+            return;
+        }
+        if (action === "macroSaved") {
+            _macroDirty = false;
+            updateSaveBtnState();
+            refreshMacroList();
+            return;
+        }
+        // Fall through to existing handler
+        if (existingHandler) {
+            try { existingHandler(action, body); } catch(e) {}
+        }
+    });
+
+    /* ── Wire function picker's "Add to Macro" ───────────────────── */
+    // The existing addToMacro calls shellPost("macros","addStep",...) which goes
+    // to Lua and back. We intercept it directly here for instant feedback.
+    // Also hook into the fnPicker.showToast to close overlay after adding.
+    if (window.fnPicker) {
+        var origSelect = window.fnPicker.select;
+    }
+
+    // Listen for the bus event that the fn-picker already sends
+    // We need to intercept the addStep from fn-picker directly in JS
+    // since both live in the same page context.
+    // Patch: override shellPost temporarily to catch addStep
+    var _origShellPost = window.shellPost;
+    window.shellPost = function(panel, action, body) {
+        if (panel === "macros" && action === "addStep" && body) {
+            // Add to canvas directly
+            _canvas.addStep({ action: body.action, params: body.params });
+            _macroDirty = true;
+            updateSaveBtnState();
+            closeFnOverlay();
+            // Still send to Lua for bus event
+        }
+        // Always call original
+        if (_origShellPost) _origShellPost(panel, action, body);
+    };
+
+    /* ── External API ────────────────────────────────────────────── */
+    window.macroLab = {
+        canvas: _canvas,
+        loadMacro: loadMacro,
+        saveMacro: saveMacro,
+        refreshList: refreshMacroList,
+        setMacroList: setMacroList,
+        setMacroDef: setMacroDef,
+        addStep: function(def) { _canvas.addStep(def); }
+    };
+
+    /* ── Initial state ───────────────────────────────────────────── */
+    updateSaveBtnState();
+    refreshMacroList();
+
+    })();
+    </script>
+    </body>
+    </html>

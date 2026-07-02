@@ -3332,6 +3332,60 @@
                 }
             end
         -- END 12b. Visual Macro Compiler (ms.compiler) --
+        -- 12c. Macro Lab Shell ↔ Compiler bridge --
+            do
+                -- This bridge handles messages from the Step Canvas in ms_shell.html
+                -- and routes them to ms.compiler, pushing results back to JS.
+                -- It must run AFTER both ms.compiler and ms.bus are initialized.
+
+                local function _macroShellEval(js)
+                    if ms.shell and ms.shell.eval then
+                        ms.shell.eval(js)
+                    end
+                end
+
+                -- listMacros → push array of IDs back to JS
+                if ms.bus then
+                    ms.bus.on("ui:macros:listMacros", function(body)
+                        local ids = ms.compiler.list()
+                        local json = hs.json.encode(ids)
+                        _macroShellEval("if(window.macroLab)macroLab.setMacroList(" .. json .. ")")
+                    end)
+
+                    -- getMacro → push full definition back to JS
+                    ms.bus.on("ui:macros:getMacro", function(body)
+                        if not body or not body.id then return end
+                        local def = ms.compiler.get(body.id)
+                        if def then
+                            local json = hs.json.encode(def)
+                            _macroShellEval("if(window.macroLab)macroLab.setMacroDef(" .. json .. ")")
+                        end
+                    end)
+
+                    -- saveMacro → write to compiler and confirm
+                    ms.bus.on("ui:macros:saveMacro", function(body)
+                        if not body or not body.id or not body.def then return end
+                        local ok, err = pcall(ms.compiler.write, body.id, body.def)
+                        if ok then
+                            _macroShellEval("shellDispatch('macros','macroSaved',{})")
+                        else
+                            print("ms.compiler.saveMacro error: " .. tostring(err))
+                        end
+                    end)
+
+                    -- deleteMacro → remove and confirm
+                    ms.bus.on("ui:macros:deleteMacro", function(body)
+                        if not body or not body.id then return end
+                        local ok, err = pcall(ms.compiler.delete, body.id)
+                        if ok then
+                            _macroShellEval("shellDispatch('macros','macroSaved',{})")
+                        else
+                            print("ms.compiler.deleteMacro error: " .. tostring(err))
+                        end
+                    end)
+                end
+            end
+        -- END 12c. Macro Lab Shell ↔ Compiler bridge --
 
         -- 13. Safety Nets --
             do
