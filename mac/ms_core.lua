@@ -436,13 +436,68 @@
                     danger   = "#d8d8d8",
                     warning  = "#aaaaaa",
                     text     = "#d8d8d8",
-                    radius   = 2,
-                    font     = "Arial",
-                    fadeMs   = 100,
+                    radius       = 2,
+                    windowRadius = 3,
+                    font         = "Arial",
+                    fadeMs       = 100,
                 }
                 ms._theme = {}
                 for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
                 ms._themeLoaded = false
+
+            -- Window Radius Helper [ms.theme] --
+                ms.theme = ms.theme or {}
+
+                --- Apply transparent window + CSS --ms-window-radius to a webview panel.
+                --- Call AFTER hs.webview.new + windowStyle(0), BEFORE panel:html().
+                ms.theme.applyWindowRadius = function(panel)
+                    pcall(function()
+                        local r = (ms._theme and ms._theme.windowRadius)
+                            or (ms._themeDefaults and ms._themeDefaults.windowRadius)
+                            or 3
+                        if r > 0 then
+                            panel:transparent(true)
+                        end
+                    end)
+                end
+
+                --- Push updated --ms-window-radius CSS variable into a live webview panel.
+                --- Safe to call on any panel that was built with applyWindowRadius.
+                ms.theme._pushWindowRadius = function(panel)
+                    pcall(function()
+                        local r = (ms._theme and ms._theme.windowRadius) or 3
+                        local js = string.format(
+                            "document.documentElement.style.setProperty('--ms-window-radius','%dpx')",
+                            r
+                        )
+                        panel:evaluateJavaScript(js)
+                    end)
+                end
+
+                --- Register a callback to fire whenever the theme changes (live-update).
+                --- Returns an ID that can be passed to _unwatchTheme.
+                ms.theme._watchers = ms.theme._watchers or {}
+                ms.theme._nextWatcherId = ms.theme._nextWatcherId or 1
+
+                ms.theme.onChanged = function(fn)
+                    local id = ms.theme._nextWatcherId
+                    ms.theme._nextWatcherId = id + 1
+                    ms.theme._watchers[id] = fn
+                    return id
+                end
+
+                ms.theme._unwatch = function(id)
+                    ms.theme._watchers[id] = nil
+                end
+
+                --- Fire all registered theme-changed watchers.
+                --- Call this from wherever the theme is reloaded/re-applied.
+                ms.theme._fireChanged = function()
+                    for _, fn in pairs(ms.theme._watchers) do
+                        pcall(fn)
+                    end
+                end
+            -- END Window Radius Helper --
 
                 require("hs.eventtap")
                 require("hs.mouse")
@@ -2207,13 +2262,234 @@
             end
         -- END 9. Bind System & Settings Panel --
 
-        -- 10. Safety Nets --
+        -- 10. Event Bus (ms.bus) --
+            do
+                local _busSubs = {}  -- [topic] = { [fn] = true, ... }
+
+                ms.bus = {}
+
+                ms.bus.on = function(topic, fn)
+                    assert(type(topic) == "string", "ms.bus.on: topic must be a string")
+                    assert(type(fn) == "function", "ms.bus.on: fn must be a function")
+                    if not _busSubs[topic] then _busSubs[topic] = {} end
+                    _busSubs[topic][fn] = true
+                end
+
+                ms.bus.off = function(topic, fn)
+                    assert(type(topic) == "string", "ms.bus.off: topic must be a string")
+                    assert(type(fn) == "function", "ms.bus.off: fn must be a function")
+                    if _busSubs[topic] then
+                        _busSubs[topic][fn] = nil
+                    end
+                end
+
+                ms.bus.emit = function(topic, payload)
+                    assert(type(topic) == "string", "ms.bus.emit: topic must be a string")
+                    local subs = _busSubs[topic]
+                    if not subs then return end
+                    for fn, _ in pairs(subs) do
+                        local ok, err = pcall(fn, payload)
+                        if not ok then
+                            print("ms.bus handler error [" .. topic .. "]: " .. tostring(err))
+                        end
+                    end
+                end
+
+                ms.bus._subscribers = _busSubs  -- privileged debug accessor
+            end
+        -- END 10. Event Bus (ms.bus) --
+
+        -- 11. Documentation Accessor (ms.docs) --
+            do
+                local _docsCache = nil  -- { [sectionName] = sectionText, ... }
+                local _docsPath = os.getenv("HOME") .. "/.hammerspoon/data/DOCS_MAC.md"
+
+                local function _parseDocs()
+                    if _docsCache then return _docsCache end
+                    _docsCache = {}
+                    local f = io.open(_docsPath, "r")
+                    if not f then
+                        print("ms.docs: cannot open " .. _docsPath)
+                        return _docsCache
+                    end
+                    local src = f:read("*all")
+                    f:close()
+                    local currentName = nil
+                    local currentBody = {}
+                    for line in src:gmatch("([^\n]*)\n?") do
+                        local h2 = line:match("^##%s+(.+)$")
+                        if h2 then
+                            if currentName then
+                                _docsCache[currentName] = table.concat(currentBody, "\n"):match("^%s*(.-)%s*$")
+                            end
+                            currentName = h2
+                            currentBody = {}
+                        elseif currentName then
+                            currentBody[#currentBody + 1] = line
+                        end
+                    end
+                    if currentName then
+                        _docsCache[currentName] = table.concat(currentBody, "\n"):match("^%s*(.-)%s*$")
+                    end
+                    return _docsCache
+                end
+
+                ms.docs = {}
+
+                ms.docs.get = function(name)
+                    assert(type(name) == "string", "ms.docs.get: name must be a string")
+                    local cache = _parseDocs()
+                    return cache[name] or nil
+                end
+
+                ms.docs.reload = function()
+                    _docsCache = nil
+                    return _parseDocs()
+                end
+
+                ms.docs.sections = function()
+                    local cache = _parseDocs()
+                    local list = {}
+                    for k, _ in pairs(cache) do list[#list + 1] = k end
+                    table.sort(list)
+                    return list
+                end
+            end
+        -- END 11. Documentation Accessor (ms.docs) --
+
+        -- 12. Shell Infrastructure (ms.shell) --
+            do
+                local _shellView     = nil   -- hs.webview instance
+                local _shellChannel  = nil   -- hs.webview.usercontent instance
+                local _shellReady    = false
+                local _shellEvalQ    = {}    -- queued JS calls before ready
+
+                ms.shell = {}
+
+                -- ms.shell.eval(js) — push JS into the shell webview
+                -- Replaces per-Spoon panel:evaluateJavaScript(...) pattern
+                ms.shell.eval = function(js)
+                    if type(js) ~= "string" then return end
+                    if _shellView and _shellReady then
+                        pcall(function() _shellView:evaluateJavaScript(js) end)
+                    else
+                        _shellEvalQ[#_shellEvalQ + 1] = js
+                    end
+                end
+
+                -- ms.shell.isReady() — check if shell webview has loaded
+                ms.shell.isReady = function()
+                    return _shellReady
+                end
+
+                -- ms.shell.webview() — get the raw hs.webview (privileged)
+                ms.shell.webview = function()
+                    return _shellView
+                end
+
+                -- ms.shell.init() — create the shell webview + channel (hidden)
+                ms.shell.init = function()
+                    if _shellView then return end
+                    require("hs.webview")
+                    require("hs.webview.usercontent")
+
+                    _shellChannel = hs.webview.usercontent.new("msShell")
+                    _shellChannel:setCallback(function(message)
+                        local ok, data = pcall(hs.json.decode, message.body)
+                        if not ok or type(data) ~= "table" then return end
+                        local panel  = data.panel  or "_shell"
+                        local action = data.action or "unknown"
+                        local body   = data.body
+                        -- Route ready signal
+                        if panel == "_shell" and action == "ready" then
+                            _shellReady = true
+                            -- Flush queued JS
+                            for _, js in ipairs(_shellEvalQ) do
+                                pcall(function() _shellView:evaluateJavaScript(js) end)
+                            end
+                            _shellEvalQ = {}
+                        end
+                        -- Emit on the bus: ui:<panel>:<action>
+                        if ms.bus then
+                            ms.bus.emit("ui:" .. panel .. ":" .. action, body)
+                        end
+                    end)
+
+                    local sf = hs.screen.mainScreen():frame()
+                    local w, h = 900, 600
+                    local x = sf.x + math.floor((sf.w - w) / 2)
+                    local y = sf.y + math.floor((sf.h - h) / 2)
+
+                    _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
+                    pcall(function() _shellView:windowStyle(1 + 2 + 4) end)  -- titled + closable + miniaturizable
+                    pcall(function() _shellView:level(hs.canvas.windowLevels.normal or 4) end)
+                    pcall(function() _shellView:allowTextEntry(true) end)
+                    pcall(function() _shellView:shadow(true) end)
+                    _shellView:alpha(0)
+
+                    local htmlPath = hs.configdir .. "/ui/ms_shell.html"
+                    local baseURL  = "file://" .. hs.configdir .. "/ui/"
+                    local f = io.open(htmlPath, "r")
+                    if f then
+                        local html = f:read("*all"); f:close()
+                        _shellView:html(html, baseURL)
+                    else
+                        print("ms.shell: cannot open " .. htmlPath)
+                    end
+
+                    -- Inject theme
+                    hs.timer.doAfter(0.05, function()
+                        if not _shellView then return end
+                        local themeJson = hs.json.encode(ms._theme or {})
+                        _shellView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                    end)
+                end
+
+                -- ms.shell.show() / hide() / toggle()
+                ms.shell.show = function()
+                    if not _shellView then ms.shell.init() end
+                    _shellView:show()
+                    _shellView:alpha(1)
+                    if ms.bus then ms.bus.emit("macroLab:toggled", { visible = true }) end
+                end
+
+                ms.shell.hide = function()
+                    if _shellView then
+                        _shellView:hide()
+                        _shellView:alpha(0)
+                        if ms.bus then ms.bus.emit("macroLab:toggled", { visible = false }) end
+                    end
+                end
+
+                ms.shell.toggle = function()
+                    if _shellView and _shellView:isVisible() then
+                        ms.shell.hide()
+                    else
+                        ms.shell.show()
+                    end
+                end
+
+                -- ms.shell.destroy() — tear down the shell webview
+                ms.shell.destroy = function()
+                    if _shellView then
+                        pcall(function() _shellView:delete() end)
+                        _shellView = nil
+                    end
+                    _shellChannel  = nil
+                    _shellReady    = false
+                    _shellEvalQ    = {}
+                end
+            end
+        -- END 12. Shell Infrastructure (ms.shell) --
+
+        -- 13. Safety Nets --
             do
                 local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
 
                 local frozenMs = setmetatable({}, {
                     __index    = function(t, k)
-                        if k == "integrity" or k == "dev" or k == "showGuardian" or k == "_systemActions" then
+                        if k == "integrity" or k == "dev" or k == "showGuardian" or k == "_systemActions"
+                       or k == "bus" or k == "docs" or k == "shell" then
                             error("ms_macros.lua: ms." .. k .. " is not accessible from macros.", 2)
                         end
                         if k == "key" then
@@ -2384,7 +2660,7 @@
                     spawnAlt = { enabled = false },
                 },
             }
-        -- END 10. Safety Nets --
+        -- END 13. Safety Nets --
     -- END Hammerspoon mudscript Utility Library --
 
     -- Startup Executions --

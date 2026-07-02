@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Macro Lab Shell</title>
+    <style>
+        /* ── Fonts ─────────────────────────────────────────────────────────── */
+        @font-face {
+            font-family: "Almendra";
+            src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+            font-weight: 400;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: "Almendra";
+            src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+            font-weight: 700;
+            font-style: normal;
+        }
+
+        /* ── Tokens (overridden by applyTheme) ────────────────────────────── */
+        :root {
+            --bg: #0e0e0e;
+            --surface: #1a1a1a;
+            --surface2: #252525;
+            --hover: #333333;
+            --accent: #cccccc;
+            --accent-hi: #e8e8e8;
+            --success: #888888;
+            --danger-bg: #1a1616;
+            --danger: #d8d8d8;
+            --warning: #aaaaaa;
+            --text: #d8d8d8;
+            --text2: rgba(200, 200, 200, 0.85);
+            --text3: rgba(160, 160, 160, 0.55);
+            --border: rgba(100, 100, 100, 0.55);
+            --border-dim: rgba(100, 100, 100, 0.18);
+            --radius: 2px;
+            --radius-s: 1px;
+            --rail-w: 140px;
+        }
+
+        /* ── Reset ────────────────────────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, "Almendra", Palatino, Georgia, serif;
+            font-size: 13px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            display: flex;
+            flex-direction: row;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: inherit;
+            font: inherit;
+        }
+
+        /* ── Left Rail ────────────────────────────────────────────────────── */
+        #rail {
+            width: var(--rail-w);
+            min-width: var(--rail-w);
+            height: 100%;
+            background: var(--surface);
+            border-right: 1px solid var(--border-dim);
+            display: flex;
+            flex-direction: column;
+            padding: 8px 0;
+            gap: 2px;
+            overflow-y: auto;
+        }
+
+        #rail-title {
+            padding: 8px 14px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text3);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+        }
+
+        .rail-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-radius: var(--radius);
+            color: var(--text2);
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.1s, color 0.1s;
+            position: relative;
+        }
+
+        .rail-item:hover {
+            background: var(--hover);
+            color: var(--text);
+        }
+
+        .rail-item.active {
+            background: var(--surface2);
+            color: var(--accent-hi);
+        }
+
+        .rail-item.active::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 4px;
+            bottom: 4px;
+            width: 2px;
+            background: var(--accent);
+            border-radius: 1px;
+        }
+
+        .rail-icon {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        .rail-item.active .rail-icon {
+            opacity: 1;
+        }
+
+        .rail-spacer {
+            flex: 1;
+        }
+
+        #rail-version {
+            padding: 8px 14px;
+            font-size: 10px;
+            color: var(--text3);
+        }
+
+        /* ── Content Area ─────────────────────────────────────────────────── */
+        #content {
+            flex: 1;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #content-empty {
+            color: var(--text3);
+            font-size: 12px;
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        #content-empty span {
+            display: block;
+            font-size: 24px;
+            margin-bottom: 8px;
+            opacity: 0.3;
+        }
+
+        /* Panel slots (hidden by default, shown when active) */
+        .panel-slot {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .panel-slot.visible {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- ── Left Rail ─────────────────────────────────────────────────────── -->
+    <nav id="rail">
+        <div id="rail-title">Macro Lab</div>
+        <button class="rail-item" data-panel="console">
+            <span class="rail-icon">⌘</span> Console
+        </button>
+        <button class="rail-item" data-panel="watcher">
+            <span class="rail-icon">◉</span> Watcher
+        </button>
+        <button class="rail-item" data-panel="keys">
+            <span class="rail-icon">⌨</span> Keys
+        </button>
+        <button class="rail-item" data-panel="window">
+            <span class="rail-icon">▢</span> Window
+        </button>
+        <button class="rail-item" data-panel="settings">
+            <span class="rail-icon">⚙</span> Settings
+        </button>
+        <button class="rail-item" data-panel="macros">
+            <span class="rail-icon">▶</span> Macros
+        </button>
+        <div class="rail-spacer"></div>
+        <div id="rail-version">shell v0.1.0</div>
+    </nav>
+
+    <!-- ── Content Area ──────────────────────────────────────────────────── -->
+    <main id="content">
+        <div id="content-empty">
+            <span>◇</span>
+            Select a panel from the rail<br>
+            <em style="font-size:10px;color:var(--text3)">Phase 0 — infrastructure only</em>
+        </div>
+        <!-- Panel slots will be populated in Phase 2 -->
+        <div class="panel-slot" id="slot-console"></div>
+        <div class="panel-slot" id="slot-watcher"></div>
+        <div class="panel-slot" id="slot-keys"></div>
+        <div class="panel-slot" id="slot-window"></div>
+        <div class="panel-slot" id="slot-settings"></div>
+        <div class="panel-slot" id="slot-macros"></div>
+    </main>
+
+    <!--
+        IIFE Module Pattern (safe default for file:// WKWebView)
+        ─────────────────────────────────────────────────────────
+        ES modules (<script type="module">) do NOT work on file://
+        URLs in WKWebView. All panel code uses IIFEs with namespace
+        wrapping. If ES modules become available (see _es_module_test.html),
+        this can be upgraded to import/export.
+
+        UserContent channel: "msShell"
+        Outbound message shape: { panel: string, action: string, body: any }
+        Inbound JS calls: eval'd via ms.shell.eval(js)
+    -->
+    <script>
+    (function() {
+        "use strict";
+
+        /* ── State ──────────────────────────────────────────────────── */
+        var _activePanel = null;
+
+        /* ── Theme Injection ────────────────────────────────────────── */
+        window.applyTheme = function(theme) {
+            if (!theme || typeof theme !== "object") return;
+            var root = document.documentElement;
+            var map = {
+                bg: "--bg", surface: "--surface", surface2: "--surface2",
+                hover: "--hover", accent: "--accent", accentHi: "--accent-hi",
+                success: "--success", dangerBg: "--danger-bg", danger: "--danger",
+                warning: "--warning", text: "--text"
+            };
+            for (var k in map) {
+                if (theme[k]) root.style.setProperty(map[k], theme[k]);
+            }
+            if (theme.radius !== undefined) {
+                root.style.setProperty("--radius", theme.radius + "px");
+            }
+        };
+
+        /* ── Message Dispatch (Lua → JS) ───────────────────────────── */
+        window.shellDispatch = function(panel, action, body) {
+            /* Route inbound Lua pushes to the correct panel slot.
+               Phase 2 will wire this to actual panel modules. */
+            var slot = document.getElementById("slot-" + panel);
+            if (slot && slot._handler) {
+                try { slot._handler(action, body); } catch (e) {
+                    console.error("[shell] panel handler error:", panel, action, e);
+                }
+            }
+        };
+
+        /* ── Panel Registration (future panels call this) ──────────── */
+        window.registerPanel = function(name, handler) {
+            var slot = document.getElementById("slot-" + name);
+            if (slot) {
+                slot._handler = handler;
+            }
+        };
+
+        /* ── Rail Navigation ────────────────────────────────────────── */
+        function setActive(panel) {
+            /* Deactivate previous */
+            var items = document.querySelectorAll(".rail-item");
+            for (var i = 0; i < items.length; i++) {
+                items[i].classList.remove("active");
+            }
+            var slots = document.querySelectorAll(".panel-slot");
+            for (var j = 0; j < slots.length; j++) {
+                slots[j].classList.remove("visible");
+            }
+
+            /* Activate new */
+            _activePanel = panel;
+            var btn = document.querySelector('.rail-item[data-panel="' + panel + '"]');
+            if (btn) btn.classList.add("active");
+            var slot = document.getElementById("slot-" + panel);
+            if (slot) {
+                slot.classList.add("visible");
+                document.getElementById("content-empty").style.display = "none";
+            } else {
+                document.getElementById("content-empty").style.display = "";
+            }
+
+            /* Notify Lua side */
+            _post({ panel: panel, action: "navigate", body: { panel: panel } });
+        }
+
+        /* ── Outbound Messages (JS → Lua) ──────────────────────────── */
+        function _post(msg) {
+            try {
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.msShell) {
+                    window.webkit.messageHandlers.msShell.postMessage(JSON.stringify(msg));
+                }
+            } catch (e) {
+                console.error("[shell] postMessage error:", e);
+            }
+        }
+
+        window.shellPost = function(panel, action, body) {
+            _post({ panel: panel, action: action, body: body || null });
+        };
+
+        /* ── Rail Click Handlers ────────────────────────────────────── */
+        var railItems = document.querySelectorAll(".rail-item");
+        for (var i = 0; i < railItems.length; i++) {
+            (function(btn) {
+                btn.addEventListener("click", function() {
+                    var panel = btn.getAttribute("data-panel");
+                    if (panel) setActive(panel);
+                });
+            })(railItems[i]);
+        }
+
+        /* ── Ready Signal ───────────────────────────────────────────── */
+        _post({ panel: "_shell", action: "ready", body: { version: "0.1.0" } });
+
+    })();
+    </script>
+</body>
+</html>

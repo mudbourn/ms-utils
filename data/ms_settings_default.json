@@ -81,5 +81,6 @@
   "systemBinds" : [
 
   ],
-  "devArchiveLimit" : 15
+  "devArchiveLimit" : 15,
+  "windowRadius" : 3
 }

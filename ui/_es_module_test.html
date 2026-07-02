@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ES Module Spike Test</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            width: 100%; height: 100vh; overflow: hidden;
+            background: #0e0e0e; color: #d8d8d8;
+            font-family: -apple-system, Arial, sans-serif; font-size: 13px;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 16px;
+        }
+        #result {
+            padding: 16px 24px; border-radius: 6px;
+            font-size: 15px; font-weight: 600; letter-spacing: 0.5px;
+        }
+        #result.pass { background: #1a2e1a; color: #6aba6a; border: 1px solid #2e5e2e; }
+        #result.fail { background: #2e1a1a; color: #ba6a6a; border: 1px solid #5e2e2e; }
+        #detail { color: #888; font-size: 11px; max-width: 400px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="result">Testing…</div>
+    <div id="detail">Checking if &lt;script type="module"&gt; executes on file:// URLs in WKWebView</div>
+
+    <!-- Test 1: Classic IIFE (control — should always work) -->
+    <script>
+        window.__iifeWorked = true;
+    </script>
+
+    <!-- Test 2: ES module with import/export -->
+    <script type="module">
+        // Inline module — import/export within same file
+        const greeting = "hello from ES module";
+        export { greeting };
+
+        // Also test dynamic import of a data: URL module
+        try {
+            const mod = await import("data:text/javascript,export const x = 42;");
+            window.__moduleWorked = true;
+            window.__moduleExport = mod.x;
+        } catch (e) {
+            window.__moduleWorked = false;
+            window.__moduleError = e.message;
+        }
+
+        // Signal completion
+        window.__moduleTestComplete = true;
+        window.dispatchEvent(new Event("module-test-done"));
+    </script>
+
+    <script>
+        // Collect results after a timeout (modules are async)
+        function report() {
+            var el = document.getElementById("result");
+            var detail = document.getElementById("detail");
+            var iife = !!window.__iifeWorked;
+            var mod  = !!window.__moduleWorked;
+            var complete = !!window.__moduleTestComplete;
+
+            if (iife && mod) {
+                el.className = "pass";
+                el.textContent = "✓ ES Modules WORK on file://";
+                detail.textContent = "IIFE: ok | module import/export: ok | export value: " + window.__moduleExport;
+            } else if (iife && !mod && complete) {
+                el.className = "fail";
+                el.textContent = "✗ ES Modules BLOCKED on file://";
+                detail.textContent = "IIFE: ok | module: blocked (" + (window.__moduleError || "unknown") + "). Use IIFE + namespace wrapping.";
+            } else if (iife && !complete) {
+                el.className = "fail";
+                el.textContent = "✗ Module script never executed";
+                detail.textContent = "IIFE: ok | module script tag was ignored entirely. Use IIFE + namespace wrapping.";
+            } else {
+                el.className = "fail";
+                el.textContent = "✗ Unexpected failure";
+                detail.textContent = "IIFE: " + iife + " | module: " + mod + " | complete: " + complete;
+            }
+
+            // Post result back to Hammerspoon if available
+            try {
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.esModuleTest) {
+                    window.webkit.messageHandlers.esModuleTest.postMessage(JSON.stringify({
+                        iife: iife, module: mod, complete: complete,
+                        exportValue: window.__moduleExport || null,
+                        error: window.__moduleError || null
+                    }));
+                }
+            } catch (_) {}
+        }
+
+        // Wait up to 2 seconds for the module to finish
+        if (window.__moduleTestComplete) {
+            report();
+        } else {
+            window.addEventListener("module-test-done", report);
+            setTimeout(report, 2000);
+        }
+    </script>
+</body>
+</html>
