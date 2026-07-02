@@ -2932,6 +2932,37 @@
 
                 body.appendChild(divider());
 
+                // Testing source selector (only shown when channel is testing)
+                if (chan === "testing") {
+                    const src = S.testingSource || "release";
+                    body.appendChild(
+                        row(
+                            "Testing Source",
+                            src === "artifact"
+                                ? "Downloads from GitHub Actions artifacts (zip only)"
+                                : "Downloads from GitHub Releases (signed manifests)",
+                            h(
+                                "button",
+                                {
+                                    cls: "btn-macro " + (src === "artifact" ? "btn-enable" : ""),
+                                    onmouseenter: () => playSlot("hover"),
+                                    onclick: () => {
+                                        playSlot("interact");
+                                        const next = src === "artifact" ? "release" : "artifact";
+                                        sendToHost({
+                                            action: "setTestingSource",
+                                            value: next,
+                                        });
+                                    },
+                                },
+                                src === "artifact" ? "Artifacts" : "Releases",
+                            ),
+                        ),
+                    );
+                }
+
+                body.appendChild(divider());
+
                 // System Integrity
                 const status = S.integrityStatus || "uninitialized";
                 const hash = S.integrityHash

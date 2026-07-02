@@ -320,6 +320,7 @@
                 customThemeEnabled      = not (ms._customThemeDisabled or false),
                 devArchiveLimit         = ms._devArchiveLimit or 15,
                 updateChannel           = ms._updateChannel or "stable",
+                testingSource           = ms._testingSource or "release",
                 qrOptions               = ms._qrOptions or {
                     macros   = true,
                     theme    = true,
@@ -847,6 +848,8 @@
                 if not hs.fs.attributes(slibDir) then
                     hs.execute("mkdir -p '" .. SoundLib .. "'")
                 end
+                -- Ensure active/ subdirectory exists for theme sounds
+                hs.execute("mkdir -p '" .. SoundLib .. "active/'")
                 if not hs.fs.attributes(slibDir) then
                     ms.ui.show()
                     ms.alert("Could not create sounds folder:\n" .. SoundLib, 4)
