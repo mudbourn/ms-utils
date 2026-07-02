@@ -28,9 +28,11 @@ if [ -d "$REPO/ui/fonts" ]; then
     cp -R "$REPO/ui/fonts/"* "$HS/ui/fonts/" 2>/dev/null || true
 fi
 
-# Copy all spoons.
+# Copy all spoons (rm first — cp -R into existing dir nests instead of overwriting).
 for spoon in "$REPO/mac/Spoons/"*.spoon; do
-    cp -R "$spoon" "$HS/Spoons/$(basename "$spoon")" 2>/dev/null || true
+    dest="$HS/Spoons/$(basename "$spoon")"
+    rm -rf "$dest"
+    cp -R "$spoon" "$dest" 2>/dev/null || true
 done
 
 # Copy guardian agent script.
