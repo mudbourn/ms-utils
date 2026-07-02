@@ -204,6 +204,17 @@
                     end
                 end
             end
+            if data.macroLabEnabled ~= nil then ms._macroLabEnabled = (data.macroLabEnabled == true) end
+            if data.shell and type(data.shell) == "table" then
+                ms._shellState = ms._shellState or {}
+                local s = data.shell
+                if s.x ~= nil then ms._shellState.x = tonumber(s.x) end
+                if s.y ~= nil then ms._shellState.y = tonumber(s.y) end
+                if s.w ~= nil then ms._shellState.w = tonumber(s.w) end
+                if s.h ~= nil then ms._shellState.h = tonumber(s.h) end
+                if s.lastPanel ~= nil then ms._shellState.lastPanel = tostring(s.lastPanel) end
+                if s.visible ~= nil then ms._shellState.visible = (s.visible == true) end
+            end
             if data.user and type(data.user) == "table" then
                 for key, value in pairs(data.user) do
                     local uDef = ms._userSettingIndex[key]
@@ -358,6 +369,13 @@
                 data.macros[id] = data.macros[id] or {}
                 data.macros[id].cooldown = cooldown
             end
+            -- Phase 6: Macro Lab & Shell State --
+            data.macroLabEnabled = ms._macroLabEnabled or false
+            data.shell = ms._shellState or {
+                x = nil, y = nil, w = 900, h = 600,
+                lastPanel = "macros", visible = false,
+            }
+            -- END Phase 6 --
             local f = io.open(jsonPath, "w")
             if f then
                 f:write(hs.json.encode(data, true))
@@ -913,6 +931,11 @@
                 soundVolume      = 100,
                 soundAssign      = {},
                 macros           = {},
+                macroLabEnabled  = false,
+                shell            = {
+                    x = nil, y = nil, w = 900, h = 600,
+                    lastPanel = "macros", visible = false,
+                },
             }
             if ms.macroDefaults then
                 for k, v in pairs(ms.macroDefaults) do

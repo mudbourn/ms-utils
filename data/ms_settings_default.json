@@ -82,5 +82,14 @@
 
   ],
   "devArchiveLimit" : 15,
-  "windowRadius" : 3
+  "windowRadius" : 3,
+  "macroLabEnabled" : false,
+  "shell" : {
+    "x" : null,
+    "y" : null,
+    "w" : 900,
+    "h" : 600,
+    "lastPanel" : "macros",
+    "visible" : false
+  }
 }

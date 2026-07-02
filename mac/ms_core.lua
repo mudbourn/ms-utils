@@ -534,7 +534,13 @@
             ms.app = function() return hs.application.frontmostApplication():name() end
 
             ms._menubar = ms._menubar or hs.menubar.new()
-            ms._menubar:setClickCallback(function() ms.ui.toggle() end)
+            ms._menubar:setClickCallback(function()
+                if ms._macroLabEnabled then
+                    ms.shell.toggle()
+                else
+                    ms.ui.toggle()
+                end
+            end)
         -- END 2. Settings, Profiles & UI --
 
         -- 3. Keyboard Actions --
@@ -1347,7 +1353,11 @@
             hs.hotkey.bind({ "alt" }, "p", function()
                 if not ms._loadComplete then return end
                 if not ms._robloxActive then return end
-                ms.ui.toggle()
+                if ms._macroLabEnabled then
+                    ms.shell.toggle()
+                else
+                    ms.ui.toggle()
+                end
             end)
         -- END 7. Macro Bind Controller --
 
@@ -2428,6 +2438,13 @@
                     local w, h = 900, 600
                     local x = sf.x + math.floor((sf.w - w) / 2)
                     local y = sf.y + math.floor((sf.h - h) / 2)
+                    -- Restore persisted position if available
+                    local st = ms._shellState
+                    if st and st.x and st.y then
+                        x, y = st.x, st.y
+                        if st.w then w = st.w end
+                        if st.h then h = st.h end
+                    end
 
                     _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
                     pcall(function() _shellView:windowStyle(1 + 2 + 4) end)  -- titled + closable + miniaturizable
@@ -2455,17 +2472,58 @@
                 end
 
                 -- ms.shell.show() / hide() / toggle()
+                -- ms.shell.saveState() — persist position, size, lastPanel to settings
+                ms.shell.saveState = function()
+                    if not _shellView then return end
+                    local ok, frame = pcall(function() return _shellView:frame() end)
+                    if ok and frame then
+                        ms._shellState = ms._shellState or {}
+                        ms._shellState.x = math.floor(frame.x)
+                        ms._shellState.y = math.floor(frame.y)
+                        ms._shellState.w = math.floor(frame.w)
+                        ms._shellState.h = math.floor(frame.h)
+                        if ms.saveSettings then pcall(ms.saveSettings) end
+                    end
+                end
+
+                -- ms.shell._restoreFrame() — restore position/size from saved state
+                ms.shell._restoreFrame = function()
+                    if not _shellView then return end
+                    local st = ms._shellState
+                    if not st or not st.x or not st.y then return end
+                    pcall(function()
+                        _shellView:frame({ x = st.x, y = st.y, w = st.w or 900, h = st.h or 600 })
+                    end)
+                end
+
+                -- ms.shell.setActivePanel(id) — track last active panel for persistence
+                ms.shell._activePanel = "macros"
+                ms.shell.setActivePanel = function(id)
+                    if type(id) ~= "string" then return end
+                    ms.shell._activePanel = id
+                    ms._shellState = ms._shellState or {}
+                    ms._shellState.lastPanel = id
+                end
+
                 ms.shell.show = function()
                     if not _shellView then ms.shell.init() end
+                    -- Restore persisted frame before showing
+                    ms.shell._restoreFrame()
                     _shellView:show()
                     _shellView:alpha(1)
+                    ms._shellState = ms._shellState or {}
+                    ms._shellState.visible = true
                     if ms.bus then ms.bus.emit("macroLab:toggled", { visible = true }) end
                 end
 
                 ms.shell.hide = function()
                     if _shellView then
+                        -- Save frame before hiding
+                        ms.shell.saveState()
                         _shellView:hide()
                         _shellView:alpha(0)
+                        ms._shellState = ms._shellState or {}
+                        ms._shellState.visible = false
                         if ms.bus then ms.bus.emit("macroLab:toggled", { visible = false }) end
                     end
                 end
@@ -2689,6 +2747,40 @@
                 end
             end
         -- END 12. Shell Infrastructure (ms.shell) --
+
+        -- 12a. Macro Lab Setting (ms.settings.define) --
+            do
+                -- Define macroLabEnabled in the settings system
+                if ms.settings and type(ms.settings.define) == "function" then
+                    pcall(ms.settings.define, {
+                        type     = "toggle",
+                        key      = "macroLabEnabled",
+                        label    = "Macro Development Lab",
+                        desc     = "Use the modern Macro Lab shell instead of the legacy settings panel",
+                        default  = false,
+                        onChange = function(val)
+                            ms._macroLabEnabled = (val == true)
+                            -- When switching to Modern: hide legacy, don't auto-show shell
+                            -- When switching to Legacy: hide shell
+                            if not ms._macroLabEnabled then
+                                pcall(function() ms.shell.hide() end)
+                            else
+                                pcall(function() ms.ui.hide() end)
+                            end
+                            if ms.saveSettings then pcall(ms.saveSettings) end
+                        end,
+                    })
+                end
+                -- Track rail tab changes from the shell for persistence
+                if ms.bus then
+                    ms.bus.on("ui:_shell:navigate", function(data)
+                        if data and data.panel then
+                            ms.shell.setActivePanel(data.panel)
+                        end
+                    end)
+                end
+            end
+        -- END 12a --
 
         -- 12b. Visual Macro Compiler (ms.compiler) --
             do
@@ -4039,6 +4131,21 @@
                     ms._loadComplete = true
                     ms.dev.log({ type = "system", event = "startup_complete" })
                     if ms._robloxActive then ms.setMacros(1, true) end
+                    -- Phase 6: Auto-open shell if it was visible last session
+                    hs.timer.doAfter(0.5, function()
+                        pcall(function()
+                            if ms._macroLabEnabled and ms._shellState and ms._shellState.visible then
+                                ms.shell.show()
+                                -- Restore last active panel
+                                local lp = ms._shellState.lastPanel
+                                if lp and lp ~= "macros" then
+                                    hs.timer.doAfter(0.3, function()
+                                        pcall(function() ms.shell.mountPanel(lp) end)
+                                    end)
+                                end
+                            end
+                        end)
+                    end)
                     _G._loadTimers.integrityWarn = hs.timer.doAfter(10, function()
                         if _needsIntegrityWarning then
                             ms.alert("\u{26a0} Integrity Error\nNo trusted manifest on record.\nSettings \u{2192} Developer \u{2192} Trust Current Version.", 10)
