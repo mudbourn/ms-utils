@@ -2618,20 +2618,26 @@
 
                 -- ms.shell.init() — create the shell webview + channel (hidden)
                 ms.shell.init = function()
-                    if _shellView then return end
+                    if _shellView then print("[shell] init: already initialized, skipping"); return end
+                    print("[shell] init: creating webview...")
                     require("hs.webview")
                     require("hs.webview.usercontent")
 
                     _shellChannel = hs.webview.usercontent.new("msShell")
                     _shellChannel:setCallback(function(message)
+                        print("[shell] Channel message received: " .. tostring(message.body):sub(1, 200))
                         local ok, data = pcall(hs.json.decode, message.body)
-                        if not ok or type(data) ~= "table" then return end
+                        if not ok or type(data) ~= "table" then
+                            print("[shell] Failed to decode message: " .. tostring(data))
+                            return
+                        end
                         local panel  = data.panel  or "_shell"
                         local action = data.action or "unknown"
                         local body   = data.body
                         -- Route ready signal
                         if panel == "_shell" and action == "ready" then
                             _shellReady = true
+                            print("[shell] Ready signal received, flushing " .. #_shellEvalQ .. " queued items")
                             -- Flush queued JS
                             for _, js in ipairs(_shellEvalQ) do
                                 pcall(function() _shellView:evaluateJavaScript(js) end)
@@ -2639,10 +2645,16 @@
                             _shellEvalQ = {}
                             -- Auto-mount built-in panels
                             hs.timer.doAfter(0.05, function()
-                                pcall(function() ms.shell.mountPanel("settings") end)
+                                print("[shell] Auto-mounting settings panel...")
+                                local ok, err = pcall(function() ms.shell.mountPanel("settings") end)
+                                print("[shell] mountPanel result: " .. tostring(ok) .. " " .. tostring(err))
                                 -- Push initial state to the newly mounted panel
                                 hs.timer.doAfter(0.1, function()
-                                    if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
+                                    print("[shell] Pushing initial state via refresh...")
+                                    if ms.ui and ms.ui.refresh then
+                                        local ok2, err2 = pcall(ms.ui.refresh)
+                                        print("[shell] refresh result: " .. tostring(ok2) .. " " .. tostring(err2))
+                                    end
                                 end)
                             end)
                         end
@@ -2657,6 +2669,7 @@
                         end
                         -- Auto-mount panels on navigate (rail click)
                         if action == "navigate" and panel ~= "_shell" then
+                            print("[shell] Navigate: auto-mounting panel '" .. panel .. "'")
                             pcall(function() ms.shell.mountPanel(panel) end)
                         end
                         -- Emit on the bus: ui:<panel>:<action>
@@ -2691,6 +2704,7 @@
                     local f = io.open(htmlPath, "r")
                     if f then
                         local html = f:read("*all"); f:close()
+                        print("[shell] Loading HTML: " .. #html .. " bytes from " .. htmlPath)
                         _shellView:html(html, baseURL)
                     else
                         print("ms.shell: cannot open " .. htmlPath)
@@ -2803,10 +2817,21 @@
                     end
                 end
 
+                -- Panel name → HTML file mapping for built-in panels
+                local _builtinPanels = {
+                    console  = "ms_console.html",
+                    watcher  = "ms_watcher.html",
+                    keys     = "ms_keys.html",
+                    window   = "ms_window.html",
+                    settings = "ms_settings_ui.html",
+                    macros   = nil,  -- macros is shell-internal, no standalone HTML
+                }
+
                 -- ms.shell.mountPanel(id)
                 -- Mount a registered panel into the shell content area.
                 -- Loads the panel's HTML into an iframe inside its slot.
                 ms.shell.mountPanel = function(id)
+                    print("[shell] mountPanel called for '" .. tostring(id) .. "'")
                     -- Auto-register built-in panels if not explicitly registered
                     if not _panelRegistry[id] and _builtinPanels[id] then
                         _panelRegistry[id] = {
@@ -2819,7 +2844,7 @@
 
                     local cfg = _panelRegistry[id]
                     if not cfg then
-                        print("ms.shell.mountPanel: unknown panel '" .. tostring(id) .. "'")
+                        print("[shell] mountPanel: unknown panel '" .. tostring(id) .. "'")
                         return false
                     end
 
@@ -2827,12 +2852,14 @@
                     local htmlContent = nil
                     if cfg.htmlPath then
                         local fullPath = hs.configdir .. "/ui/" .. cfg.htmlPath
+                        print("[shell] mountPanel: reading " .. fullPath)
                         local fh = io.open(fullPath, "r")
                         if fh then
                             htmlContent = fh:read("*all")
                             fh:close()
+                            print("[shell] mountPanel: read " .. #htmlContent .. " bytes")
                         else
-                            print("ms.shell.mountPanel: cannot read " .. fullPath)
+                            print("[shell] mountPanel: cannot read " .. fullPath)
                             return false
                         end
                     end
@@ -2843,7 +2870,9 @@
                     local htmlJson    = htmlContent and hs.json.encode(htmlContent) or "\"\""
                     local baseURLJson = hs.json.encode(baseURL)
                     local js = "PanelManager.mount(" .. idJson .. "," .. htmlJson .. "," .. baseURLJson .. ")"
-                    ms.shell.eval(js)
+                    print("[shell] mountPanel: eval JS (" .. #js .. " chars)")
+                    local evalOk, evalErr = pcall(function() ms.shell.eval(js) end)
+                    print("[shell] mountPanel: eval result: " .. tostring(evalOk) .. " " .. tostring(evalErr))
 
                     -- Call onLoad callback
                     if cfg.onLoad then pcall(cfg.onLoad) end
@@ -2865,16 +2894,6 @@
                     if ms.bus then ms.bus.emit("panel:closed", { id = id }) end
                     return true
                 end
-
-                -- Panel name → HTML file mapping for built-in panels
-                local _builtinPanels = {
-                    console  = "ms_console.html",
-                    watcher  = "ms_watcher.html",
-                    keys     = "ms_keys.html",
-                    window   = "ms_window.html",
-                    settings = "ms_settings_ui.html",
-                    macros   = nil,  -- macros is shell-internal, no standalone HTML
-                }
 
                 -- ms.shell.popOut(panelId)
                 -- Unmount from shell, create a standalone webview with the same HTML.
