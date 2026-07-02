@@ -1672,8 +1672,9 @@
         end)
 
         -- Shell integration: route bus messages to the same action handlers
+        -- Topic shape: ui:<panel>:<action> (emitted by ms.shell's msShell channel)
         if ms.bus then
-            ms.bus.on("ui:setSettings:*", function(topic, body)
+            ms.bus.on("ui:settings:*", function(topic, body)
                 if not body or type(body) ~= "table" then return end
                 local action = body.action
                 if not action then return end

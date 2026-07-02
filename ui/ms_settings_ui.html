@@ -3328,6 +3328,13 @@
 
             // ── Init ───────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
+                // Register with shell iframe bridge (if mounted inside Macro Lab shell)
+                // The bridge injects window.registerPanel into iframes via PanelManager.mount
+                if (typeof registerPanel === "function") {
+                    registerPanel("settings", function(action, body) {
+                        if (action === "state") receiveState(body);
+                    });
+                }
                 sendToHost({ action: "ready" });
             });
         </script>

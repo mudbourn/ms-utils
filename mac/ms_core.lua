@@ -2637,6 +2637,14 @@
                                 pcall(function() _shellView:evaluateJavaScript(js) end)
                             end
                             _shellEvalQ = {}
+                            -- Auto-mount built-in panels
+                            hs.timer.doAfter(0.05, function()
+                                pcall(function() ms.shell.mountPanel("settings") end)
+                                -- Push initial state to the newly mounted panel
+                                hs.timer.doAfter(0.1, function()
+                                    if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
+                                end)
+                            end)
                         end
                         -- Route pop-out/pop-in requests from JS
                         if panel == "_shell" and action == "popOut" and body and body.panel then
@@ -2646,6 +2654,10 @@
                         if panel == "_shell" and action == "popIn" and body and body.panel then
                             pcall(function() ms.shell.popIn(body.panel) end)
                             return
+                        end
+                        -- Auto-mount panels on navigate (rail click)
+                        if action == "navigate" and panel ~= "_shell" then
+                            pcall(function() ms.shell.mountPanel(panel) end)
                         end
                         -- Emit on the bus: ui:<panel>:<action>
                         if ms.bus then
