@@ -2846,6 +2846,19 @@
                     return indent(lvl) .. "ms.alert(" .. args .. ")"
                 end
 
+                -- Mouse operations (from recording) ----------------------------
+
+                emitters["ms.Mouse"] = function(step, lvl)
+                    local p = step.params or {}
+                    local parts = {}
+                    parts[#parts + 1] = serialize(p.operation or "Click")
+                    parts[#parts + 1] = serialize(p.button or "Left")
+                    parts[#parts + 1] = serialize(p.reference or "Mouse")
+                    parts[#parts + 1] = tostring(p.x or 0)
+                    parts[#parts + 1] = tostring(p.y or 0)
+                    return indent(lvl) .. "ms.Mouse(" .. table.concat(parts, ", ") .. ")"
+                end
+
                 -- Variable operations --------------------------------------
 
                 emitters["var_set"] = function(step, lvl)
@@ -3386,6 +3399,306 @@
                 end
             end
         -- END 12c. Macro Lab Shell ↔ Compiler bridge --
+
+        -- 12d. Test Run & Record Mode --
+            do
+                local function _testShellEval(js)
+                    if ms.shell and ms.shell.eval then
+                        ms.shell.eval(js)
+                    end
+                end
+
+                -- ── Test Run ──────────────────────────────────────────────
+                -- Compiles and executes a macro definition in the sandbox.
+                -- Returns (ok:bool, err:string|nil)
+
+                ms.shell._testRun = function(macroDef)
+                    if not macroDef or type(macroDef) ~= "table" then
+                        return false, "Invalid macro definition"
+                    end
+                    if not macroDef.id or type(macroDef.id) ~= "string" then
+                        -- Generate a temporary id for test runs
+                        macroDef.id = "_testRun_" .. tostring(math.random(100000, 999999))
+                    end
+                    if not macroDef.steps then macroDef.steps = {} end
+
+                    -- Compile
+                    local compileOk, src = pcall(ms.compiler.compile, macroDef)
+                    if not compileOk then
+                        return false, "Compile error: " .. tostring(src)
+                    end
+
+                    -- Load into sandbox
+                    local sandbox = ms._macroSandbox
+                    if not sandbox then
+                        return false, "Macro sandbox not initialized"
+                    end
+
+                    local chunk, loadErr
+                    if _VERSION and _VERSION >= "Lua 5.2" or not setfenv then
+                        chunk, loadErr = load(src, "@testRun_" .. macroDef.id, "bt", sandbox)
+                    else
+                        chunk, loadErr = loadstring(src, "@testRun_" .. macroDef.id)
+                        if chunk then setfenv(chunk, sandbox) end
+                    end
+                    if not chunk then
+                        return false, "Load error: " .. tostring(loadErr)
+                    end
+
+                    -- Execute (pcall-wrapped)
+                    local runOk, runErr = pcall(chunk)
+                    if not runOk then
+                        return false, "Runtime error: " .. tostring(runErr)
+                    end
+
+                    return true, nil
+                end
+
+                -- ── Record Mode ──────────────────────────────────────────
+
+                local _recordTap      = nil
+                local _recording      = false
+                local _lastEventTime  = nil
+                local _waitThreshold  = 0.05  -- 50ms default
+                local _recordMouseMoves = false  -- off by default
+
+                -- Key code → ms key name (macOS virtual key codes)
+                local _keyCodeMap = {
+                    [0x00] = "a", [0x01] = "s", [0x02] = "d", [0x03] = "f",
+                    [0x04] = "h", [0x05] = "g", [0x06] = "z", [0x07] = "x",
+                    [0x08] = "c", [0x09] = "v", [0x0B] = "b", [0x0C] = "q",
+                    [0x0D] = "w", [0x0E] = "e", [0x0F] = "r", [0x10] = "y",
+                    [0x11] = "t", [0x12] = "1", [0x13] = "2", [0x14] = "3",
+                    [0x15] = "4", [0x16] = "6", [0x17] = "5", [0x18] = "=",
+                    [0x19] = "9", [0x1A] = "7", [0x1B] = "-", [0x1C] = "8",
+                    [0x1D] = "0", [0x1E] = "]", [0x1F] = "o", [0x20] = "u",
+                    [0x21] = "[", [0x22] = "i", [0x23] = "p", [0x25] = "l",
+                    [0x26] = "j", [0x27] = "'", [0x28] = "k", [0x29] = ";",
+                    [0x2A] = "\\", [0x2B] = ",", [0x2C] = "/", [0x2D] = "n",
+                    [0x2E] = "m", [0x2F] = ".", [0x32] = "`",
+                    [0x24] = "return", [0x30] = "tab", [0x31] = "space",
+                    [0x33] = "delete", [0x35] = "escape",
+                    [0x7A] = "f1",  [0x78] = "f2",  [0x63] = "f3",
+                    [0x76] = "f4",  [0x60] = "f5",  [0x61] = "f6",
+                    [0x62] = "f7",  [0x64] = "f8",  [0x65] = "f9",
+                    [0x6D] = "f10", [0x67] = "f11", [0x6F] = "f12",
+                    [0x72] = "help",    [0x73] = "home",     [0x74] = "pageup",
+                    [0x75] = "forwarddelete", [0x77] = "end", [0x79] = "pagedown",
+                    [0x7B] = "left",    [0x7C] = "right",
+                    [0x7D] = "down",    [0x7E] = "up",
+                }
+
+                -- Extract modifier names from event flags
+                local function _extractMods(flags)
+                    local mods = {}
+                    -- Use rawFlagMasks for reliable detection
+                    if flags.ctrl   then mods[#mods + 1] = "ctrl"  end
+                    if flags.alt    then mods[#mods + 1] = "alt"   end
+                    if flags.shift  then mods[#mods + 1] = "shift" end
+                    if flags.cmd    then mods[#mods + 1] = "cmd"   end
+                    return mods
+                end
+
+                -- Send a recorded step to JS
+                local function _sendRecordStep(step)
+                    local json = hs.json.encode(step)
+                    _testShellEval("shellDispatch('macros','recordStep'," .. json .. ")")
+                end
+
+                -- Auto-insert ms.wait if time gap exceeds threshold
+                local function _checkAutoWait()
+                    if not _lastEventTime then return end
+                    local now = hs.timer.secondsSinceEpoch()
+                    local elapsed = now - _lastEventTime
+                    if elapsed >= _waitThreshold then
+                        local waitMs = math.floor(elapsed * 1000)
+                        _sendRecordStep({ action = "ms.wait", params = { ms = waitMs } })
+                    end
+                end
+
+                -- Start recording
+                ms.shell._startRecording = function(opts)
+                    if _recording then return true end
+                    opts = opts or {}
+
+                    _recording = true
+                    _lastEventTime = hs.timer.secondsSinceEpoch()
+                    _waitThreshold = (opts.waitThreshold or 50) / 1000  -- convert ms to seconds
+                    _recordMouseMoves = opts.recordMouseMoves or false
+
+                    local eventTypes = {
+                        hs.eventtap.event.types.keyDown,
+                        hs.eventtap.event.types.leftMouseDown,
+                        hs.eventtap.event.types.rightMouseDown,
+                        hs.eventtap.event.types.otherMouseDown,
+                        hs.eventtap.event.types.leftMouseDragged,
+                        hs.eventtap.event.types.scrollWheel,
+                    }
+
+                    _recordTap = hs.eventtap.new(eventTypes, function(event)
+                        local eventType = event:getType()
+                        local now = hs.timer.secondsSinceEpoch()
+
+                        -- Auto-insert wait before each action
+                        _checkAutoWait()
+                        _lastEventTime = now
+
+                        if eventType == hs.eventtap.event.types.keyDown then
+                            local keyCode = event:getKeyCode()
+                            local flags = event:getFlags()
+                            local keyName = _keyCodeMap[keyCode]
+                            if not keyName then
+                                keyName = "key" .. tostring(keyCode)
+                            end
+
+                            -- Skip modifier-only keys
+                            if keyName == "ctrl" or keyName == "alt"
+                               or keyName == "shift" or keyName == "cmd" then
+                                return false
+                            end
+
+                            local mods = _extractMods(flags)
+                            _sendRecordStep({
+                                action = "ms.type",
+                                params = { key = keyName, mods = mods },
+                            })
+
+                        elseif eventType == hs.eventtap.event.types.leftMouseDown then
+                            local pos = hs.mouse.absolutePosition()
+                            _sendRecordStep({
+                                action = "ms.Mouse",
+                                params = {
+                                    operation = "Click",
+                                    button    = "Left",
+                                    reference = "Mouse",
+                                    x = math.floor(pos.x),
+                                    y = math.floor(pos.y),
+                                },
+                            })
+
+                        elseif eventType == hs.eventtap.event.types.rightMouseDown then
+                            local pos = hs.mouse.absolutePosition()
+                            _sendRecordStep({
+                                action = "ms.Mouse",
+                                params = {
+                                    operation = "Click",
+                                    button    = "Right",
+                                    reference = "Mouse",
+                                    x = math.floor(pos.x),
+                                    y = math.floor(pos.y),
+                                },
+                            })
+
+                        elseif eventType == hs.eventtap.event.types.otherMouseDown then
+                            local pos = hs.mouse.absolutePosition()
+                            local btnNum = event:getProperty(
+                                hs.eventtap.event.properties.mouseEventButtonNumber)
+                            local btnName = "Button" .. tostring(btnNum + 1)
+                            _sendRecordStep({
+                                action = "ms.Mouse",
+                                params = {
+                                    operation = "Click",
+                                    button    = btnName,
+                                    reference = "Mouse",
+                                    x = math.floor(pos.x),
+                                    y = math.floor(pos.y),
+                                },
+                            })
+
+                        elseif eventType == hs.eventtap.event.types.leftMouseDragged then
+                            local pos = hs.mouse.absolutePosition()
+                            _sendRecordStep({
+                                action = "ms.Mouse",
+                                params = {
+                                    operation = "Drag",
+                                    button    = "Left",
+                                    reference = "Mouse",
+                                    x = math.floor(pos.x),
+                                    y = math.floor(pos.y),
+                                },
+                            })
+
+                        elseif eventType == hs.eventtap.event.types.scrollWheel then
+                            local dy = event:getProperty(
+                                hs.eventtap.event.properties.scrollWheelEventDeltaAxis1)
+                            if dy and dy ~= 0 then
+                                local direction = dy > 0 and "up" or "down"
+                                local clicks = math.min(math.abs(dy), 10)
+                                _sendRecordStep({
+                                    action = "ms.scroll",
+                                    params = {
+                                        direction = direction,
+                                        clicks = clicks,
+                                    },
+                                })
+                            end
+                        end
+
+                        return false  -- don't swallow events
+                    end)
+
+                    _recordTap:start()
+                    return true
+                end
+
+                -- Stop recording
+                ms.shell._stopRecording = function()
+                    if not _recording then return true end
+                    _recording = false
+                    if _recordTap then
+                        _recordTap:stop()
+                        _recordTap = nil
+                    end
+                    _lastEventTime = nil
+                    return true
+                end
+
+                -- Is currently recording?
+                ms.shell._isRecording = function()
+                    return _recording
+                end
+
+                -- ── Bus Wiring ───────────────────────────────────────────
+
+                if ms.bus then
+                    -- Test Run
+                    ms.bus.on("ui:macros:testRun", function(body)
+                        if not body then
+                            _testShellEval("shellDispatch('macros','testRunResult',{ok:false,err:'No macro data received'})")
+                            return
+                        end
+                        local ok, err = ms.shell._testRun(body)
+                        if ok then
+                            _testShellEval("shellDispatch('macros','testRunResult',{ok:true})")
+                        else
+                            local safeErr = tostring(err or "unknown error")
+                                :gsub("\\", "\\\\"):gsub("'", "\\'"):gsub("\n", "\\n")
+                            _testShellEval("shellDispatch('macros','testRunResult',{ok:false,err:'" .. safeErr .. "'})")
+                        end
+                    end)
+
+                    -- Start Recording
+                    ms.bus.on("ui:macros:startRecording", function(body)
+                        local ok, result = pcall(ms.shell._startRecording, body)
+                        if not ok then
+                            print("ms.shell._startRecording error: " .. tostring(result))
+                            local safeErr = tostring(result):gsub("\\", "\\\\"):gsub("'", "\\'"):gsub("\n", "\\n")
+                            _testShellEval("shellDispatch('macros','testRunResult',{ok:false,err:'Recording failed: " .. safeErr .. "'})")
+                        elseif result ~= true then
+                            _testShellEval("shellDispatch('macros','testRunResult',{ok:false,err:'Recording failed to start'})")
+                        end
+                    end)
+
+                    -- Stop Recording
+                    ms.bus.on("ui:macros:stopRecording", function(body)
+                        local ok, err = pcall(ms.shell._stopRecording)
+                        if not ok then
+                            print("ms.shell._stopRecording error: " .. tostring(err))
+                        end
+                    end)
+                end
+            end
+        -- END 12d. Test Run & Record Mode --
 
         -- 13. Safety Nets --
             do
