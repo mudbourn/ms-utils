@@ -616,6 +616,7 @@
 
             setUpdateChannel = function(data)
                 local ch = data.value
+                print("setUpdateChannel: received value=" .. tostring(ch))
                 if ch == "testing" or ch == "stable" then
                     ms._updateChannel = ch
                     ms.saveSettings()
@@ -636,7 +637,7 @@
 
             setGithubToken = function(data)
                 ms._githubToken = data.value or ""
-                -- Store in a restricted file (for project maintainers only)
+                -- Store in a restricted file (not settings.json, not keychain)
                 local tokenPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_github_token"
                 if ms._githubToken ~= "" then
                     local f = io.open(tokenPath, "w")

@@ -384,6 +384,9 @@
             if f then
                 f:write(hs.json.encode(data, true))
                 f:close()
+                print("saveSettings: wrote " .. jsonPath)
+            else
+                print("saveSettings: FAILED to open " .. jsonPath .. " for writing")
             end
         end
 
@@ -2364,6 +2367,18 @@
                 return
             end
 
+            -- Read local base version (strip -pre.N suffix)
+            local baseVersion = "0.0.0"
+            do
+                local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
+                if lf then
+                    local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                    if ok and lm and lm.version then
+                        baseVersion = lm.version:gsub("%-pre[%.%-]%d+$", "")
+                    end
+                end
+            end
+
             -- Step 1: Get latest completed workflow run
             local runsURL = "https://api.github.com/repos/" .. repo
                 .. "/actions/workflows/" .. workflow .. ".yml/runs?per_page=1&status=completed"
@@ -2413,7 +2428,7 @@
                             })
                             if callback then
                                 pcall(callback, {
-                                    version = "pre." .. runNumber,
+                                    version = baseVersion .. "-pre." .. runNumber,
                                     downloadUrl = downloadURL,
                                     headers = headers,
                                     format = "zip",
@@ -2429,7 +2444,7 @@
                                 .. "/actions/artifacts/" .. art.id .. "/zip"
                             if callback then
                                 pcall(callback, {
-                                    version = "pre." .. runNumber,
+                                    version = baseVersion .. "-pre." .. runNumber,
                                     downloadUrl = downloadURL,
                                     headers = headers,
                                     format = "zip",
