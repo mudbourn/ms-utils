@@ -369,8 +369,8 @@ YQIDAQAB
 
                 _guardianView:navigationCallback(function(action)
                     pcall(function()
-                        local _t = _trusted:sub(1, 16) .. "\xe2\x80\xa6"
-                        local _c = _cur:sub(1, 16)     .. "\xe2\x80\xa6"
+                        local _t = (_trusted or "unknown"):sub(1, 16) .. "\xe2\x80\xa6"
+                        local _c = (_cur or "unknown"):sub(1, 16)     .. "\xe2\x80\xa6"
 
                         _guardianView:evaluateJavaScript(
                             "setHashes('" .. _t .. "', '" .. _c .. "')"
