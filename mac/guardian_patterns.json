@@ -1,0 +1,32 @@
+{
+  "description": "Guardian include/exclude patterns — shared between CI (release.yml) and runtime (MsGuardian.spoon). Both sides walk the same include globs, skip the same excludes, and agree on the manifest format.",
+  "include": [
+    "mac/ms_core.lua",
+    "mac/Spoons/**/*.lua",
+    "ui/**/*.html",
+    "mac/bin/*.sh"
+  ],
+  "exclude": [
+    "mac/ms_macros.lua",
+    "mac/ms_macros_visual.lua",
+    "data/ms_settings.json",
+    "data/ms_theme.json",
+    "data/.ms_trusted_hash",
+    "data/.ms_update_pending",
+    "data/.ms_file_manifest.json",
+    "profiles/"
+  ],
+  "manifest": {
+    "path": "data/.ms_file_manifest.json",
+    "description": "Per-file SHA-256 manifest. CI generates + signs, Guardian verifies + checks hashes.",
+    "format": {
+      "version": "<release version>",
+      "generated": "<ISO 8601 timestamp>",
+      "files": {
+        "<relative path>": "<sha256 hex>",
+        "...": "..."
+      },
+      "signature": "<base64 RSA-2048 signature over sha256(minified JSON of version+generated+files)>"
+    }
+  }
+}
