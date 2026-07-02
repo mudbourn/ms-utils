@@ -313,11 +313,19 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
 
+          # Auto-detect pre-release from version string (semver: hyphen = pre-release)
+          PRERELEASE_FLAG=""
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+            echo "Pre-release detected: $VERSION"
+          fi
+
           # shellcheck disable=SC2086
           gh release create "$TAG" \
             --title "mudscript v${VERSION}" \
             --notes-file release-notes.md \
             --target main \
+            $PRERELEASE_FLAG \
             $ASSETS
 
           echo "Release: https://github.com/${{ github.repository }}/releases/tag/$TAG"
