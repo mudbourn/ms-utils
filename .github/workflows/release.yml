@@ -306,26 +306,35 @@ jobs:
           ASSETS=$(find . -name "mudscript-*-${VERSION}.*" -type f 2>/dev/null | tr '\n' ' ' || true)
           echo "Assets: $ASSETS"
 
-          gh release view "$TAG" --json name &>/dev/null && gh release delete "$TAG" --yes 2>/dev/null || true
-          git tag -d "$TAG" 2>/dev/null || true
-          git push origin ":refs/tags/$TAG" 2>/dev/null || true
+          # Update existing release or create new one — never delete first
+          if gh release view "$TAG" --json name &>/dev/null; then
+            echo "Release $TAG already exists — updating assets..."
+            gh release edit "$TAG" \
+              --title "mudscript v${VERSION}" \
+              --notes-file release-notes.md \
+              --prerelease="${VERSION%%-*}" != "$VERSION" && echo "pre" || echo "" \
+              2>/dev/null || true
+            # Upload new assets (gh release upload is idempotent for same filenames)
+            for asset in $ASSETS; do
+              gh release upload "$TAG" "$asset" --clobber 2>/dev/null || true
+            done
+          else
+            PRERELEASE_FLAG=""
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE_FLAG="--prerelease"
+              echo "Pre-release detected: $VERSION"
+            fi
 
-          git tag "$TAG"
-          git push origin "$TAG"
+            git tag "$TAG" 2>/dev/null || true
+            git push origin "$TAG" 2>/dev/null || true
 
-          # Auto-detect pre-release from version string (semver: hyphen = pre-release)
-          PRERELEASE_FLAG=""
-          if [[ "$VERSION" == *-* ]]; then
-            PRERELEASE_FLAG="--prerelease"
-            echo "Pre-release detected: $VERSION"
+            # shellcheck disable=SC2086
+            gh release create "$TAG" \
+              --title "mudscript v${VERSION}" \
+              --notes-file release-notes.md \
+              --target main \
+              $PRERELEASE_FLAG \
+              $ASSETS
           fi
-
-          # shellcheck disable=SC2086
-          gh release create "$TAG" \
-            --title "mudscript v${VERSION}" \
-            --notes-file release-notes.md \
-            --target main \
-            $PRERELEASE_FLAG \
-            $ASSETS
 
           echo "Release: https://github.com/${{ github.repository }}/releases/tag/$TAG"
