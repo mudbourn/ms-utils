@@ -274,7 +274,7 @@ YQIDAQAB
 
     -- Show the Guardian blocking UI (webview or dialog fallback).
     -- Called when integrity check fails and we need to block loading.
-    local function _showGuardianBlock()
+    local function _showGuardianBlock(expectedHash, currentHash)
         pcall(function()
             local _snd = hs.sound.getByFile(_home .. "/.hammerspoon/sounds/Error.wav")
 
@@ -397,8 +397,8 @@ YQIDAQAB
 
                 _guardianView:navigationCallback(function(action)
                     pcall(function()
-                        local _t = (_trusted or "unknown"):sub(1, 16) .. "\xe2\x80\xa6"
-                        local _c = (_cur or "unknown"):sub(1, 16)     .. "\xe2\x80\xa6"
+                        local _t = (expectedHash or "unknown"):sub(1, 16) .. "\xe2\x80\xa6"
+                        local _c = (currentHash or "unknown"):sub(1, 16)  .. "\xe2\x80\xa6"
 
                         _guardianView:evaluateJavaScript(
                             "setHashes('" .. _t .. "', '" .. _c .. "')"
@@ -542,13 +542,15 @@ YQIDAQAB
 
             if not _manifestOk then
                 _blocked = true
-                _showGuardianBlock()
+                local _exp = _manifest and _manifest["ms_core.lua"] or nil
+                local _got = _hashFile(_corePath)
+                _showGuardianBlock(_exp, _got)
             end
         end -- if _checkResult
     elseif _fmResult == "tampered" then
         -- Per-file manifest itself is suspect — block immediately
         _blocked = true
-        _showGuardianBlock()
+        _showGuardianBlock(nil, nil)
         print("Guardian: per-file manifest signature verification failed — blocking.")
 
     elseif _fmResult == "mismatch" then
@@ -609,7 +611,14 @@ YQIDAQAB
 
         if not _manifestOk then
             _blocked = true
-            _showGuardianBlock()
+            -- Get expected hash from file manifest and current hash from disk
+            local _exp, _got = nil, nil
+            if _fmFailedFile then
+                local fm = _readFileManifest()
+                if fm and fm.files then _exp = fm.files[_fmFailedFile] end
+                _got = _hashFile(_home .. "/.hammerspoon/" .. _fmFailedFile)
+            end
+            _showGuardianBlock(_exp, _got)
             print("Guardian: per-file hash mismatch for " .. (_fmFailedFile or "unknown") .. " — blocking.")
         end
     end
