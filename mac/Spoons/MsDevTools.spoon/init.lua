@@ -1206,7 +1206,7 @@
     end
 -- END Watcher Panel --
 
--- Keys Panel --
+-- Inputs Panel --
     function MsDevTools:_buildKeysPanel()
         local panel, ucKeys, pos = _makeDevPanel("msKeys", 360, 480, 80, 68)
 
@@ -1369,7 +1369,7 @@
             self:showKeys()
         end
     end
--- END Keys Panel --
+-- END Inputs Panel --
 
 -- Window Panel --
     function MsDevTools:_pushWindowEvent(entry)

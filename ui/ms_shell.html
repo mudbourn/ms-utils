@@ -210,6 +210,7 @@
         }
 
         #content-empty {
+            display: none;
             color: var(--text3);
             font-size: 12px;
             text-align: center;
@@ -947,7 +948,7 @@
             <span class="rail-icon">◉</span> Watcher
         </button>
         <button class="rail-item" data-panel="keys">
-            <span class="rail-icon">⌨</span> Keys
+            <span class="rail-icon">⌨</span> Inputs
         </button>
         <button class="rail-item" data-panel="window">
             <span class="rail-icon">▢</span> Window
@@ -1066,7 +1067,7 @@
             }
 
             /* Notify Lua side */
-            _post({ panel: panel, action: "navigate", body: { panel: panel } });
+            _post({ panel: "_shell", action: "navigate", body: { panel: panel } });
         }
 
         /* ── Outbound Messages (JS → Lua) ──────────────────────────── */
@@ -1097,6 +1098,9 @@
 
         /* ── Ready Signal ───────────────────────────────────────────── */
         _post({ panel: "_shell", action: "ready", body: { version: "0.2.0" } });
+
+        /* Auto-activate the default panel on first load */
+        setActive("macros");
 
     })();
     </script>

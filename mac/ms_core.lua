@@ -1334,9 +1334,18 @@
                 end
             end)
 
+            local function _inSafeSpace()
+                if ms._robloxActive then return true end
+                local front = hs.application.frontmostApplication()
+                if not front then return false end
+                local name = front:name()
+                return name == "Hammerspoon" or name == "Activity Monitor"
+                    or (ms.shell and ms.shell.isPoppedOut and pcall(function() return ms.shell.isPoppedOut() end) and ms.shell.isPoppedOut())
+            end
+
             hs.hotkey.bind({ "alt" }, "F10", function()
                 if not ms._loadComplete then return end
-                if not ms._robloxActive then return end
+                if not _inSafeSpace() then return end
                 ms.setMacros(0)
             end)
 
@@ -1352,7 +1361,7 @@
 
             hs.hotkey.bind({ "alt" }, "p", function()
                 if not ms._loadComplete then return end
-                if not ms._robloxActive then return end
+                if not _inSafeSpace() then return end
                 if ms._macroLabEnabled then
                     ms.shell.toggle()
                 else
@@ -2447,8 +2456,9 @@
                     end
 
                     _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
-                    pcall(function() _shellView:windowStyle(1 + 2 + 4) end)  -- titled + closable + miniaturizable
-                    pcall(function() _shellView:level(hs.canvas.windowLevels.normal or 4) end)
+                    pcall(function() _shellView:windowStyle(1 + 2 + 4 + 8) end)  -- titled + closable + miniaturizable + resizable
+                    pcall(function() _shellView:allowResizing(true) end)
+                    pcall(function() _shellView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
                     pcall(function() _shellView:allowTextEntry(true) end)
                     pcall(function() _shellView:shadow(true) end)
                     _shellView:alpha(0)
@@ -2776,6 +2786,7 @@
                     ms.bus.on("ui:_shell:navigate", function(data)
                         if data and data.panel then
                             ms.shell.setActivePanel(data.panel)
+                            pcall(function() ms.shell.mountPanel(data.panel) end)
                         end
                     end)
                 end
