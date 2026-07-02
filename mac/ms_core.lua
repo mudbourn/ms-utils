@@ -2796,6 +2796,11 @@
 
                 -- Panel Registry & Mounting --
 
+                -- JSON-encode a single string value (hs.json.encode requires a table)
+                local function _jsonStr(s)
+                    return hs.json.encode({s}):sub(2, -2)
+                end
+
                 local _panelRegistry = {}  -- [id] = config
                 local _popouts      = {}  -- [id] = { view, channel }
 
@@ -2810,9 +2815,9 @@
                     -- Tell the shell to add a rail item if it's ready
                     if _shellReady then
                         -- Build JSON manually (config may contain non-serializable functions)
-                        local railJson = '{"id":' .. hs.json.encode(id)
-                            .. ',"title":' .. hs.json.encode(config.title or id)
-                            .. ',"icon":' .. hs.json.encode(config.icon or "▪") .. '}'
+                        local railJson = '{"id":' .. _jsonStr(id)
+                            .. ',"title":' .. _jsonStr(config.title or id)
+                            .. ',"icon":' .. _jsonStr(config.icon or "▪") .. '}'
                         ms.shell.eval("PanelManager.addRailItem(" .. railJson .. ")")
                     end
                 end
@@ -2824,7 +2829,7 @@
                     keys     = "ms_keys.html",
                     window   = "ms_window.html",
                     settings = "ms_settings_ui.html",
-                    macros   = nil,  -- macros is shell-internal, no standalone HTML
+                    macros   = nil,
                 }
 
                 -- ms.shell.mountPanel(id)
@@ -2866,9 +2871,9 @@
 
                     -- Escape HTML for safe JS embedding via JSON encoding
                     local baseURL     = "file://" .. hs.configdir .. "/ui/"
-                    local idJson      = hs.json.encode(id)
-                    local htmlJson    = htmlContent and hs.json.encode(htmlContent) or "\"\""
-                    local baseURLJson = hs.json.encode(baseURL)
+                    local idJson      = _jsonStr(id)
+                    local htmlJson    = htmlContent and _jsonStr(htmlContent) or "\"\""
+                    local baseURLJson = _jsonStr(baseURL)
                     local js = "PanelManager.mount(" .. idJson .. "," .. htmlJson .. "," .. baseURLJson .. ")"
                     print("[shell] mountPanel: eval JS (" .. #js .. " chars)")
                     local evalOk, evalErr = pcall(function() ms.shell.eval(js) end)
@@ -2888,7 +2893,7 @@
                     local cfg = _panelRegistry[id]
                     if not cfg then return false end
 
-                    ms.shell.eval("PanelManager.unmount(" .. hs.json.encode(id) .. ")")
+                    ms.shell.eval("PanelManager.unmount(" .. _jsonStr(id) .. ")")
 
                     if cfg.onUnload then pcall(cfg.onUnload) end
                     if ms.bus then ms.bus.emit("panel:closed", { id = id }) end
@@ -2974,7 +2979,7 @@
                     _popouts[panelId] = { view = popView, channel = popChannel }
 
                     -- Notify shell that panel was popped out
-                    ms.shell.eval("PanelManager.markPoppedOut(" .. hs.json.encode(panelId) .. ", true)")
+                    ms.shell.eval("PanelManager.markPoppedOut(" .. _jsonStr(panelId) .. ", true)")
 
                     if ms.bus then ms.bus.emit("panel:poppedOut", { id = panelId }) end
                     return true
@@ -2994,7 +2999,7 @@
                     _popouts[panelId] = nil
 
                     -- Notify shell
-                    ms.shell.eval("PanelManager.markPoppedOut(" .. hs.json.encode(panelId) .. ", false)")
+                    ms.shell.eval("PanelManager.markPoppedOut(" .. _jsonStr(panelId) .. ", false)")
 
                     -- Remount in shell
                     ms.shell.mountPanel(panelId)

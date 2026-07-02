@@ -3328,6 +3328,14 @@
 
             // ── Init ───────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
+                // When embedded in the shell iframe, strip window-chrome styling
+                if (window.shellPost) {
+                    var p = document.getElementById("panel");
+                    if (p) {
+                        p.style.borderRadius = "0";
+                        p.style.clipPath = "none";
+                    }
+                }
                 sendToHost({ action: "ready" });
             });
         </script>

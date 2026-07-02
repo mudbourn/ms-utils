@@ -7,6 +7,26 @@
     MsDevTools.archiveLimit = 15
     MsDevTools.logDir       = "~/Documents/ms_dev_logs/"
     MsDevTools.branchTrace  = true
+
+    -- Panel push helper: route through shellDispatch when panel is in shell,
+    -- fall back to direct evaluateJavaScript for standalone webviews.
+    local function _pushToPanel(panelView, panelId, js)
+        -- Try shell path first (panel mounted in shell iframe)
+        local ms = _G.ms
+        if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
+            -- Extract function call: "appendEntry({...})" → fn="appendEntry", args="{...}"
+            local fnName, argStr = js:match("^(%w+)%((.+)%)$")
+            if fnName and argStr then
+                local dispatchJs = "shellDispatch(\"" .. panelId .. "\",\"" .. fnName .. "\"," .. argStr .. ")"
+                pcall(function() ms.shell.eval(dispatchJs) end)
+                return
+            end
+        end
+        -- Fallback: direct webview push (standalone panel)
+        if panelView then
+            pcall(function() panelView:evaluateJavaScript(js) end)
+        end
+    end
 -- END MsDevTools --
 
 -- State --
@@ -220,6 +240,17 @@
                 type = "print",
                 msg  = table.concat(parts, "\t"),
             })
+        end
+
+        -- Shell bus subscribers: handle messages from dev tool panels in shell iframes
+        if ms.bus then
+            ms.bus.on("ui:console:*", function(topic, body)
+                if not body or type(body) ~= "table" then return end
+                if body.action == "execute" and body.code then
+                    local ok, err = pcall(function() load(body.code)() end)
+                    if not ok then print("[console] execute error: " .. tostring(err)) end
+                end
+            end)
         end
     end
 -- END Lifecycle --
@@ -480,21 +511,21 @@
 
             if send then
                 pcall(function()
-                    _consolePanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                    _pushToPanel(_consolePanel, "console", "appendEntry(" .. json .. ")")
                 end)
             end
         end
 
         if _watcherPanel and (t == "macro" or t == "print" or t == "error" or t == "system" or t == "sound") then
             pcall(function()
-                _watcherPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                _pushToPanel(_watcherPanel, "watcher", "appendEntry(" .. json .. ")")
             end)
         end
 
         if _keysPanel and _keysReady
             and (t == "key" or t == "mouse" or t == "scroll" or t == "mousemove") then
             pcall(function()
-                _keysPanel:evaluateJavaScript("appendEntry(" .. json .. ")")
+                _pushToPanel(_keysPanel, "keys", "appendEntry(" .. json .. ")")
             end)
         end
 
@@ -545,7 +576,7 @@
 
             if aok then
                 pcall(function()
-                    _keysPanel:evaluateJavaScript("updateActiveKeys(" .. aj .. ")")
+                    _pushToPanel(_keysPanel, "keys", "updateActiveKeys(" .. aj .. ")")
                 end)
             end
         end
@@ -581,7 +612,7 @@
 
             if aok then
                 pcall(function()
-                    _keysPanel:evaluateJavaScript("updateMouseState(" .. aj .. ")")
+                    _pushToPanel(_keysPanel, "keys", "updateMouseState(" .. aj .. ")")
                 end)
             end
         end
@@ -607,7 +638,7 @@
 
         if ok then
             pcall(function()
-                _watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                _pushToPanel(_watcherPanel, "watcher", "appendEntry(" .. j .. ")")
             end)
         end
     end
@@ -723,7 +754,7 @@
 
                 if ok then
                     pcall(function()
-                        _watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                        _pushToPanel(_watcherPanel, "watcher", "appendEntry(" .. j .. ")")
                     end)
                 end
             end
@@ -751,7 +782,7 @@
 -- Panel Helpers --
     local _HIST_MAX = 300
 
-    local function _loadDevHistory(panel, categories)
+    local function _loadDevHistory(panel, categories, shellPanelId)
         local entries = {}
 
         for _, cat in ipairs(categories) do
@@ -787,9 +818,13 @@
         local ok, json = pcall(hs.json.encode, entries)
 
         if ok then
-            pcall(function()
-                panel:evaluateJavaScript("loadHistory(" .. json .. ")")
-            end)
+            if shellPanelId then
+                _pushToPanel(nil, shellPanelId, "loadHistory(" .. json .. ")")
+            elseif panel then
+                pcall(function()
+                    panel:evaluateJavaScript("loadHistory(" .. json .. ")")
+                end)
+            end
         end
     end
 
@@ -966,14 +1001,14 @@
         local j = string.format('{"x":%d,"y":%d}', math.floor(tx), math.floor(ty))
 
         pcall(function()
-            _keysPanel:evaluateJavaScript("updateMouseState(" .. j .. ")")
+            _pushToPanel(_keysPanel, "keys", "updateMouseState(" .. j .. ")")
         end)
     end
 -- END Panel Helpers --
 
 -- Console Panel --
     function MsDevTools:_buildConsolePanel()
-        local panel, ucCon, pos = _makeDevPanel("msConsole", 360, 480, 20, 20)
+        local panel, ucCon, pos = _makeDevPanel("console", 360, 480, 20, 20)
 
         if not panel then return nil end
 
@@ -1057,6 +1092,17 @@
     end
 
     function MsDevTools:showConsole()
+        -- Shell path: mount in shell and load history
+        local ms = _G.ms
+        if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
+            _consoleOpen = true
+            pcall(function() ms.shell.mountPanel("console") end)
+            hs.timer.doAfter(0.15, function()
+                _loadDevHistory(nil, {"macro", "console", "error", "system", "input"}, "console")
+            end)
+            return
+        end
+
         if not _consolePanel then
             _consolePanel = self:_buildConsolePanel()
 
@@ -1110,7 +1156,7 @@
 
 -- Watcher Panel --
     function MsDevTools:_buildWatcherPanel()
-        local panel, ucWatcher, pos = _makeDevPanel("msWatcher", 360, 480, 50, 44)
+        local panel, ucWatcher, pos = _makeDevPanel("watcher", 360, 480, 50, 44)
 
         if not panel then return nil end
 
@@ -1155,6 +1201,16 @@
     end
 
     function MsDevTools:showWatcher()
+        local ms = _G.ms
+        if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
+            _watcherOpen = true
+            pcall(function() ms.shell.mountPanel("watcher") end)
+            hs.timer.doAfter(0.15, function()
+                _loadDevHistory(nil, {"macro", "error", "system"}, "watcher")
+            end)
+            return
+        end
+
         if not _watcherPanel then
             _watcherPanel = self:_buildWatcherPanel()
 
@@ -1208,7 +1264,7 @@
 
 -- Inputs Panel --
     function MsDevTools:_buildKeysPanel()
-        local panel, ucKeys, pos = _makeDevPanel("msKeys", 360, 480, 80, 68)
+        local panel, ucKeys, pos = _makeDevPanel("keys", 360, 480, 80, 68)
 
         if not panel then return nil end
 
@@ -1288,6 +1344,17 @@
     end
 
     function MsDevTools:showKeys()
+        local ms = _G.ms
+        if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
+            _keysOpen = true
+            _keysReady = true
+            pcall(function() ms.shell.mountPanel("keys") end)
+            hs.timer.doAfter(0.15, function()
+                _loadDevHistory(nil, {"input"}, "keys")
+            end)
+            return
+        end
+
         if not _keysPanel then
             _keysPanel = self:_buildKeysPanel()
 
@@ -1384,16 +1451,14 @@
 
             if ok then
                 pcall(function()
-                    _windowPanel:evaluateJavaScript(
-                        "appendEntry(" .. j .. ");updateCurrentWindow(" .. j .. ")"
-                    )
+                    _pushToPanel(_windowPanel, "window", "appendEntry(" .. j .. ");updateCurrentWindow(" .. j .. ")")
                 end)
             end
         end
     end
 
     function MsDevTools:_buildWindowPanel()
-        local panel, ucWindow, pos = _makeDevPanel("msWindow", 360, 480, 110, 68)
+        local panel, ucWindow, pos = _makeDevPanel("window", 360, 480, 110, 68)
 
         if not panel then return nil end
 
@@ -1465,6 +1530,13 @@
     end
 
     function MsDevTools:showWindow()
+        local ms = _G.ms
+        if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
+            _windowOpen = true
+            pcall(function() ms.shell.mountPanel("window") end)
+            return
+        end
+
         if not _windowPanel then
             _windowPanel = self:_buildWindowPanel()
 
@@ -1620,7 +1692,7 @@
 
             if ok then
                 pcall(function()
-                    _watcherPanel:evaluateJavaScript("appendEntry(" .. j .. ")")
+                    _pushToPanel(_watcherPanel, "watcher", "appendEntry(" .. j .. ")")
                 end)
             end
         end

@@ -538,7 +538,7 @@
 
             // ── Create LogPanel ─────────────────────────────────────────────
             const lp = createLogPanel({
-                channel: "msConsole",
+                channel: "console",
                 buildRow,
                 maxEntries: 500,
                 scrollThresh: 60,
@@ -582,6 +582,18 @@
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
+                // Shell integration: register for incoming Lua pushes
+                if (typeof registerPanel === "function") {
+                    registerPanel("console", function(action, body) {
+                        if (action === "appendEntry" && body) window.appendEntry(body);
+                        else if (action === "loadHistory" && body) window.loadHistory(body);
+                    });
+                }
+                // Strip window-chrome when embedded in shell
+                if (window.shellPost) {
+                    var p = document.getElementById("panel");
+                    if (p) { p.style.borderRadius = "0"; p.style.clipPath = "none"; }
+                }
                 lp.sendToHost({ action: "ready" });
                 document.getElementById("code-input").focus();
             });

@@ -673,7 +673,7 @@
 
             // ── Create LogPanel ─────────────────────────────────────────────
             const lp = createLogPanel({
-                channel: "msWatcher",
+                channel: "watcher",
                 buildRow,
                 maxEntries: 300,
                 scrollThresh: 48,
@@ -700,6 +700,16 @@
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
+                if (typeof registerPanel === "function") {
+                    registerPanel("watcher", function(action, body) {
+                        if (action === "appendEntry" && body) window.appendEntry(body);
+                        else if (action === "loadHistory" && body) window.loadHistory(body);
+                    });
+                }
+                if (window.shellPost) {
+                    var p = document.getElementById("panel");
+                    if (p) { p.style.borderRadius = "0"; p.style.clipPath = "none"; }
+                }
                 lp.sendToHost({ action: "ready" });
             });
         </script>

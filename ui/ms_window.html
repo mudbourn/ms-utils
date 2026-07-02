@@ -420,7 +420,7 @@
 
             // ── Create LogPanel ─────────────────────────────────────────────
             const lp = createLogPanel({
-                channel: "msWindow",
+                channel: "window",
                 buildRow,
                 maxEntries: 300,
                 scrollThresh: 48,
@@ -487,6 +487,16 @@
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
+                if (typeof registerPanel === "function") {
+                    registerPanel("window", function(action, body) {
+                        if (action === "updateCurrentWindow" && body) window.updateCurrentWindow(body);
+                        else if (action === "loadHistory" && body) window.loadHistory(body);
+                    });
+                }
+                if (window.shellPost) {
+                    var p = document.getElementById("panel");
+                    if (p) { p.style.borderRadius = "0"; p.style.clipPath = "none"; }
+                }
                 lp.sendToHost({ action: "ready" });
             });
         </script>

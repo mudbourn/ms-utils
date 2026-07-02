@@ -175,9 +175,15 @@ export function createLogPanel(config) {
     // ── Host bridge ────────────────────────────────────────────────────
     function sendToHost(msg) {
         const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-        try {
-            window.webkit.messageHandlers[channel].postMessage(s);
-        } catch (e) {}
+        if (window.shellPost) {
+            // Running inside the Macro Lab shell — route through msShell channel
+            const data = typeof msg === "string" ? JSON.parse(msg) : msg;
+            window.shellPost(channel, data.action || "unknown", data);
+        } else {
+            try {
+                window.webkit.messageHandlers[channel].postMessage(s);
+            } catch (e) {}
+        }
     }
 
     function playSlot(slot) {
