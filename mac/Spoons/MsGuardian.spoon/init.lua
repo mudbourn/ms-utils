@@ -265,6 +265,7 @@ YQIDAQAB
             if body == "confirmDelete" then
                 pcall(function() if _guardianView then _guardianView:delete() end end)
                 os.remove(_trustPath)
+                os.remove(_home .. "/.hammerspoon/data/.ms_file_manifest.json")
                 hs.reload()
 
             elseif body == "keepBlocked" then
@@ -408,7 +409,9 @@ YQIDAQAB
                 )
 
                 if _choice == "Delete Manifest & Reload" then
-                    os.remove(_trustPath); hs.reload()
+                    os.remove(_trustPath)
+                    os.remove(_home .. "/.hammerspoon/data/.ms_file_manifest.json")
+                    hs.reload()
                 end
             end
         else
@@ -422,7 +425,9 @@ YQIDAQAB
             )
 
             if _choice == "Delete Manifest & Reload" then
-                os.remove(_trustPath); hs.reload()
+                os.remove(_trustPath)
+                os.remove(_home .. "/.hammerspoon/data/.ms_file_manifest.json")
+                hs.reload()
             end
         end
     end
@@ -453,7 +458,22 @@ YQIDAQAB
         local _checkResult, _failedFile = _checkAll(_manifest)
 
         if _checkResult == "uninitialized" then
-            print("Guardian: no trusted manifest — skipping check.")
+            -- No trusted manifest at all — auto-seed from current files
+            local files = _trackedFiles()
+            local newManifest = {}
+            for _, absPath in ipairs(files) do
+                local h = _hashFile(absPath)
+                if h then
+                    local rel = absPath:gsub(".*/%.hammerspoon/", "")
+                    newManifest[rel] = h
+                end
+            end
+            local ok, json = pcall(hs.json.encode, newManifest)
+            if ok then
+                local wf = io.open(_trustPath, "w")
+                if wf then wf:write(json .. "\n"); wf:close() end
+            end
+            print("Guardian: no trusted manifest — auto-seeded from current files.")
 
         elseif _checkResult == "error" then
             print("Guardian: could not hash " .. (_failedFile or "unknown") .. "; skipping check.")

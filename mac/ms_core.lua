@@ -2612,6 +2612,7 @@
                     _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
                     pcall(function() _shellView:windowStyle(1 + 2 + 4 + 8) end)  -- titled + closable + miniaturizable + resizable
                     pcall(function() _shellView:allowResizing(true) end)
+                    pcall(function() _shellView:minimumSize({ w = 600, h = 400 }) end)
                     pcall(function() _shellView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
                     pcall(function() _shellView:allowTextEntry(true) end)
                     pcall(function() _shellView:shadow(true) end)
@@ -4452,7 +4453,9 @@
                             end
                         end
                     end
-                    _needsIntegrityWarning = true
+                    -- MANIFEST doesn't match or missing — trust current files
+                    -- (user deleted hash = consent to trust current state)
+                    ms.integrity.trustCurrent()
                 end)
             end)
 

@@ -36,10 +36,6 @@ done
 # Copy guardian agent script.
 cp "$REPO/mac/bin/ms_guardian_agent.sh" "$HS/bin/ms_guardian_agent.sh" 2>/dev/null || true
 
-# Copy hidinject binary.
-mkdir -p "$HOME/.local/bin"
-cp "$REPO/mac/bin/hidinject" "$HOME/.local/bin/hidinject" 2>/dev/null || true
-
 # Compile and copy gamepad reader binary.
 if command -v swiftc &>/dev/null && [ -f "$REPO/mac/bin/ms_gc_read.swift" ]; then
     swiftc -O -o "$HOME/.local/bin/ms_gc_read" "$REPO/mac/bin/ms_gc_read.swift" -framework GameController 2>/dev/null || true

@@ -333,7 +333,7 @@ export class StepCanvas {
     // ── Icon preloading ────────────────────────────────────────────────
 
     async _preloadIcons() {
-        const needed = new Set(["drag", "close", "chevdown", "macros"]);
+        const needed = new Set(["drag", "close", "chevdown", "chevup", "trash", "edit", "macros"]);
         for (const action in ACTION_ICON_MAP) needed.add(ACTION_ICON_MAP[action]);
         for (const name of needed) await fetchSVG(this._svgBase, name);
     }
@@ -539,9 +539,14 @@ export class StepCanvas {
         acts.className = "step-actions";
         const del = document.createElement("div");
         del.className = "step-action-btn del";
-        del.innerHTML = _svgCache["close"] || "×";
+        del.innerHTML = _svgCache["trash"] || "×";
         del.addEventListener("click", e => { e.stopPropagation(); this.removeStep(step._sid); });
         acts.appendChild(del);
+        const editBtn = document.createElement("div");
+        editBtn.className = "step-action-btn edit";
+        editBtn.innerHTML = _svgCache["edit"] || "✎";
+        editBtn.addEventListener("click", e => { e.stopPropagation(); this._selectStep(step._sid); });
+        acts.appendChild(editBtn);
         el.appendChild(acts);
 
         el.addEventListener("click", e => {
@@ -597,9 +602,14 @@ export class StepCanvas {
         acts.className = "step-actions";
         const del = document.createElement("div");
         del.className = "step-action-btn del";
-        del.innerHTML = _svgCache["close"] || "×";
+        del.innerHTML = _svgCache["trash"] || "×";
         del.addEventListener("click", e => { e.stopPropagation(); this.removeStep(step._sid); });
         acts.appendChild(del);
+        const editBtn = document.createElement("div");
+        editBtn.className = "step-action-btn edit";
+        editBtn.innerHTML = _svgCache["edit"] || "✎";
+        editBtn.addEventListener("click", e => { e.stopPropagation(); this._selectStep(step._sid); });
+        acts.appendChild(editBtn);
         header.appendChild(acts);
 
         header.addEventListener("click", e => {

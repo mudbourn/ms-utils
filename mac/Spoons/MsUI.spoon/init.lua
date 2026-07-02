@@ -609,6 +609,16 @@
                 ms.ui.refresh()
             end,
 
+            setTestingSource = function(data)
+                local src = data.value
+                if src == "release" or src == "artifact" then
+                    ms._testingSource = src
+                    ms.saveSettings()
+                    ms.playSlot("update")
+                end
+                ms.ui.refresh()
+            end,
+
             setMacroEnabled = function(data)
                 if not data.id then return end
                 local def = ms.registry._defs[data.id]
