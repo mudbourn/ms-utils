@@ -2193,242 +2193,220 @@
             return true
         end
 
+        -- _fetchReleaseInfo [GitHub Releases API helper] --
+        local function _fetchReleaseInfo(channel, callback)
+            local repo = ms._testingRepo or "mudbourn/ms-utils"
+            local apiURL
+            if channel == "stable" then
+                apiURL = "https://api.github.com/repos/" .. repo .. "/releases/latest"
+            else
+                apiURL = "https://api.github.com/repos/" .. repo .. "/releases?per_page=5"
+            end
+            hs.http.asyncGet(apiURL, {
+                ["Accept"] = "application/vnd.github+json",
+            }, function(code, body, _)
+                if code ~= 200 or not body then
+                    ms.dev.log({
+                        type    = "error",
+                        event   = "release_fetch_failed",
+                        channel = channel,
+                        code    = code,
+                    })
+                    if callback then pcall(callback, nil) end
+                    return
+                end
+                local ok, data = pcall(hs.json.decode, body)
+                if not ok or not data then
+                    ms.dev.log({
+                        type    = "error",
+                        event   = "release_parse_failed",
+                        channel = channel,
+                    })
+                    if callback then pcall(callback, nil) end
+                    return
+                end
+                local release
+                if channel == "stable" then
+                    release = data
+                else
+                    if type(data) ~= "table" or #data == 0 then
+                        ms.dev.log({
+                            type    = "error",
+                            event   = "release_parse_failed",
+                            channel = channel,
+                            reason  = "empty_array",
+                        })
+                        if callback then pcall(callback, nil) end
+                        return
+                    end
+                    release = data[1]
+                end
+                if not release or not release.tag_name then
+                    ms.dev.log({
+                        type    = "error",
+                        event   = "release_parse_failed",
+                        channel = channel,
+                        reason  = "no_tag",
+                    })
+                    if callback then pcall(callback, nil) end
+                    return
+                end
+                local downloadUrl
+                local assets = release.assets or {}
+                for _, asset in ipairs(assets) do
+                    if asset.name and asset.name:match("^mudscript%-macos%-.*%.tar%.gz$") then
+                        downloadUrl = asset.browser_download_url
+                        break
+                    end
+                end
+                if not downloadUrl then
+                    ms.dev.log({
+                        type    = "error",
+                        event   = "release_parse_failed",
+                        channel = channel,
+                        reason  = "no_asset",
+                    })
+                    if callback then pcall(callback, nil) end
+                    return
+                end
+                local tagName = release.tag_name
+                local version = tagName:gsub("^v", "")
+                if callback then pcall(callback, {
+                    version     = version,
+                    downloadUrl = downloadUrl,
+                    tagName     = tagName,
+                }) end
+            end)
+        end
+        -- END _fetchReleaseInfo --
+
+        -- Update [stable channel] --
         ms.integrity.update = function()
             ms.dev.log({
                 type    = "system",
                 event   = "update_start",
                 channel = "stable",
             })
-            local manifestURL = ms._updateManifestURL
-            if not manifestURL or manifestURL == "" then
-                ms.dev.log({
-                    type   = "error",
-                    event  = "update_failed",
-                    reason = "no_url",
-                })
-                ms.alert("Update URL not configured.\nSet ms._updateManifestURL in ms_core.lua.", 6)
-                return
-            end
-            if not manifestURL:match("^https://") then
-                ms.dev.log({
-                    type   = "error",
-                    event  = "update_failed",
-                    reason = "not_https",
-                })
-                ms.alert("Update URL must use HTTPS.\nHTTP URLs are not permitted.", 6)
-                return
-            end
-            ms.alert("Fetching update manifest\xe2\x80\xa6", 4, true)
-            hs.http.asyncGet(manifestURL, nil, function(mCode, mBody, _)
-                if mCode ~= 200 or not mBody then
+            ms.alert("Checking for stable update\xe2\x80\xa6", 4, true)
+            _fetchReleaseInfo("stable", function(info)
+                if not info then
                     ms.dev.log({
                         type   = "error",
                         event  = "update_failed",
-                        reason = "manifest_http",
-                        code   = mCode,
+                        reason = "release_fetch",
                     })
-                    ms.alert("Update failed: manifest request returned " .. tostring(mCode) .. ".", 5)
+                    ms.alert("Update failed: could not fetch release info.", 5)
                     return
                 end
-                local manifest = hs.json.decode(mBody)
-                if not manifest then
-                    ms.dev.log({
-                        type   = "error",
-                        event  = "update_failed",
-                        reason = "manifest_parse",
-                    })
-                    ms.alert("Update failed: could not parse manifest.", 5)
-                    return
-                end
-
-                local isBundle = manifest.bundle
-                    and manifest.bundle.url and manifest.bundle.sha256
-
-                if isBundle then
-                elseif manifest.sha256 and manifest.url then
-                else
-                    ms.alert("Update failed: manifest missing required fields.", 5)
-                    return
-                end
-
-                if not _verifySignature(manifest) then return end
-
-                local newVersion = manifest.version or "?"
-
-                if isBundle then
-                    local bundleURL  = manifest.bundle.url
-                    local bundleHash = manifest.bundle.sha256:lower()
-                    ms.alert("Downloading v" .. newVersion .. " bundle\xe2\x80\xa6", 4, true)
+                local newVersion = info.version
+                local bundleURL  = info.downloadUrl
+                ms.alert("Downloading v" .. newVersion .. " bundle\xe2\x80\xa6", 4, true)
+                ms.dev.log({
+                    type    = "system",
+                    event   = "update_download_start",
+                    version = newVersion,
+                    format  = "bundle",
+                })
+                hs.http.asyncGet(bundleURL, nil, function(fCode, fBody, _)
+                    if fCode ~= 200 or not fBody then
+                        ms.dev.log({
+                            type    = "error",
+                            event   = "update_failed",
+                            reason  = "download_http",
+                            code    = fCode,
+                            version = newVersion,
+                        })
+                        ms.alert("Update failed: bundle download returned " .. tostring(fCode) .. ".", 5)
+                        return
+                    end
+                    os.execute("mkdir -p '" .. archivePath .. "'")
+                    local tmpArchive = archivePath .. "ms_bundle_update.tar.gz"
+                    local tmpF = io.open(tmpArchive, "w")
+                    if not tmpF then
+                        ms.alert("Update failed: could not write temp file.", 4)
+                        return
+                    end
+                    tmpF:write(fBody); tmpF:close()
+                    local tmpExtract = archivePath .. "ms_bundle_extract/"
+                    os.execute("rm -rf '" .. tmpExtract .. "'")
+                    os.execute("mkdir -p '" .. tmpExtract .. "'")
+                    local _, tarOk = hs.execute(
+                        "tar xzf '" .. tmpArchive .. "' -C '" .. tmpExtract .. "' 2>&1"
+                    )
+                    os.remove(tmpArchive)
+                    if not tarOk then
+                        os.execute("rm -rf '" .. tmpExtract .. "'")
+                        ms.dev.log({
+                            type    = "error",
+                            event   = "update_failed",
+                            reason  = "extract_failed",
+                            version = newVersion,
+                        })
+                        ms.alert("Update failed: could not extract bundle.", 5)
+                        return
+                    end
+                    -- Read MANIFEST.json from extracted bundle for signature verification
+                    local manifestPath = tmpExtract .. "MANIFEST.json"
+                    local topDir = nil
+                    local dh = io.popen("ls -d '" .. tmpExtract .. "'/mudscript-* 2>/dev/null | head -1")
+                    if dh then topDir = dh:read("*l"); dh:close() end
+                    if topDir and topDir ~= "" then
+                        if not topDir:match("/$") then topDir = topDir .. "/" end
+                        local altManifest = topDir .. "MANIFEST.json"
+                        if hs.fs.attributes(altManifest) then manifestPath = altManifest end
+                    end
+                    local manifest = nil
+                    local mf = io.open(manifestPath, "r")
+                    if mf then
+                        local ok, m = pcall(hs.json.decode, mf:read("*all")); mf:close()
+                        if ok then manifest = m end
+                    end
+                    if manifest and not _verifySignature(manifest) then
+                        os.execute("rm -rf '" .. tmpExtract .. "'")
+                        return
+                    end
+                    local timestamp = os.date("%Y-%m-%d_%H%M")
+                    ms._updateInProgress = true
+                    os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
+                    local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
+                    if _sp then _sp:close() end
+                    local ok = _applyBundleUpdate(tmpExtract, timestamp)
+                    ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
+                    os.execute("rm -rf '" .. tmpExtract .. "'")
+                    if not ok then
+                        ms.dev.log({
+                            type    = "error",
+                            event   = "update_failed",
+                            reason  = "apply_failed",
+                            version = newVersion,
+                        })
+                        ms.alert("Update failed: could not apply bundle.", 5)
+                        return
+                    end
                     ms.dev.log({
                         type    = "system",
-                        event   = "update_download_start",
+                        event   = "update_applied",
                         version = newVersion,
                         format  = "bundle",
                     })
-                    hs.http.asyncGet(bundleURL, nil, function(fCode, fBody, _)
-                        if fCode ~= 200 or not fBody then
-                            ms.dev.log({
-                                type    = "error",
-                                event   = "update_failed",
-                                reason  = "download_http",
-                                code    = fCode,
-                                version = newVersion,
-                            })
-                            ms.alert("Update failed: bundle download returned " .. tostring(fCode) .. ".", 5)
-                            return
-                        end
-                        os.execute("mkdir -p '" .. archivePath .. "'")
-                        local tmpArchive = archivePath .. "ms_bundle_update.tar.gz"
-                        local tmpF = io.open(tmpArchive, "w")
-                        if not tmpF then
-                            ms.alert("Update failed: could not write temp file.", 4)
-                            return
-                        end
-                        tmpF:write(fBody); tmpF:close()
-                        local actualHash = ms.integrity.hashFile(tmpArchive)
-                        if actualHash ~= bundleHash then
-                            print("ms update: bundle hash mismatch (expected "
-                                .. bundleHash:sub(1,16) .. "… got "
-                                .. (actualHash or "?"):sub(1,16) .. "…)"
-                                .. " — installing anyway.")
-                        end
-                        local tmpExtract = archivePath .. "ms_bundle_extract/"
-                        os.execute("rm -rf '" .. tmpExtract .. "'")
-                        os.execute("mkdir -p '" .. tmpExtract .. "'")
-                        local _, tarOk = hs.execute(
-                            "tar xzf '" .. tmpArchive .. "' -C '" .. tmpExtract .. "' 2>&1"
-                        )
-                        os.remove(tmpArchive)
-                        if not tarOk then
-                            os.execute("rm -rf '" .. tmpExtract .. "'")
-                            ms.dev.log({
-                                type    = "error",
-                                event   = "update_failed",
-                                reason  = "extract_failed",
-                                version = newVersion,
-                            })
-                            ms.alert("Update failed: could not extract bundle.", 5)
-                            return
-                        end
-                        local timestamp = os.date("%Y-%m-%d_%H%M")
-                        ms._updateInProgress = true
-                        os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
-                        local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
-                        if _sp then _sp:close() end
-                        local ok = _applyBundleUpdate(tmpExtract, timestamp)
-                        ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                        os.execute("rm -rf '" .. tmpExtract .. "'")
-                        if not ok then
-                            ms.dev.log({
-                                type    = "error",
-                                event   = "update_failed",
-                                reason  = "apply_failed",
-                                version = newVersion,
-                            })
-                            ms.alert("Update failed: could not apply bundle.", 5)
-                            return
-                        end
-                        ms.dev.log({
-                            type    = "system",
-                            event   = "update_applied",
+                    local newCoreHash = ms.integrity.hashFile(corePath)
+                    if newCoreHash then
+                        ms.integrity.writeTrustedHash(newCoreHash)
+                    end
+                    ms.integrity.invalidateCache()
+                    local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
+                    if _mf then
+                        _mf:write(hs.json.encode({
                             version = newVersion,
-                            format  = "bundle",
-                        })
-                        local newCoreHash = ms.integrity.hashFile(corePath)
-                        if newCoreHash then
-                            ms.integrity.writeTrustedHash(newCoreHash)
-                        end
-                        ms.integrity.invalidateCache()
-                        local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
-                        if _mf then
-                            _mf:write(hs.json.encode({
-                                version = newVersion,
-                                sha256  = newCoreHash or manifest.sha256,
-                                bundle  = manifest.bundle,
-                            })); _mf:close()
-                        end
-                        ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
-                        hs.timer.doAfter(3, function() hs.reload() end)
-                    end)
-                else
-                    local expectedHash = manifest.sha256:lower()
-                    ms.alert("Downloading v" .. newVersion .. "\xe2\x80\xa6", 4, true)
-                    ms.dev.log({
-                        type    = "system",
-                        event   = "update_download_start",
-                        version = newVersion,
-                        format  = "single-file",
-                    })
-                    hs.http.asyncGet(manifest.url, nil, function(fCode, fBody, _)
-                        if fCode ~= 200 or not fBody then
-                            ms.dev.log({
-                                type    = "error",
-                                event   = "update_failed",
-                                reason  = "download_http",
-                                code    = fCode,
-                                version = newVersion,
-                            })
-                            ms.alert("Update failed: file download returned " .. tostring(fCode) .. ".", 5)
-                            return
-                        end
-                        os.execute("mkdir -p '" .. archivePath .. "'")
-                        local tmpPath = archivePath .. "ms_core_update_tmp.lua"
-                        local tmpF = io.open(tmpPath, "w")
-                        if not tmpF then
-                            ms.alert("Update failed: could not write temp file.", 4)
-                            return
-                        end
-                        tmpF:write(fBody); tmpF:close()
-                        local actualHash = ms.integrity.hashFile(tmpPath)
-                        if actualHash ~= expectedHash then
-                            print("ms update: MANIFEST hash mismatch (expected "
-                                .. expectedHash:sub(1,16) .. "… got "
-                                .. (actualHash or "?"):sub(1,16) .. "…)"
-                                .. " — installing anyway and re-seeding trust from actual file.")
-                        end
-                        local timestamp  = os.date("%Y-%m-%d_%H%M")
-                        local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
-                        ms._updateInProgress = true
-                        os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
-                        local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
-                        if _sp then _sp:close() end
-                        local bOk = moveFile(corePath, backupFile)
-                        if not bOk then
-                            ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                            os.remove(tmpPath)
-                            ms.alert("Update failed: could not back up ms_core.lua.", 4)
-                            return
-                        end
-                        local mOk = moveFile(tmpPath, corePath)
-                        if not mOk then
-                            moveFile(backupFile, corePath)
-                            ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                            ms.alert("Update failed: could not install new ms_core.lua.\nBackup restored.", 5)
-                            return
-                        end
-                        ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                        ms.integrity.writeTrustedHash(actualHash)
-                        ms.integrity.invalidateCache()
-                        local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
-                        if _mf then
-                            _mf:write(hs.json.encode({
-                                version = newVersion,
-                                sha256  = expectedHash,
-                                url     = manifest.url,
-                            })); _mf:close()
-                        end
-                        ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
-                        ms.dev.log({
-                            type    = "system",
-                            event   = "update_applied",
-                            version = newVersion,
-                            format  = "single-file",
-                        })
-                        hs.timer.doAfter(3, function() hs.reload() end)
-                    end)
-                end
+                            sha256  = newCoreHash or "",
+                        })); _mf:close()
+                    end
+                    ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                    hs.timer.doAfter(3, function() hs.reload() end)
+                end)
             end)
         end
+        -- END Update --
 
         local function _parseVersion(v)
             local t = {}
@@ -2505,188 +2483,43 @@
             end)
         end
 
-        local _testingRunPath = os.getenv("HOME")
-            .. "/.hammerspoon/data/.ms_testing_run"
-
-        local function _readTestingRun()
-            local f = io.open(_testingRunPath, "r")
-            if not f then return 0 end
-            local n = tonumber(f:read("*a")) or 0; f:close(); return n
-        end
-        local function _writeTestingRun(n)
-            os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
-            local f = io.open(_testingRunPath, "w")
-            if f then f:write(tostring(n)); f:close() end
-        end
-
-        local function _fetchLatestTestingRun(callback)
-            local repo = ms._testingRepo or "mudbourn/ms-utils"
-            local wf   = ms._testingWorkflow or "testing"
-            local apiURL = "https://api.github.com/repos/" .. repo
-                .. "/actions/workflows/" .. wf .. ".yml/runs"
-                .. "?per_page=1"
-            hs.http.asyncGet(apiURL, {
-                ["Accept"] = "application/vnd.github+json",
-            }, function(code, body, _)
-                if code ~= 200 or not body then
-                    if callback then pcall(callback, nil) end
-                    return
-                end
-                local ok, data = pcall(hs.json.decode, body)
-                if not ok or not data or not data.workflow_runs
-                    or #data.workflow_runs == 0 then
-                    if callback then pcall(callback, nil) end
-                    return
-                end
-                local run = data.workflow_runs[1]
-                if callback then pcall(callback, {
-                    runId     = run.run_number or run.id,
-                    sha       = run.head_sha,
-                    display   = "build " .. tostring(run.run_number or run.id),
-                    createdAt = run.created_at or "",
-                }) end
-            end)
-        end
-
+        -- Update Beta [testing channel] --
         ms.integrity.updateBeta = function()
             ms.dev.log({
                 type    = "system",
                 event   = "update_start",
                 channel = "testing",
             })
-            local repo = ms._testingRepo or "mudbourn/ms-utils"
-            if not repo or repo == "" then
-                ms.alert("Testing channel: no repo configured.\nSet ms._testingRepo in ms_core.lua.", 6)
-                return
-            end
-            ms.alert("Fetching latest testing build\xe2\x80\xa6", 4, true)
-            _fetchLatestTestingRun(function(info)
-                if not info or not info.runId then
+            ms.alert("Checking for testing update\xe2\x80\xa6", 4, true)
+            _fetchReleaseInfo("testing", function(info)
+                if not info then
                     ms.dev.log({
-                        type   = "system",
-                        event  = "update_beta_fallback",
-                        reason = "no_workflow_run",
-                        target = "main",
+                        type   = "error",
+                        event  = "update_failed",
+                        reason = "release_fetch",
                     })
-                    ms.alert("Downloading latest from main branch\xe2\x80\xa6", 4, true)
-                    local fileURL = "https://raw.githubusercontent.com/" .. repo
-                        .. "/main/mac/ms_core.lua"
-                    hs.http.asyncGet(fileURL, nil, function(fCode, fBody, _)
-                        if fCode ~= 200 or not fBody then
-                            ms.alert("Download failed: HTTP " .. tostring(fCode) .. ".", 5)
-                            return
-                        end
-                        os.execute("mkdir -p '" .. archivePath .. "'")
-                        local tmpPath = archivePath .. "ms_core_update_tmp.lua"
-                        local tmpF = io.open(tmpPath, "w")
-                        if not tmpF then
-                            ms.alert("Update failed: could not write temp file.", 4)
-                            return
-                        end
-                        tmpF:write(fBody); tmpF:close()
-                        local actualHash = ms.integrity.hashFile(tmpPath)
-                        local timestamp  = os.date("%Y-%m-%d_%H%M")
-                        local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
-                        ms._updateInProgress = true
-                        os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
-                        local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
-                        if _sp then _sp:close() end
-                        local bOk = moveFile(corePath, backupFile)
-                        if not bOk then
-                            ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                            os.remove(tmpPath)
-                            ms.alert("Update failed: could not back up ms_core.lua.", 4)
-                            return
-                        end
-                        local mOk = moveFile(tmpPath, corePath)
-                        if not mOk then
-                            moveFile(backupFile, corePath)
-                            ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                            ms.alert("Update failed: could not install.\nBackup restored.", 5)
-                            return
-                        end
-                        ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                        ms.integrity.writeTrustedHash(actualHash)
-                        ms.integrity.invalidateCache()
-                        ms.alert("Updated to latest main.\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
-                        ms.dev.log({
-                            type    = "system",
-                            event   = "update_applied",
-                            version = "main-latest",
-                            format  = "single-file",
-                        })
-                        hs.timer.doAfter(3, function() hs.reload() end)
-                    end)
+                    ms.alert("Update failed: could not fetch testing release info.", 5)
                     return
                 end
-                local buildNum = info.runId
-                local bundleURL = "https://github.com/" .. repo
-                    .. "/releases/download/pre-" .. buildNum
-                    .. "/mudscript-macos-pre-" .. buildNum .. ".tar.gz"
+                local newVersion = info.version
+                local bundleURL  = info.downloadUrl
+                ms.alert("Downloading v" .. newVersion .. " bundle\xe2\x80\xa6", 4, true)
                 ms.dev.log({
                     type    = "system",
                     event   = "update_download_start",
-                    version = "pre-" .. buildNum,
+                    version = newVersion,
                     format  = "bundle",
                 })
-                ms.alert("Downloading build " .. buildNum .. "\xe2\x80\xa6", 4, true)
                 hs.http.asyncGet(bundleURL, nil, function(fCode, fBody, _)
                     if fCode ~= 200 or not fBody then
                         ms.dev.log({
-                            type   = "system",
-                            event  = "update_beta_fallback",
-                            reason = "bundle_http_" .. tostring(fCode),
-                            target = "single-file",
+                            type    = "error",
+                            event   = "update_failed",
+                            reason  = "download_http",
+                            code    = fCode,
+                            version = newVersion,
                         })
-                        local fileURL = "https://raw.githubusercontent.com/" .. repo
-                            .. "/" .. info.sha .. "/mac/ms_core.lua"
-                        hs.http.asyncGet(fileURL, nil, function(fCode2, fBody2, _)
-                            if fCode2 ~= 200 or not fBody2 then
-                                ms.alert("Download failed: HTTP " .. tostring(fCode2) .. ".", 5)
-                                return
-                            end
-                            os.execute("mkdir -p '" .. archivePath .. "'")
-                            local tmpPath = archivePath .. "ms_core_update_tmp.lua"
-                            local tmpF = io.open(tmpPath, "w")
-                            if not tmpF then
-                                ms.alert("Update failed: could not write temp file.", 4)
-                                return
-                            end
-                            tmpF:write(fBody2); tmpF:close()
-                            local actualHash = ms.integrity.hashFile(tmpPath)
-                            local timestamp  = os.date("%Y-%m-%d_%H%M")
-                            local backupFile = archivePath .. "ms_core_" .. timestamp .. ".lua.bak"
-                            ms._updateInProgress = true
-                        os.execute("mkdir -p '" .. os.getenv("HOME") .. "/.hammerspoon/data'")
-                        local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
-                        if _sp then _sp:close() end
-                            local bOk = moveFile(corePath, backupFile)
-                            if not bOk then
-                                ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                                os.remove(tmpPath)
-                                ms.alert("Update failed: could not back up ms_core.lua.", 4)
-                                return
-                            end
-                            local mOk = moveFile(tmpPath, corePath)
-                            if not mOk then
-                                moveFile(backupFile, corePath)
-                                ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                                ms.alert("Update failed: could not install.\nBackup restored.", 5)
-                                return
-                            end
-                            ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
-                            ms.integrity.writeTrustedHash(actualHash)
-                            ms.integrity.invalidateCache()
-                            _writeTestingRun(buildNum)
-                            ms.alert("Updated to build " .. buildNum .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
-                            ms.dev.log({
-                                type    = "system",
-                                event   = "update_applied",
-                                version = "pre-" .. buildNum,
-                                format  = "single-file-fallback",
-                            })
-                            hs.timer.doAfter(3, function() hs.reload() end)
-                        end)
+                        ms.alert("Update failed: bundle download returned " .. tostring(fCode) .. ".", 5)
                         return
                     end
                     os.execute("mkdir -p '" .. archivePath .. "'")
@@ -2706,7 +2539,33 @@
                     os.remove(tmpArchive)
                     if not tarOk then
                         os.execute("rm -rf '" .. tmpExtract .. "'")
+                        ms.dev.log({
+                            type    = "error",
+                            event   = "update_failed",
+                            reason  = "extract_failed",
+                            version = newVersion,
+                        })
                         ms.alert("Update failed: could not extract bundle.", 5)
+                        return
+                    end
+                    -- Read MANIFEST.json from extracted bundle for signature verification
+                    local manifestPath = tmpExtract .. "MANIFEST.json"
+                    local topDir = nil
+                    local dh = io.popen("ls -d '" .. tmpExtract .. "'/mudscript-* 2>/dev/null | head -1")
+                    if dh then topDir = dh:read("*l"); dh:close() end
+                    if topDir and topDir ~= "" then
+                        if not topDir:match("/$") then topDir = topDir .. "/" end
+                        local altManifest = topDir .. "MANIFEST.json"
+                        if hs.fs.attributes(altManifest) then manifestPath = altManifest end
+                    end
+                    local manifest = nil
+                    local mf = io.open(manifestPath, "r")
+                    if mf then
+                        local ok, m = pcall(hs.json.decode, mf:read("*all")); mf:close()
+                        if ok then manifest = m end
+                    end
+                    if manifest and not _verifySignature(manifest) then
+                        os.execute("rm -rf '" .. tmpExtract .. "'")
                         return
                     end
                     local timestamp = os.date("%Y-%m-%d_%H%M")
@@ -2718,44 +2577,118 @@
                     ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     if not ok then
+                        ms.dev.log({
+                            type    = "error",
+                            event   = "update_failed",
+                            reason  = "apply_failed",
+                            version = newVersion,
+                        })
                         ms.alert("Update failed: could not apply bundle.", 5)
                         return
                     end
+                    ms.dev.log({
+                        type    = "system",
+                        event   = "update_applied",
+                        version = newVersion,
+                        format  = "bundle",
+                    })
                     local newCoreHash = ms.integrity.hashFile(corePath)
                     if newCoreHash then
                         ms.integrity.writeTrustedHash(newCoreHash)
                     end
                     ms.integrity.invalidateCache()
-                    _writeTestingRun(buildNum)
-                    ms.alert("Updated to build " .. buildNum .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
-                    ms.dev.log({
-                        type    = "system",
-                        event   = "update_applied",
-                        version = "pre-" .. buildNum,
-                        format  = "bundle",
-                    })
+                    local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
+                    if _mf then
+                        _mf:write(hs.json.encode({
+                            version = newVersion,
+                            sha256  = newCoreHash or "",
+                        })); _mf:close()
+                    end
+                    ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
                     hs.timer.doAfter(3, function() hs.reload() end)
                 end)
             end)
         end
+        -- END Update Beta --
 
-        ms.integrity.checkForUpdateBeta = function(callback)
-            local latestRun = _readTestingRun()
-            _fetchLatestTestingRun(function(info)
-                if not info or not info.runId then
+        -- Check For Update [stable channel] --
+        ms.integrity.checkForUpdate = function(callback)
+            local localVersion
+            do
+                local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
+                if lf then
+                    local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                    if ok and lm and lm.version then localVersion = lm.version end
+                end
+            end
+            _fetchReleaseInfo("stable", function(info)
+                if not info then
+                    ms.dev.log({
+                        type    = "error",
+                        event   = "update_check_failed",
+                        channel = "stable",
+                    })
                     if callback then pcall(callback, nil) end
                     return
                 end
-                if info.runId > latestRun then
-                    if callback then pcall(callback, {
-                        version = info.display,
-                        runId   = info.runId,
-                    }) end
+                local remoteVersion = info.version
+                if _remoteIsNewer(localVersion, remoteVersion) then
+                    ms.dev.log({
+                        type     = "system",
+                        event    = "update_available",
+                        local_v  = localVersion,
+                        remote_v = remoteVersion,
+                        channel  = "stable",
+                    })
+                    if callback then
+                        pcall(callback, {
+                            version = remoteVersion or "?",
+                            sha256  = info.sha256,
+                        })
+                    end
+                    return
+                end
+                if callback then pcall(callback, nil) end
+            end)
+        end
+        -- END Check For Update --
+
+        -- Check For Update Beta [testing channel] --
+        ms.integrity.checkForUpdateBeta = function(callback)
+            local localVersion
+            do
+                local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
+                if lf then
+                    local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                    if ok and lm and lm.version then localVersion = lm.version end
+                end
+            end
+            _fetchReleaseInfo("testing", function(info)
+                if not info then
+                    if callback then pcall(callback, nil) end
+                    return
+                end
+                local remoteVersion = info.version
+                if _remoteIsNewer(localVersion, remoteVersion) then
+                    ms.dev.log({
+                        type     = "system",
+                        event    = "update_available",
+                        local_v  = localVersion,
+                        remote_v = remoteVersion,
+                        channel  = "testing",
+                    })
+                    if callback then
+                        pcall(callback, {
+                            version = remoteVersion or "?",
+                            sha256  = info.sha256,
+                        })
+                    end
                 else
                     if callback then pcall(callback, nil) end
                 end
             end)
         end
+        -- END Check For Update Beta --
     -- END System Integrity --
 
     -- ms.showGuardian --

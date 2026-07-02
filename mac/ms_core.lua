@@ -399,7 +399,6 @@
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
             ms._updateChannel     = "stable"
             ms._branchTrace       = true
-            ms._testingWorkflow   = "testing"
             ms._testingRepo       = "mudbourn/ms-utils"
 
             ms._updatePublicKey = [[
