@@ -174,6 +174,9 @@
             if data.updateChannel == "testing" or data.updateChannel == "stable" then
                 ms._updateChannel = data.updateChannel
             end
+            if data.testingSource == "release" or data.testingSource == "artifact" then
+                ms._testingSource = data.testingSource
+            end
             if data.macros then
                 for id, entry in pairs(data.macros) do
                     if entry.enabled ~= nil then
@@ -315,6 +318,7 @@
                 customThemeDisabled = ms._customThemeDisabled or false,
                 devArchiveLimit  = ms._devArchiveLimit or 15,
                 updateChannel    = ms._updateChannel or "stable",
+                testingSource    = ms._testingSource or "release",
                 quickReloaded    = ms._quickReloaded or 0,
                 qrOptions        = ms._qrOptions or {
                     macros   = true,
@@ -4223,6 +4227,20 @@
                             ms.saveSettings()
                             ms.playSlot("update")
                             ms.alert("Update channel: Testing", 2, true)
+                        end },
+                    }},
+                    { title = "Testing Source: " .. ((ms._testingSource or "release") == "artifact" and "Artifacts" or "Releases"), menu = {
+                        { title = ((ms._testingSource or "release") == "release" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Releases (signed manifests)", fn = function()
+                            ms._testingSource = "release"
+                            ms.saveSettings()
+                            ms.playSlot("update")
+                            ms.alert("Testing source: Releases", 2, true)
+                        end },
+                        { title = ((ms._testingSource or "release") == "artifact" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Artifacts (rapid testing)", fn = function()
+                            ms._testingSource = "artifact"
+                            ms.saveSettings()
+                            ms.playSlot("update")
+                            ms.alert("Testing source: Artifacts", 2, true)
                         end },
                     }},
                 }
