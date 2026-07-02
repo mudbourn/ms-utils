@@ -2320,7 +2320,7 @@
                 local downloadUrl
                 local assets = release.assets or {}
                 for _, asset in ipairs(assets) do
-                    if asset.name and asset.name:match("^mudscript%-macos%-.*%.zip$") then
+                    if asset.name and asset.name:match("^mudscript%-macos%-.*%.(zip|tar%.gz)$") then
                         downloadUrl = asset.browser_download_url
                         break
                     end
@@ -2386,7 +2386,8 @@
                         return
                     end
                     os.execute("mkdir -p '" .. archivePath .. "'")
-                    local tmpArchive = archivePath .. "ms_bundle_update.zip"
+                    local isZip = bundleURL:match("%.zip$")
+                    local tmpArchive = archivePath .. (isZip and "ms_bundle_update.zip" or "ms_bundle_update.tar.gz")
                     local tmpF = io.open(tmpArchive, "wb")
                     if not tmpF then
                         ms.alert("Update failed: could not write temp file.", 4)
@@ -2396,11 +2397,14 @@
                     local tmpExtract = archivePath .. "ms_bundle_extract/"
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     os.execute("mkdir -p '" .. tmpExtract .. "'")
-                    local _, zipOk = hs.execute(
-                        "unzip -o '" .. tmpArchive .. "' -d '" .. tmpExtract .. "' 2>&1"
-                    )
+                    local _, extractOk
+                    if isZip then
+                        _, extractOk = hs.execute("unzip -o '" .. tmpArchive .. "' -d '" .. tmpExtract .. "' 2>&1")
+                    else
+                        _, extractOk = hs.execute("tar xzf '" .. tmpArchive .. "' -C '" .. tmpExtract .. "' 2>&1")
+                    end
                     os.remove(tmpArchive)
-                    if not zipOk then
+                    if not extractOk then
                         os.execute("rm -rf '" .. tmpExtract .. "'")
                         ms.dev.log({
                             type    = "error",
@@ -2521,7 +2525,8 @@
                         return
                     end
                     os.execute("mkdir -p '" .. archivePath .. "'")
-                    local tmpArchive = archivePath .. "ms_bundle_update.zip"
+                    local isZip = bundleURL:match("%.zip$")
+                    local tmpArchive = archivePath .. (isZip and "ms_bundle_update.zip" or "ms_bundle_update.tar.gz")
                     local tmpF = io.open(tmpArchive, "wb")
                     if not tmpF then
                         ms.alert("Update failed: could not write temp file.", 4)
@@ -2531,11 +2536,14 @@
                     local tmpExtract = archivePath .. "ms_bundle_extract/"
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     os.execute("mkdir -p '" .. tmpExtract .. "'")
-                    local _, zipOk = hs.execute(
-                        "unzip -o '" .. tmpArchive .. "' -d '" .. tmpExtract .. "' 2>&1"
-                    )
+                    local _, extractOk
+                    if isZip then
+                        _, extractOk = hs.execute("unzip -o '" .. tmpArchive .. "' -d '" .. tmpExtract .. "' 2>&1")
+                    else
+                        _, extractOk = hs.execute("tar xzf '" .. tmpArchive .. "' -C '" .. tmpExtract .. "' 2>&1")
+                    end
                     os.remove(tmpArchive)
-                    if not zipOk then
+                    if not extractOk then
                         os.execute("rm -rf '" .. tmpExtract .. "'")
                         ms.dev.log({
                             type    = "error",

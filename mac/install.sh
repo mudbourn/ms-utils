@@ -92,18 +92,23 @@ else
     # Try to get the latest release download URL via the GitHub API
     echo "   Checking for latest release..."
     API="https://api.github.com/repos/$REPO/releases/latest"
-    ZIP_URL=$(curl -sf "$API" | grep -o '"browser_download_url": *"[^"]*macos[^"]*\.zip"' | head -1 | sed 's/.*": *"//; s/"//')
+    ZIP_URL=$(curl -sf "$API" | grep -o '"browser_download_url": *"[^"]*macos[^"]*"' | head -1 | sed 's/.*": *"//; s/"//')
 
     if [ -n "$ZIP_URL" ]; then
         echo "   Downloading: $ZIP_URL"
         TMP_FILE=$(mktemp)
         curl -sfL "$ZIP_URL" -o "$TMP_FILE"
-        unzip -o "$TMP_FILE" -d "$HS" > /dev/null
-        # Move contents out of the nested mudscript-* directory if present
-        NESTED=$(find "$HS" -maxdepth 1 -type d -name "mudscript-*" | head -1)
-        if [ -n "$NESTED" ]; then
-            mv "$NESTED"/* "$HS/" 2>/dev/null || true
-            rm -rf "$NESTED"
+        # Detect format from URL
+        if echo "$ZIP_URL" | grep -q '\.zip$'; then
+            unzip -o "$TMP_FILE" -d "$HS" > /dev/null
+            # Move contents out of the nested mudscript-* directory if present
+            NESTED=$(find "$HS" -maxdepth 1 -type d -name "mudscript-*" | head -1)
+            if [ -n "$NESTED" ]; then
+                mv "$NESTED"/* "$HS/" 2>/dev/null || true
+                rm -rf "$NESTED"
+            fi
+        else
+            tar xzf "$TMP_FILE" -C "$HS" --strip-components=1
         fi
         rm -f "$TMP_FILE"
         echo "   ✓ Release downloaded and extracted."
