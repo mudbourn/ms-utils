@@ -210,7 +210,6 @@
         }
 
         #content-empty {
-            display: none;
             color: var(--text3);
             font-size: 12px;
             text-align: center;
@@ -967,8 +966,7 @@
     <main id="content">
         <div id="content-empty">
             <span>◇</span>
-            Select a panel from the rail<br>
-            <em style="font-size:10px;color:var(--text3)">Phase 0 — infrastructure only</em>
+            Select a panel from the rail
         </div>
         <!-- Panel slots will be populated in Phase 2 -->
         <div class="panel-slot" id="slot-console"></div>
@@ -1067,7 +1065,7 @@
             }
 
             /* Notify Lua side */
-            _post({ panel: "_shell", action: "navigate", body: { panel: panel } });
+            _post({ panel: panel, action: "navigate", body: { panel: panel } });
         }
 
         /* ── Outbound Messages (JS → Lua) ──────────────────────────── */
@@ -1098,9 +1096,6 @@
 
         /* ── Ready Signal ───────────────────────────────────────────── */
         _post({ panel: "_shell", action: "ready", body: { version: "0.2.0" } });
-
-        /* Auto-activate the default panel on first load */
-        setActive("macros");
 
     })();
     </script>

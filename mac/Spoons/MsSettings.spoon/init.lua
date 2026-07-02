@@ -1751,38 +1751,49 @@
                     else
                         -- Legacy format: flat sounds/ directory — prompt user for destination
                         local hasSounds = false
+                        local legacyFiles = {}
                         for file in hs.fs.dir(soundsDir) do
                             if file ~= "." and file ~= ".." then
                                 if hs.fs.attributes(soundsDir .. file, "mode") == "file" then
-                                    hasSounds = true; break
+                                    hasSounds = true
+                                    table.insert(legacyFiles, file)
                                 end
                             end
                         end
                         if hasSounds then
-                            local soundDest = SoundActiveDir
-                            local btn = hs.dialog.blockAlert(
-                                "Import Sounds",
-                                "How should these sounds be imported?",
-                                "Theming Sounds",
-                                "Macro Sounds"
-                            )
-                            if btn == 2 then soundDest = SoundMacroDir end
-                            local added = (soundDest == SoundActiveDir) and soundsAdded or macroAdded
-                            _importSndDir(soundsDir, soundDest, added)
-                            if soundDest == SoundActiveDir then
-                                ms.importedSounds = ms.importedSounds or {}
-                                for _, name in ipairs(added) do
-                                    for file in hs.fs.dir(soundsDir) do
-                                        if file ~= "." and file ~= ".." then
-                                            local n = file:match("^(.+)%.[^%.]+$") or file
-                                            if n == name then
-                                                ms.importedSounds[name] = file
-                                                break
+                            local fileList = ""
+                            for i, f in ipairs(legacyFiles) do
+                                if i <= 10 then
+                                    fileList = fileList .. "  • " .. f:gsub("%.[^%.]+$", "") .. "\n"
+                                end
+                            end
+                            if #legacyFiles > 10 then
+                                fileList = fileList .. "  … and " .. (#legacyFiles - 10) .. " more\n"
+                            end
+                            ms.ui.modal({
+                                title   = "Import Sounds (Legacy Format)",
+                                msg     = #legacyFiles .. " sound(s) in flat directory:\n\n" .. fileList,
+                                confirm = "Theming Sounds",
+                                cancel  = "Macro Sounds",
+                            }, function(r)
+                                local soundDest = r.confirmed and SoundActiveDir or SoundMacroDir
+                                local added = (soundDest == SoundActiveDir) and soundsAdded or macroAdded
+                                _importSndDir(soundsDir, soundDest, added)
+                                if soundDest == SoundActiveDir then
+                                    ms.importedSounds = ms.importedSounds or {}
+                                    for _, name in ipairs(added) do
+                                        for file in hs.fs.dir(soundsDir) do
+                                            if file ~= "." and file ~= ".." then
+                                                local n = file:match("^(.+)%.[^%.]+$") or file
+                                                if n == name then
+                                                    ms.importedSounds[name] = file
+                                                    break
+                                                end
                                             end
                                         end
                                     end
                                 end
-                            end
+                            end)
                         end
                     end
                 end

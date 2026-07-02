@@ -399,6 +399,7 @@
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
             ms._updateChannel     = "stable"
             ms._branchTrace       = true
+            ms._testingWorkflow   = "testing"
             ms._testingRepo       = "mudbourn/ms-utils"
 
             ms._updatePublicKey = [[
@@ -1727,6 +1728,160 @@
                    and math.abs(c.g - g) <= tolerance
                    and math.abs(c.b - b) <= tolerance
             end
+
+            -- Random wait between min and max milliseconds
+            ms.randWait = function(min, max)
+                ms.wait(math.random(min, max))
+            end
+
+            -- Wait base milliseconds ± jitter
+            ms.jitter = function(base, jitterMs)
+                ms.wait(base + math.random(-jitterMs, jitterMs))
+            end
+
+            -- Save/restore cursor position
+            local _savedCursor = nil
+            ms.saveCursor = function()
+                _savedCursor = hs.mouse.absolutePosition()
+                return _savedCursor
+            end
+            ms.restoreCursor = function()
+                if _savedCursor then
+                    hs.mouse.absolutePosition(_savedCursor)
+                end
+            end
+
+            -- Check if an app is running
+            ms.appRunning = function(appName)
+                return hs.application.get(appName) ~= nil
+            end
+
+            -- Check if an app is the frontmost application
+            ms.appIsFront = function(appName)
+                local front = hs.application.frontmostApplication()
+                return front and front:name() == appName
+            end
+
+            -- Focus (activate) an app by name
+            ms.focus = function(appName)
+                local app = hs.application.get(appName)
+                if app then
+                    pcall(function() app:activate() end)
+                    return true
+                end
+                return false
+            end
+
+            -- Toggle a key: press if not held, release if held
+            ms.toggle = function(key, mods)
+                if ms.keystate(key) then
+                    ms.release(key, mods)
+                else
+                    ms.press(key, mods)
+                end
+            end
+
+            -- Wait until a pixel matches expected color (poll loop)
+            ms.waitPixel = function(x, y, ref, r, g, b, tol, timeout)
+                timeout = timeout or 5000
+                local deadline = hs.timer.absoluteTime() + timeout * 1000000
+                while hs.timer.absoluteTime() < deadline do
+                    if ms.pixelMatch(x, y, ref, r, g, b, tol or 10) then return true end
+                    ms.wait(50)
+                end
+                return false
+            end
+
+            -- Wait until a pixel does NOT match expected color (poll loop)
+            ms.waitNotPixel = function(x, y, ref, r, g, b, tol, timeout)
+                timeout = timeout or 5000
+                local deadline = hs.timer.absoluteTime() + timeout * 1000000
+                while hs.timer.absoluteTime() < deadline do
+                    if not ms.pixelMatch(x, y, ref, r, g, b, tol or 10) then return true end
+                    ms.wait(50)
+                end
+                return false
+            end
+
+            -- Wait until an app appears (poll loop)
+            ms.waitApp = function(appName, timeout)
+                timeout = timeout or 10000
+                local deadline = hs.timer.absoluteTime() + timeout * 1000000
+                while hs.timer.absoluteTime() < deadline do
+                    if hs.application.get(appName) then return true end
+                    ms.wait(100)
+                end
+                return false
+            end
+
+            -- Wait until an app disappears (poll loop)
+            ms.waitNotApp = function(appName, timeout)
+                timeout = timeout or 10000
+                local deadline = hs.timer.absoluteTime() + timeout * 1000000
+                while hs.timer.absoluteTime() < deadline do
+                    if not hs.application.get(appName) then return true end
+                    ms.wait(100)
+                end
+                return false
+            end
+
+            -- Get window position of an app (returns {x, y, w, h} or nil)
+            ms.windowPos = function(appName)
+                local app = hs.application.get(appName)
+                if not app then return nil end
+                local win = app:mainWindow()
+                if not win then return nil end
+                local f = win:frame()
+                return { x = f.x, y = f.y, w = f.w, h = f.h }
+            end
+
+            -- Press multiple keys in sequence with optional delay between them
+            ms.multiPress = function(keys, delayMs, mods, hidinject)
+                delayMs = delayMs or 15
+                for i, key in ipairs(keys) do
+                    ms.type(key, mods, hidinject)
+                    if i < #keys then ms.wait(delayMs) end
+                end
+            end
+
+            -- Set system volume (0-100)
+            ms.setVolume = function(level)
+                local dev = hs.audiodevice.defaultOutputDevice()
+                if dev then dev:setVolume(level) end
+            end
+
+            -- Mute system audio
+            ms.mute = function()
+                local dev = hs.audiodevice.defaultOutputDevice()
+                if dev then dev:setMuted(true) end
+            end
+
+            -- Unmute system audio
+            ms.unmute = function()
+                local dev = hs.audiodevice.defaultOutputDevice()
+                if dev then dev:setMuted(false) end
+            end
+
+            -- Take a screenshot and save to path
+            ms.screenshot = function(path)
+                path = path or os.getenv("HOME") .. "/Desktop/screenshot_" .. os.date("%Y%m%d_%H%M%S") .. ".png"
+                local screen = hs.screen.mainScreen()
+                if not screen then return nil end
+                local img = screen:snapshot()
+                if not img then return nil end
+                img:saveToFile(path)
+                return path
+            end
+
+            -- Watch for clipboard changes
+            local _clipWatcher = nil
+            ms.clipChanged = function(callback)
+                if _clipWatcher then _clipWatcher:stop() end
+                _clipWatcher = hs.pasteboard.watcher.new(callback)
+                _clipWatcher:start()
+                return _clipWatcher
+            end
+
         -- END 8. Utilities --
 
         -- 9. Bind System & Settings Panel --
