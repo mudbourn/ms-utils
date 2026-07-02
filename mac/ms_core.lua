@@ -2625,7 +2625,6 @@
 
                     _shellChannel = hs.webview.usercontent.new("msShell")
                     _shellChannel:setCallback(function(message)
-                        print("[shell] Channel message received: " .. tostring(message.body):sub(1, 200))
                         local ok, data = pcall(hs.json.decode, message.body)
                         if not ok or type(data) ~= "table" then
                             print("[shell] Failed to decode message: " .. tostring(data))
@@ -2645,15 +2644,10 @@
                             _shellEvalQ = {}
                             -- Auto-mount built-in panels
                             hs.timer.doAfter(0.05, function()
-                                print("[shell] Auto-mounting settings panel...")
-                                local ok, err = pcall(function() ms.shell.mountPanel("settings") end)
-                                print("[shell] mountPanel result: " .. tostring(ok) .. " " .. tostring(err))
-                                -- Push initial state to the newly mounted panel
+                                pcall(function() ms.shell.mountPanel("settings") end)
                                 hs.timer.doAfter(0.1, function()
-                                    print("[shell] Pushing initial state via refresh...")
                                     if ms.ui and ms.ui.refresh then
-                                        local ok2, err2 = pcall(ms.ui.refresh)
-                                        print("[shell] refresh result: " .. tostring(ok2) .. " " .. tostring(err2))
+                                        pcall(ms.ui.refresh)
                                     end
                                 end)
                             end)
@@ -2669,7 +2663,6 @@
                         end
                         -- Auto-mount panels on navigate (rail click)
                         if action == "navigate" and panel ~= "_shell" then
-                            print("[shell] Navigate: auto-mounting panel '" .. panel .. "'")
                             pcall(function() ms.shell.mountPanel(panel) end)
                         end
                         -- Emit on the bus: ui:<panel>:<action>
@@ -2704,6 +2697,34 @@
                     local f = io.open(htmlPath, "r")
                     if f then
                         local html = f:read("*all"); f:close()
+
+                        -- Inject log-panel.js as IIFE global.
+                        -- html()-loaded documents can't import external modules (file:// blocked).
+                        -- Solution: Lua reads the ES module, strips 'export', wraps as IIFE.
+                        local lpPath = hs.configdir .. "/ui/modules/log-panel.js"
+                        local lpF = io.open(lpPath, "r")
+                        if lpF then
+                            local lpCode = lpF:read("*all"); lpF:close()
+                            -- Strip 'export ' keyword from 'export function createLogPanel'
+                            lpCode = lpCode:gsub("export%s+function", "function")
+                            -- Wrap in IIFE that exposes createLogPanel globally
+                            lpCode = "(function() {\n" .. lpCode
+                                .. "\nwindow.createLogPanel = createLogPanel;\n"
+                                .. "window._msApplyTheme = applyTheme;\n"
+                                .. "})();\n"
+                            -- Use find+sub to replace only the FIRST </head> (gsub would
+                            -- match all occurrences including ones inside string literals)
+                            local headPos = html:find("</head>")
+                            if headPos then
+                                html = html:sub(1, headPos - 1)
+                                    .. "<script>" .. lpCode .. "</script>\n"
+                                    .. html:sub(headPos)
+                            end
+                            print("[shell] Injected log-panel.js as IIFE (" .. #lpCode .. " bytes)")
+                        else
+                            print("[shell] WARNING: cannot read " .. lpPath)
+                        end
+
                         print("[shell] Loading HTML: " .. #html .. " bytes from " .. htmlPath)
                         _shellView:html(html, baseURL)
                     else
@@ -2716,6 +2737,62 @@
                         local themeJson = hs.json.encode(ms._theme or {})
                         _shellView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
                     end)
+                end
+
+                -- ms.shell.testModules() — spike: verify ES modules work in shell context
+                -- Creates a temporary webview, loads _es_module_test.html via html(),
+                -- and reports whether relative imports from ./modules/ succeed.
+                ms.shell.testModules = function()
+                    print("[shell] testModules: starting ES module spike...")
+                    require("hs.webview")
+                    require("hs.webview.usercontent")
+
+                    local testChannel = hs.webview.usercontent.new("msShell")
+                    testChannel:setCallback(function(message)
+                        local ok, data = pcall(hs.json.decode, message.body)
+                        if ok and data and data.body then
+                            local r = data.body
+                            print("[shell] testModules RESULTS:")
+                            print("  Inline module:     " .. tostring(r.inlineOk))
+                            print("  Import map in DOM: " .. tostring(r.hasMap) .. " (count: " .. tostring(r.importmapCount) .. ")")
+                            print("  Absolute file://:  " .. tostring(r.absoluteImport))
+                            print("  createLogPanel:    " .. tostring(r.absoluteHasFn))
+                            if r.absoluteError then print("  Error: " .. r.absoluteError) end
+                            print("  ALL PASS:          " .. tostring(r.allPass))
+                            if r.absoluteImport then
+                                print("[shell] testModules: Absolute file:// import WORKS. Use this for DOM-native panels.")
+                            else
+                                print("[shell] testModules: Absolute file:// import FAILED. Must use IIFE fallback.")
+                            end
+                        end
+                    end)
+
+                    local sf = hs.screen.mainScreen():frame()
+                    local w, h = 560, 400
+                    local x = sf.x + math.floor((sf.w - w) / 2)
+                    local y = sf.y + math.floor((sf.h - h) / 2)
+
+                    local testView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, testChannel)
+                    pcall(function() testView:windowStyle(1 + 2 + 4) end)
+                    pcall(function() testView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
+
+                    local htmlPath = hs.configdir .. "/ui/_es_module_test.html"
+                    local baseURL  = "file://" .. hs.configdir .. "/ui/"
+                    local f = io.open(htmlPath, "r")
+                    if f then
+                        local html = f:read("*all"); f:close()
+                        print("[shell] testModules: loaded " .. #html .. " bytes")
+                        testView:html(html, baseURL)
+                        testView:show()
+                        testView:alpha(1)
+                        -- Auto-close after 5 seconds
+                        hs.timer.doAfter(5, function()
+                            pcall(function() testView:delete() end)
+                            print("[shell] testModules: test webview closed")
+                        end)
+                    else
+                        print("[shell] testModules: ERROR cannot read " .. htmlPath)
+                    end
                 end
 
                 -- ms.shell.show() / hide() / toggle()
@@ -2801,6 +2878,13 @@
                     return hs.json.encode({s}):sub(2, -2)
                 end
 
+                -- _jsonStr safe for embedding in HTML <script> context.
+                -- Escapes < to \x3C so the HTML parser never sees </script> in string literals.
+                -- JS engine decodes \x3C back to < at runtime.
+                local function _safeJsonStr(s)
+                    return _jsonStr(s):gsub("<", "\\x3C")
+                end
+
                 local _panelRegistry = {}  -- [id] = config
                 local _popouts      = {}  -- [id] = { view, channel }
 
@@ -2832,11 +2916,159 @@
                     macros   = nil,
                 }
 
+                -- Panels that use DOM-native injection (CSS+JS into slot, no iframe)
+                local _domNativePanels = {
+                    console  = true,
+                    watcher  = true,
+                    keys     = true,
+                    window   = true,
+                    settings = true,
+                }
+                local _domNativeMounted = {}  -- [id] = true when DOM has been injected
+
+                -- _injectPanelDom(id, htmlContent)
+                -- DOM-native panel injection: extracts CSS/HTML/JS from a panel HTML file,
+                -- scopes CSS with #slot-{id} prefix, injects into the shell panel slot.
+                local function _injectPanelDom(id, htmlContent)
+                    if not htmlContent or htmlContent == "" then
+                        print("[shell] _injectPanelDom: no HTML for " .. id)
+                        return false
+                    end
+
+                    -- Strip injected log-panel IIFE (added by ms.shell.init before
+                    -- </head>) so it doesn't get picked up as the panel script.
+                    -- Only needed when the panel uses plain <script> (not module),
+                    -- because the IIFE is also plain <script> and would match first.
+                    local hasModule = htmlContent:find('<script type="module">')
+                    if not hasModule then
+                        local iifeEnd = htmlContent:find("</script>")
+                        if iifeEnd then
+                            local iifeStart = htmlContent:find("<script>")
+                            if iifeStart and iifeStart < iifeEnd then
+                                htmlContent = htmlContent:sub(1, iifeStart - 1)
+                                    .. htmlContent:sub(iifeEnd + 9)
+                            end
+                        end
+                    end
+
+                    -- Extract <style>...</style>
+                    local css = htmlContent:match("<style>(.-)</style>")
+                    -- Extract <body>...</body> inner HTML
+                    local bodyHtml = htmlContent:match("<body>(.-)</body>")
+                    -- Extract script: try <script type="module"> first, then plain <script>
+                    local script = htmlContent:match('<script type="module">(.-)</script>')
+                    local isModule = script ~= nil
+                    if not script then
+                        script = htmlContent:match("<script>(.-)</script>")
+                    end
+
+                    if not css or not bodyHtml or not script then
+                        print("[shell] _injectPanelDom: failed to extract parts for " .. id)
+                        return false
+                    end
+
+                    -- Strip ALL <script> tags from body HTML (innerHTML doesn't execute them,
+                    -- and they'd render as visible text)
+                    bodyHtml = bodyHtml:gsub("<script[^>]*>.-</script>", "")
+
+                    -- Strip ES module import (createLogPanel is already a global IIFE)
+                    if isModule then
+                        script = script:gsub('import%s+{.-}%s+from%s+"[^"]*";?', '')
+                    end
+
+                    -- Scope CSS: prefix selectors with #slot-{id}
+                    -- First strip CSS comments (they confuse the {/} parser)
+                    css = css:gsub("/%*.-%*/", "")
+                    local prefix = "#slot-" .. id
+                    local scoped = ""
+                    local pos = 1
+                    while pos <= #css do
+                        local bStart = css:find("{", pos)
+                        if not bStart then
+                            scoped = scoped .. css:sub(pos)
+                            break
+                        end
+                        local selector = css:sub(pos, bStart - 1)
+                        local bEnd = css:find("}", bStart)
+                        if not bEnd then
+                            scoped = scoped .. css:sub(pos)
+                            break
+                        end
+                        local block = css:sub(bStart, bEnd)
+                        local trimSel = selector:match("^%s*(.-)%s*$") or ""
+                        if trimSel:match("^@font%-face") or trimSel:match("^@keyframes") then
+                            -- @font-face and @keyframes can't be scoped; leave as-is
+                            scoped = scoped .. selector .. block .. "\n"
+                        elseif trimSel == ":root" then
+                            -- Scope :root to the slot element (CSS variables cascade to children)
+                            scoped = scoped .. prefix .. " " .. block .. "\n"
+                        elseif trimSel ~= "" then
+                            -- Prefix each comma-separated selector
+                            local scopedSel = trimSel:gsub("([^,]+)", function(s)
+                                s = s:match("^%s*(.-)%s*$")
+                                -- Replace html/body with the slot itself (no such elements inside slot)
+                                if s == "html" or s == "body" then return prefix end
+                                return prefix .. " " .. s
+                            end)
+                            -- When html/body was mapped to the slot, strip the display property
+                            -- (the shell controls slot visibility via .panel-slot CSS)
+                            if trimSel:match("^html") or trimSel:match("^body") or
+                               trimSel:match(",%s*html") or trimSel:match(",%s*body") then
+                                block = block:gsub("display%s*:%s*[^;]+;?", "")
+                            end
+                            scoped = scoped .. scopedSel .. " " .. block .. "\n"
+                        end
+                        pos = bEnd + 1
+                    end
+
+                    -- Wrap in IIFE to prevent const/let redeclaration collisions
+                    -- between panels (each panel declares `const lp = ...` etc.)
+                    -- Save/restore shell's applyTheme: panels expose their own on
+                    -- window (for inline handlers), but the shell's version must
+                    -- remain the global so Lua-side theme calls work correctly.
+                    -- Panel's applyTheme is stashed on slot._applyTheme for
+                    -- shell-level theme forwarding.
+                    script = "(function(){\n"
+                        .. "var _savedAT = window.applyTheme;\n"
+                        .. script
+                        .. "\nif (typeof applyTheme === 'function') {"
+                        .. "  window.applyTheme = applyTheme;"
+                        .. "  var _slot = document.getElementById('slot-" .. id .. "');"
+                        .. "  if (_slot) _slot._applyTheme = applyTheme;"
+                        .. "}\n"
+                        -- Expose functions used by inline HTML event handlers
+                        .. "if (typeof sendToHost === 'function') window.sendToHost = sendToHost;\n"
+                        .. "if (typeof playSlot === 'function') window.playSlot = playSlot;\n"
+                        .. "if (typeof closeModal === 'function') window.closeModal = closeModal;\n"
+                        .. "if (typeof toggleQR === 'function') window.toggleQR = toggleQR;\n"
+                        .. "if (_savedAT) window.applyTheme = _savedAT;\n"
+                        .. "})();\n"
+
+                    -- Build JS to inject into the shell webview
+                    local parts = {}
+                    parts[#parts + 1] = "(function() {"
+                    parts[#parts + 1] = "var slot = document.getElementById('slot-" .. id .. "');"
+                    parts[#parts + 1] = "if (!slot) return;"
+                    parts[#parts + 1] = "slot.innerHTML = " .. _safeJsonStr(bodyHtml) .. ";"
+                    parts[#parts + 1] = "var st = document.createElement('style');"
+                    parts[#parts + 1] = "st.textContent = " .. _safeJsonStr(scoped) .. ";"
+                    parts[#parts + 1] = "slot.prepend(st);"
+                    parts[#parts + 1] = "var sc = document.createElement('script');"
+                    parts[#parts + 1] = "sc.textContent = " .. _safeJsonStr(script) .. ";"
+                    parts[#parts + 1] = "slot.appendChild(sc);"
+                    -- Dispatch DOMContentLoaded so panels that listen for it will init
+                    parts[#parts + 1] = "document.dispatchEvent(new Event('DOMContentLoaded'));"
+                    parts[#parts + 1] = "})()"
+                    local finalJs = table.concat(parts, "\n")
+
+                    ms.shell.eval(finalJs)
+                    return true
+                end
+
                 -- ms.shell.mountPanel(id)
                 -- Mount a registered panel into the shell content area.
                 -- Loads the panel's HTML into an iframe inside its slot.
                 ms.shell.mountPanel = function(id)
-                    print("[shell] mountPanel called for '" .. tostring(id) .. "'")
                     -- Auto-register built-in panels if not explicitly registered
                     if not _panelRegistry[id] and _builtinPanels[id] then
                         _panelRegistry[id] = {
@@ -2857,27 +3089,31 @@
                     local htmlContent = nil
                     if cfg.htmlPath then
                         local fullPath = hs.configdir .. "/ui/" .. cfg.htmlPath
-                        print("[shell] mountPanel: reading " .. fullPath)
                         local fh = io.open(fullPath, "r")
                         if fh then
                             htmlContent = fh:read("*all")
                             fh:close()
-                            print("[shell] mountPanel: read " .. #htmlContent .. " bytes")
                         else
                             print("[shell] mountPanel: cannot read " .. fullPath)
                             return false
                         end
                     end
 
-                    -- Escape HTML for safe JS embedding via JSON encoding
-                    local baseURL     = "file://" .. hs.configdir .. "/ui/"
-                    local idJson      = _jsonStr(id)
-                    local htmlJson    = htmlContent and _jsonStr(htmlContent) or "\"\""
-                    local baseURLJson = _jsonStr(baseURL)
-                    local js = "PanelManager.mount(" .. idJson .. "," .. htmlJson .. "," .. baseURLJson .. ")"
-                    print("[shell] mountPanel: eval JS (" .. #js .. " chars)")
-                    local evalOk, evalErr = pcall(function() ms.shell.eval(js) end)
-                    print("[shell] mountPanel: eval result: " .. tostring(evalOk) .. " " .. tostring(evalErr))
+                    -- Mount via DOM-native injection or iframe (PanelManager)
+                    if _domNativePanels[id] then
+                        if not _domNativeMounted[id] then
+                            local ok = _injectPanelDom(id, htmlContent)
+                            if ok then _domNativeMounted[id] = true end
+                        end
+                    else
+                        -- Escape HTML for safe JS embedding via JSON encoding
+                        local baseURL     = "file://" .. hs.configdir .. "/ui/"
+                        local idJson      = _jsonStr(id)
+                        local htmlJson    = htmlContent and _jsonStr(htmlContent) or "\"\""
+                        local baseURLJson = _jsonStr(baseURL)
+                        local js = "PanelManager.mount(" .. idJson .. "," .. htmlJson .. "," .. baseURLJson .. ")"
+                        pcall(function() ms.shell.eval(js) end)
+                    end
 
                     -- Call onLoad callback
                     if cfg.onLoad then pcall(cfg.onLoad) end
@@ -2893,7 +3129,13 @@
                     local cfg = _panelRegistry[id]
                     if not cfg then return false end
 
-                    ms.shell.eval("PanelManager.unmount(" .. _jsonStr(id) .. ")")
+                    if _domNativeMounted[id] then
+                        _domNativeMounted[id] = nil
+                        -- Clear slot content via eval
+                        ms.shell.eval("(function(){var s=document.getElementById('slot-" .. id .. "');if(s)s.innerHTML='';})()")
+                    else
+                        ms.shell.eval("PanelManager.unmount(" .. _jsonStr(id) .. ")")
+                    end
 
                     if cfg.onUnload then pcall(cfg.onUnload) end
                     if ms.bus then ms.bus.emit("panel:closed", { id = id }) end
@@ -2958,13 +3200,10 @@
                     pcall(function() popView:allowTextEntry(true) end)
                     pcall(function() popView:shadow(true) end)
 
-                    local htmlPath = hs.configdir .. "/ui/" .. (cfg.htmlPath or "")
-                    local baseURL  = "file://" .. hs.configdir .. "/ui/"
-                    local fh = io.open(htmlPath, "r")
-                    if fh then
-                        local html = fh:read("*all"); fh:close()
-                        popView:html(html, baseURL)
-                    end
+                    -- Load via url() so ES module imports (from "log-panel") work.
+                    -- html()-loaded documents block external module imports; url() does not.
+                    local panelURL = "file://" .. hs.configdir .. "/ui/" .. (cfg.htmlPath or "")
+                    popView:url(panelURL)
 
                     -- Inject theme
                     hs.timer.doAfter(0.05, function()

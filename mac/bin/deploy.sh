@@ -28,6 +28,18 @@ if [ -d "$REPO/ui/fonts" ]; then
     cp -R "$REPO/ui/fonts/"* "$HS/ui/fonts/" 2>/dev/null || true
 fi
 
+# Copy UI modules (ES modules shared across panels).
+if [ -d "$REPO/ui/modules" ]; then
+    mkdir -p "$HS/ui/modules"
+    cp -R "$REPO/ui/modules/"* "$HS/ui/modules/" 2>/dev/null || true
+fi
+
+# Copy UI SVGs (step icons).
+if [ -d "$REPO/ui/svg" ]; then
+    mkdir -p "$HS/ui/svg"
+    cp -R "$REPO/ui/svg/"* "$HS/ui/svg/" 2>/dev/null || true
+fi
+
 # Copy all spoons (rm first — cp -R into existing dir nests instead of overwriting).
 for spoon in "$REPO/mac/Spoons/"*.spoon; do
     dest="$HS/Spoons/$(basename "$spoon")"

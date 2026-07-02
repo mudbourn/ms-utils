@@ -978,12 +978,17 @@
     </main>
 
     <!--
-        IIFE Module Pattern (safe default for file:// WKWebView)
-        ─────────────────────────────────────────────────────────
-        ES modules (<script type="module">) do NOT work on file://
-        URLs in WKWebView. All panel code uses IIFEs with namespace
-        wrapping. If ES modules become available (see _es_module_test.html),
-        this can be upgraded to import/export.
+        Module Pattern
+        ──────────────
+        Shell chrome uses IIFEs (no imports needed). Shared modules (log-panel.js)
+        are injected as IIFE globals by ms.shell.init() at load time — Lua reads
+        the ES module source, strips 'export', wraps in IIFE.
+
+        Pop-out panels load via url() where ES module imports work normally.
+        Shell-injected panels use the IIFE globals (createLogPanel, _msApplyTheme).
+
+        html()-loaded documents BLOCK all external module imports (file://, relative,
+        import maps). This is a WKWebView restriction, not configurable.
 
         UserContent channel: "msShell"
         Outbound message shape: { panel: string, action: string, body: any }
@@ -1014,30 +1019,34 @@
             }
             /* Forward theme to all mounted iframe panels */
             if (window.PanelManager) PanelManager.forwardTheme(theme);
+            /* Forward theme to DOM-native panels via slot._applyTheme */
+            var slots = document.querySelectorAll(".panel-slot");
+            for (var i = 0; i < slots.length; i++) {
+                if (slots[i]._applyTheme) {
+                    try { slots[i]._applyTheme(theme); } catch (e) {}
+                }
+            }
         };
 
         /* ── Message Dispatch (Lua → JS) ───────────────────────────── */
         window.shellDispatch = function(panel, action, body) {
             /* Route inbound Lua pushes to the correct panel slot. */
             var slot = document.getElementById("slot-" + panel);
-            console.log("[shellDispatch] panel=" + panel + " action=" + action + " slot=" + !!slot);
             if (!slot) return;
 
-            // Try iframe-internal handler first (panels mounted via PanelManager.mount)
-            var iframe = slot.querySelector("iframe");
-            var hasHandler = iframe && iframe.contentWindow && iframe.contentWindow._panelHandler;
-            console.log("[shellDispatch] iframe=" + !!iframe + " handler=" + !!hasHandler);
-            if (hasHandler) {
-                try { iframe.contentWindow._panelHandler(action, body); } catch (e) {
-                    console.error("[shell] iframe panel handler error:", panel, action, e);
+            // DOM-native handler (set by registerPanel → slot._handler)
+            if (slot._handler) {
+                try { slot._handler(action, body); } catch (e) {
+                    console.error("[shell] panel handler error:", panel, action, e);
                 }
                 return;
             }
 
-            // Fall back to slot-level handler (inline panels)
-            if (slot._handler) {
-                try { slot._handler(action, body); } catch (e) {
-                    console.error("[shell] panel handler error:", panel, action, e);
+            // Fallback: iframe panel handler (settings, macros, etc.)
+            var iframe = slot.querySelector("iframe");
+            if (iframe && iframe.contentWindow && iframe.contentWindow._panelHandler) {
+                try { iframe.contentWindow._panelHandler(action, body); } catch (e) {
+                    console.error("[shell] iframe panel handler error:", panel, action, e);
                 }
             }
         };
