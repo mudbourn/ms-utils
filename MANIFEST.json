@@ -1,11 +1,11 @@
 {
-  "version": "1.3.0-pre.9",
-  "sha256": "d1723034e5b208b378038508cd323bf2ec462fdacc9615b986b3488fbd204415",
+  "version": "1.3.0-pre.10",
+  "sha256": "d31399e9adea85e4abeedcc3da2979f619a51dd72026885e591f1a9452776ebc",
   "url": "https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua",
   "bundle": {
-    "url": "https://github.com/mudbourn/ms-utils/releases/download/v1.3.0-pre.9/mudscript-macos-1.3.0-pre.9.tar.gz",
-    "sha256": "992d2374fcfe30381a908b19f76661be686ebb3f0771cf13f4f4c3668e20d0d2"
+    "url": "https://github.com/mudbourn/ms-utils/releases/download/v1.3.0-pre.10/mudscript-macos-1.3.0-pre.10.tar.gz",
+    "sha256": "ae8b12537c0df15078cf8f3768a93fa6a2e3dbe518f70cf4193dd80574fa1ffb"
   },
-  "signature": "MiN5L2Ooy9LiS1rrauTZ7IROCANSdd7xxpns39DZYkm4k+Ay3hLejDU22EO9wYDi0VMaDOiYB87IcCS1SPGNczlTqUkt7KKCXazgPfcTWVelh90I3xGdqoMVKQtqHSpg8m2bbPd2TPK6C3MDJZk/qt3ln0Eatuivh9fpJTgvSmydQD0CR9do1jcY1eMcQ7ndQUuIOrI/ixkkLtCjURG9ysiOxxKBqjElsXtpjvqPQY0UI5xw3F4aPYAeoYonBH5Gi6Dg1vWWGA7qtI3JkacjNMhTjdz+Hsn3MpD8sfWWr4ndEBO7yd5DLxFpgHtF6fYKchDndOk0pqDQjVYA4EbsnQ==",
+  "signature": "c2ZaWUcdFLxPdPBwDaWurRJdNnhW5d295/3NZ4+0i/ldnqRXlv08TbwZmKBndN+u67oXrRjcGV9YIoTBfhCQSCUczvff5zs9EdaVmU4Sb3hsG0N//4uhcjYvv9DBD28pdIvuPwTSNdHjlp+yURno9l7i9L+vOgRvZ2cUfFqttbbHBmOK2HVmM4m1I3nDYT7MefEtyHW4J+0Yh3b71xl8YjuCMKN8tBCpGBRGKaIVo52cqOztLeSmZVnr8c2LYoQQKr9oSg0BHLLD3k3R98lui0iguOu1jfcB0dqhNv3vQci+xp7SI4BoNY/P2/jW7XXckXNhwk1l0fYSl1KMfEwv6A==",
   "fileManifest": "data/.ms_file_manifest.json"
 }
