@@ -1675,12 +1675,15 @@
         -- Topic shape: ui:<panel>:<action> (emitted by ms.shell's msShell channel)
         if ms.bus then
             ms.bus.on("ui:settings:*", function(topic, body)
-                if not body or type(body) ~= "table" then return end
+                print("[MsUI] Bus received: " .. tostring(topic))
+                if not body or type(body) ~= "table" then print("[MsUI] body not table"); return end
                 local action = body.action
-                if not action then return end
+                if not action then print("[MsUI] no action in body"); return end
                 local handler = ms.ui._actions[action]
+                print("[MsUI] action=" .. tostring(action) .. " handler=" .. tostring(handler ~= nil))
                 if handler then
-                    pcall(handler, body)
+                    local ok, err = pcall(handler, body)
+                    if not ok then print("[MsUI] handler error: " .. tostring(err)) end
                 end
             end)
         end

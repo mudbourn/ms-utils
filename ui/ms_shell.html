@@ -1361,6 +1361,7 @@
 
         /* ── iframe bridge receiver ─────────────────────────────── */
         window._panelBridge = function(msg) {
+            console.log("[shell-bridge] panel=" + msg.panel + " action=" + msg.action);
             // Route iframe messages through the shell's msShell channel to Lua
             if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.msShell) {
                 window.webkit.messageHandlers.msShell.postMessage(JSON.stringify(msg));
