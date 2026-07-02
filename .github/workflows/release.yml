@@ -236,13 +236,20 @@ jobs:
 
           echo "Per-file manifest: $MANIFEST_OUT ($FILE_COUNT files)"
 
-      - name: Commit MANIFEST.json
+      - name: Commit MANIFEST.json (stable releases only)
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add MANIFEST.json
-          git commit -m "release: v${{ inputs.version }}" || echo "Nothing to commit."
-          git push
+          VERSION="${{ needs.build.outputs.version }}"
+          # Only commit MANIFEST.json for stable releases (no hyphen = no pre-release suffix)
+          # Pre-releases must NOT update MANIFEST.json or the stable updater will offer them.
+          if [[ "$VERSION" != *-* ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add MANIFEST.json
+            git commit -m "release: v${VERSION}" || echo "Nothing to commit."
+            git push
+          else
+            echo "Pre-release ($VERSION) — skipping MANIFEST.json commit to keep stable channel clean."
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
