@@ -47,14 +47,14 @@ jobs:
           for d in mac/Spoons mac/templates ui mac/bin; do
             [ -d "$d" ] && cp -R "$d" "$DIST/"
           done
-          mkdir -p "$DIST/data" "$DIST/sounds"
+          mkdir -p "$DIST/data" "$DIST/sounds/defaults"
           # Include default settings so fresh installs have sound assignments and QR options.
           for f in data/ms_settings.json data/ms_settings_default.json; do
             [ -f "$f" ] && cp "$f" "$DIST/data/"
           done
           # Include default sounds so fresh installs have audio feedback.
           if [ -d "sounds" ]; then
-            cp sounds/*.wav "$DIST/sounds/" 2>/dev/null || true
+            cp sounds/*.wav "$DIST/sounds/defaults/" 2>/dev/null || true
           fi
           # Include the default profile and bundled .mspkg packs.
           if [ -d "profiles/Default" ]; then
@@ -69,7 +69,7 @@ jobs:
           # Legacy hash: ms_core.lua only (computed before MANIFEST exists in archive)
           LEGACY_SHA=$(sha256sum mac/ms_core.lua | awk '{print $1}')
 
-          echo "archive=mudscript-macos-${VERSION}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "archive=mudscript-macos-${VERSION}.zip" >> "$GITHUB_OUTPUT"
           echo "legacy_sha=$LEGACY_SHA" >> "$GITHUB_OUTPUT"
           echo "dist=$DIST" >> "$GITHUB_OUTPUT"
 
@@ -84,7 +84,7 @@ jobs:
           LEGACY_SHA="${{ steps.build.outputs.legacy_sha }}"
           DIST="${{ steps.build.outputs.dist }}"
           LEGACY_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua"
-          BUNDLE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.tar.gz"
+          BUNDLE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.zip"
 
           # Write a placeholder MANIFEST (no bundle hash yet) to compute the archive hash.
           jq -n \
@@ -105,8 +105,8 @@ jobs:
           cp MANIFEST.json "$DIST/"
 
           # Build archive, compute bundle hash, then re-stamp with real values.
-          ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
-          tar czf "$ARCHIVE" "$DIST"
+          ARCHIVE="mudscript-macos-${VERSION}.zip"
+          zip -r "$ARCHIVE" "$DIST"
           BUNDLE_SHA=$(sha256sum "$ARCHIVE" | awk '{print $1}')
 
           jq -n \
@@ -143,7 +143,7 @@ jobs:
           echo "MANIFEST.json stamped for v$VERSION"
           echo "Archive: $ARCHIVE"
           echo "Legacy SHA (ms_core.lua): $LEGACY_SHA"
-          echo "Bundle SHA (tar.gz):      $BUNDLE_SHA"
+          echo "Bundle SHA (zip):         $BUNDLE_SHA"
 
       - name: Generate per-file manifest
         env:
@@ -152,7 +152,7 @@ jobs:
           set -euo pipefail
           VERSION="${{ inputs.version }}"
           DIST="${{ steps.build.outputs.dist }}"
-          ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
+          ARCHIVE="mudscript-macos-${VERSION}.zip"
           PATTERNS_FILE="mac/guardian_patterns.json"
           MANIFEST_OUT="$DIST/data/.ms_file_manifest.json"
 
@@ -232,7 +232,8 @@ jobs:
           jq '. + {"fileManifest": "data/.ms_file_manifest.json"}' MANIFEST.json > /tmp/manifest_final.json
           mv /tmp/manifest_final.json MANIFEST.json
           cp MANIFEST.json "$DIST/"
-          tar czf "$ARCHIVE" "$DIST"
+          rm -f "$ARCHIVE"
+          zip -r "$ARCHIVE" "$DIST"
 
           echo "Per-file manifest: $MANIFEST_OUT ($FILE_COUNT files)"
 
@@ -255,7 +256,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ inputs.version }}
-          path: mudscript-macos-${{ inputs.version }}.tar.gz
+          path: mudscript-macos-${{ inputs.version }}.zip
 
   # ────────────────────────────────────────────────────────────────────────────
   # Release — create GitHub Release and attach assets
@@ -292,10 +293,10 @@ jobs:
           $CHANGES
 
           ### Downloads
-          - [mudscript-macos-${VERSION}.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.tar.gz)
+          - [mudscript-macos-${VERSION}.zip](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.zip)
 
           ### Install
-          Extract the tar.gz, run \`bash install.sh\`
+          Extract the zip, run \`bash install.sh\`
 
           > **Windows users:** The Windows build is in early testing.
           > Switch mudscript's update channel to **Testing** or grab a pre-release from the [Releases](https://github.com/${{ github.repository }}/releases) page.

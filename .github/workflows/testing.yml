@@ -110,7 +110,7 @@ jobs:
           done
           [ -d mac/templates ] && cp -R mac/templates "$DIST/"
           [ -d profiles/Default ] && cp -R profiles/Default "$DIST/profiles/"
-          mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
+          mkdir -p "$DIST/data" "$DIST/sounds/defaults" "$DIST/profiles"
           rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
 
           # Stamp MANIFEST.json with pre-release version (bump patch: 1.2.7 → 1.2.8-pre.N)
@@ -136,8 +136,8 @@ jobs:
             echo "Stamped MANIFEST.json: $BASE_VER → $PRE_VER"
           fi
 
-          ARCHIVE="mudscript-macos-pre-${BUILD_NUM}.tar.gz"
-          tar czf "$ARCHIVE" "$DIST"
+          ARCHIVE="mudscript-macos-pre-${BUILD_NUM}.zip"
+          zip -r "$ARCHIVE" "$DIST"
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
           echo "Package: $ARCHIVE"
 
@@ -149,12 +149,12 @@ jobs:
         run: |
           PREV_TAG=$(git tag -l 'pre-*' --sort=-v:refname | head -1)
           PREV_NUM=$(echo "$PREV_TAG" | sed 's/pre-//')
-          ARCHIVE="mudscript-macos-pre-${PREV_NUM}.tar.gz"
+          ARCHIVE="mudscript-macos-pre-${PREV_NUM}.zip"
           if gh release download \
             --repo "${{ github.repository }}" \
             --pattern "$ARCHIVE" \
             --dir /tmp/prev-artifact 2>/dev/null; then
-            cp "/tmp/prev-artifact/$ARCHIVE" "mudscript-macos-pre-${{ github.run_number }}.tar.gz"
+            cp "/tmp/prev-artifact/$ARCHIVE" "mudscript-macos-pre-${{ github.run_number }}.zip"
             echo "Reusing: $ARCHIVE"
           else
             echo "Asset not found in $PREV_TAG — will build fresh"
@@ -175,7 +175,7 @@ jobs:
           done
           [ -d mac/templates ] && cp -R mac/templates "$DIST/"
           [ -d profiles/Default ] && cp -R profiles/Default "$DIST/profiles/"
-          mkdir -p "$DIST/data" "$DIST/sounds" "$DIST/profiles"
+          mkdir -p "$DIST/data" "$DIST/sounds/defaults" "$DIST/profiles"
           rm -f "$DIST"/*.ahk "$DIST"/install.bat "$DIST/bin"/*.bat "$DIST/bin"/*.ps1 "$DIST/.gitignore" 2>/dev/null; true
 
           if [ -f "$DIST/MANIFEST.json" ]; then
@@ -194,13 +194,13 @@ jobs:
             mv "$DIST/MANIFEST.json.tmp" "$DIST/MANIFEST.json"
           fi
 
-          tar czf "mudscript-macos-pre-${BUILD_NUM}.tar.gz" "$DIST"
+          zip -r "mudscript-macos-pre-${BUILD_NUM}.zip" "$DIST"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-pre-${{ github.run_number }}
-          path: mudscript-macos-pre-${{ github.run_number }}.tar.gz
+          path: mudscript-macos-pre-${{ github.run_number }}.zip
           if-no-files-found: warn
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -415,7 +415,7 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
 
-          ASSETS=$(find . -name "mudscript-*-pre-${{ github.run_number }}.*" -type f 2>/dev/null | tr '\n' ' ' || true)
+          ASSETS=$(find . -name "mudscript-*-pre-${{ github.run_number }}.zip" -type f 2>/dev/null | tr '\n' ' ' || true)
           echo "Assets: $ASSETS"
 
           # Determine which platforms were built

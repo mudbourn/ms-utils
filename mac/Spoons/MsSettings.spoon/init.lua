@@ -2153,6 +2153,13 @@
                 os.execute("cp '" .. _fmSrc .. "' '" .. _fmDst .. "'")
             end
 
+            -- Copy MANIFEST.json from bundle (preserves signature, bundle hash, fileManifest)
+            local _mfSrc = topDir .. "MANIFEST.json"
+            local _mfDst = hsDir .. "MANIFEST.json"
+            if hs.fs.attributes(_mfSrc) then
+                os.execute("cp '" .. _mfSrc .. "' '" .. _mfDst .. "'")
+            end
+
             for _, name in ipairs(templateList) do
                 local src = topDir .. name
                 local dst = hsDir .. name
@@ -2208,6 +2215,39 @@
             return true
         end
 
+        -- Version comparison helpers (used by _fetchReleaseInfo and check functions) --
+        local function _parseVersion(v)
+            local t = {}
+            if type(v) == "string" then
+                local base = v:match("^[%d%.]+")
+                if base then
+                    for n in base:gmatch("%d+") do t[#t + 1] = tonumber(n) or 0 end
+                end
+                t._pre = v:find("%-pre") ~= nil or v:find("%-beta") ~= nil
+                    or v:find("%-rc") ~= nil
+                local preNum = v:match("%-pre%.(%d+)")
+                t._preNum = preNum and tonumber(preNum) or 0
+            end
+            return t
+        end
+
+        local function _remoteIsNewer(localV, remoteV)
+            local a, b = _parseVersion(localV), _parseVersion(remoteV)
+            local len = math.max(#a, #b)
+            for i = 1, len do
+                local la, ra = a[i] or 0, b[i] or 0
+                if ra > la then return true  end
+                if ra < la then return false end
+            end
+            if a._pre and not b._pre then return true  end
+            if not a._pre and b._pre then return false end
+            if a._pre and b._pre then
+                return (b._preNum or 0) > (a._preNum or 0)
+            end
+            return false
+        end
+        -- END Version comparison helpers --
+
         -- _fetchReleaseInfo [GitHub Releases API helper] --
         local function _fetchReleaseInfo(channel, callback)
             local repo = ms._testingRepo or "mudbourn/ms-utils"
@@ -2255,6 +2295,17 @@
                         return
                     end
                     release = data[1]
+                    local bestIdx = 1
+                    -- Find the release with the highest version number
+                    for i = 2, #data do
+                        if _remoteIsNewer(
+                            data[bestIdx].tag_name or "",
+                            data[i].tag_name or ""
+                        ) then
+                            bestIdx = i
+                        end
+                    end
+                    release = data[bestIdx]
                 end
                 if not release or not release.tag_name then
                     ms.dev.log({
@@ -2269,7 +2320,7 @@
                 local downloadUrl
                 local assets = release.assets or {}
                 for _, asset in ipairs(assets) do
-                    if asset.name and asset.name:match("^mudscript%-macos%-.*%.tar%.gz$") then
+                    if asset.name and asset.name:match("^mudscript%-macos%-.*%.zip$") then
                         downloadUrl = asset.browser_download_url
                         break
                     end
@@ -2335,8 +2386,8 @@
                         return
                     end
                     os.execute("mkdir -p '" .. archivePath .. "'")
-                    local tmpArchive = archivePath .. "ms_bundle_update.tar.gz"
-                    local tmpF = io.open(tmpArchive, "w")
+                    local tmpArchive = archivePath .. "ms_bundle_update.zip"
+                    local tmpF = io.open(tmpArchive, "wb")
                     if not tmpF then
                         ms.alert("Update failed: could not write temp file.", 4)
                         return
@@ -2345,11 +2396,11 @@
                     local tmpExtract = archivePath .. "ms_bundle_extract/"
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     os.execute("mkdir -p '" .. tmpExtract .. "'")
-                    local _, tarOk = hs.execute(
-                        "tar xzf '" .. tmpArchive .. "' -C '" .. tmpExtract .. "' 2>&1"
+                    local _, zipOk = hs.execute(
+                        "unzip -o '" .. tmpArchive .. "' -d '" .. tmpExtract .. "' 2>&1"
                     )
                     os.remove(tmpArchive)
-                    if not tarOk then
+                    if not zipOk then
                         os.execute("rm -rf '" .. tmpExtract .. "'")
                         ms.dev.log({
                             type    = "error",
@@ -2404,99 +2455,16 @@
                         version = newVersion,
                         format  = "bundle",
                     })
-                    local newCoreHash = ms.integrity.hashFile(corePath)
-                    if newCoreHash then
-                        ms.integrity.writeTrustedHash(newCoreHash)
-                    end
+                    -- Re-seed trusted manifest from all tracked files
+                    -- (MANIFEST.json and .ms_file_manifest.json were copied from bundle)
+                    ms.integrity.trustCurrent()
                     ms.integrity.invalidateCache()
-                    local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
-                    if _mf then
-                        _mf:write(hs.json.encode({
-                            version = newVersion,
-                            sha256  = newCoreHash or "",
-                        })); _mf:close()
-                    end
-                    ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                    ms.alert("Updated to v" .. newVersion .. ".\\nReloading in 3 seconds\\xe2\\x80\\xa6", 5, true)
                     hs.timer.doAfter(3, function() hs.reload() end)
                 end)
             end)
         end
         -- END Update --
-
-        local function _parseVersion(v)
-            local t = {}
-            if type(v) == "string" then
-                for n in v:gmatch("%d+") do t[#t + 1] = tonumber(n) or 0 end
-            end
-            return t
-        end
-
-        local function _remoteIsNewer(localV, remoteV)
-            local a, b = _parseVersion(localV), _parseVersion(remoteV)
-            local len = math.max(#a, #b)
-            for i = 1, len do
-                local la, ra = a[i] or 0, b[i] or 0
-                if ra > la then return true  end
-                if ra < la then return false end
-            end
-            return false  -- equal
-        end
-
-        ms.integrity.checkForUpdate = function(callback)
-            local manifestURL = ms._updateManifestURL
-            if not manifestURL or manifestURL == "" or not manifestURL:match("^https://") then
-                if callback then pcall(callback, nil) end
-                return
-            end
-            local localVersion
-            do
-                local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
-                if lf then
-                    local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
-                    if ok and lm and lm.version then localVersion = lm.version end
-                end
-            end
-            hs.http.asyncGet(manifestURL, nil, function(mCode, mBody, _)
-                if mCode ~= 200 or not mBody then
-                    ms.dev.log({
-                        type    = "error",
-                        event   = "update_check_failed",
-                        reason  = "manifest_http",
-                        code    = mCode,
-                        channel = "stable",
-                    })
-                    if callback then pcall(callback, nil); return end
-                end
-                local manifest = hs.json.decode(mBody)
-                if not manifest or not manifest.version then
-                    ms.dev.log({
-                        type    = "error",
-                        event   = "update_check_failed",
-                        reason  = "manifest_parse",
-                        channel = "stable",
-                    })
-                    if callback then pcall(callback, nil); return end
-                end
-                local remoteVersion = manifest.version
-                if _remoteIsNewer(localVersion, remoteVersion) then
-                    ms.dev.log({
-                        type     = "system",
-                        event    = "update_available",
-                        local_v  = localVersion,
-                        remote_v = remoteVersion,
-                        channel  = "stable",
-                    })
-                    if callback then
-                        pcall(callback, {
-                            version = remoteVersion or "?",
-                            sha256  = manifest.sha256,
-                        })
-                    end
-                    return
-                end
-                if callback then pcall(callback, nil) end
-            end)
-        end
 
         -- Update Beta [testing channel] --
         ms.integrity.updateBeta = function()
@@ -2517,6 +2485,21 @@
                     return
                 end
                 local newVersion = info.version
+
+                -- Check if the remote version is actually newer
+                local _localVer
+                do
+                    local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
+                    if lf then
+                        local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                        if ok and lm and lm.version then _localVer = lm.version end
+                    end
+                end
+                if _localVer and not _remoteIsNewer(_localVer, newVersion) then
+                    ms.alert("Already on the latest testing version (v" .. _localVer .. ").", 4, true)
+                    return
+                end
+
                 local bundleURL  = info.downloadUrl
                 ms.alert("Downloading v" .. newVersion .. " bundle\xe2\x80\xa6", 4, true)
                 ms.dev.log({
@@ -2538,8 +2521,8 @@
                         return
                     end
                     os.execute("mkdir -p '" .. archivePath .. "'")
-                    local tmpArchive = archivePath .. "ms_bundle_update.tar.gz"
-                    local tmpF = io.open(tmpArchive, "w")
+                    local tmpArchive = archivePath .. "ms_bundle_update.zip"
+                    local tmpF = io.open(tmpArchive, "wb")
                     if not tmpF then
                         ms.alert("Update failed: could not write temp file.", 4)
                         return
@@ -2548,11 +2531,11 @@
                     local tmpExtract = archivePath .. "ms_bundle_extract/"
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     os.execute("mkdir -p '" .. tmpExtract .. "'")
-                    local _, tarOk = hs.execute(
-                        "tar xzf '" .. tmpArchive .. "' -C '" .. tmpExtract .. "' 2>&1"
+                    local _, zipOk = hs.execute(
+                        "unzip -o '" .. tmpArchive .. "' -d '" .. tmpExtract .. "' 2>&1"
                     )
                     os.remove(tmpArchive)
-                    if not tarOk then
+                    if not zipOk then
                         os.execute("rm -rf '" .. tmpExtract .. "'")
                         ms.dev.log({
                             type    = "error",
@@ -2607,19 +2590,11 @@
                         version = newVersion,
                         format  = "bundle",
                     })
-                    local newCoreHash = ms.integrity.hashFile(corePath)
-                    if newCoreHash then
-                        ms.integrity.writeTrustedHash(newCoreHash)
-                    end
+                    -- Re-seed trusted manifest from all tracked files
+                    -- (MANIFEST.json and .ms_file_manifest.json were copied from bundle)
+                    ms.integrity.trustCurrent()
                     ms.integrity.invalidateCache()
-                    local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
-                    if _mf then
-                        _mf:write(hs.json.encode({
-                            version = newVersion,
-                            sha256  = newCoreHash or "",
-                        })); _mf:close()
-                    end
-                    ms.alert("Updated to v" .. newVersion .. ".\nReloading in 3 seconds\xe2\x80\xa6", 5, true)
+                    ms.alert("Updated to v" .. newVersion .. ".\\nReloading in 3 seconds\\xe2\\x80\\xa6", 5, true)
                     hs.timer.doAfter(3, function() hs.reload() end)
                 end)
             end)
