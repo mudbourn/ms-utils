@@ -1542,33 +1542,46 @@
             if hs.fs.attributes(themePath) then
                 hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(tmpDir .. "ms_theme.json"))
             end
+            -- Bundle theming sounds (preserving subdirectory structure)
             local soundsDir = tmpDir .. "sounds/"
             local soundsCopied = 0
-            local bundledFiles = {}  -- deduplicate by filename
+            local bundledPaths = {}  -- deduplicate by relative path
             for _, soundName in pairs(ms.soundAssign or {}) do
                 if type(soundName) == "string" and ms.sounds then
                     local soundPath = ms.sounds[soundName]
                     if soundPath and hs.fs.attributes(soundPath) then
                         local filename = soundPath:match("([^/\\]+)$")
-                        if filename and not bundledFiles[filename] then
-                            os.execute("mkdir -p " .. sq(soundsDir))
-                            hs.execute("/bin/cp " .. sq(soundPath) .. " " .. sq(soundsDir .. filename))
-                            bundledFiles[filename] = true
+                        -- Determine subdirectory based on source path
+                        local subdir = ""
+                        pcall(function()
+                            if soundPath:sub(1, #SoundActiveDir) == SoundActiveDir then
+                                subdir = "active/"
+                            elseif soundPath:sub(1, #SoundDefaultsDir) == SoundDefaultsDir then
+                                subdir = "defaults/"
+                            end
+                        end)
+                        local relPath = subdir .. filename
+                        if filename and not bundledPaths[relPath] then
+                            local destDir = soundsDir .. subdir
+                            os.execute("mkdir -p " .. sq(destDir))
+                            hs.execute("/bin/cp " .. sq(soundPath) .. " " .. sq(destDir .. filename))
+                            bundledPaths[relPath] = true
                             soundsCopied = soundsCopied + 1
                         end
                     end
                 end
             end
-            -- Bundle macro sounds
-            local macroDir = tmpDir .. "macro/"
+            -- Bundle macro sounds (preserving subdirectory structure)
             local macroCopied = 0
-            for name, soundPath in pairs(ms.macroSounds or {}) do
+            for _, soundPath in pairs(ms.macroSounds or {}) do
                 if hs.fs.attributes(soundPath) then
                     local filename = soundPath:match("([^/\\]+)$")
-                    if filename and not bundledFiles[filename] then
-                        os.execute("mkdir -p " .. sq(macroDir))
-                        hs.execute("/bin/cp " .. sq(soundPath) .. " " .. sq(macroDir .. filename))
-                        bundledFiles[filename] = true
+                    local relPath = "macro/" .. filename
+                    if filename and not bundledPaths[relPath] then
+                        local destDir = soundsDir .. "macro/"
+                        os.execute("mkdir -p " .. sq(destDir))
+                        hs.execute("/bin/cp " .. sq(soundPath) .. " " .. sq(destDir .. filename))
+                        bundledPaths[relPath] = true
                         macroCopied = macroCopied + 1
                     end
                 end
@@ -1691,86 +1704,93 @@
                 if hs.fs.attributes(themeSrc) then
                     hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
                 end
-                local soundsDir = tmpDir .. "sounds/"
+                -- Import sounds (handles new subdirectory structure + legacy flat format)
                 local soundsAdded = {}
-                local soundDest = SoundActiveDir -- default to theming
-                if hs.fs.attributes(soundsDir) then
-                    -- Check if there are any sounds to import
-                    local hasSounds = false
-                    for file in hs.fs.dir(soundsDir) do
-                        if file ~= "." and file ~= ".." then
-                            hasSounds = true; break
-                        end
-                    end
-                    -- Prompt user for import type
-                    if hasSounds then
-                        local btn = hs.dialog.blockAlert(
-                            "Import Sounds",
-                            "How should these sounds be imported?",
-                            "Theming Sounds",
-                            "Macro Sounds"
-                        )
-                        if btn == 2 then soundDest = SoundMacroDir end
-                    end
-                    local slibDir = soundDest:match("^(.-)[/\\]*$") or soundDest
+                local macroAdded = {}
+                local function _importSndDir(srcDir, dstDir, added)
+                    if not hs.fs.attributes(srcDir) then return end
+                    local slibDir = dstDir:match("^(.-)[/\\]*$") or dstDir
                     if not hs.fs.attributes(slibDir) then
-                        hs.execute("mkdir -p '" .. soundDest .. "'")
+                        hs.execute("mkdir -p " .. sq(dstDir))
                     end
-                    for file in hs.fs.dir(soundsDir) do
+                    for file in hs.fs.dir(srcDir) do
                         if file ~= "." and file ~= ".." then
                             local importName = file:match("^(.+)%.[^%.]+$") or file
-                            local srcSnd = soundsDir .. file
-                            local dstSnd = soundDest .. file
-                            if not hs.fs.attributes(dstSnd) then
-                                local sf = io.open(srcSnd, "rb")
-                                if sf then
-                                    local data = sf:read("*all"); sf:close()
-                                    local out = io.open(dstSnd, "wb")
-                                    if out then
-                                        out:write(data); out:close()
-                                        if soundDest == SoundActiveDir then
-                                            ms.importedSounds = ms.importedSounds or {}
-                                            ms.importedSounds[importName] = file
+                            local srcSnd = srcDir .. file
+                            if hs.fs.attributes(srcSnd, "mode") == "file" then
+                                local dstSnd = dstDir .. file
+                                if not hs.fs.attributes(dstSnd) then
+                                    local sf = io.open(srcSnd, "rb")
+                                    if sf then
+                                        local data = sf:read("*all"); sf:close()
+                                        local out = io.open(dstSnd, "wb")
+                                        if out then
+                                            out:write(data); out:close()
+                                            table.insert(added, importName)
                                         end
-                                        table.insert(soundsAdded, importName)
                                     end
                                 end
                             end
                         end
-                    end
-                    if #soundsAdded > 0 then
-                        ms.saveSettings()
-                        ms._soundsDirty = true
-                        ms._discoverSounds()
                     end
                 end
-                -- Import macro sounds
-                local macroSrc = tmpDir .. "macro/"
-                local macroAdded = {}
-                if hs.fs.attributes(macroSrc) then
-                    hs.fs.mkdir(SoundMacroDir)
-                    for file in hs.fs.dir(macroSrc) do
-                        if file ~= "." and file ~= ".." then
-                            local importName = file:match("^(.+)%.[^%.]+$") or file
-                            local srcSnd = macroSrc .. file
-                            local dstSnd = SoundMacroDir .. file
-                            if not hs.fs.attributes(dstSnd) then
-                                local sf = io.open(srcSnd, "rb")
-                                if sf then
-                                    local data = sf:read("*all"); sf:close()
-                                    local out = io.open(dstSnd, "wb")
-                                    if out then
-                                        out:write(data); out:close()
-                                        table.insert(macroAdded, importName)
+                local soundsDir = tmpDir .. "sounds/"
+                if hs.fs.attributes(soundsDir) then
+                    -- New format: subdirectory structure (sounds/active/, sounds/defaults/, sounds/macro/)
+                    local hasSubdirs = hs.fs.attributes(soundsDir .. "active/")
+                        or hs.fs.attributes(soundsDir .. "defaults/")
+                        or hs.fs.attributes(soundsDir .. "macro/")
+                    if hasSubdirs then
+                        _importSndDir(soundsDir .. "active/",   SoundActiveDir,   soundsAdded)
+                        pcall(function() _importSndDir(soundsDir .. "defaults/", SoundDefaultsDir, soundsAdded) end)
+                        _importSndDir(soundsDir .. "macro/",    SoundMacroDir,    macroAdded)
+                    else
+                        -- Legacy format: flat sounds/ directory — prompt user for destination
+                        local hasSounds = false
+                        for file in hs.fs.dir(soundsDir) do
+                            if file ~= "." and file ~= ".." then
+                                if hs.fs.attributes(soundsDir .. file, "mode") == "file" then
+                                    hasSounds = true; break
+                                end
+                            end
+                        end
+                        if hasSounds then
+                            local soundDest = SoundActiveDir
+                            local btn = hs.dialog.blockAlert(
+                                "Import Sounds",
+                                "How should these sounds be imported?",
+                                "Theming Sounds",
+                                "Macro Sounds"
+                            )
+                            if btn == 2 then soundDest = SoundMacroDir end
+                            local added = (soundDest == SoundActiveDir) and soundsAdded or macroAdded
+                            _importSndDir(soundsDir, soundDest, added)
+                            if soundDest == SoundActiveDir then
+                                ms.importedSounds = ms.importedSounds or {}
+                                for _, name in ipairs(added) do
+                                    for file in hs.fs.dir(soundsDir) do
+                                        if file ~= "." and file ~= ".." then
+                                            local n = file:match("^(.+)%.[^%.]+$") or file
+                                            if n == name then
+                                                ms.importedSounds[name] = file
+                                                break
+                                            end
+                                        end
                                     end
                                 end
                             end
                         end
                     end
-                    if #macroAdded > 0 then
-                        ms._soundsDirty = true
-                        ms._discoverSounds()
-                    end
+                end
+                -- Legacy: import from separate macro/ directory (old package format)
+                local macroSrc = tmpDir .. "macro/"
+                if hs.fs.attributes(macroSrc) then
+                    _importSndDir(macroSrc, SoundMacroDir, macroAdded)
+                end
+                if #soundsAdded > 0 or #macroAdded > 0 then
+                    ms.saveSettings()
+                    ms._soundsDirty = true
+                    ms._discoverSounds()
                 end
                 -- Auto-install fonts from package
                 local fontsAdded = 0
