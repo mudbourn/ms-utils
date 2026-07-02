@@ -104,10 +104,13 @@ jobs:
           # Include MANIFEST in the archive so auto-seed works on first load.
           cp MANIFEST.json "$DIST/"
 
-          # Build archive, compute bundle hash, then re-stamp with real values.
-          ARCHIVE="mudscript-macos-${VERSION}.zip"
-          zip -r "$ARCHIVE" "$DIST"
-          BUNDLE_SHA=$(sha256sum "$ARCHIVE" | awk '{print $1}')
+          # Build archives in both formats for backward compatibility.
+          # The .zip is the primary format; .tar.gz is for older installers.
+          ZIP_ARCHIVE="mudscript-macos-${VERSION}.zip"
+          TAR_ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
+          zip -r "$ZIP_ARCHIVE" "$DIST"
+          tar czf "$TAR_ARCHIVE" "$DIST"
+          BUNDLE_SHA=$(sha256sum "$ZIP_ARCHIVE" | awk '{print $1}')
 
           jq -n \
             --arg version "$VERSION" \
@@ -234,6 +237,10 @@ jobs:
           cp MANIFEST.json "$DIST/"
           rm -f "$ARCHIVE"
           zip -r "$ARCHIVE" "$DIST"
+          # Also rebuild tar.gz for backward compat
+          TAR_ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
+          rm -f "$TAR_ARCHIVE"
+          tar czf "$TAR_ARCHIVE" "$DIST"
 
           echo "Per-file manifest: $MANIFEST_OUT ($FILE_COUNT files)"
 
@@ -252,11 +259,13 @@ jobs:
             echo "Pre-release ($VERSION) — skipping MANIFEST.json commit to keep stable channel clean."
           fi
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ inputs.version }}
-          path: mudscript-macos-${{ inputs.version }}.zip
+          path: |
+            mudscript-macos-${{ inputs.version }}.zip
+            mudscript-macos-${{ inputs.version }}.tar.gz
 
   # ────────────────────────────────────────────────────────────────────────────
   # Release — create GitHub Release and attach assets
@@ -294,9 +303,10 @@ jobs:
 
           ### Downloads
           - [mudscript-macos-${VERSION}.zip](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.zip)
+          - [mudscript-macos-${VERSION}.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.tar.gz) (legacy)
 
           ### Install
-          Extract the zip, run \`bash install.sh\`
+          Extract the zip (or tar.gz), run \`bash install.sh\`
 
           > **Windows users:** The Windows build is in early testing.
           > Switch mudscript's update channel to **Testing** or grab a pre-release from the [Releases](https://github.com/${{ github.repository }}/releases) page.

@@ -2320,7 +2320,7 @@
                 local downloadUrl
                 local assets = release.assets or {}
                 for _, asset in ipairs(assets) do
-                    if asset.name and asset.name:match("^mudscript%-macos%-.*%.(zip|tar%.gz)$") then
+                    if asset.name and asset.name:match("^mudscript%-macos%-.*%.zip$") then
                         downloadUrl = asset.browser_download_url
                         break
                     end
