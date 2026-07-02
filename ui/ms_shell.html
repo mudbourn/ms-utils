@@ -837,30 +837,9 @@
             fill: none;
         }
 
-        /* Step param editor panel (slides up from bottom) */
-        .step-param-editor {
-            border-top: 1px solid var(--border-dim);
-            background: var(--surface);
-            padding: 10px 12px;
-            flex-shrink: 0;
-            display: none;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .step-param-editor.open {
-            display: block;
-        }
-
-        .step-param-editor-title {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            color: var(--text3);
-            margin-bottom: 8px;
-        }
     </style>
+    <!-- Step Editor module (loaded before panel scripts) -->
+    <script src="./modules/step-editor.js"></script>
 </head>
 <body>
     <!-- ── Left Rail ─────────────────────────────────────────────────────── -->
@@ -2401,11 +2380,6 @@
     canvasContainer.style.cssText = "flex:1;overflow:hidden;position:relative";
     stepArea.appendChild(canvasContainer);
 
-    // Param editor panel (shown when a step is selected)
-    var paramEditor = document.createElement("div");
-    paramEditor.className = "step-param-editor";
-    stepArea.appendChild(paramEditor);
-
     mainArea.appendChild(stepArea);
 
     // Floating add-step button
@@ -2452,9 +2426,17 @@
             updateSaveBtnState();
         },
         onSelect: function(sid, step) {
-            renderParamEditor(sid, step);
+            if (_stepEditor) _stepEditor.open(sid);
         }
     });
+
+    // Inline step parameter editor
+    var _stepEditor = null;
+    if (window.StepEditor) {
+        _stepEditor = new StepEditor({ canvas: _canvas });
+    } else {
+        console.warn("[macros] StepEditor not loaded — inline editing disabled");
+    }
 
     /* ── Preload add icon ────────────────────────────────────────── */
     _fetchSVG("add").then(function(svg) {
@@ -2578,56 +2560,6 @@
         saveBtn.style.opacity = _macroDirty ? "1" : "0.5";
     }
 
-    /* ── Param Editor (for selected step) ────────────────────────── */
-    function renderParamEditor(sid, step) {
-        paramEditor.innerHTML = "";
-        if (!step) { paramEditor.classList.remove("open"); return; }
-
-        paramEditor.classList.add("open");
-
-        var title = document.createElement("div");
-        title.className = "step-param-editor-title";
-        title.textContent = step.action + " — Parameters";
-        paramEditor.appendChild(title);
-
-        var params = step.params || {};
-        var keys = Object.keys(params);
-
-        for (var i = 0; i < keys.length; i++) {
-            (function(key) {
-                var val = params[key];
-                var row = document.createElement("div");
-                row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:4px";
-
-                var lbl = document.createElement("span");
-                lbl.style.cssText = "font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);width:70px;flex-shrink:0";
-                lbl.textContent = key;
-                row.appendChild(lbl);
-
-                var inp = document.createElement("input");
-                inp.type = "text";
-                inp.value = Array.isArray(val) ? JSON.stringify(val) : (val !== undefined ? String(val) : "");
-                inp.style.cssText = "flex:1;background:var(--surface2);border:1px solid var(--border-dim);border-radius:var(--radius);color:var(--text);font-size:11px;padding:3px 6px;outline:none;font-family:\"SF Mono\",\"Menlo\",\"Consolas\",monospace;user-select:text;-webkit-user-select:text";
-                inp.addEventListener("input", function() {
-                    var v = inp.value;
-                    // Try to parse arrays/numbers
-                    if (v.startsWith("[") || v.startsWith("{")) {
-                        try { v = JSON.parse(v); } catch(_) {}
-                    } else if (/^\d+$/.test(v)) {
-                        v = parseInt(v, 10);
-                    } else if (/^\d+\.\d+$/.test(v)) {
-                        v = parseFloat(v);
-                    }
-                    _canvas.updateStep(sid, (function(o){ o[key]=v; return o; })({}));
-                });
-                inp.addEventListener("keydown", function(e) { e.stopPropagation(); });
-                row.appendChild(inp);
-
-                paramEditor.appendChild(row);
-            })(keys[i]);
-        }
-    }
-
     /* ── Wire toolbar buttons ────────────────────────────────────── */
     newBtn.addEventListener("click", function() {
         _currentMacroId = null;
@@ -2720,6 +2652,7 @@
     /* ── External API ────────────────────────────────────────────── */
     window.macroLab = {
         canvas: _canvas,
+        editor: _stepEditor,
         loadMacro: loadMacro,
         saveMacro: saveMacro,
         refreshList: refreshMacroList,
