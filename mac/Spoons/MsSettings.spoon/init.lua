@@ -2400,9 +2400,9 @@
                         if callback then pcall(callback, nil) end
                         return
                     end
-                    -- Find the macOS artifact (zip)
+                    -- Find the macOS artifact
                     for _, art in ipairs(artData.artifacts) do
-                        if art.name and art.name:match("macos") and art.name:match("%.zip$") then
+                        if art.name and art.name:match("macos") then
                             local downloadURL = "https://api.github.com/repos/" .. repo
                                 .. "/actions/artifacts/" .. art.id .. "/zip"
                             ms.dev.log({
@@ -2422,9 +2422,9 @@
                             return
                         end
                     end
-                    -- No macOS zip found, try any zip
+                    -- No macOS artifact found, try any
                     for _, art in ipairs(artData.artifacts) do
-                        if art.name and art.name:match("%.zip$") then
+                        if art.name then
                             local downloadURL = "https://api.github.com/repos/" .. repo
                                 .. "/actions/artifacts/" .. art.id .. "/zip"
                             if callback then
