@@ -2745,6 +2745,12 @@
             pcall(function() _panel:windowStyle(0) end)
             pcall(function() _panel:level(hs.canvas.windowLevels.popUpMenu or 101) end)
             pcall(function() _panel:shadow(true) end)
+            if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(_panel) end
+            if ms and ms.theme and ms.theme.onChanged then
+                ms.theme.onChanged(function()
+                    if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(_panel) end
+                end)
+            end
             local f = io.open(_htmlPath, "r")
             if not f then return end
             _panel:html(f:read("*all"), _baseURL); f:close()

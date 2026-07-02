@@ -65,7 +65,7 @@
             body {
                 height: 100%;
                 overflow: hidden;
-                background: var(--bg);
+                background: transparent;
             }
             body {
                 font-family: Arial, "Almendra", Palatino, Georgia, serif;
@@ -74,6 +74,10 @@
                 -webkit-font-smoothing: antialiased;
                 display: flex;
                 flex-direction: column;
+                position: relative;
+                background: var(--bg);
+                border-radius: var(--ms-window-radius, 3px);
+                overflow: hidden;
             }
             button {
                 cursor: pointer;

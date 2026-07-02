@@ -1040,6 +1040,12 @@
         pcall(function() panel:shadow(true) end)
 
         _consolePanelPos = { x = x, y = y, w = w, h = h }
+        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
+        if ms and ms.theme and ms.theme.onChanged then
+            ms.theme.onChanged(function()
+                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
+            end)
+        end
 
         panel:navigationCallback(function(_, action)
             if action == "navigating" then return end
@@ -1167,6 +1173,12 @@
         pcall(function() panel:shadow(true) end)
 
         _watcherPanelPos = { x = x, y = y, w = w, h = h }
+        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
+        if ms and ms.theme and ms.theme.onChanged then
+            ms.theme.onChanged(function()
+                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
+            end)
+        end
 
         panel:navigationCallback(function(_, action)
             if action == "navigating" then return end
@@ -1314,6 +1326,12 @@
         pcall(function() panel:shadow(true) end)
 
         if not _htmlCache["keys"] then return nil end
+        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
+        if ms and ms.theme and ms.theme.onChanged then
+            ms.theme.onChanged(function()
+                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
+            end)
+        end
 
         _keysPanelPos = { x = x, y = y, w = w, h = h }
         _keysReady    = false
@@ -1499,6 +1517,12 @@
         pcall(function() panel:shadow(true) end)
 
         _windowPanelPos = { x = x, y = y, w = w, h = h }
+        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
+        if ms and ms.theme and ms.theme.onChanged then
+            ms.theme.onChanged(function()
+                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
+            end)
+        end
 
         panel:navigationCallback(function(_, action)
             if action == "navigating" then return end

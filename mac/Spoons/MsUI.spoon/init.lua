@@ -1651,6 +1651,12 @@
             pcall(function() panel:allowTextEntry(true) end)
             pcall(function() panel:shadow(true) end)
             pcall(function() panel:closeOnEscape(true) end)
+            if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
+            if ms and ms.theme and ms.theme.onChanged then
+                ms.theme.onChanged(function()
+                    if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
+                end)
+            end
             pcall(function()
                 panel:windowCallback(function(action)
                     if action == "closing" then

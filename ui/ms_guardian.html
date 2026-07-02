@@ -27,7 +27,7 @@
             body {
                 width: 100%;
                 height: 100%;
-                background: var(--bg);
+                background: transparent;
                 color: var(--text);
                 font-family: Arial, "Almendra", sans-serif;
                 font-size: 13px;
@@ -35,6 +35,12 @@
                 overflow: hidden;
                 user-select: none;
                 -webkit-user-select: none;
+            }
+
+            body {
+                background: var(--bg);
+                border-radius: var(--ms-window-radius, 3px);
+                overflow: hidden;
             }
 
             /* ── Drag region ────────────────────────────────────────────────── */
