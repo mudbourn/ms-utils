@@ -41,6 +41,8 @@ sed \
     -e "s|%%AGENT_PATH%%|$AGENT_SCRIPT|g" \
     -e "s|%%CORE_PATH%%|$HS/ms_core.lua|g" \
     -e "s|%%SPOONS_DIR%%|$HS/Spoons|g" \
+    -e "s|%%UI_DIR%%|$HS/ui|g" \
+    -e "s|%%BIN_DIR%%|$HS/bin|g" \
     -e "s|%%LOG_PATH%%|$HS/data/guardian_agent.log|g" \
     "$PLIST_TEMPLATE" > "$PLIST_DST"
 
@@ -52,7 +54,7 @@ launchctl load "$PLIST_DST"
 
 echo ""
 echo "mudscript Guardian agent installed and running."
-echo "It watches:  $HS/ms_core.lua + $HS/Spoons/"
+echo "It watches:  $HS/ms_core.lua + $HS/Spoons/ + $HS/ui/ + $HS/bin/"
 echo "Log file:    $HS/data/guardian_agent.log"
 
 # ── Install Roblox cache cleaner agent ────────────────────────────────────────

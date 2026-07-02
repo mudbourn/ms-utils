@@ -152,61 +152,98 @@ YQIDAQAB
 
         return _ok and _out and _out:find("Verified OK") ~= nil
     end
--- END Helpers --
 
--- Integrity Check --
-    local _manifest = _readTrustedManifest()
-    local _checkResult, _failedFile = _checkAll(_manifest)
-    local _blocked = false
+    -- Read per-file integrity manifest (from CI). Returns parsed table or nil.
+    local function _readFileManifest()
+        local _fmPath = _home .. "/.hammerspoon/data/.ms_file_manifest.json"
+        local f = io.open(_fmPath, "r")
+        if not f then return nil end
+        local raw = f:read("*all"); f:close()
+        if not raw or raw == "" then return nil end
+        local ok, tbl = pcall(hs.json.decode, raw)
+        if ok and type(tbl) == "table" and type(tbl.files) == "table" then
+            return tbl
+        end
+        return nil
+    end
 
-    if _checkResult == "uninitialized" then
-        print("Guardian: no trusted manifest — skipping check.")
+    -- Verify per-file manifest RSA-2048 signature.  Returns true only if the
+    -- signature is present and validates against the embedded public key.
+    local function _verifyFileManifestSignature(fm)
+        if not fm.signature or fm.signature == "" then
+            return false
+        end
 
-    elseif _checkResult == "error" then
-        print("Guardian: could not hash " .. (_failedFile or "unknown") .. "; skipping check.")
+        -- Build minified JSON of just {version, generated, files} matching what CI signs
+        local signPayload = { version = fm.version, generated = fm.generated, files = fm.files }
+        local okEncode, minified = pcall(hs.json.encode, signPayload)
+        if not okEncode or not minified then return false end
 
-    elseif _checkResult == "mismatch" then
-        -- Hash mismatch. Check if MANIFEST.json confirms the current core
-        -- is a legitimate update (sha256 matches AND signature is valid).
-        -- If so, auto-seed all files and pass through.
-        local _manifestOk = false
-        do
-            local _cur = _hashFile(_corePath)
-            local _mPath = _home .. "/.hammerspoon/MANIFEST.json"
-            local _mf = io.open(_mPath, "r")
-            if _mf and _cur then
-                local _raw = _mf:read("*all"); _mf:close()
-                local _ok, _m = pcall(hs.json.decode, _raw)
-                if _ok and type(_m) == "table"
-                    and type(_m.sha256) == "string"
-                    and #_m.sha256 == 64
-                    and _m.sha256:lower() == _cur:lower()
-                    and _verifyManifestSignature(_m) then
-                    -- MANIFEST confirms the current file is legit and signed.
-                    -- Re-seed all tracked files.
-                    local files = _trackedFiles()
-                    local newManifest = {}
-                    for _, absPath in ipairs(files) do
-                        local h = _hashFile(absPath)
-                        if h then
-                            local rel = absPath:gsub(".*/%.hammerspoon/", "")
-                            newManifest[rel] = h
-                        end
-                    end
-                    local ok2, json = pcall(hs.json.encode, newManifest)
-                    if ok2 then
-                        local _wf = io.open(_trustPath, "w")
-                        if _wf then _wf:write(json .. "\n"); _wf:close() end
-                    end
-                    _manifestOk = true
-                    print("Guardian: hash mismatch but signed MANIFEST.json confirms update — auto-seeded all files.")
+        local _keyPath = _dataPath .. "_guardian_pub.pem"
+        local _sigPath = _dataPath .. "_guardian_sig.bin"
+        local _msgPath = _dataPath .. "_guardian_msg.bin"
+
+        os.execute("mkdir -p '" .. _dataPath .. "'")
+
+        local _kf = io.open(_keyPath, "w")
+        if _kf then _kf:write(_publicKey); _kf:close() end
+
+        local _sf = io.open(_sigPath .. ".b64", "w")
+        if _sf then _sf:write(fm.signature); _sf:close() end
+        hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
+        os.remove(_sigPath .. ".b64")
+
+        -- SHA-256 hash the minified JSON
+        local hashOut = hs.execute("printf '%s' '" .. minified:gsub("'", "'\\''") .. "' | shasum -a 256 2>/dev/null")
+        local contentHash = hashOut and hashOut:sub(1, 64):lower() or nil
+        if not contentHash then
+            os.remove(_keyPath); os.remove(_sigPath)
+            return false
+        end
+
+        local _mf = io.open(_msgPath, "w")
+        if _mf then _mf:write(contentHash); _mf:close() end
+
+        local _out, _ok = hs.execute(
+            "openssl dgst -sha256 -verify '" .. _keyPath ..
+            "' -signature '" .. _sigPath ..
+            "' '" .. _msgPath .. "' 2>&1"
+        )
+
+        os.remove(_keyPath)
+        os.remove(_sigPath)
+        os.remove(_msgPath)
+
+        return _ok and _out and _out:find("Verified OK") ~= nil
+    end
+
+    -- Check per-file manifest integrity.
+    -- Returns: 'ok', 'legacy', 'tampered', or 'mismatch' + filename
+    local function _checkFileManifest()
+        local fm = _readFileManifest()
+        if not fm then return "legacy" end
+
+        if not _verifyFileManifestSignature(fm) then
+            return "tampered"
+        end
+
+        for relPath, expected in pairs(fm.files) do
+            if type(expected) == "string" and #expected == 64 then
+                local absPath = _home .. "/.hammerspoon/" .. relPath
+                if hs.fs.attributes(absPath) then
+                    local cur = _hashFile(absPath)
+                    if not cur then return "mismatch", relPath end
+                    if cur ~= expected:lower() then return "mismatch", relPath end
                 end
             end
         end
 
-        if not _manifestOk then
-        _blocked = true
+        return "ok"
+    end
 
+    -- Show the Guardian blocking UI (webview or dialog fallback).
+    -- Called when integrity check fails and we need to block loading.
+    local function _showGuardianBlock()
         pcall(function()
             local _snd = hs.sound.getByFile(_home .. "/.hammerspoon/sounds/Error.wav")
 
@@ -384,7 +421,142 @@ YQIDAQAB
                 os.remove(_trustPath); hs.reload()
             end
         end
-        end -- if not _manifestOk
+    end
+-- END Helpers --
+
+-- Integrity Check --
+    local _blocked = false
+    local _manifest = _readTrustedManifest()
+    local _fmResult, _fmFailedFile = _checkFileManifest()
+
+    if _fmResult == "ok" then
+        -- Per-file manifest passed — all files verified via signed manifest
+        print("Guardian: per-file manifest verified — all files intact.")
+
+    elseif _fmResult == "legacy" then
+        -- No per-file manifest — fall back to old single-hash / JSON behavior
+        local _checkResult, _failedFile = _checkAll(_manifest)
+
+        if _checkResult == "uninitialized" then
+            print("Guardian: no trusted manifest — skipping check.")
+
+        elseif _checkResult == "error" then
+            print("Guardian: could not hash " .. (_failedFile or "unknown") .. "; skipping check.")
+
+        elseif _checkResult == "mismatch" then
+            local _manifestOk = false
+            do
+                local _cur = _hashFile(_corePath)
+                local _mPath = _home .. "/.hammerspoon/MANIFEST.json"
+                local _mf = io.open(_mPath, "r")
+                if _mf and _cur then
+                    local _raw = _mf:read("*all"); _mf:close()
+                    local _ok, _m = pcall(hs.json.decode, _raw)
+                    if _ok and type(_m) == "table"
+                        and type(_m.sha256) == "string"
+                        and #_m.sha256 == 64
+                        and _m.sha256:lower() == _cur:lower()
+                        and _verifyManifestSignature(_m) then
+                        -- Re-seed old manifest
+                        local files = _trackedFiles()
+                        local newManifest = {}
+                        for _, absPath in ipairs(files) do
+                            local h = _hashFile(absPath)
+                            if h then
+                                local rel = absPath:gsub(".*/%.hammerspoon/", "")
+                                newManifest[rel] = h
+                            end
+                        end
+                        local ok2, json = pcall(hs.json.encode, newManifest)
+                        if ok2 then
+                            local _wf = io.open(_trustPath, "w")
+                            if _wf then _wf:write(json .. "\n"); _wf:close() end
+                        end
+                        _manifestOk = true
+                        print("Guardian: hash mismatch but signed MANIFEST.json confirms update — auto-seeded all files.")
+                    end
+                end
+            end
+
+            if not _manifestOk then
+                _blocked = true
+                _showGuardianBlock()
+            end
+        end -- if _checkResult
+    elseif _fmResult == "tampered" then
+        -- Per-file manifest itself is suspect — block immediately
+        _blocked = true
+        _showGuardianBlock()
+        print("Guardian: per-file manifest signature verification failed — blocking.")
+
+    elseif _fmResult == "mismatch" then
+        -- Per-file hash mismatch. Check if MANIFEST.json confirms a legit update.
+        local _manifestOk = false
+        do
+            local _cur = _hashFile(_corePath)
+            local _mPath = _home .. "/.hammerspoon/MANIFEST.json"
+            local _mf = io.open(_mPath, "r")
+            if _mf and _cur then
+                local _raw = _mf:read("*all"); _mf:close()
+                local _ok, _m = pcall(hs.json.decode, _raw)
+                if _ok and type(_m) == "table"
+                    and type(_m.sha256) == "string"
+                    and #_m.sha256 == 64
+                    and _m.sha256:lower() == _cur:lower()
+                    and _verifyManifestSignature(_m) then
+                    -- MANIFEST confirms the current file is legit and signed.
+                    -- Re-seed both per-file manifest (unsigned) and old trusted hash.
+                    local fm = _readFileManifest()
+                    local tracked = fm and fm.files or {}
+                    local files = _trackedFiles()
+                    local newFM = { version = "", generated = os.date("!%Y-%m-%dT%H:%M:%SZ"), files = {} }
+
+                    if fm and fm.version then newFM.version = fm.version end
+
+                    -- Hash all files from per-file manifest scope
+                    for relPath, _ in pairs(tracked) do
+                        local absPath = _home .. "/.hammerspoon/" .. relPath
+                        local h = _hashFile(absPath)
+                        if h then newFM.files[relPath] = h end
+                    end
+
+                    -- Also hash tracked files (spoons + core) not already covered
+                    local oldManifest = {}
+                    for _, absPath in ipairs(files) do
+                        local h = _hashFile(absPath)
+                        if h then
+                            local rel = absPath:gsub(".*/%.hammerspoon/", "")
+                            oldManifest[rel] = h
+                            if not newFM.files[rel] then newFM.files[rel] = h end
+                        end
+                    end
+
+                    -- Write unsigned per-file manifest
+                    local okFM, jsonFM = pcall(hs.json.encode, newFM)
+                    if okFM then
+                        local _fmPath = _home .. "/.hammerspoon/data/.ms_file_manifest.json"
+                        local _wfm = io.open(_fmPath, "w")
+                        if _wfm then _wfm:write(jsonFM .. "\n"); _wfm:close() end
+                    end
+
+                    -- Write old trusted hash for backward compat
+                    local okOld, jsonOld = pcall(hs.json.encode, oldManifest)
+                    if okOld then
+                        local _wf = io.open(_trustPath, "w")
+                        if _wf then _wf:write(jsonOld .. "\n"); _wf:close() end
+                    end
+
+                    _manifestOk = true
+                    print("Guardian: per-file mismatch but signed MANIFEST.json confirms update — auto-seeded both manifests.")
+                end
+            end
+        end
+
+        if not _manifestOk then
+            _blocked = true
+            _showGuardianBlock()
+            print("Guardian: per-file hash mismatch for " .. (_fmFailedFile or "unknown") .. " — blocking.")
+        end
     end
 -- END Integrity Check --
 

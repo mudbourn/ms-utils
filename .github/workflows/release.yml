@@ -138,16 +138,103 @@ jobs:
             echo "Warning: MS_SIGNING_KEY not set — hash stamped, no signature."
           fi
 
-          # Rebuild archive with the final signed MANIFEST.
-          cp MANIFEST.json "$DIST/"
-          tar czf "$ARCHIVE" "$DIST"
-
           echo "bundle_sha=$BUNDLE_SHA" >> "$GITHUB_OUTPUT"
 
           echo "MANIFEST.json stamped for v$VERSION"
           echo "Archive: $ARCHIVE"
           echo "Legacy SHA (ms_core.lua): $LEGACY_SHA"
           echo "Bundle SHA (tar.gz):      $BUNDLE_SHA"
+
+      - name: Generate per-file manifest
+        env:
+          MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version }}"
+          DIST="${{ steps.build.outputs.dist }}"
+          ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
+          PATTERNS_FILE="mac/guardian_patterns.json"
+          MANIFEST_OUT="$DIST/data/.ms_file_manifest.json"
+
+          mkdir -p "$DIST/data"
+
+          # Read include/exclude patterns and strip mac/ prefix for dist-relative paths
+          mapfile -t RAW_INCLUDES < <(jq -r '.include[]' "$PATTERNS_FILE")
+          mapfile -t RAW_EXCLUDES < <(jq -r '.exclude[]' "$PATTERNS_FILE")
+
+          declare -a INCLUDES=() EXCLUDES=()
+          for p in "${RAW_INCLUDES[@]}"; do INCLUDES+=("${p#mac/}"); done
+          for p in "${RAW_EXCLUDES[@]}"; do EXCLUDES+=("${p#mac/}"); done
+
+          # Enable globstar for ** pattern support
+          shopt -s globstar nullglob
+
+          # Walk include globs inside DIST, skip excludes, hash each file
+          declare -A SEEN=()
+          HASH_FILE=$(mktemp)
+
+          for pattern in "${INCLUDES[@]}"; do
+            for filepath in "$DIST"/$pattern; do
+              [ -f "$filepath" ] || continue
+              # Relative path from DIST root (strips DIST prefix + slash)
+              relpath="${filepath:${#DIST}+1}"
+
+              # Deduplicate
+              [[ -n "${SEEN[$relpath]+_}" ]] && continue
+
+              # Check exclusions (prefix match)
+              skip=false
+              for excl in "${EXCLUDES[@]}"; do
+                if [[ "$relpath" == "$excl"* ]]; then
+                  skip=true
+                  break
+                fi
+              done
+              [[ "$skip" == true ]] && continue
+
+              SEEN["$relpath"]=1
+              hash=$(sha256sum "$filepath" | awk '{print $1}')
+              printf '%s\t%s\n' "$relpath" "$hash" >> "$HASH_FILE"
+            done
+          done
+
+          # Build the files JSON object from tab-separated pairs
+          FILES_JSON=$(jq -Rn '[inputs | split("\t") | {(.[0]): .[1]}] | add // {}' "$HASH_FILE")
+          rm -f "$HASH_FILE"
+          FILE_COUNT=$(echo "$FILES_JSON" | jq 'length')
+
+          # Write unsigned per-file manifest
+          GENERATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          jq -n \
+            --arg version "$VERSION" \
+            --arg generated "$GENERATED" \
+            --argjson files "$FILES_JSON" \
+            '{version: $version, generated: $generated, files: $files, signature: ""}' \
+            > "$MANIFEST_OUT"
+
+          # Sign: hash minified {version, generated, files}, sign with MS_SIGNING_KEY
+          if [ -n "$MS_SIGNING_KEY" ]; then
+            UNSIGNED_JSON=$(jq -c '{version, generated, files}' "$MANIFEST_OUT")
+            printf '%s\n' "$MS_SIGNING_KEY" > /tmp/fm_key.pem
+            printf '%s'   "$UNSIGNED_JSON"  > /tmp/fm_msg.bin
+            openssl dgst -sha256 -sign /tmp/fm_key.pem -out /tmp/fm_sig.bin /tmp/fm_msg.bin
+            FM_SIG=$(base64 -w0 /tmp/fm_sig.bin)
+            rm -f /tmp/fm_key.pem /tmp/fm_sig.bin /tmp/fm_msg.bin
+
+            jq --arg sig "$FM_SIG" '.signature = $sig' "$MANIFEST_OUT" > /tmp/fm_out.json
+            mv /tmp/fm_out.json "$MANIFEST_OUT"
+            echo "Signed per-file manifest ($FILE_COUNT files)."
+          else
+            echo "Warning: MS_SIGNING_KEY not set — per-file manifest unsigned."
+          fi
+
+          # Wire fileManifest into MANIFEST.json, copy final assets into DIST, rebuild
+          jq '. + {"fileManifest": "data/.ms_file_manifest.json"}' MANIFEST.json > /tmp/manifest_final.json
+          mv /tmp/manifest_final.json MANIFEST.json
+          cp MANIFEST.json "$DIST/"
+          tar czf "$ARCHIVE" "$DIST"
+
+          echo "Per-file manifest: $MANIFEST_OUT ($FILE_COUNT files)"
 
       - name: Commit MANIFEST.json
         run: |
