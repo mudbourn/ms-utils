@@ -148,6 +148,46 @@
             opacity: 1;
         }
 
+        /* Pop-out button (appears on hover) */
+        .rail-popout {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            background: transparent;
+            color: var(--text3);
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.15s, background 0.1s, color 0.1s;
+            pointer-events: none;
+        }
+
+        .rail-item:hover .rail-popout {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .rail-popout:hover {
+            background: var(--hover);
+            color: var(--accent-hi);
+        }
+
+        .rail-item.popped-out .rail-popout {
+            opacity: 0.6;
+            pointer-events: auto;
+            color: var(--accent);
+        }
+
+        .rail-item.popped-out {
+            opacity: 0.5;
+        }
+
         .rail-spacer {
             flex: 1;
         }
@@ -192,6 +232,370 @@
 
         .panel-slot.visible {
             display: block;
+        }
+
+        /* ── Macros Panel: Function Picker ──────────────────────────── */
+        .fn-picker {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* Left: function list */
+        .fn-picker-list {
+            width: 240px;
+            min-width: 240px;
+            border-right: 1px solid var(--border-dim);
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+        }
+
+        .fn-picker-search {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-dim);
+        }
+
+        .fn-picker-search input {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 11px;
+            padding: 5px 8px;
+            outline: none;
+            font-family: inherit;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .fn-picker-search input::placeholder {
+            color: var(--text3);
+        }
+
+        .fn-picker-search input:focus {
+            border-color: var(--accent);
+        }
+
+        .fn-picker-entries {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+
+        .fn-entry {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            cursor: pointer;
+            font-size: 11px;
+            color: var(--text2);
+            transition: background 0.1s, color 0.1s;
+            border-left: 2px solid transparent;
+        }
+
+        .fn-entry:hover {
+            background: var(--hover);
+            color: var(--text);
+        }
+
+        .fn-entry.active {
+            background: var(--surface2);
+            color: var(--accent-hi);
+            border-left-color: var(--accent);
+        }
+
+        .fn-entry-sig {
+            font-family: "SF Mono", "Menlo", "Consolas", monospace;
+            font-size: 11px;
+        }
+
+        .fn-entry-label {
+            color: var(--text3);
+            font-size: 10px;
+            margin-left: auto;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80px;
+        }
+
+        /* Right: detail panel */
+        .fn-picker-detail {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .fn-detail-header {
+            padding: 14px 16px 10px;
+            border-bottom: 1px solid var(--border-dim);
+        }
+
+        .fn-detail-name {
+            font-family: "SF Mono", "Menlo", "Consolas", monospace;
+            font-size: 14px;
+            color: var(--accent-hi);
+            font-weight: 700;
+        }
+
+        .fn-detail-desc {
+            font-size: 11px;
+            color: var(--text3);
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .fn-detail-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+        }
+
+        /* Parameter form */
+        .fn-params {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .fn-param-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .fn-param-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .fn-param-type {
+            font-size: 9px;
+            font-weight: 400;
+            color: var(--accent);
+            background: rgba(196, 26, 26, 0.12);
+            padding: 1px 5px;
+            border-radius: var(--radius-s);
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .fn-param input[type="text"],
+        .fn-param input[type="number"] {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 12px;
+            padding: 5px 8px;
+            outline: none;
+            font-family: "SF Mono", "Menlo", "Consolas", monospace;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .fn-param input:focus {
+            border-color: var(--accent);
+        }
+
+        /* Key capture button */
+        .fn-key-capture {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .fn-key-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: "SF Mono", "Menlo", "Consolas", monospace;
+            font-size: 12px;
+            padding: 5px 12px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            min-width: 60px;
+            text-align: center;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .fn-key-btn:hover {
+            border-color: var(--accent);
+        }
+
+        .fn-key-btn.capturing {
+            border-color: var(--accent);
+            background: rgba(196, 26, 26, 0.15);
+            color: var(--accent-hi);
+            animation: fn-pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes fn-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .fn-key-hint {
+            font-size: 10px;
+            color: var(--text3);
+        }
+
+        /* Modifiers checkboxes */
+        .fn-mods-row {
+            display: flex;
+            gap: 2px;
+        }
+
+        .fn-mod-chip {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--surface2);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius);
+            color: var(--text3);
+            font-family: "SF Mono", "Menlo", "Consolas", monospace;
+            font-size: 10px;
+            padding: 4px 8px;
+            cursor: pointer;
+            transition: all 0.1s;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .fn-mod-chip:hover {
+            border-color: var(--accent);
+            color: var(--text);
+        }
+
+        .fn-mod-chip.on {
+            background: rgba(196, 26, 26, 0.15);
+            border-color: var(--accent);
+            color: var(--accent-hi);
+        }
+
+        /* No-params message */
+        .fn-no-params {
+            color: var(--text3);
+            font-size: 11px;
+            font-style: italic;
+            padding: 8px 0;
+        }
+
+        /* Add-to-macro footer */
+        .fn-detail-footer {
+            padding: 10px 16px;
+            border-top: 1px solid var(--border-dim);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .fn-add-btn {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: var(--radius);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 6px 16px;
+            cursor: pointer;
+            transition: opacity 0.15s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .fn-add-btn:hover {
+            opacity: 0.85;
+        }
+
+        .fn-add-btn:disabled {
+            opacity: 0.3;
+            cursor: default;
+        }
+
+        .fn-step-preview {
+            flex: 1;
+            font-family: "SF Mono", "Menlo", "Consolas", monospace;
+            font-size: 10px;
+            color: var(--text3);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Detail empty state */
+        .fn-detail-empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text3);
+            font-size: 11px;
+            gap: 6px;
+        }
+
+        .fn-detail-empty span {
+            font-size: 28px;
+            opacity: 0.25;
+        }
+
+        /* Scrollbar styling */
+        .fn-picker-entries::-webkit-scrollbar,
+        .fn-detail-body::-webkit-scrollbar {
+            width: 4px;
+        }
+        .fn-picker-entries::-webkit-scrollbar-track,
+        .fn-detail-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .fn-picker-entries::-webkit-scrollbar-thumb,
+        .fn-detail-body::-webkit-scrollbar-thumb {
+            background: var(--border-dim);
+            border-radius: 2px;
+        }
+        .fn-picker-entries::-webkit-scrollbar-thumb:hover,
+        .fn-detail-body::-webkit-scrollbar-thumb:hover {
+            background: var(--border);
+        }
+
+        /* Toast feedback */
+        .fn-toast {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            background: var(--surface2);
+            border: 1px solid var(--success);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 11px;
+            padding: 8px 14px;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .fn-toast.show {
+            opacity: 1;
+            transform: translateY(0);
         }
     </style>
 </head>
@@ -272,6 +676,8 @@
             if (theme.radius !== undefined) {
                 root.style.setProperty("--radius", theme.radius + "px");
             }
+            /* Forward theme to all mounted iframe panels */
+            if (window.PanelManager) PanelManager.forwardTheme(theme);
         };
 
         /* ── Message Dispatch (Lua → JS) ───────────────────────────── */
@@ -314,6 +720,10 @@
             if (slot) {
                 slot.classList.add("visible");
                 document.getElementById("content-empty").style.display = "none";
+                /* If this is a registered panel with HTML that hasn't been loaded yet, mount it */
+                if (window.PanelManager && PanelManager.isRegistered(panel) && !PanelManager.isMounted(panel)) {
+                    PanelManager.requestMount(panel);
+                }
             } else {
                 document.getElementById("content-empty").style.display = "";
             }
@@ -349,7 +759,806 @@
         }
 
         /* ── Ready Signal ───────────────────────────────────────────── */
-        _post({ panel: "_shell", action: "ready", body: { version: "0.1.0" } });
+        _post({ panel: "_shell", action: "ready", body: { version: "0.2.0" } });
+
+    })();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PanelManager — mount/unmount/pop-out infrastructure
+         ════════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function() {
+        "use strict";
+
+        /* ── Panel Registry (JS-side mirror of Lua registry) ─────── */
+        var _registered = {};  // [id] = { title, icon }
+        var _mounted    = {};  // [id] = true (currently loaded in slot)
+        var _poppedOut  = {};  // [id] = true (currently in standalone webview)
+        var _pendingMount = {}; // [id] = true (Lua told us to mount, waiting for HTML)
+
+        var PM = {};
+
+        /* ── isRegistered / isMounted ───────────────────────────── */
+        PM.isRegistered = function(id) { return !!_registered[id]; };
+        PM.isMounted    = function(id) { return !!_mounted[id]; };
+
+        /* ── addRailItem(cfg) — called from Lua registerPanel ──── */
+        PM.addRailItem = function(cfg) {
+            if (!cfg || !cfg.id) return;
+            _registered[cfg.id] = cfg;
+
+            // Create rail item if it doesn't exist yet
+            var existing = document.querySelector('.rail-item[data-panel="' + cfg.id + '"]');
+            if (existing) return; // Already exists (e.g., static items)
+
+            var rail = document.getElementById("rail");
+            var spacer = rail.querySelector(".rail-spacer");
+            var btn = document.createElement("button");
+            btn.className = "rail-item";
+            btn.setAttribute("data-panel", cfg.id);
+
+            var icon = document.createElement("span");
+            icon.className = "rail-icon";
+            icon.textContent = cfg.icon || "▪";
+            btn.appendChild(icon);
+            btn.appendChild(document.createTextNode(" " + (cfg.title || cfg.id)));
+
+            // Pop-out button
+            var popBtn = document.createElement("button");
+            popBtn.className = "rail-popout";
+            popBtn.textContent = "↗";
+            popBtn.setAttribute("data-popout", cfg.id);
+            popBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                PM.requestPopOut(cfg.id);
+            });
+            btn.appendChild(popBtn);
+
+            btn.addEventListener("click", function() {
+                if (window.setActive) setActive(cfg.id);
+            });
+
+            rail.insertBefore(btn, spacer);
+
+            // Create slot in content area
+            var content = document.getElementById("content");
+            var slot = document.createElement("div");
+            slot.className = "panel-slot";
+            slot.id = "slot-" + cfg.id;
+            content.appendChild(slot);
+
+            // Wire pop-out for existing static rail items too
+            _wireStaticPopouts();
+
+            // If Lua already requested a mount before this rail item existed
+            if (_pendingMount[cfg.id]) {
+                delete _pendingMount[cfg.id];
+                PM.requestMount(cfg.id);
+            }
+        };
+
+        /* ── Wire pop-out buttons on static rail items ──────────── */
+        function _wireStaticPopouts() {
+            var items = document.querySelectorAll(".rail-item");
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                var pid = item.getAttribute("data-panel");
+                if (!pid) continue;
+                // Skip if already has a pop-out button
+                if (item.querySelector(".rail-popout")) continue;
+                // Skip shell-internal panels (settings uses bespoke logic)
+                if (pid === "settings") continue;
+
+                var popBtn = document.createElement("button");
+                popBtn.className = "rail-popout";
+                popBtn.textContent = "↗";
+                popBtn.setAttribute("data-popout", pid);
+                popBtn.addEventListener("click", function(e) {
+                    e.stopPropagation();
+                    var panelId = this.getAttribute("data-popout");
+                    PM.requestPopOut(panelId);
+                });
+                item.appendChild(popBtn);
+                // Mark as registered (static panels are implicitly registered)
+                if (!_registered[pid]) {
+                    _registered[pid] = { id: pid, title: pid, icon: "▪" };
+                }
+            }
+        }
+
+        /* ── requestMount(id) — Lua calls this to load HTML ────── */
+        PM.requestMount = function(id) {
+            // Called when Lua pushes HTML via mount() or when rail tab is clicked
+            if (_mounted[id] || _poppedOut[id]) return;
+            // If we don't have the HTML yet, mark as pending
+            _pendingMount[id] = true;
+        };
+
+        /* ── mount(id, html, baseURL) — called from Lua via eval ─ */
+        PM.mount = function(id, html, baseURL) {
+            var slot = document.getElementById("slot-" + id);
+            if (!slot) {
+                // Slot doesn't exist yet — queue it
+                _pendingMount[id] = true;
+                return;
+            }
+            if (_mounted[id]) return; // Already mounted
+            if (_poppedOut[id]) return; // Popped out, don't remount
+
+            // Clear any existing content
+            slot.innerHTML = "";
+
+            // Inject base URL into HTML so relative paths resolve
+            var baseInjected = html;
+            if (baseInjected.indexOf("<head>") !== -1 && baseURL) {
+                baseInjected = baseInjected.replace(
+                    "<head>",
+                    '<head><base href="' + baseURL + '">'
+                );
+            }
+
+            // Create iframe with srcdoc
+            var iframe = document.createElement("iframe");
+            iframe.className = "panel-iframe";
+            iframe.setAttribute("frameborder", "0");
+            iframe.style.cssText = "width:100%;height:100%;border:none;background:var(--bg);";
+            iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+
+            // Inject communication bridge into the HTML
+            var bridgeScript = '<script>\n' +
+                '/* Shell iframe bridge — provides webkit.messageHandlers shim */\n' +
+                '(function() {\n' +
+                '  if (window.webkit && window.webkit.messageHandlers) return;\n' +
+                '  window.webkit = { messageHandlers: { msShell: {\n' +
+                '    postMessage: function(data) {\n' +
+                '      var msg = (typeof data === "string") ? JSON.parse(data) : data;\n' +
+                '      msg._panelId = ' + JSON.stringify(id) + ';\n' +
+                '      if (window.parent && window.parent._panelBridge) {\n' +
+                '        window.parent._panelBridge(msg);\n' +
+                '      }\n' +
+                '    }\n' +
+                '  }} };\n' +
+                '})();\n' +
+                '<\/script>\n';
+
+            // Insert bridge right after <head> or at start of body
+            var srcdoc = baseInjected;
+            if (srcdoc.indexOf("<body>") !== -1) {
+                srcdoc = srcdoc.replace("<body>", "<body>" + bridgeScript);
+            } else if (srcdoc.indexOf("<head>") !== -1) {
+                srcdoc = srcdoc.replace("</head>", bridgeScript + "</head>");
+            } else {
+                srcdoc = bridgeScript + srcdoc;
+            }
+
+            iframe.srcdoc = srcdoc;
+            slot.appendChild(iframe);
+            _mounted[id] = true;
+            delete _pendingMount[id];
+        };
+
+        /* ── unmount(id) — called from Lua ──────────────────────── */
+        PM.unmount = function(id) {
+            var slot = document.getElementById("slot-" + id);
+            if (!slot) return;
+            slot.innerHTML = "";
+            _mounted[id] = false;
+        };
+
+        /* ── requestPopOut(id) — JS-initiated pop-out ───────────── */
+        PM.requestPopOut = function(id) {
+            // Tell Lua to handle the pop-out
+            if (window.shellPost) {
+                shellPost("_shell", "popOut", { panel: id });
+            }
+        };
+
+        /* ── requestPopIn(id) — JS-initiated pop-in ─────────────── */
+        PM.requestPopIn = function(id) {
+            if (window.shellPost) {
+                shellPost("_shell", "popIn", { panel: id });
+            }
+        };
+
+        /* ── markPoppedOut(id, isPopped) — called from Lua ──────── */
+        PM.markPoppedOut = function(id, isPopped) {
+            _poppedOut[id] = isPopped;
+            _mounted[id] = false;
+            // Update rail item styling
+            var btn = document.querySelector('.rail-item[data-panel="' + id + '"]');
+            if (btn) {
+                btn.classList.toggle("popped-out", isPopped);
+                // Update pop-out button icon
+                var popBtn = btn.querySelector(".rail-popout");
+                if (popBtn) {
+                    popBtn.textContent = isPopped ? "↙" : "↗";
+                    popBtn.title = isPopped ? "Pop back into shell" : "Pop out to standalone window";
+                }
+            }
+            // Clear slot content when popped out
+            if (isPopped) {
+                var slot = document.getElementById("slot-" + id);
+                if (slot) slot.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:12px;">Panel popped out — <a href="#" onclick="PanelManager.requestPopIn(\'' + id + '\');return false;" style="color:var(--accent);margin-left:4px;">bring back</a></div>';
+            }
+        };
+
+        /* ── forwardTheme(theme) — push theme to iframe panels ──── */
+        PM.forwardTheme = function(theme) {
+            var iframes = document.querySelectorAll(".panel-iframe");
+            for (var i = 0; i < iframes.length; i++) {
+                try {
+                    var cw = iframes[i].contentWindow;
+                    if (cw && cw.applyTheme) {
+                        cw.applyTheme(theme);
+                    }
+                } catch (e) { /* cross-origin, ignore */ }
+            }
+        };
+
+        /* ── iframe bridge receiver ─────────────────────────────── */
+        window._panelBridge = function(msg) {
+            // Route iframe messages through the shell's msShell channel to Lua
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.msShell) {
+                window.webkit.messageHandlers.msShell.postMessage(JSON.stringify(msg));
+            }
+        };
+
+        /* ── Wire pop-out button clicks on rail items ───────────── */
+        function _wirePopoutClicks() {
+            var popBtns = document.querySelectorAll(".rail-popout[data-popout]");
+            for (var i = 0; i < popBtns.length; i++) {
+                (function(btn) {
+                    if (btn._wired) return;
+                    btn._wired = true;
+                    btn.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        var panelId = btn.getAttribute("data-popout");
+                        // Toggle: if already popped out, pop in; otherwise pop out
+                        if (_poppedOut[panelId]) {
+                            PM.requestPopIn(panelId);
+                        } else {
+                            PM.requestPopOut(panelId);
+                        }
+                    });
+                })(popBtns[i]);
+            }
+        }
+
+        /* ── Initialize: wire static rail items ─────────────────── */
+        _wireStaticPopouts();
+        _wirePopoutClicks();
+
+        /* ── Expose globally ─────────────────────────────────────── */
+        window.PanelManager = PM;
+
+    })();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         Macros Panel — Function Picker
+         ════════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function() {
+        "use strict";
+
+        /* ── Function Registry ─────────────────────────────────────── */
+        var REGISTRY = [
+            {
+                id: "ms.type",
+                name: "ms.type",
+                sig: "ms.type(key, mods)",
+                desc: "Type a key with optional modifiers. Simulates a full key-press cycle (down + up).",
+                category: "input",
+                params: [
+                    { name: "key",  type: "key",   label: "Key",        required: true },
+                    { name: "mods", type: "mods",   label: "Modifiers",  required: false }
+                ]
+            },
+            {
+                id: "ms.wait",
+                name: "ms.wait",
+                sig: "ms.wait(ms)",
+                desc: "Pause macro execution for the specified number of milliseconds.",
+                category: "flow",
+                params: [
+                    { name: "ms", type: "number", label: "Milliseconds", required: true }
+                ]
+            },
+            {
+                id: "ms.copy",
+                name: "ms.copy",
+                sig: "ms.copy(text)",
+                desc: "Copy the given text string to the system clipboard.",
+                category: "clipboard",
+                params: [
+                    { name: "text", type: "string", label: "Text", required: true }
+                ]
+            },
+            {
+                id: "ms.paste",
+                name: "ms.paste",
+                sig: "ms.paste()",
+                desc: "Paste the current clipboard contents at the cursor position.",
+                category: "clipboard",
+                params: []
+            },
+            {
+                id: "ms.press",
+                name: "ms.press",
+                sig: "ms.press(key, mods)",
+                desc: "Press and release a key with optional modifiers.",
+                category: "input",
+                params: [
+                    { name: "key",  type: "key",   label: "Key",        required: true },
+                    { name: "mods", type: "mods",   label: "Modifiers",  required: false }
+                ]
+            },
+            {
+                id: "ms.hold",
+                name: "ms.hold",
+                sig: "ms.hold(key)",
+                desc: "Hold a key down without releasing it. Pair with ms.release() later.",
+                category: "input",
+                params: [
+                    { name: "key", type: "key", label: "Key", required: true }
+                ]
+            },
+            {
+                id: "ms.release",
+                name: "ms.release",
+                sig: "ms.release(key)",
+                desc: "Release a previously held key.",
+                category: "input",
+                params: [
+                    { name: "key", type: "key", label: "Key", required: true }
+                ]
+            },
+            {
+                id: "ms.cam",
+                name: "ms.cam",
+                sig: "ms.cam(dx, dy)",
+                desc: "Move the camera by delta values in each axis.",
+                category: "camera",
+                params: [
+                    { name: "dx", type: "number", label: "Delta X", required: true },
+                    { name: "dy", type: "number", label: "Delta Y", required: true }
+                ]
+            },
+            {
+                id: "ms.cam.rebalance",
+                name: "ms.cam.rebalance",
+                sig: "ms.cam.rebalance()",
+                desc: "Rebalance the camera to its neutral position.",
+                category: "camera",
+                params: []
+            },
+            {
+                id: "ms.cam.reset",
+                name: "ms.cam.reset",
+                sig: "ms.cam.reset()",
+                desc: "Reset the camera to its default position and zoom.",
+                category: "camera",
+                params: []
+            }
+        ];
+
+        var MOD_LIST = ["ctrl", "alt", "shift", "cmd"];
+
+        /* ── State ─────────────────────────────────────────────────── */
+        var _selectedId  = null;
+        var _paramValues = {};   // { paramName: value }
+        var _modState    = {};   // { ctrl: false, alt: false, ... }
+        var _keyCapture  = null; // param name currently capturing
+        var _toastTimer  = null;
+
+        /* ── Build DOM ─────────────────────────────────────────────── */
+        var slot = document.getElementById("slot-macros");
+        if (!slot) return;
+
+        var root = document.createElement("div");
+        root.className = "fn-picker";
+
+        // Left: list
+        var listPane = document.createElement("div");
+        listPane.className = "fn-picker-list";
+
+        var searchBox = document.createElement("div");
+        searchBox.className = "fn-picker-search";
+        var searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Search ms.* functions\u2026";
+        searchInput.setAttribute("spellcheck", "false");
+        searchBox.appendChild(searchInput);
+        listPane.appendChild(searchBox);
+
+        var entriesDiv = document.createElement("div");
+        entriesDiv.className = "fn-picker-entries";
+        listPane.appendChild(entriesDiv);
+
+        // Right: detail
+        var detailPane = document.createElement("div");
+        detailPane.className = "fn-picker-detail";
+        detailPane.innerHTML = '<div class="fn-detail-empty"><span>▶</span>Select a function from the list</div>';
+
+        root.appendChild(listPane);
+        root.appendChild(detailPane);
+        slot.appendChild(root);
+
+        // Toast
+        var toast = document.createElement("div");
+        toast.className = "fn-toast";
+        document.body.appendChild(toast);
+
+        /* ── Render Function List ──────────────────────────────────── */
+        function renderList(filter) {
+            entriesDiv.innerHTML = "";
+            var q = (filter || "").toLowerCase();
+            var visible = [];
+            for (var i = 0; i < REGISTRY.length; i++) {
+                var fn = REGISTRY[i];
+                if (q && fn.name.toLowerCase().indexOf(q) === -1
+                       && fn.desc.toLowerCase().indexOf(q) === -1
+                       && fn.category.toLowerCase().indexOf(q) === -1) {
+                    continue;
+                }
+                visible.push(fn);
+            }
+            for (var j = 0; j < visible.length; j++) {
+                (function(fn) {
+                    var row = document.createElement("div");
+                    row.className = "fn-entry" + (_selectedId === fn.id ? " active" : "");
+                    row.setAttribute("data-fn-id", fn.id);
+
+                    var sigSpan = document.createElement("span");
+                    sigSpan.className = "fn-entry-sig";
+                    sigSpan.textContent = fn.name;
+                    row.appendChild(sigSpan);
+
+                    var catSpan = document.createElement("span");
+                    catSpan.className = "fn-entry-label";
+                    catSpan.textContent = fn.category;
+                    row.appendChild(catSpan);
+
+                    row.addEventListener("click", function() {
+                        selectFunction(fn.id);
+                    });
+
+                    entriesDiv.appendChild(row);
+                })(visible[j]);
+            }
+        }
+
+        /* ── Select Function ───────────────────────────────────────── */
+        function selectFunction(id) {
+            _selectedId = id;
+            _paramValues = {};
+            _modState = {};
+            _keyCapture = null;
+
+            // Update list highlight
+            var items = entriesDiv.querySelectorAll(".fn-entry");
+            for (var i = 0; i < items.length; i++) {
+                items[i].classList.toggle("active", items[i].getAttribute("data-fn-id") === id);
+            }
+
+            // Find function definition
+            var fn = null;
+            for (var j = 0; j < REGISTRY.length; j++) {
+                if (REGISTRY[j].id === id) { fn = REGISTRY[j]; break; }
+            }
+            if (!fn) return;
+
+            // Initialize defaults
+            for (var k = 0; k < fn.params.length; k++) {
+                var p = fn.params[k];
+                if (p.type === "mods") {
+                    _paramValues[p.name] = [];
+                    _modState = { ctrl: false, alt: false, shift: false, cmd: false };
+                } else if (p.type === "number") {
+                    _paramValues[p.name] = 0;
+                } else {
+                    _paramValues[p.name] = "";
+                }
+            }
+
+            renderDetail(fn);
+        }
+
+        /* ── Render Detail Panel ───────────────────────────────────── */
+        function renderDetail(fn) {
+            var html = '';
+
+            // Header
+            html += '<div class="fn-detail-header">';
+            html += '<div class="fn-detail-name">' + esc(fn.name) + '</div>';
+            html += '<div class="fn-detail-desc">' + esc(fn.desc) + '</div>';
+            html += '</div>';
+
+            // Body (params)
+            html += '<div class="fn-detail-body">';
+            if (fn.params.length === 0) {
+                html += '<div class="fn-no-params">This function takes no parameters.</div>';
+            } else {
+                html += '<div class="fn-params">';
+                for (var i = 0; i < fn.params.length; i++) {
+                    var p = fn.params[i];
+                    html += renderParamField(p);
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Footer
+            html += '<div class="fn-detail-footer">';
+            html += '<button class="fn-add-btn" id="fn-add-btn">Add Step</button>';
+            html += '<span class="fn-step-preview" id="fn-step-preview"></span>';
+            html += '</div>';
+
+            detailPane.innerHTML = html;
+
+            // Wire up param inputs
+            wireParamInputs(fn);
+
+            // Wire add button
+            var addBtn = document.getElementById("fn-add-btn");
+            if (addBtn) {
+                addBtn.addEventListener("click", function() {
+                    addToMacro(fn);
+                });
+            }
+
+            updatePreview(fn);
+        }
+
+        /* ── Render a single parameter field ───────────────────────── */
+        function renderParamField(p) {
+            var html = '<div class="fn-param-group fn-param">';
+            html += '<div class="fn-param-label">' + esc(p.label);
+            html += ' <span class="fn-param-type">' + esc(p.type) + '</span>';
+            if (p.required) html += ' <span style="color:var(--danger)">*</span>';
+            html += '</div>';
+
+            switch (p.type) {
+                case "string":
+                    html += '<input type="text" data-param="' + esc(p.name) + '" placeholder="Enter text\u2026">';
+                    break;
+
+                case "number":
+                    html += '<input type="number" data-param="' + esc(p.name) + '" value="0" step="1">';
+                    break;
+
+                case "key":
+                    html += '<div class="fn-key-capture">';
+                    html += '<button class="fn-key-btn" data-param="' + esc(p.name) + '" data-key-capture>Click to set</button>';
+                    html += '<span class="fn-key-hint">press a key\u2026</span>';
+                    html += '</div>';
+                    break;
+
+                case "mods":
+                    html += '<div class="fn-mods-row">';
+                    for (var i = 0; i < MOD_LIST.length; i++) {
+                        html += '<button class="fn-mod-chip" data-mod="' + MOD_LIST[i] + '">' + MOD_LIST[i] + '</button>';
+                    }
+                    html += '</div>';
+                    break;
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        /* ── Wire up input events ──────────────────────────────────── */
+        function wireParamInputs(fn) {
+            // Text and number inputs
+            var inputs = detailPane.querySelectorAll("input[data-param]");
+            for (var i = 0; i < inputs.length; i++) {
+                (function(inp) {
+                    var name = inp.getAttribute("data-param");
+                    inp.addEventListener("input", function() {
+                        if (inp.type === "number") {
+                            _paramValues[name] = parseFloat(inp.value) || 0;
+                        } else {
+                            _paramValues[name] = inp.value;
+                        }
+                        updatePreview(fn);
+                    });
+                })(inputs[i]);
+            }
+
+            // Key capture buttons
+            var keyBtns = detailPane.querySelectorAll("[data-key-capture]");
+            for (var j = 0; j < keyBtns.length; j++) {
+                (function(btn) {
+                    var name = btn.getAttribute("data-param");
+                    btn.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        startKeyCapture(name, btn, fn);
+                    });
+                })(keyBtns[j]);
+            }
+
+            // Modifier chips
+            var modChips = detailPane.querySelectorAll("[data-mod]");
+            for (var k = 0; k < modChips.length; k++) {
+                (function(chip) {
+                    var mod = chip.getAttribute("data-mod");
+                    chip.addEventListener("click", function() {
+                        _modState[mod] = !_modState[mod];
+                        chip.classList.toggle("on", _modState[mod]);
+                        // Update mods param value
+                        var mods = [];
+                        for (var m = 0; m < MOD_LIST.length; m++) {
+                            if (_modState[MOD_LIST[m]]) mods.push(MOD_LIST[m]);
+                        }
+                        // Find the mods param name
+                        for (var n = 0; n < fn.params.length; n++) {
+                            if (fn.params[n].type === "mods") {
+                                _paramValues[fn.params[n].name] = mods;
+                                break;
+                            }
+                        }
+                        updatePreview(fn);
+                    });
+                })(modChips[k]);
+            }
+        }
+
+        /* ── Key Capture ───────────────────────────────────────────── */
+        function startKeyCapture(paramName, btn, fn) {
+            // Cancel any existing capture
+            if (_keyCapture) {
+                var prevBtn = detailPane.querySelector(".fn-key-btn.capturing");
+                if (prevBtn) prevBtn.classList.remove("capturing");
+                document.removeEventListener("keydown", _keyCaptureHandler, true);
+            }
+
+            _keyCapture = paramName;
+            btn.classList.add("capturing");
+            btn.textContent = "\u2026";
+
+            function handler(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Build key name
+                var key = normalizeKey(e);
+                _paramValues[paramName] = key;
+
+                btn.classList.remove("capturing");
+                btn.textContent = key || "???";
+                btn.classList.remove("fn-key-btn");
+                btn.classList.add("fn-key-btn");
+
+                document.removeEventListener("keydown", handler, true);
+                _keyCapture = null;
+                _keyCaptureHandler = null;
+                updatePreview(fn);
+            }
+
+            _keyCaptureHandler = handler;
+            document.addEventListener("keydown", handler, true);
+        }
+
+        var _keyCaptureHandler = null;
+
+        function normalizeKey(e) {
+            // Map common keys to ms naming
+            var map = {
+                " ": "space",
+                "ArrowUp": "up",
+                "ArrowDown": "down",
+                "ArrowLeft": "left",
+                "ArrowRight": "right",
+                "Backspace": "delete",
+                "Escape": "escape",
+                "Enter": "return",
+                "Tab": "tab"
+            };
+            if (map[e.key]) return map[e.key];
+            if (e.key.length === 1) return e.key.toLowerCase();
+            return e.key.toLowerCase();
+        }
+
+        /* ── Step Preview ──────────────────────────────────────────── */
+        function updatePreview(fn) {
+            var el = document.getElementById("fn-step-preview");
+            if (!el) return;
+
+            var parts = [];
+            for (var i = 0; i < fn.params.length; i++) {
+                var p = fn.params[i];
+                var val = _paramValues[p.name];
+                if (p.type === "mods") {
+                    parts.push(p.name + ":[" + (val || []).join(",") + "]");
+                } else if (p.type === "string") {
+                    parts.push(p.name + ':"' + (val || "") + '"');
+                } else {
+                    parts.push(p.name + ":" + (val !== undefined ? val : ""));
+                }
+            }
+            el.textContent = fn.name + "(" + parts.join(", ") + ")";
+        }
+
+        /* ── Add to Macro ──────────────────────────────────────────── */
+        function addToMacro(fn) {
+            var params = {};
+            for (var i = 0; i < fn.params.length; i++) {
+                var p = fn.params[i];
+                var val = _paramValues[p.name];
+                if (p.required && p.type === "string" && (!val || val === "")) {
+                    showToast("Missing required field: " + p.label);
+                    return;
+                }
+                if (p.required && p.type === "key" && (!val || val === "")) {
+                    showToast("Missing required field: " + p.label);
+                    return;
+                }
+                if (p.type === "mods") {
+                    params[p.name] = val || [];
+                } else {
+                    params[p.name] = val;
+                }
+            }
+
+            // Send step via msShell usercontent channel → Lua bus
+            window.shellPost("macros", "addStep", {
+                action: fn.name,
+                params: params
+            });
+
+            showToast("Added: " + fn.name);
+        }
+
+        /* ── Toast ─────────────────────────────────────────────────── */
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.add("show");
+            if (_toastTimer) clearTimeout(_toastTimer);
+            _toastTimer = setTimeout(function() {
+                toast.classList.remove("show");
+                _toastTimer = null;
+            }, 1800);
+        }
+
+        /* ── Escape HTML ───────────────────────────────────────────── */
+        function esc(s) {
+            var d = document.createElement("div");
+            d.appendChild(document.createTextNode(s));
+            return d.innerHTML;
+        }
+
+        /* ── Search Input Handler ──────────────────────────────────── */
+        searchInput.addEventListener("input", function() {
+            renderList(searchInput.value);
+        });
+
+        // Prevent key capture from swallowing search input keystrokes
+        searchInput.addEventListener("keydown", function(e) {
+            e.stopPropagation();
+        });
+
+        /* ── Panel Registration (Lua → JS dispatch) ────────────────── */
+        window.registerPanel("macros", function(action, body) {
+            // Handle inbound Lua pushes (e.g., function list from ms.docs)
+            if (action === "functions" && Array.isArray(body)) {
+                // Future: merge dynamically-loaded functions from Lua
+                // For now, ignore — we use the hardcoded REGISTRY
+            }
+            if (action === "selectFunction" && body && body.name) {
+                selectFunction(body.name);
+            }
+        });
+
+        /* ── External API: allow ms.shell.eval to call in ──────────── */
+        window.fnPicker = {
+            select: selectFunction,
+            registry: REGISTRY,
+            showToast: showToast
+        };
+
+        /* ── Initial Render ────────────────────────────────────────── */
+        renderList("");
 
     })();
     </script>

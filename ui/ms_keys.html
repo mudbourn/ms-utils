@@ -598,246 +598,41 @@
 
         <div id="ctx-menu"></div>
 
-        <script>
+        <script type="module">
             "use strict";
+            import { createLogPanel } from "./modules/log-panel.js";
 
-            // ── Pause state ──────────────────────────────────────────────────────
-            let _paused = false;
-            function togglePause() {
-                _paused = !_paused;
-                const btn = document.getElementById("pause-btn");
-                if (btn) btn.textContent = _paused ? "Resume" : "Pause";
-            }
-
-            const _selected = new Set();
-            let _lastClicked = null;
-
-            function _getEntries() {
-                return Array.from(document.querySelectorAll(".log .entry, .log .step"));
-            }
-
-            function _updateSelectionVisuals() {
-                for (const el of _getEntries()) {
-                    el.classList.toggle("selected", _selected.has(el));
-                }
-            }
-
-            function _handleEntryClick(e) {
-                const row = e.currentTarget;
-                const entries = _getEntries();
-                const idx = entries.indexOf(row);
-                if (idx === -1) return;
-                playSlot("interact");
-
-                if (e.shiftKey && _lastClicked !== null) {
-                    const lo = Math.min(_lastClicked, idx);
-                    const hi = Math.max(_lastClicked, idx);
-                    for (let i = lo; i <= hi; i++) _selected.add(entries[i]);
-                } else if (e.metaKey || e.ctrlKey) {
-                    if (_selected.has(row)) _selected.delete(row);
-                    else _selected.add(row);
-                } else {
-                    if (_selected.has(row) && _selected.size === 1) {
-                        _selected.delete(row);
-                    } else {
-                        _selected.clear();
-                        _selected.add(row);
-                    }
-                }
-                _lastClicked = idx;
-                _updateSelectionVisuals();
-            }
-
-            function _copySelected() {
-                if (_selected.size === 0) return;
-                const lines = [];
-                for (const el of _getEntries()) {
-                    if (_selected.has(el)) {
-                        const ts = el.querySelector(".ts")?.textContent || "";
-                        const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
-                        const arrow = el.querySelector(".arrow")?.textContent || "";
-                        const name = el.querySelector(".key-name, .mouse-name, .scroll-name, .move-name")?.textContent || "";
-                        const dim = el.querySelector(".dim")?.textContent || "";
-                        const parts = [ts, `[${badge}]`];
-                        if (arrow) parts.push(arrow);
-                        if (name) parts.push(name);
-                        if (dim) parts.push(dim.trim());
-                        lines.push(parts.join(" "));
-                    }
-                }
-                const text = lines.join("\n");
-                try { navigator.clipboard.writeText(text); } catch (_) {}
-                playSlot("update");
-            }
-
-
-            // ── Context menu ─────────────────────────────────────────────────────
-            function closeCtxMenu() {
-                document.getElementById("ctx-menu").classList.remove("open");
-            }
-
-            function showCtxMenu(x, y, items) {
-                const el = document.getElementById("ctx-menu");
-                el.innerHTML = "";
-                for (const item of items) {
-                    if (item === "divider") {
-                        const d = document.createElement("div");
-                        d.className = "ctx-divider";
-                        el.appendChild(d);
-                        continue;
-                    }
-                    const row = document.createElement("div");
-                    row.className = "ctx-item";
-                    row.textContent = item.label;
-                    row.addEventListener("mouseenter", () => playSlot("hover"));
-                    row.addEventListener("click", (e) => {
-                        e.stopPropagation();
-                        playSlot("interact");
-                        closeCtxMenu();
-                        item.action();
-                    });
-                    el.appendChild(row);
-                }
-                el.classList.add("open");
-                const mw = el.offsetWidth || 140;
-                const mh = el.offsetHeight || 80;
-                const vw = window.innerWidth;
-                const vh = window.innerHeight;
-                el.style.left = Math.min(x, vw - mw - 4) + "px";
-                el.style.top = Math.min(y, vh - mh - 4) + "px";
-            }
-
-            // Suppress native context menu everywhere, show custom menu
-            document.addEventListener("contextmenu", (e) => {
-                e.preventDefault();
-                const row = e.target.closest(".entry");
-                const items = [];
-                if (row && !_selected.has(row)) {
-                    _selected.clear();
-                    _selected.add(row);
-                    _updateSelectionVisuals();
-                }
-                if (_selected.size > 0) {
-                    items.push({ label: "Copy", action: _copySelected });
-                    items.push("divider");
-                }
-                items.push({ label: "Select All", action: _selectAll });
-                items.push({ label: "Clear", action: clearLog });
-                showCtxMenu(e.clientX, e.clientY, items);
+            // ── Create LogPanel (selection, context menu, keyboard, drag, theme) ──
+            const lp = createLogPanel({
+                channel: "msKeys",
+                buildRow, // defined below
+                entrySelector: ".log .entry, .log .step",
+                maxEntries: 300,
+                scrollThresh: 48,
+                extractCopyText(el) {
+                    const ts = el.querySelector(".ts")?.textContent || "";
+                    const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
+                    const arrow = el.querySelector(".arrow")?.textContent || "";
+                    const name = el.querySelector(".key-name, .mouse-name, .scroll-name, .move-name")?.textContent || "";
+                    const dim = el.querySelector(".dim")?.textContent || "";
+                    const parts = [ts, `[${badge}]`];
+                    if (arrow) parts.push(arrow);
+                    if (name) parts.push(name);
+                    if (dim) parts.push(dim.trim());
+                    return parts.join(" ");
+                },
             });
 
-            document.addEventListener("click", () => closeCtxMenu());
-            document.addEventListener("keydown", (e) => {
-                if (e.key === "Escape") closeCtxMenu();
-                if ((e.metaKey || e.ctrlKey) && e.key === "a") {
-                    e.preventDefault();
-                    _selectAll();
-                }
-                if ((e.metaKey || e.ctrlKey) && e.key === "c" && _selected.size > 0) {
-                    e.preventDefault();
-                    _copySelected();
-                }
-            });
+            // ── Expose globals for inline handlers ──────────────────────────
+            window.togglePause = lp.togglePause;
+            window.playSlot    = lp.playSlot;
+            window.clearLog    = clearLog;
+            window.closePanel  = lp.closePanel;
+            window.switchTab   = switchTab;
+            window.onCoordModeChange = onCoordModeChange;
+            window.applyTheme  = lp.applyTheme;
 
-            function _selectAll() {
-                _selected.clear();
-                for (const el of _getEntries()) _selected.add(el);
-                _updateSelectionVisuals();
-            }
-
-            // ── Host communication ─────────────────────────────────────────────
-            function sendToHost(msg) {
-                const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-                try {
-                    window.webkit.messageHandlers.msKeys.postMessage(s);
-                } catch (e) {}
-            }
-            function playSlot(slot) {
-                sendToHost({ action: "playSlot", slot });
-            }
-
-            // ── Header drag ────────────────────────────────────────────────────
-            (function () {
-                let _drag = null;
-                document
-                    .getElementById("header")
-                    .addEventListener("mousedown", (e) => {
-                        if (e.target.closest(".header-btns")) return;
-                        _drag = { ox: e.screenX, oy: e.screenY };
-                        const onMove = (ev) => {
-                            if (!_drag) return;
-                            sendToHost({
-                                action: "move",
-                                dx: ev.screenX - _drag.ox,
-                                dy: ev.screenY - _drag.oy,
-                            });
-                            _drag.ox = ev.screenX;
-                            _drag.oy = ev.screenY;
-                        };
-                        const onUp = () => {
-                            _drag = null;
-                            window.removeEventListener("mousemove", onMove);
-                            window.removeEventListener("mouseup", onUp);
-                        };
-                        window.addEventListener("mousemove", onMove);
-                        window.addEventListener("mouseup", onUp);
-                    });
-            })();
-
-            // ── Tab switching ──────────────────────────────────────────────────
-            function switchTab(tab) {
-                document
-                    .querySelectorAll(".tab")
-                    .forEach((t) =>
-                        t.classList.toggle("active", t.id === "tab-" + tab),
-                    );
-                document
-                    .querySelectorAll(".tab-section")
-                    .forEach((s) =>
-                        s.classList.toggle("active", s.id === tab + "-section"),
-                    );
-                // Scroll the newly-visible log to the bottom
-                const log = document.getElementById(tab + "-log");
-                if (log) log.scrollTop = log.scrollHeight;
-            }
-
-            // ── Flag row ───────────────────────────────────────────────────────
-            let _lastKeyTime = 0,
-                _lastMouseTime = 0;
-
-            function flagKey(name) {
-                _lastKeyTime = Date.now();
-                document.getElementById("flag-key-name").textContent =
-                    name || "—";
-                _updateFlagStyles();
-            }
-
-            function flagMouse(name) {
-                _lastMouseTime = Date.now();
-                document.getElementById("flag-mouse-name").textContent =
-                    name || "—";
-                _updateFlagStyles();
-            }
-
-            function _updateFlagStyles() {
-                const kRecent = _lastKeyTime >= _lastMouseTime;
-                document
-                    .getElementById("flag-key-pill")
-                    .classList.toggle(
-                        "flag-recent",
-                        kRecent && _lastKeyTime > 0,
-                    );
-                document
-                    .getElementById("flag-mouse-pill")
-                    .classList.toggle(
-                        "flag-recent",
-                        !kRecent && _lastMouseTime > 0,
-                    );
-            }
-
-            // ── Constants ─────────────────────────────────────────────────────
-            const MAX_ENTRIES = 300;
-            const SCROLL_THRESH = 48;
+            // ── Constants ───────────────────────────────────────────────────
             const BTN_NAMES = {
                 0: "Left",
                 1: "Right",
@@ -846,30 +641,9 @@
                 4: "Btn5",
             };
 
-            function btnName(n) {
-                return BTN_NAMES[n] ?? "M" + n;
-            }
-            function isNearBottom(el) {
-                return (
-                    el.scrollHeight - el.scrollTop - el.clientHeight <=
-                    SCROLL_THRESH
-                );
-            }
-            function pad2(n) {
-                return String(n).padStart(2, "0");
-            }
-            function nowTs() {
-                const d = new Date();
-                return (
-                    pad2(d.getHours()) +
-                    ":" +
-                    pad2(d.getMinutes()) +
-                    ":" +
-                    pad2(d.getSeconds())
-                );
-            }
+            function btnName(n) { return BTN_NAMES[n] ?? "M" + n; }
 
-            // ── Entry builder ──────────────────────────────────────────────────
+            // ── Entry builder ───────────────────────────────────────────────
             function mkSpan(cls, text) {
                 const s = document.createElement("span");
                 s.className = cls;
@@ -888,8 +662,8 @@
                         mkSpan("arrow arrow-move", "→"),
                         mkSpan("move-name", entry.x + ", " + entry.y),
                     );
-                    row.onmouseenter = function() { playSlot("hover"); };
-                    row.onclick = _handleEntryClick;
+                    row.onmouseenter = function() { lp.playSlot("hover"); };
+                    row.onclick = lp._handleEntryClick;
                     return row;
                 }
 
@@ -933,14 +707,14 @@
                     );
                 }
 
-                row.onmouseenter = function() { playSlot("hover"); };
-                row.onclick = _handleEntryClick;
+                row.onmouseenter = function() { lp.playSlot("hover"); };
+                row.onclick = lp._handleEntryClick;
                 return row;
             }
 
-            // ── Route entries to the correct log ──────────────────────────────
+            // ── Route entries to the correct log ────────────────────────────
             function appendEntry(entry) {
-                if (_paused) return;
+                if (lp.isPaused()) return;
                 if (entry.type === "key" && entry.down)
                     flagKey(entry.key || "?");
                 if (entry.type === "mouse" && entry.down)
@@ -952,11 +726,9 @@
                 const log = document.getElementById(
                     isMouseSide ? "mouse-log" : "keys-log",
                 );
-                const atBottom = isNearBottom(log);
+                const atBottom = lp.isNearBottom(log);
                 log.appendChild(buildRow(entry));
-                while (log.childElementCount > MAX_ENTRIES) {
-                    log.removeChild(log.firstElementChild);
-                }
+                lp.trimLog(log);
                 if (atBottom) log.scrollTop = log.scrollHeight;
             }
 
@@ -965,8 +737,8 @@
                 const ml = document.getElementById("mouse-log");
                 kl.innerHTML = ml.innerHTML = "";
                 const capped =
-                    entries && entries.length > MAX_ENTRIES
-                        ? entries.slice(-MAX_ENTRIES)
+                    entries && entries.length > lp.maxEntries
+                        ? entries.slice(-lp.maxEntries)
                         : entries || [];
                 const kf = document.createDocumentFragment();
                 const mf = document.createDocumentFragment();
@@ -983,8 +755,7 @@
                 ml.scrollTop = ml.scrollHeight;
             }
 
-            // ── Active keys pills ──────────────────────────────────────────────
-            // Accepts array of { name, code } objects (or plain strings for backwards compat).
+            // ── Active keys pills ───────────────────────────────────────────
             function updateActiveKeys(keys) {
                 const row = document.getElementById("keys-pills");
                 row.innerHTML = "";
@@ -1007,7 +778,7 @@
                 });
             }
 
-            // ── Mouse state (position + active buttons) ───────────────────────
+            // ── Mouse state (position + active buttons) ─────────────────────
             function updateMouseState(state) {
                 if (state.x != null)
                     document.getElementById("mx-display").textContent = state.x;
@@ -1045,118 +816,78 @@
                     document.getElementById("my-display").textContent = pos.y;
             }
 
-            // ── Button actions ─────────────────────────────────────────────────
+            // ── Flag row ────────────────────────────────────────────────────
+            let _lastKeyTime = 0,
+                _lastMouseTime = 0;
+
+            function flagKey(name) {
+                _lastKeyTime = Date.now();
+                document.getElementById("flag-key-name").textContent =
+                    name || "—";
+                _updateFlagStyles();
+            }
+
+            function flagMouse(name) {
+                _lastMouseTime = Date.now();
+                document.getElementById("flag-mouse-name").textContent =
+                    name || "—";
+                _updateFlagStyles();
+            }
+
+            function _updateFlagStyles() {
+                const kRecent = _lastKeyTime >= _lastMouseTime;
+                document
+                    .getElementById("flag-key-pill")
+                    .classList.toggle(
+                        "flag-recent",
+                        kRecent && _lastKeyTime > 0,
+                    );
+                document
+                    .getElementById("flag-mouse-pill")
+                    .classList.toggle(
+                        "flag-recent",
+                        !kRecent && _lastMouseTime > 0,
+                    );
+            }
+
+            // ── Tab switching ───────────────────────────────────────────────
+            function switchTab(tab) {
+                document
+                    .querySelectorAll(".tab")
+                    .forEach((t) =>
+                        t.classList.toggle("active", t.id === "tab-" + tab),
+                    );
+                document
+                    .querySelectorAll(".tab-section")
+                    .forEach((s) =>
+                        s.classList.toggle("active", s.id === tab + "-section"),
+                    );
+                // Scroll the newly-visible log to the bottom
+                const log = document.getElementById(tab + "-log");
+                if (log) log.scrollTop = log.scrollHeight;
+            }
+
+            // ── Button actions ──────────────────────────────────────────────
             function clearLog() {
                 document.getElementById("keys-log").innerHTML = "";
                 document.getElementById("mouse-log").innerHTML = "";
-                sendToHost({ action: "clear" });
-            }
-
-            function closePanel() {
-                sendToHost({ action: "close" });
+                lp.sendToHost({ action: "clear" });
             }
 
             function onCoordModeChange(mode) {
-                sendToHost({ action: "setCoordMode", mode: mode });
+                lp.sendToHost({ action: "setCoordMode", mode: mode });
             }
 
-            // ── Theme ──────────────────────────────────────────────────────────
-            // Parse #rrggbb or #rgb → { r, g, b }
-            function hexToRgb(hex) {
-                hex = hex.replace(/^#/, "");
-                if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-                const n = parseInt(hex, 16);
-                return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-            }
+            // ── Expose for Lua evaluateJavaScript ───────────────────────────
+            window.appendEntry      = appendEntry;
+            window.loadHistory      = loadHistory;
+            window.updateActiveKeys = updateActiveKeys;
+            window.updateMouseState = updateMouseState;
+            window.updateMousePos   = updateMousePos;
 
-            function applyTheme(t) {
-                if (!t) return;
-                const r = document.documentElement.style;
-                if (t.bg) r.setProperty("--bg", t.bg);
-                if (t.surface) r.setProperty("--surface", t.surface);
-                if (t.surface2) r.setProperty("--surface2", t.surface2);
-                if (t.hover) r.setProperty("--hover", t.hover);
-                if (t.accent) r.setProperty("--accent", t.accent);
-                if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
-                if (t.success) r.setProperty("--success", t.success);
-                if (t.dangerBg) r.setProperty("--danger-bg", t.dangerBg);
-                if (t.danger) r.setProperty("--danger", t.danger);
-                if (t.warning) r.setProperty("--warning", t.warning);
-                if (t.text) r.setProperty("--text", t.text);
-                // Derived: text2/text3 from text
-                if (t.text && !t.text2) {
-                    const c = hexToRgb(t.text);
-                    if (c) r.setProperty("--text2", `rgba(${c.r},${c.g},${c.b},0.85)`);
-                }
-                if (t.text && !t.text3) {
-                    const c = hexToRgb(t.text);
-                    if (c) r.setProperty("--text3", `rgba(${c.r},${c.g},${c.b},0.55)`);
-                }
-                // Derived: border from accent + hover mix
-                if (t.accent && t.hover && !t.border) {
-                    const a = hexToRgb(t.accent);
-                    const h = hexToRgb(t.hover);
-                    if (a && h) {
-                        const mr = Math.round(a.r * 0.5 + h.r * 0.5);
-                        const mg = Math.round(a.g * 0.5 + h.g * 0.5);
-                        const mb = Math.round(a.b * 0.5 + h.b * 0.5);
-                        r.setProperty("--border", `rgba(${mr},${mg},${mb},0.55)`);
-                        r.setProperty("--border-dim", `rgba(${mr},${mg},${mb},0.18)`);
-                    }
-                }
-                // Panel-specific: mouse/scroll tokens derived from warning/success
-                if (t.warning) r.setProperty("--mouse", t.warning);
-                if (t.success) r.setProperty("--scroll", t.success);
-                if (t.mouse) r.setProperty("--mouse", t.mouse);
-                if (t.scroll) r.setProperty("--scroll", t.scroll);
-                // Derived: accent glow
-                if (t.accent && !t.accentGlow) {
-                    const a = hexToRgb(t.accent);
-                    if (a) r.setProperty("--accent-glow", `rgba(${a.r},${a.g},${a.b},0.4)`);
-                }
-                if (t.accent && !t.accentGlowFaint) {
-                    const a = hexToRgb(t.accent);
-                    if (a) r.setProperty("--accent-glow-faint", `rgba(${a.r},${a.g},${a.b},0.12)`);
-                }
-                // Derived: danger glow/border
-                if (t.danger && !t.dangerGlow) {
-                    const d = hexToRgb(t.danger);
-                    if (d) r.setProperty("--danger-glow", `rgba(${d.r},${d.g},${d.b},0.6)`);
-                }
-                if (t.danger && !t.dangerBorder) {
-                    const d = hexToRgb(t.danger);
-                    if (d) r.setProperty("--danger-border", `rgba(${d.r},${d.g},${d.b},0.3)`);
-                }
-                // Explicit overrides
-                if (t.text2) r.setProperty("--text2", t.text2);
-                if (t.text3) r.setProperty("--text3", t.text3);
-                if (t.border) r.setProperty("--border", t.border);
-                if (t.borderDim) r.setProperty("--border-dim", t.borderDim);
-                if (t.accentGlow) r.setProperty("--accent-glow", t.accentGlow);
-                if (t.accentGlowFaint) r.setProperty("--accent-glow-faint", t.accentGlowFaint);
-                if (t.dangerGlow) r.setProperty("--danger-glow", t.dangerGlow);
-                if (t.dangerBorder) r.setProperty("--danger-border", t.dangerBorder);
-                if (t.radius !== undefined) {
-                    r.setProperty("--radius", t.radius + "px");
-                    r.setProperty("--radius-s", Math.max(0, t.radius - 1) + "px");
-                }
-                if (t.font) {
-                    if (t.fontURL) {
-                        let el = document.getElementById("_ms-custom-font");
-                        if (!el) {
-                            el = document.createElement("style");
-                            el.id = "_ms-custom-font";
-                            document.head.appendChild(el);
-                        }
-                        el.textContent = `@font-face { font-family: "${t.font}"; src: url("${t.fontURL}"); }`;
-                    }
-                    document.body.style.fontFamily = `"${t.font}", Almendra, Palatino, Georgia, serif`;
-                }
-            }
-
-            // ── Init ───────────────────────────────────────────────────────────
+            // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
-                sendToHost({ action: "ready" });
+                lp.sendToHost({ action: "ready" });
             });
         </script>
     </body>

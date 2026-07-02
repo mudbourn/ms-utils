@@ -21,3 +21,5 @@ ignore/
 
 # Rust build artifacts
 mac/bin/hidinject-rs/target/
+docs/function-index.md
+docs/icon-requirements.md

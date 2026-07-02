@@ -2409,6 +2409,15 @@
                             end
                             _shellEvalQ = {}
                         end
+                        -- Route pop-out/pop-in requests from JS
+                        if panel == "_shell" and action == "popOut" and body and body.panel then
+                            pcall(function() ms.shell.popOut(body.panel) end)
+                            return
+                        end
+                        if panel == "_shell" and action == "popIn" and body and body.panel then
+                            pcall(function() ms.shell.popIn(body.panel) end)
+                            return
+                        end
                         -- Emit on the bus: ui:<panel>:<action>
                         if ms.bus then
                             ms.bus.emit("ui:" .. panel .. ":" .. action, body)
@@ -2479,8 +2488,850 @@
                     _shellReady    = false
                     _shellEvalQ    = {}
                 end
+
+                -- Panel Registry & Mounting --
+
+                local _panelRegistry = {}  -- [id] = config
+                local _popouts      = {}  -- [id] = { view, channel }
+
+                -- ms.shell.registerPanel(id, config)
+                -- Register a panel module with the shell.
+                -- config: { title, icon, htmlPath (relative to ui/), onLoad, onUnload }
+                ms.shell.registerPanel = function(id, config)
+                    assert(type(id) == "string", "registerPanel: id must be string")
+                    assert(type(config) == "table", "registerPanel: config must be table")
+                    config.id = id
+                    _panelRegistry[id] = config
+                    -- Tell the shell to add a rail item if it's ready
+                    if _shellReady then
+                        -- Build JSON manually (config may contain non-serializable functions)
+                        local railJson = '{"id":' .. hs.json.encode(id)
+                            .. ',"title":' .. hs.json.encode(config.title or id)
+                            .. ',"icon":' .. hs.json.encode(config.icon or "▪") .. '}'
+                        ms.shell.eval("PanelManager.addRailItem(" .. railJson .. ")")
+                    end
+                end
+
+                -- ms.shell.mountPanel(id)
+                -- Mount a registered panel into the shell content area.
+                -- Loads the panel's HTML into an iframe inside its slot.
+                ms.shell.mountPanel = function(id)
+                    local cfg = _panelRegistry[id]
+                    if not cfg then
+                        print("ms.shell.mountPanel: unknown panel '" .. tostring(id) .. "'")
+                        return false
+                    end
+
+                    -- Read panel HTML
+                    local htmlContent = nil
+                    if cfg.htmlPath then
+                        local fullPath = hs.configdir .. "/ui/" .. cfg.htmlPath
+                        local fh = io.open(fullPath, "r")
+                        if fh then
+                            htmlContent = fh:read("*all")
+                            fh:close()
+                        else
+                            print("ms.shell.mountPanel: cannot read " .. fullPath)
+                            return false
+                        end
+                    end
+
+                    -- Escape HTML for safe JS embedding via JSON encoding
+                    local baseURL     = "file://" .. hs.configdir .. "/ui/"
+                    local idJson      = hs.json.encode(id)
+                    local htmlJson    = htmlContent and hs.json.encode(htmlContent) or "\"\""
+                    local baseURLJson = hs.json.encode(baseURL)
+                    local js = "PanelManager.mount(" .. idJson .. "," .. htmlJson .. "," .. baseURLJson .. ")"
+                    ms.shell.eval(js)
+
+                    -- Call onLoad callback
+                    if cfg.onLoad then pcall(cfg.onLoad) end
+
+                    -- Emit bus event
+                    if ms.bus then ms.bus.emit("panel:opened", { id = id }) end
+                    return true
+                end
+
+                -- ms.shell.unmountPanel(id)
+                -- Unmount a panel from the shell content area.
+                ms.shell.unmountPanel = function(id)
+                    local cfg = _panelRegistry[id]
+                    if not cfg then return false end
+
+                    ms.shell.eval("PanelManager.unmount(" .. hs.json.encode(id) .. ")")
+
+                    if cfg.onUnload then pcall(cfg.onUnload) end
+                    if ms.bus then ms.bus.emit("panel:closed", { id = id }) end
+                    return true
+                end
+
+                -- Panel name → HTML file mapping for built-in panels
+                local _builtinPanels = {
+                    console  = "ms_console.html",
+                    watcher  = "ms_watcher.html",
+                    keys     = "ms_keys.html",
+                    window   = "ms_window.html",
+                    settings = "ms_settings_ui.html",
+                    macros   = nil,  -- macros is shell-internal, no standalone HTML
+                }
+
+                -- ms.shell.popOut(panelId)
+                -- Unmount from shell, create a standalone webview with the same HTML.
+                ms.shell.popOut = function(panelId)
+                    -- Auto-register built-in panels if not explicitly registered
+                    if not _panelRegistry[panelId] and _builtinPanels[panelId] then
+                        _panelRegistry[panelId] = {
+                            id = panelId,
+                            title = panelId,
+                            icon = "▪",
+                            htmlPath = _builtinPanels[panelId],
+                        }
+                    end
+
+                    local cfg = _panelRegistry[panelId]
+                    if not cfg then
+                        print("ms.shell.popOut: unknown panel '" .. tostring(panelId) .. "'")
+                        return false
+                    end
+                    if not cfg.htmlPath then
+                        print("ms.shell.popOut: panel '" .. tostring(panelId) .. "' has no standalone HTML")
+                        return false
+                    end
+                    if _popouts[panelId] then
+                        -- Already popped out — just focus it
+                        pcall(function() _popouts[panelId].view:show() end)
+                        return true
+                    end
+
+                    -- Unmount from shell first
+                    ms.shell.unmountPanel(panelId)
+
+                    -- Create standalone webview
+                    require("hs.webview")
+                    require("hs.webview.usercontent")
+
+                    local popChannel = hs.webview.usercontent.new("msShell")
+                    popChannel:setCallback(function(message)
+                        local ok, data = pcall(hs.json.decode, message.body)
+                        if not ok or type(data) ~= "table" then return end
+                        local panel  = data.panel  or panelId
+                        local action = data.action or "unknown"
+                        local body   = data.body
+                        if ms.bus then
+                            ms.bus.emit("ui:" .. panel .. ":" .. action, body)
+                        end
+                    end)
+
+                    local sf = hs.screen.mainScreen():frame()
+                    local w, h = 800, 500
+                    local x = sf.x + math.floor((sf.w - w) / 2) + 40
+                    local y = sf.y + math.floor((sf.h - h) / 2) + 40
+
+                    local popView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, popChannel)
+                    pcall(function() popView:windowStyle(1 + 2 + 4) end)
+                    pcall(function() popView:level(hs.canvas.windowLevels.normal or 4) end)
+                    pcall(function() popView:allowTextEntry(true) end)
+                    pcall(function() popView:shadow(true) end)
+
+                    local htmlPath = hs.configdir .. "/ui/" .. (cfg.htmlPath or "")
+                    local baseURL  = "file://" .. hs.configdir .. "/ui/"
+                    local fh = io.open(htmlPath, "r")
+                    if fh then
+                        local html = fh:read("*all"); fh:close()
+                        popView:html(html, baseURL)
+                    end
+
+                    -- Inject theme
+                    hs.timer.doAfter(0.05, function()
+                        if not popView then return end
+                        local themeJson = hs.json.encode(ms._theme or {})
+                        pcall(function() popView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)
+                    end)
+
+                    popView:show()
+                    popView:alpha(1)
+
+                    _popouts[panelId] = { view = popView, channel = popChannel }
+
+                    -- Notify shell that panel was popped out
+                    ms.shell.eval("PanelManager.markPoppedOut(" .. hs.json.encode(panelId) .. ", true)")
+
+                    if ms.bus then ms.bus.emit("panel:poppedOut", { id = panelId }) end
+                    return true
+                end
+
+                -- ms.shell.popIn(panelId)
+                -- Destroy standalone webview, remount in shell.
+                ms.shell.popIn = function(panelId)
+                    local pop = _popouts[panelId]
+                    if not pop then
+                        print("ms.shell.popIn: panel '" .. tostring(panelId) .. "' is not popped out")
+                        return false
+                    end
+
+                    -- Destroy standalone webview
+                    pcall(function() pop.view:delete() end)
+                    _popouts[panelId] = nil
+
+                    -- Notify shell
+                    ms.shell.eval("PanelManager.markPoppedOut(" .. hs.json.encode(panelId) .. ", false)")
+
+                    -- Remount in shell
+                    ms.shell.mountPanel(panelId)
+
+                    if ms.bus then ms.bus.emit("panel:poppedIn", { id = panelId }) end
+                    return true
+                end
+
+                -- ms.shell.isPoppedOut(panelId) — check if panel is in standalone mode
+                ms.shell.isPoppedOut = function(panelId)
+                    return _popouts[panelId] ~= nil
+                end
             end
         -- END 12. Shell Infrastructure (ms.shell) --
+
+        -- 12b. Visual Macro Compiler (ms.compiler) --
+            do
+                local home       = os.getenv("HOME")
+                local dataDir    = home .. "/.hammerspoon/data"
+                local jsonPath   = dataDir .. "/ms_macros_visual.json"
+                local luaPath    = dataDir .. "/ms_macros_visual.lua"
+
+                ms.compiler = {}
+
+                -- ── helpers ──────────────────────────────────────────────
+
+                --- Serialize a Lua value to a source literal.
+                local function serialize(val)
+                    local t = type(val)
+                    if t == "string"  then return string.format("%q", val) end
+                    if t == "number"  then return tostring(val) end
+                    if t == "boolean" then return tostring(val) end
+                    if t == "nil"     then return "nil" end
+                    if t == "table" then
+                        local parts = {}
+                        local isList = (#val > 0)
+                        if isList then
+                            for _, v in ipairs(val) do
+                                parts[#parts + 1] = serialize(v)
+                            end
+                        else
+                            for k, v in pairs(val) do
+                                local key
+                                if type(k) == "string" and k:match("^%a[%w_]*$") then
+                                    key = k
+                                else
+                                    key = "[" .. serialize(k) .. "]"
+                                end
+                                parts[#parts + 1] = key .. " = " .. serialize(v)
+                            end
+                        end
+                        return "{" .. table.concat(parts, ", ") .. "}"
+                    end
+                    return tostring(val)
+                end
+
+                --- Build the argument list string for a sandbox call.
+                --- params is a table; keys are positional in order of an explicit `args` array
+                --- OR named keys that map to the function signature.
+                local function buildArgs(params, argOrder)
+                    if not params or not argOrder then return "" end
+                    local parts = {}
+                    for _, key in ipairs(argOrder) do
+                        local v = params[key]
+                        if v ~= nil then
+                            parts[#parts + 1] = serialize(v)
+                        end
+                    end
+                    return table.concat(parts, ", ")
+                end
+
+                -- ── action → Lua code emitter ────────────────────────────
+                -- Each emitter returns a string of Lua code for one step.
+                -- indent is the current indentation level (number of 4-space groups).
+
+                local INDENT = "    "
+
+                local function indent(n)
+                    local s = ""
+                    for _ = 1, n do s = s .. INDENT end
+                    return s
+                end
+
+                --- Emit a single action step. Returns Lua source lines (string).
+                local emitStep  -- forward declaration
+
+                local emitters = {}
+
+                -- Simple passthrough calls ---------------------------------
+
+                emitters["ms.type"] = function(step, lvl)
+                    local p = step.params or {}
+                    local args
+                    if p.mods and #p.mods > 0 then
+                        args = serialize(p.key) .. ", " .. serialize(p.mods)
+                    else
+                        args = serialize(p.key)
+                    end
+                    return indent(lvl) .. "ms.type(" .. args .. ")"
+                end
+
+                emitters["ms.wait"] = function(step, lvl)
+                    local ms_val = (step.params and step.params.ms) or 100
+                    return indent(lvl) .. "ms.wait(" .. tostring(ms_val) .. ")"
+                end
+
+                emitters["ms.copy"] = function(step, lvl)
+                    local text = (step.params and step.params.text) or ""
+                    return indent(lvl) .. "ms.copy(" .. serialize(text) .. ")"
+                end
+
+                emitters["ms.paste"] = function(step, lvl)
+                    return indent(lvl) .. "ms.paste()"
+                end
+
+                emitters["ms.press"] = function(step, lvl)
+                    local p = step.params or {}
+                    local args
+                    if p.mods and #p.mods > 0 then
+                        args = serialize(p.key) .. ", " .. serialize(p.mods)
+                    else
+                        args = serialize(p.key)
+                    end
+                    return indent(lvl) .. "ms.press(" .. args .. ")"
+                end
+
+                emitters["ms.hold"] = function(step, lvl)
+                    local p = step.params or {}
+                    local args
+                    if p.mods and #p.mods > 0 then
+                        args = serialize(p.key) .. ", " .. serialize(p.mods)
+                    else
+                        args = serialize(p.key)
+                    end
+                    return indent(lvl) .. "ms.hold(" .. args .. ")"
+                end
+
+                emitters["ms.release"] = function(step, lvl)
+                    local key = (step.params and step.params.key) or ""
+                    return indent(lvl) .. "ms.release(" .. serialize(key) .. ")"
+                end
+
+                emitters["ms.cam"] = function(step, lvl)
+                    local p = step.params or {}
+                    return indent(lvl) .. "ms.cam(" .. tostring(p.dx or 0) .. ", " .. tostring(p.dy or 0) .. ")"
+                end
+
+                emitters["ms.cam.rebalance"] = function(step, lvl)
+                    return indent(lvl) .. "ms.cam.rebalance()"
+                end
+
+                emitters["ms.cam.reset"] = function(step, lvl)
+                    return indent(lvl) .. "ms.cam.reset()"
+                end
+
+                emitters["ms.scroll"] = function(step, lvl)
+                    local p = step.params or {}
+                    local dir = serialize(p.direction or "up")
+                    if p.clicks and p.clicks > 1 then
+                        return indent(lvl) .. "ms.scroll(" .. dir .. ", " .. tostring(p.clicks) .. ")"
+                    end
+                    return indent(lvl) .. "ms.scroll(" .. dir .. ")"
+                end
+
+                emitters["ms.alert"] = function(step, lvl)
+                    local p = step.params or {}
+                    local args = serialize(p.message or p.msg or "")
+                    if p.duration then args = args .. ", " .. tostring(p.duration) end
+                    return indent(lvl) .. "ms.alert(" .. args .. ")"
+                end
+
+                -- Variable operations --------------------------------------
+
+                emitters["var_set"] = function(step, lvl)
+                    local p = step.params or {}
+                    local name  = p.name or "v"
+                    local value = serialize(p.value)
+                    return indent(lvl) .. "local " .. name .. " = " .. value
+                end
+
+                emitters["var_add"] = function(step, lvl)
+                    local p = step.params or {}
+                    local name   = p.name or "v"
+                    local amount = p.amount or 1
+                    return indent(lvl) .. name .. " = " .. name .. " + " .. tostring(amount)
+                end
+
+                emitters["var_sub"] = function(step, lvl)
+                    local p = step.params or {}
+                    local name   = p.name or "v"
+                    local amount = p.amount or 1
+                    return indent(lvl) .. name .. " = " .. name .. " - " .. tostring(amount)
+                end
+
+                emitters["var_mul"] = function(step, lvl)
+                    local p = step.params or {}
+                    local name   = p.name or "v"
+                    local amount = p.amount or 2
+                    return indent(lvl) .. name .. " = " .. name .. " * " .. tostring(amount)
+                end
+
+                -- Control flow ---------------------------------------------
+
+                emitters["if"] = function(step, lvl)
+                    local cond = step.condition or "true"
+                    local lines = {}
+                    lines[#lines + 1] = indent(lvl) .. "if " .. cond .. " then"
+                    if step.then_steps then
+                        for _, s in ipairs(step.then_steps) do
+                            lines[#lines + 1] = emitStep(s, lvl + 1)
+                        end
+                    end
+                    if step.else_steps then
+                        lines[#lines + 1] = indent(lvl) .. "else"
+                        for _, s in ipairs(step.else_steps) do
+                            lines[#lines + 1] = emitStep(s, lvl + 1)
+                        end
+                    end
+                    lines[#lines + 1] = indent(lvl) .. "end"
+                    return table.concat(lines, "\n")
+                end
+
+                emitters["for"] = function(step, lvl)
+                    local p = step.params or {}
+                    local varName = p.var or "i"
+                    local from    = p.from or 1
+                    local to      = p.to or 1
+                    local stepVal = p.step
+                    local lines = {}
+                    local forArgs = tostring(from) .. ", " .. tostring(to)
+                    if stepVal then forArgs = forArgs .. ", " .. tostring(stepVal) end
+                    lines[#lines + 1] = indent(lvl) .. "for " .. varName .. " = " .. forArgs .. " do"
+                    if step.body then
+                        for _, s in ipairs(step.body) do
+                            lines[#lines + 1] = emitStep(s, lvl + 1)
+                        end
+                    end
+                    lines[#lines + 1] = indent(lvl) .. "end"
+                    return table.concat(lines, "\n")
+                end
+
+                emitters["while"] = function(step, lvl)
+                    local cond = step.condition or "true"
+                    local lines = {}
+                    lines[#lines + 1] = indent(lvl) .. "while " .. cond .. " do"
+                    if step.body then
+                        for _, s in ipairs(step.body) do
+                            lines[#lines + 1] = emitStep(s, lvl + 1)
+                        end
+                    end
+                    lines[#lines + 1] = indent(lvl) .. "end"
+                    return table.concat(lines, "\n")
+                end
+
+                emitters["repeat"] = function(step, lvl)
+                    local cond = step.condition or "true"
+                    local lines = {}
+                    lines[#lines + 1] = indent(lvl) .. "repeat"
+                    if step.body then
+                        for _, s in ipairs(step.body) do
+                            lines[#lines + 1] = emitStep(s, lvl + 1)
+                        end
+                    end
+                    lines[#lines + 1] = indent(lvl) .. "until " .. cond
+                    return table.concat(lines, "\n")
+                end
+
+                -- Comment ---------------------------------------------------
+
+                emitters["comment"] = function(step, lvl)
+                    local text = (step.params and step.params.text) or ""
+                    return indent(lvl) .. "-- " .. text
+                end
+
+                -- Custom code (escape hatch) --------------------------------
+
+                emitters["code"] = function(step, lvl)
+                    local src = (step.params and step.params.source) or ""
+                    -- Indent each line of the custom source
+                    local lines = {}
+                    for line in src:gmatch("([^\n]*)\n?") do
+                        if line ~= "" then
+                            lines[#lines + 1] = indent(lvl) .. line
+                        end
+                    end
+                    return table.concat(lines, "\n")
+                end
+
+                -- Generic fallback for any ms.* call -----------------------
+
+                local function genericEmitter(step, lvl)
+                    local action = step.action
+                    local p = step.params or {}
+                    -- If params has an ordered `args` array, use it
+                    if p.args then
+                        local parts = {}
+                        for _, v in ipairs(p.args) do
+                            parts[#parts + 1] = serialize(v)
+                        end
+                        return indent(lvl) .. action .. "(" .. table.concat(parts, ", ") .. ")"
+                    end
+                    -- Otherwise serialize all params as a single table
+                    local parts = {}
+                    for k, v in pairs(p) do
+                        parts[#parts + 1] = k .. "=" .. serialize(v)
+                    end
+                    if #parts == 0 then
+                        return indent(lvl) .. action .. "()"
+                    end
+                    return indent(lvl) .. action .. "(" .. serialize(p) .. ")"
+                end
+
+                -- emitStep implementation -----------------------------------
+
+                emitStep = function(step, lvl)
+                    lvl = lvl or 1
+                    local action = step.action
+                    if not action then return indent(lvl) .. "-- [empty step]" end
+                    local emitter = emitters[action]
+                    if emitter then
+                        return emitter(step, lvl)
+                    end
+                    -- Fallback: treat as an ms.* call
+                    return genericEmitter(step, lvl)
+                end
+
+                -- ── compile one macro definition → Lua source ─────────────
+
+                ---@param macroDef table  A single macro definition from the JSON
+                ---@return string         Lua source code (without the global header)
+                ms.compiler.compile = function(macroDef)
+                    assert(type(macroDef) == "table", "ms.compiler.compile: macroDef must be a table")
+                    assert(type(macroDef.id) == "string", "ms.compiler.compile: macroDef.id must be a string")
+
+                    local id     = macroDef.id
+                    local name   = macroDef.name or id
+                    local author = macroDef.author or "Visual"
+                    local group  = macroDef.group or "visual"
+                    local steps  = macroDef.steps or {}
+                    local bind   = macroDef.bind or {}
+                    local cooldown = macroDef.cooldown
+
+                    -- Validate id is a safe Lua identifier
+                    assert(id:match("^[%a_][%w_]*$"),
+                        "ms.compiler.compile: invalid macro id '" .. id .. "' (must be a valid Lua identifier)")
+
+                    local fnName = id .. "Function"
+                    local lines = {}
+
+                    -- Function body
+                    lines[#lines + 1] = "local " .. fnName .. " = ms.fn(function()"
+                    -- Default timing variable
+                    lines[#lines + 1] = indent(1) .. "local t = 100"
+                    for _, step in ipairs(steps) do
+                        lines[#lines + 1] = emitStep(step, 1)
+                    end
+                    lines[#lines + 1] = "end)"
+                    lines[#lines + 1] = ""
+
+                    -- bind.define call
+                    lines[#lines + 1] = 'ms.bind.define("' .. id .. '", ' .. fnName .. ", {"
+                    lines[#lines + 1] = indent(1) .. 'group   = "' .. group .. '",'
+                    lines[#lines + 1] = indent(1) .. 'label   = "' .. name .. '",'
+                    if cooldown then
+                        lines[#lines + 1] = indent(1) .. "cooldown = " .. tostring(cooldown) .. ","
+                    end
+                    if bind.type or bind.key then
+                        lines[#lines + 1] = indent(1) .. "default = {"
+                        lines[#lines + 1] = indent(2) .. 'type = "' .. (bind.type or "key") .. '",'
+                        if bind.mods and #bind.mods > 0 then
+                            local modParts = {}
+                            for _, m in ipairs(bind.mods) do modParts[#modParts + 1] = '"' .. m .. '"' end
+                            lines[#lines + 1] = indent(2) .. "mods = {" .. table.concat(modParts, ", ") .. "},"
+                        else
+                            lines[#lines + 1] = indent(2) .. "mods = {},"
+                        end
+                        if bind.key then
+                            lines[#lines + 1] = indent(2) .. 'key  = "' .. bind.key .. '",'
+                        end
+                        lines[#lines + 1] = indent(1) .. "},"
+                    end
+                    lines[#lines + 1] = "})"
+
+                    return table.concat(lines, "\n")
+                end
+
+                -- ── write compiled Lua to file ────────────────────────────
+
+                --- Write (or rewrite) the full compiled file from all macro sources.
+                ---@param sources table  Array of { id=string, source=string } pairs
+                ms.compiler._writeFile = function(sources)
+                    local lines = {}
+                    lines[#lines + 1] = "-- ══════════════════════════════════════════════════════════════"
+                    lines[#lines + 1] = "-- AUTO-GENERATED by ms.compiler — DO NOT EDIT BY HAND"
+                    lines[#lines + 1] = "-- Source: data/ms_macros_visual.json"
+                    lines[#lines + 1] = "-- Rebuild: ms.compiler.rebuild()"
+                    lines[#lines + 1] = "-- ══════════════════════════════════════════════════════════════"
+                    lines[#lines + 1] = ""
+                    lines[#lines + 1] = "-- Creator Credits --"
+                    lines[#lines + 1] = "    ms.macroMeta = {"
+                    lines[#lines + 1] = '        name    = "Visual Macros",'
+                    lines[#lines + 1] = '        author  = "ms.compiler"'
+                    lines[#lines + 1] = "    }"
+                    lines[#lines + 1] = "-- END Creator Credits --"
+                    lines[#lines + 1] = ""
+
+                    for _, entry in ipairs(sources) do
+                        lines[#lines + 1] = "-- " .. entry.id .. " --"
+                        lines[#lines + 1] = entry.source
+                        lines[#lines + 1] = "-- END " .. entry.id .. " --"
+                        lines[#lines + 1] = ""
+                    end
+
+                    local out = table.concat(lines, "\n") .. "\n"
+
+                    -- Ensure data/ directory exists
+                    os.execute("mkdir -p '" .. dataDir .. "'")
+
+                    local f = io.open(luaPath, "w")
+                    if not f then
+                        error("ms.compiler: cannot open " .. luaPath .. " for writing")
+                    end
+                    f:write(out)
+                    f:close()
+
+                    return true
+                end
+
+                -- ── rebuild: read JSON, compile all, write Lua ────────────
+
+                ms.compiler.rebuild = function()
+                    -- Read JSON source file
+                    local f = io.open(jsonPath, "r")
+                    if not f then
+                        error("ms.compiler.rebuild: cannot open " .. jsonPath)
+                    end
+                    local raw = f:read("*all")
+                    f:close()
+
+                    local ok, data = pcall(hs.json.decode, raw)
+                    if not ok or type(data) ~= "table" then
+                        error("ms.compiler.rebuild: invalid JSON in " .. jsonPath .. ": " .. tostring(data))
+                    end
+
+                    local macros = data.macros or {}
+                    local sources = {}
+                    local count = 0
+
+                    for id, macroDef in pairs(macros) do
+                        macroDef.id = id  -- ensure id is set
+                        local srcOk, src = pcall(ms.compiler.compile, macroDef)
+                        if not srcOk then
+                            print("ms.compiler: compile error for '" .. id .. "': " .. tostring(src))
+                            -- Write an error stub so the file is still valid Lua
+                            src = "-- [COMPILE ERROR for " .. id .. "]\n"
+                               .. "-- " .. tostring(src) .. "\n"
+                        end
+                        sources[#sources + 1] = { id = id, source = src }
+                        count = count + 1
+                    end
+
+                    -- Sort by id for deterministic output
+                    table.sort(sources, function(a, b) return a.id < b.id end)
+
+                    ms.compiler._writeFile(sources)
+
+                    print("ms.compiler.rebuild: compiled " .. count .. " macro(s) → " .. luaPath)
+                    return count
+                end
+
+                -- ── load: execute the compiled file in the macro sandbox ──
+
+                ms.compiler.load = function()
+                    if not hs.fs.attributes(luaPath) then
+                        print("ms.compiler.load: no compiled file at " .. luaPath .. " — skipping")
+                        return false
+                    end
+
+                    local f = io.open(luaPath, "r")
+                    if not f then
+                        print("ms.compiler.load: cannot open " .. luaPath)
+                        return false
+                    end
+                    local rawSrc = f:read("*all")
+                    f:close()
+
+                    -- Audit the compiled source (same as ms_macros.lua)
+                    if ms.auditMacros then
+                        local auditErrs = ms.auditMacros(rawSrc)
+                        if #auditErrs > 0 then
+                            local msg = "ms_macros_visual.lua failed security audit ("
+                                .. #auditErrs .. " violation"
+                                .. (#auditErrs > 1 and "s" or "") .. "):\n"
+                            for _, e in ipairs(auditErrs) do
+                                msg = msg .. "  • " .. e .. "\n"
+                            end
+                            print(msg)
+                            ms.alert("Visual macros audit failed — see console", 6)
+                            return false
+                        end
+                    end
+
+                    -- Load into the macro sandbox
+                    local sandbox = ms._macroSandbox
+                    if not sandbox then
+                        error("ms.compiler.load: macro sandbox not initialized")
+                    end
+
+                    local chunk, loadErr
+                    if _VERSION and _VERSION >= "Lua 5.2" or not setfenv then
+                        chunk, loadErr = load(rawSrc, "@ms_macros_visual.lua", "bt", sandbox)
+                    else
+                        chunk, loadErr = loadstring(rawSrc, "@ms_macros_visual.lua")
+                        if chunk then setfenv(chunk, sandbox) end
+                    end
+                    if not chunk then
+                        print("ms.compiler.load: failed to load: " .. tostring(loadErr))
+                        ms.alert("Visual macros load error — see console", 6)
+                        return false
+                    end
+
+                    local ok, runErr = pcall(chunk)
+                    if not ok then
+                        print("ms.compiler.load: execution error: " .. tostring(runErr))
+                        ms.alert("Visual macros runtime error — see console", 6)
+                        return false
+                    end
+
+                    print("ms.compiler.load: visual macros loaded into sandbox")
+                    return true
+                end
+
+                -- ── write: compile a single macro and append/replace in file ──
+
+                --- Compile one macro definition and merge it into the JSON + rebuild.
+                ---@param macroId string   The macro identifier
+                ---@param macroDef table   Full macro definition (name, author, bind, steps)
+                ms.compiler.write = function(macroId, macroDef)
+                    assert(type(macroId) == "string", "ms.compiler.write: macroId must be a string")
+                    assert(type(macroDef) == "table",  "ms.compiler.write: macroDef must be a table")
+
+                    macroDef.id = macroId
+
+                    -- Read existing JSON
+                    local data = { macros = {} }
+                    local f = io.open(jsonPath, "r")
+                    if f then
+                        local raw = f:read("*all"); f:close()
+                        local ok, parsed = pcall(hs.json.decode, raw)
+                        if ok and type(parsed) == "table" then
+                            data = parsed
+                            data.macros = data.macros or {}
+                        end
+                    end
+
+                    -- Upsert the macro
+                    data.macros[macroId] = {
+                        name     = macroDef.name,
+                        author   = macroDef.author,
+                        group    = macroDef.group,
+                        bind     = macroDef.bind,
+                        steps    = macroDef.steps,
+                        cooldown = macroDef.cooldown,
+                    }
+
+                    -- Write updated JSON
+                    os.execute("mkdir -p '" .. dataDir .. "'")
+                    local jf = io.open(jsonPath, "w")
+                    if not jf then
+                        error("ms.compiler.write: cannot open " .. jsonPath .. " for writing")
+                    end
+                    jf:write(hs.json.encode(data, true))
+                    jf:close()
+
+                    -- Recompile everything
+                    ms.compiler.rebuild()
+
+                    print("ms.compiler.write: saved '" .. macroId .. "' to JSON and recompiled")
+                    return true
+                end
+
+                -- ── delete: remove a macro from JSON and recompile ────────
+
+                ms.compiler.delete = function(macroId)
+                    assert(type(macroId) == "string", "ms.compiler.delete: macroId must be a string")
+
+                    local f = io.open(jsonPath, "r")
+                    if not f then
+                        print("ms.compiler.delete: no JSON file found")
+                        return false
+                    end
+                    local raw = f:read("*all"); f:close()
+                    local ok, data = pcall(hs.json.decode, raw)
+                    if not ok or type(data) ~= "table" then
+                        error("ms.compiler.delete: invalid JSON")
+                    end
+
+                    data.macros = data.macros or {}
+                    if not data.macros[macroId] then
+                        print("ms.compiler.delete: macro '" .. macroId .. "' not found")
+                        return false
+                    end
+
+                    data.macros[macroId] = nil
+
+                    local jf = io.open(jsonPath, "w")
+                    if not jf then
+                        error("ms.compiler.delete: cannot write JSON")
+                    end
+                    jf:write(hs.json.encode(data, true))
+                    jf:close()
+
+                    ms.compiler.rebuild()
+                    print("ms.compiler.delete: removed '" .. macroId .. "' and recompiled")
+                    return true
+                end
+
+                -- ── list: return ids of all compiled visual macros ────────
+
+                ms.compiler.list = function()
+                    local f = io.open(jsonPath, "r")
+                    if not f then return {} end
+                    local raw = f:read("*all"); f:close()
+                    local ok, data = pcall(hs.json.decode, raw)
+                    if not ok or type(data) ~= "table" or type(data.macros) ~= "table" then
+                        return {}
+                    end
+                    local ids = {}
+                    for id in pairs(data.macros) do ids[#ids + 1] = id end
+                    table.sort(ids)
+                    return ids
+                end
+
+                -- ── get: return a single macro definition from JSON ───────
+
+                ms.compiler.get = function(macroId)
+                    local f = io.open(jsonPath, "r")
+                    if not f then return nil end
+                    local raw = f:read("*all"); f:close()
+                    local ok, data = pcall(hs.json.decode, raw)
+                    if not ok or type(data) ~= "table" or type(data.macros) ~= "table" then
+                        return nil
+                    end
+                    local def = data.macros[macroId]
+                    if def then def.id = macroId end
+                    return def
+                end
+
+                -- ── paths: expose file locations ──────────────────────────
+
+                ms.compiler.paths = {
+                    json = jsonPath,
+                    lua  = luaPath,
+                    data = dataDir,
+                }
+            end
+        -- END 12b. Visual Macro Compiler (ms.compiler) --
 
         -- 13. Safety Nets --
             do
@@ -2489,7 +3340,7 @@
                 local frozenMs = setmetatable({}, {
                     __index    = function(t, k)
                         if k == "integrity" or k == "dev" or k == "showGuardian" or k == "_systemActions"
-                       or k == "bus" or k == "docs" or k == "shell" then
+                       or k == "bus" or k == "docs" or k == "shell" or k == "compiler" then
                             error("ms_macros.lua: ms." .. k .. " is not accessible from macros.", 2)
                         end
                         if k == "key" then

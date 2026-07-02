@@ -844,6 +844,30 @@
         return panel, uc, { x = x, y = y, w = w, h = h }
     end
 
+    local function _setupDevPanelTheme(panel, timerKey, onReady)
+        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
+        if ms and ms.theme and ms.theme.onChanged then
+            ms.theme.onChanged(function()
+                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
+            end)
+        end
+
+        panel:navigationCallback(function(_, action)
+            if action == "navigating" then return end
+
+            _devFadeTimers[timerKey] = hs.timer.doAfter(0, function()
+                _devFadeTimers[timerKey] = nil
+                local tj = _devThemeJS()
+
+                if tj ~= "" then
+                    pcall(function() panel:evaluateJavaScript(tj) end)
+                end
+            end)
+
+            if onReady then onReady() end
+        end)
+    end
+
     local function _devFadeIn(panel, key)
         if _devFadeTimers[key] then
             _devFadeTimers[key]:stop()
@@ -949,7 +973,9 @@
 
 -- Console Panel --
     function MsDevTools:_buildConsolePanel()
-        local ucCon = hs.webview.usercontent.new("msConsole")
+        local panel, ucCon, pos = _makeDevPanel("msConsole", 360, 480, 20, 20)
+
+        if not panel then return nil end
 
         ucCon:setCallback(function(msg)
             local ok, data = pcall(hs.json.decode, msg.body)
@@ -1020,45 +1046,8 @@
             end
         end)
 
-        local screen = hs.screen.mainScreen():frame()
-        local w, h   = 360, 480
-        local x      = screen.x + screen.w - w - 20
-        local y      = screen.y + 20
-
-        local panel = hs.webview.new(
-            { x = x, y = y, w = w, h = h },
-            { developerExtrasEnabled = true },
-            ucCon
-        )
-
-        if not panel then return nil end
-
-        pcall(function() panel:windowStyle(0) end)
-        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-        pcall(function() panel:allowTextEntry(true) end)
-        pcall(function() panel:shadow(true) end)
-
-        _consolePanelPos = { x = x, y = y, w = w, h = h }
-        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
-        if ms and ms.theme and ms.theme.onChanged then
-            ms.theme.onChanged(function()
-                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
-            end)
-        end
-
-        panel:navigationCallback(function(_, action)
-            if action == "navigating" then return end
-
-            _devFadeTimers["_themeConsole"] = hs.timer.doAfter(0, function()
-                _devFadeTimers["_themeConsole"] = nil
-                local tj = _devThemeJS()
-
-                if tj ~= "" then
-                    pcall(function() panel:evaluateJavaScript(tj) end)
-                end
-            end)
-        end)
+        _consolePanelPos = pos
+        _setupDevPanelTheme(panel, "_themeConsole")
 
         if _htmlCache["console"] then
             panel:html(_htmlCache["console"], _devBase)
@@ -1121,7 +1110,9 @@
 
 -- Watcher Panel --
     function MsDevTools:_buildWatcherPanel()
-        local ucWatcher = hs.webview.usercontent.new("msWatcher")
+        local panel, ucWatcher, pos = _makeDevPanel("msWatcher", 360, 480, 50, 44)
+
+        if not panel then return nil end
 
         ucWatcher:setCallback(function(msg)
             local ok, data = pcall(hs.json.decode, msg.body)
@@ -1153,45 +1144,8 @@
             end
         end)
 
-        local screen = hs.screen.mainScreen():frame()
-        local w, h   = 360, 480
-        local x      = screen.x + screen.w - w - 50
-        local y      = screen.y + 44
-
-        local panel = hs.webview.new(
-            { x = x, y = y, w = w, h = h },
-            { developerExtrasEnabled = true },
-            ucWatcher
-        )
-
-        if not panel then return nil end
-
-        pcall(function() panel:windowStyle(0) end)
-        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-        pcall(function() panel:allowTextEntry(true) end)
-        pcall(function() panel:shadow(true) end)
-
-        _watcherPanelPos = { x = x, y = y, w = w, h = h }
-        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
-        if ms and ms.theme and ms.theme.onChanged then
-            ms.theme.onChanged(function()
-                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
-            end)
-        end
-
-        panel:navigationCallback(function(_, action)
-            if action == "navigating" then return end
-
-            _devFadeTimers["_themeWatcher"] = hs.timer.doAfter(0, function()
-                _devFadeTimers["_themeWatcher"] = nil
-                local tj = _devThemeJS()
-
-                if tj ~= "" then
-                    pcall(function() panel:evaluateJavaScript(tj) end)
-                end
-            end)
-        end)
+        _watcherPanelPos = pos
+        _setupDevPanelTheme(panel, "_themeWatcher")
 
         if _htmlCache["watcher"] then
             panel:html(_htmlCache["watcher"], _devBase)
@@ -1254,7 +1208,9 @@
 
 -- Keys Panel --
     function MsDevTools:_buildKeysPanel()
-        local ucKeys = hs.webview.usercontent.new("msKeys")
+        local panel, ucKeys, pos = _makeDevPanel("msKeys", 360, 480, 80, 68)
+
+        if not panel then return nil end
 
         ucKeys:setCallback(function(msg)
             local ok, data = pcall(hs.json.decode, msg.body)
@@ -1306,48 +1262,12 @@
             end
         end)
 
-        local screen = hs.screen.mainScreen():frame()
-        local w, h   = 360, 480
-        local x      = screen.x + screen.w - w - 80
-        local y      = screen.y + 68
-
-        local panel = hs.webview.new(
-            { x = x, y = y, w = w, h = h },
-            { developerExtrasEnabled = true },
-            ucKeys
-        )
-
-        if not panel then return nil end
-
-        pcall(function() panel:windowStyle(0) end)
-        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-        pcall(function() panel:allowTextEntry(true) end)
-        pcall(function() panel:shadow(true) end)
-
         if not _htmlCache["keys"] then return nil end
-        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
-        if ms and ms.theme and ms.theme.onChanged then
-            ms.theme.onChanged(function()
-                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
-            end)
-        end
 
-        _keysPanelPos = { x = x, y = y, w = w, h = h }
+        _keysPanelPos = pos
         _keysReady    = false
 
-        panel:navigationCallback(function(_, action)
-            if action == "navigating" then return end
-
-            _devFadeTimers["_themeKeys"] = hs.timer.doAfter(0, function()
-                _devFadeTimers["_themeKeys"] = nil
-                local tj = _devThemeJS()
-
-                if tj ~= "" then
-                    pcall(function() panel:evaluateJavaScript(tj) end)
-                end
-            end)
-
+        local function keysOnReady()
             if not _keysReady then
                 _keysReady = true
 
@@ -1358,7 +1278,9 @@
                     y = math.floor(_p.y),
                 }
             end
-        end)
+        end
+
+        _setupDevPanelTheme(panel, "_themeKeys", keysOnReady)
 
         panel:html(_htmlCache["keys"], _devBase)
 
@@ -1471,7 +1393,9 @@
     end
 
     function MsDevTools:_buildWindowPanel()
-        local ucWindow = hs.webview.usercontent.new("msWindow")
+        local panel, ucWindow, pos = _makeDevPanel("msWindow", 360, 480, 110, 68)
+
+        if not panel then return nil end
 
         ucWindow:setCallback(function(msg)
             local ok, data = pcall(hs.json.decode, msg.body)
@@ -1497,45 +1421,8 @@
             end
         end)
 
-        local screen = hs.screen.mainScreen():frame()
-        local w, h   = 360, 480
-        local x      = screen.x + screen.w - w - 110
-        local y      = screen.y + 68
-
-        local panel = hs.webview.new(
-            { x = x, y = y, w = w, h = h },
-            { developerExtrasEnabled = true },
-            ucWindow
-        )
-
-        if not panel then return nil end
-
-        pcall(function() panel:windowStyle(0) end)
-        pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-        pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-        pcall(function() panel:allowTextEntry(true) end)
-        pcall(function() panel:shadow(true) end)
-
-        _windowPanelPos = { x = x, y = y, w = w, h = h }
-        if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
-        if ms and ms.theme and ms.theme.onChanged then
-            ms.theme.onChanged(function()
-                if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
-            end)
-        end
-
-        panel:navigationCallback(function(_, action)
-            if action == "navigating" then return end
-
-            _devFadeTimers["_themeWindow"] = hs.timer.doAfter(0, function()
-                _devFadeTimers["_themeWindow"] = nil
-                local tj = _devThemeJS()
-
-                if tj ~= "" then
-                    pcall(function() panel:evaluateJavaScript(tj) end)
-                end
-            end)
-        end)
+        _windowPanelPos = pos
+        _setupDevPanelTheme(panel, "_themeWindow")
 
         if _htmlCache["window"] then
             panel:html(_htmlCache["window"], _devBase)
