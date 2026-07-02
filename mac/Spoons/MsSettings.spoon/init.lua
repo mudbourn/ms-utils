@@ -2288,6 +2288,10 @@
                             ms.integrity.writeTrustedHash(newCoreHash)
                         end
                         ms.integrity.invalidateCache()
+                        -- Copy per-file manifest from bundle if present
+                        local _fmSrc = tmpExtract .. "mudscript-*/data/.ms_file_manifest.json"
+                        local _fmDst = os.getenv("HOME") .. "/.hammerspoon/data/.ms_file_manifest.json"
+                        os.execute("cp " .. _fmSrc .. " '" .. _fmDst .. "' 2>/dev/null")
                         local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
                         if _mf then
                             _mf:write(hs.json.encode({
@@ -2358,6 +2362,10 @@
                         ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                         ms.integrity.writeTrustedHash(actualHash)
                         ms.integrity.invalidateCache()
+                        -- Copy per-file manifest from bundle if present
+                        local _fmSrc = tmpExtract .. "mudscript-*/data/.ms_file_manifest.json"
+                        local _fmDst = os.getenv("HOME") .. "/.hammerspoon/data/.ms_file_manifest.json"
+                        os.execute("cp " .. _fmSrc .. " '" .. _fmDst .. "' 2>/dev/null")
                         local _mf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "w")
                         if _mf then
                             _mf:write(hs.json.encode({
