@@ -513,9 +513,10 @@ YQIDAQAB
                     local fm = _readFileManifest()
                     local tracked = fm and fm.files or {}
                     local files = _trackedFiles()
-                    local newFM = { version = "", generated = os.date("!%Y-%m-%dT%H:%M:%SZ"), files = {} }
+                    local newFM = { version = "", generated = os.date("!%Y-%m-%dT%H:%M:%SZ"), files = {}, signature = "" }
 
                     if fm and fm.version then newFM.version = fm.version end
+                    if fm and fm.signature then newFM.signature = fm.signature end
 
                     -- Hash all files from per-file manifest scope
                     for relPath, _ in pairs(tracked) do
@@ -535,14 +536,6 @@ YQIDAQAB
                         end
                     end
 
-                    -- Write unsigned per-file manifest
-                    local okFM, jsonFM = pcall(hs.json.encode, newFM)
-                    if okFM then
-                        local _fmPath = _home .. "/.hammerspoon/data/.ms_file_manifest.json"
-                        local _wfm = io.open(_fmPath, "w")
-                        if _wfm then _wfm:write(jsonFM .. "\n"); _wfm:close() end
-                    end
-
                     -- Write old trusted hash for backward compat
                     local okOld, jsonOld = pcall(hs.json.encode, oldManifest)
                     if okOld then
@@ -551,7 +544,7 @@ YQIDAQAB
                     end
 
                     _manifestOk = true
-                    print("Guardian: per-file mismatch but signed MANIFEST.json confirms update — auto-seeded both manifests.")
+                    print("Guardian: per-file mismatch but signed MANIFEST.json confirms update — auto-seeded trusted manifest.")
                 end
             end
         end
