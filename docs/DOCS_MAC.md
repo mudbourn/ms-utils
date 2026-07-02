@@ -284,6 +284,25 @@ ms.copy("/spawn l")
 ms.type("v", {"cmd"})   -- paste
 ```
 
+### `ms.toggle(key [, mods])`
+
+Toggles a key: if the key is currently held, releases it; if not held, presses it. Useful for toggle-style actions (e.g. crouch toggle).
+
+```lua
+ms.toggle("c")          -- toggle crouch
+ms.toggle("shift")      -- toggle sprint
+```
+
+### `ms.multiPress(keys [, delayMs [, mods [, hidinject]]])`
+
+Presses a sequence of keys in order, with an optional delay between each press. Useful for combo sequences or rapid-fire inputs.
+
+```lua
+ms.multiPress({"e", "e", "q"})           -- press E, E, Q
+ms.multiPress({"1", "2", "3"}, 50)       -- press 1, 2, 3 with 50ms gaps
+ms.multiPress({"a", "b"}, 100, {"shift"}) -- Shift+A, Shift+B
+```
+
 ---
 
 ## 6. Mouse Actions
@@ -397,6 +416,41 @@ local ax, ay = ms.resolvePoint(900, 660, WindowTL)
 local ax, ay = ms.resolvePoint(445, 37,  WindowTL, true)   -- unscaled
 ```
 
+### `ms.moveMouse(x, y, ref [, durationMs])`
+
+Moves the mouse cursor to the target position with smooth interpolation. The movement uses an ease-out curve for natural-looking motion.
+
+```lua
+ms.moveMouse(900, 540, "Absolute")           -- move to screen position, 200ms default
+ms.moveMouse(900, 540, "WindowTL", 500)      -- move relative to window, 500ms duration
+ms.moveMouse(840, 104, "Absolute", 100)      -- fast move (100ms)
+```
+
+Returns a timer object that can be cancelled with `timer:stop()`.
+
+### `ms.dragPath(points, button [, ref [, delayMs]])`
+
+Drags the mouse through a sequence of points. Presses at the first point, drags through each subsequent point, then releases.
+
+```lua
+-- Drag from (100,100) to (200,200) to (300,100)
+ms.dragPath({{100,100}, {200,200}, {300,100}}, "Left", "Absolute")
+
+-- Right-button drag with 20ms delay between points
+ms.dragPath({{500,300}, {600,400}}, "Right", "WindowTL", 20)
+```
+
+### `ms.saveCursor()` / `ms.restoreCursor()`
+
+Save and restore the mouse cursor position. Useful for macros that need to move the mouse and then return it to its original position.
+
+```lua
+ms.saveCursor()              -- remember current position
+ms.Mouse(Click, Left, WindowTL, 900, 540)  -- click somewhere
+ms.wait(100)
+ms.restoreCursor()           -- move cursor back
+```
+
 ---
 
 ## 7. Camera Engine — `ms.cam`
@@ -460,6 +514,41 @@ Must be called from a coroutine context (i.e. inside an `ms.fn`-wrapped function
 
 > **Macro Monitor integration.** When the Macro Monitor panel is open, every `ms.wait` call produces a dim step trace entry in the log regardless of duration — there is no minimum threshold. See **Section 24** for the full list of functions that generate step traces.
 
+### `ms.randWait(min, max)`
+
+Waits a random duration between `min` and `max` milliseconds. Useful for adding human-like variation to macro timing.
+
+```lua
+ms.randWait(50, 150)   -- wait between 50 and 150 ms
+ms.randWait(100, 300)  -- wait between 100 and 300 ms
+```
+
+### `ms.jitter(base, jitterMs)`
+
+Waits `base` milliseconds plus or minus a random offset of `jitterMs`. More predictable than `randWait` while still adding variation.
+
+```lua
+ms.jitter(100, 20)   -- wait 80–120 ms (100 ± 20)
+ms.jitter(500, 50)   -- wait 450–550 ms (500 ± 50)
+```
+
+### `ms.waitApp(appName [, timeout])`
+
+Waits until the named application is running. Returns `true` if found, `false` on timeout (default 10 seconds).
+
+```lua
+local found = ms.waitApp("Roblox", 5000)
+if found then ms.alert("Roblox launched!") end
+```
+
+### `ms.waitNotApp(appName [, timeout])`
+
+Waits until the named application is no longer running. Returns `true` if the app exits, `false` on timeout.
+
+```lua
+ms.waitNotApp("Roblox")  -- wait for Roblox to close
+```
+
 ---
 
 ## 9. State Queries
@@ -488,6 +577,47 @@ Returns the name of the frontmost application.
 
 ```lua
 if string.find(ms.app(), "Roblox") then ... end
+```
+
+### `ms.appRunning(appName)`
+
+Returns `true` if the named application is currently running.
+
+```lua
+if ms.appRunning("Roblox") then
+    ms.alert("Roblox is running")
+end
+```
+
+### `ms.appIsFront(appName)`
+
+Returns `true` if the named application is the frontmost (active) application.
+
+```lua
+if ms.appIsFront("Roblox") then
+    ms.type("e")  -- only type when Roblox is focused
+end
+```
+
+### `ms.focus(appName)`
+
+Activates (brings to front) the named application. Returns `true` on success, `false` if the app is not running.
+
+```lua
+ms.focus("Roblox")       -- switch to Roblox
+ms.focus("Hammerspoon")  -- switch to Hammerspoon
+```
+
+### `ms.windowPos(appName)`
+
+Returns the window position of the named application as `{x, y, w, h}`, or `nil` if the app is not running or has no window.
+
+```lua
+local pos = ms.windowPos("Roblox")
+if pos then
+    print("Window at " .. pos.x .. ", " .. pos.y)
+    print("Size: " .. pos.w .. " x " .. pos.h)
+end
 ```
 
 ---
@@ -590,6 +720,25 @@ end
 if ms.pixelMatch(445, 37, WindowTL, 12, 200, 64, 5) then
     -- ...
 end
+```
+
+### `ms.waitPixel(x, y, ref, r, g, b [, tolerance [, timeout]])`
+
+Waits until a pixel matches the expected color. Polls every 50ms. Returns `true` when matched, `false` on timeout (default 5 seconds).
+
+```lua
+-- Wait for a button to appear (green pixel at known position)
+local found = ms.waitPixel(900, 540, WindowTL, 0, 255, 0, 10, 3000)
+if found then ms.type("e") end
+```
+
+### `ms.waitNotPixel(x, y, ref, r, g, b [, tolerance [, timeout]])`
+
+Waits until a pixel does NOT match the expected color. Inverse of `waitPixel`. Returns `true` when the pixel changes, `false` on timeout.
+
+```lua
+-- Wait for a loading screen to disappear (white pixel turns dark)
+ms.waitNotPixel(960, 540, "Absolute", 255, 255, 255, 10, 10000)
 ```
 
 ---
@@ -774,6 +923,61 @@ ms.playSlot("hover")    -- plays the menu hover sound
 | `back` | Left arrow closes a submenu |
 | `settingsOpen` | The settings panel or a developer panel opens |
 | `settingsClose` | The settings panel or a developer panel closes |
+
+### `ms.setVolume(level)`
+
+Sets the system output volume (0–100).
+
+```lua
+ms.setVolume(50)   -- set to 50%
+ms.setVolume(0)    -- mute (by setting volume to 0)
+```
+
+### `ms.mute()` / `ms.unmute()`
+
+Mute or unmute the system audio output.
+
+```lua
+ms.mute()          -- mute
+ms.wait(1000)
+ms.unmute()        -- unmute
+```
+
+---
+
+## 13. Utilities
+
+### `ms.screenshot([path])`
+
+Takes a screenshot of the main screen and saves it to a file. Returns the file path, or `nil` on failure.
+
+```lua
+local path = ms.screenshot()                          -- save to Desktop with timestamp
+local path = ms.screenshot("~/Desktop/test.png")      -- save to specific path
+```
+
+### `ms.clipChanged(callback)`
+
+Watches for clipboard changes and calls the callback when the clipboard content changes. Returns a watcher object that can be stopped with `watcher:stop()`.
+
+```lua
+local watcher = ms.clipChanged(function()
+    local content = hs.pasteboard.getContents()
+    print("Clipboard changed: " .. tostring(content))
+end)
+
+-- Later, stop watching:
+watcher:stop()
+```
+
+### `ms.notify(title [, subTitle [, infoText]])`
+
+Shows a native macOS notification. Unlike `ms.alert` (which is a toast overlay), this uses the system notification center.
+
+```lua
+ms.notify("mudscript", "Macros enabled", "Ready to go")
+ms.notify("Update available", "", "v1.4.0 is ready to install")
+```
 
 ---
 

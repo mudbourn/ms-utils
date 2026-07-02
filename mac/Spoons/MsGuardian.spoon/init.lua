@@ -76,6 +76,8 @@ YQIDAQAB
     -- Discover all spoon init files
     local function _trackedFiles()
         local files = { _corePath }
+
+        -- Spoons: Spoons/*/init.lua
         local spoonDir = _home .. "/.hammerspoon/Spoons/"
         local ok, iter, dir_obj = pcall(hs.fs.dir, spoonDir)
         if ok and iter then
@@ -89,6 +91,31 @@ YQIDAQAB
             end
             dir_obj:close()
         end
+
+        -- UI: ui/*.html
+        local uiDir = _home .. "/.hammerspoon/ui/"
+        local ok2, iter2, dir2 = pcall(hs.fs.dir, uiDir)
+        if ok2 and iter2 then
+            for entry in iter2, dir2 do
+                if entry:match("%.html$") then
+                    files[#files + 1] = uiDir .. entry
+                end
+            end
+            dir2:close()
+        end
+
+        -- Bin: bin/*.sh
+        local binDir = _home .. "/.hammerspoon/bin/"
+        local ok3, iter3, dir3 = pcall(hs.fs.dir, binDir)
+        if ok3 and iter3 then
+            for entry in iter3, dir3 do
+                if entry:match("%.sh$") then
+                    files[#files + 1] = binDir .. entry
+                end
+            end
+            dir3:close()
+        end
+
         table.sort(files)
         return files
     end
