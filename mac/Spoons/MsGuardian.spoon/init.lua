@@ -174,10 +174,21 @@ YQIDAQAB
             return false
         end
 
-        -- Build minified JSON of just {version, generated, files} matching what CI signs
+        -- Build minified JSON of just {version, generated, files} matching what CI signs.
+        -- MUST use jq -c -S to guarantee sorted keys (matching CI's jq -c output).
+        -- hs.json.encode does not sort keys and would produce a different payload.
         local signPayload = { version = fm.version, generated = fm.generated, files = fm.files }
-        local okEncode, minified = pcall(hs.json.encode, signPayload)
-        if not okEncode or not minified then return false end
+        local okEncode, unsorted = pcall(hs.json.encode, signPayload)
+        if not okEncode or not unsorted then return false end
+
+        local _sortTmp = _dataPath .. "_guardian_sort_tmp.json"
+        local _stf = io.open(_sortTmp, "w")
+        if _stf then _stf:write(unsorted); _stf:close() end
+        local sortedOut = hs.execute("jq -c -S '.' '" .. _sortTmp .. "' 2>/dev/null")
+        os.remove(_sortTmp)
+        local minified = sortedOut and sortedOut ~= "" and sortedOut:sub(-1) == "\n"
+            and sortedOut:sub(1, -2) or sortedOut
+        if not minified or minified == "" then return false end
 
         local _keyPath = _dataPath .. "_guardian_pub.pem"
         local _sigPath = _dataPath .. "_guardian_sig.bin"
