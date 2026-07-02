@@ -204,16 +204,9 @@ YQIDAQAB
         hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
         os.remove(_sigPath .. ".b64")
 
-        -- SHA-256 hash the minified JSON
-        local hashOut = hs.execute("printf '%s' '" .. minified:gsub("'", "'\\''") .. "' | shasum -a 256 2>/dev/null")
-        local contentHash = hashOut and hashOut:sub(1, 64):lower() or nil
-        if not contentHash then
-            os.remove(_keyPath); os.remove(_sigPath)
-            return false
-        end
-
+        -- Write the minified JSON as the message (CI signs the JSON directly, not a hash)
         local _mf = io.open(_msgPath, "w")
-        if _mf then _mf:write(contentHash); _mf:close() end
+        if _mf then _mf:write(minified); _mf:close() end
 
         local _out, _ok = hs.execute(
             "openssl dgst -sha256 -verify '" .. _keyPath ..
