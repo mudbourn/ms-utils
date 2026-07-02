@@ -1020,11 +1020,14 @@
         window.shellDispatch = function(panel, action, body) {
             /* Route inbound Lua pushes to the correct panel slot. */
             var slot = document.getElementById("slot-" + panel);
+            console.log("[shellDispatch] panel=" + panel + " action=" + action + " slot=" + !!slot);
             if (!slot) return;
 
             // Try iframe-internal handler first (panels mounted via PanelManager.mount)
             var iframe = slot.querySelector("iframe");
-            if (iframe && iframe.contentWindow && iframe.contentWindow._panelHandler) {
+            var hasHandler = iframe && iframe.contentWindow && iframe.contentWindow._panelHandler;
+            console.log("[shellDispatch] iframe=" + !!iframe + " handler=" + !!hasHandler);
+            if (hasHandler) {
                 try { iframe.contentWindow._panelHandler(action, body); } catch (e) {
                     console.error("[shell] iframe panel handler error:", panel, action, e);
                 }
