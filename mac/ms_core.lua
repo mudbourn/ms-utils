@@ -2499,11 +2499,27 @@
                 ms.bus.emit = function(topic, payload)
                     assert(type(topic) == "string", "ms.bus.emit: topic must be a string")
                     local subs = _busSubs[topic]
-                    if not subs then return end
-                    for fn, _ in pairs(subs) do
-                        local ok, err = pcall(fn, payload)
-                        if not ok then
-                            print("ms.bus handler error [" .. topic .. "]: " .. tostring(err))
+                    if subs then
+                        for fn, _ in pairs(subs) do
+                            local ok, err = pcall(fn, topic, payload)
+                            if not ok then
+                                print("ms.bus handler error [" .. topic .. "]: " .. tostring(err))
+                            end
+                        end
+                    end
+                    -- Wildcard subscribers: "ui:setSettings:*" matches "ui:setSettings:ready"
+                    for pattern, fns in pairs(_busSubs) do
+                        local starPos = pattern:find("%*$")
+                        if starPos then
+                            local prefix = pattern:sub(1, starPos - 1)
+                            if topic:sub(1, #prefix) == prefix then
+                                for fn, _ in pairs(fns) do
+                                    local ok, err = pcall(fn, topic, payload)
+                                    if not ok then
+                                        print("ms.bus handler error [" .. pattern .. "]: " .. tostring(err))
+                                    end
+                                end
+                            end
                         end
                     end
                 end
@@ -2779,6 +2795,16 @@
                 -- Mount a registered panel into the shell content area.
                 -- Loads the panel's HTML into an iframe inside its slot.
                 ms.shell.mountPanel = function(id)
+                    -- Auto-register built-in panels if not explicitly registered
+                    if not _panelRegistry[id] and _builtinPanels[id] then
+                        _panelRegistry[id] = {
+                            id = id,
+                            title = id,
+                            icon = "▪",
+                            htmlPath = _builtinPanels[id],
+                        }
+                    end
+
                     local cfg = _panelRegistry[id]
                     if not cfg then
                         print("ms.shell.mountPanel: unknown panel '" .. tostring(id) .. "'")

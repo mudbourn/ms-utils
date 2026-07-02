@@ -1165,11 +1165,28 @@
             // ── Bridge ─────────────────────────────────────────────────────────
             function sendToHost(msg) {
                 const s = typeof msg === "string" ? msg : JSON.stringify(msg);
-                if (window.chrome?.webview) {
+                if (window.shellPost) {
+                    // Running inside the Macro Lab shell — route through msShell channel
+                    const data = typeof msg === "string" ? JSON.parse(msg) : msg;
+                    window.shellPost("settings", data.action || "unknown", data);
+                } else if (window.chrome?.webview) {
                     window.chrome.webview.postMessage(s);
                 } else {
                     window.webkit.messageHandlers.ms.postMessage(s);
                 }
+            }
+
+            // ── Shell integration ─────────────────────────────────────────────
+            // When loaded inside the shell, register as a panel so shellDispatch
+            // can route incoming Lua pushes (state, theme) to receiveState().
+            if (window.registerPanel) {
+                window.registerPanel("settings", function(action, body) {
+                    if (action === "state" && body) {
+                        receiveState(body);
+                    } else if (action === "theme" && body) {
+                        applyTheme(body);
+                    }
+                });
             }
 
             // ── Window drag ────────────────────────────────────────────────────

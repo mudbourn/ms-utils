@@ -371,12 +371,20 @@
         ms.ui.markDirty = function() _uiStateDirty = true end
 
         ms.ui.refresh = function()
-            if not ms.ui._panel then return end
             if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
             if _uiStateJSON then
-                pcall(function()
-                    ms.ui._panel:evaluateJavaScript(_uiStateJSON)
-                end)
+                -- Push to standalone panel if open
+                if ms.ui._panel then
+                    pcall(function()
+                        ms.ui._panel:evaluateJavaScript(_uiStateJSON)
+                    end)
+                end
+                -- Push to shell if active
+                if ms.shell and ms.shell.isReady and ms.shell.isReady() then
+                    pcall(function()
+                        ms.shell.eval("shellDispatch('settings', 'state', " .. (_uiStateJSON:match("^receiveState%((.*)%);$") or "null") .. ")")
+                    end)
+                end
             end
         end
 
@@ -1637,6 +1645,19 @@
                 print("ms.ui: action '" .. data.action .. "' error: " .. tostring(err))
             end
         end)
+
+        -- Shell integration: route bus messages to the same action handlers
+        if ms.bus then
+            ms.bus.on("ui:setSettings:*", function(topic, body)
+                if not body or type(body) ~= "table" then return end
+                local action = body.action
+                if not action then return end
+                local handler = ms.ui._actions[action]
+                if handler then
+                    pcall(handler, body)
+                end
+            end)
+        end
 
         local function _panelFrame()
             local screen = hs.screen.mainScreen():frame()
