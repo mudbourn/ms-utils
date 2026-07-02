@@ -1257,6 +1257,7 @@
             var bridgeScript = '<script>\n' +
                 '/* Shell iframe bridge */\n' +
                 '(function() {\n' +
+                '  var _panelId = ' + JSON.stringify(panelId) + ';\n' +
                 '  /* shellPost — route messages to parent shell */\n' +
                 '  window.shellPost = function(panel, action, body) {\n' +
                 '    var msg = { panel: panel, action: action, body: body || null };\n' +
@@ -1275,13 +1276,14 @@
                 '  window.webkit.messageHandlers.ms = {\n' +
                 '    postMessage: function(data) {\n' +
                 '      var msg = (typeof data === "string") ? JSON.parse(data) : data;\n' +
-                '      msg.panel = ' + JSON.stringify(panelId) + ';\n' +
+                '      msg.panel = _panelId;\n' +
                 '      if (window.parent && window.parent._panelBridge) {\n' +
                 '        window.parent._panelBridge(msg);\n' +
                 '      }\n' +
                 '    }\n' +
                 '  };\n' +
                 '  window.webkit.messageHandlers.msShell = window.webkit.messageHandlers.ms;\n' +
+                '  window.shellPost(_panelId, "_bridgeReady", { ok: true });\n' +
                 '})();\n' +
                 '<\/script>\n';
 
