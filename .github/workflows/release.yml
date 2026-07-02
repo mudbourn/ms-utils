@@ -309,10 +309,14 @@ jobs:
           # Update existing release or create new one — never delete first
           if gh release view "$TAG" --json name &>/dev/null; then
             echo "Release $TAG already exists — updating assets..."
+            # Determine pre-release flag
+            EDIT_PRERELEASE=""
+            if [[ "$VERSION" == *-* ]]; then EDIT_PRERELEASE="--prerelease"; fi
+            # shellcheck disable=SC2086
             gh release edit "$TAG" \
               --title "mudscript v${VERSION}" \
               --notes-file release-notes.md \
-              --prerelease="${VERSION%%-*}" != "$VERSION" && echo "pre" || echo "" \
+              $EDIT_PRERELEASE \
               2>/dev/null || true
             # Upload new assets (gh release upload is idempotent for same filenames)
             for asset in $ASSETS; do
