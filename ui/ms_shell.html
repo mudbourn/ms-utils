@@ -1018,10 +1018,21 @@
 
         /* ── Message Dispatch (Lua → JS) ───────────────────────────── */
         window.shellDispatch = function(panel, action, body) {
-            /* Route inbound Lua pushes to the correct panel slot.
-               Phase 2 will wire this to actual panel modules. */
+            /* Route inbound Lua pushes to the correct panel slot. */
             var slot = document.getElementById("slot-" + panel);
-            if (slot && slot._handler) {
+            if (!slot) return;
+
+            // Try iframe-internal handler first (panels mounted via PanelManager.mount)
+            var iframe = slot.querySelector("iframe");
+            if (iframe && iframe.contentWindow && iframe.contentWindow._panelHandler) {
+                try { iframe.contentWindow._panelHandler(action, body); } catch (e) {
+                    console.error("[shell] iframe panel handler error:", panel, action, e);
+                }
+                return;
+            }
+
+            // Fall back to slot-level handler (inline panels)
+            if (slot._handler) {
                 try { slot._handler(action, body); } catch (e) {
                     console.error("[shell] panel handler error:", panel, action, e);
                 }
@@ -1242,19 +1253,35 @@
             iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
 
             // Inject communication bridge into the HTML
+            var panelId = id;
             var bridgeScript = '<script>\n' +
-                '/* Shell iframe bridge — provides webkit.messageHandlers shim */\n' +
+                '/* Shell iframe bridge */\n' +
                 '(function() {\n' +
-                '  if (window.webkit && window.webkit.messageHandlers) return;\n' +
-                '  window.webkit = { messageHandlers: { msShell: {\n' +
+                '  /* shellPost — route messages to parent shell */\n' +
+                '  window.shellPost = function(panel, action, body) {\n' +
+                '    var msg = { panel: panel, action: action, body: body || null };\n' +
+                '    if (window.parent && window.parent._panelBridge) {\n' +
+                '      window.parent._panelBridge(msg);\n' +
+                '    }\n' +
+                '  };\n' +
+                '  /* registerPanel — wire handler for incoming Lua pushes */\n' +
+                '  window.registerPanel = function(name, handler) {\n' +
+                '    window._panelHandler = handler;\n' +
+                '    window._panelName = name;\n' +
+                '  };\n' +
+                '  /* webkit.messageHandlers shim for standalone HTML panels */\n' +
+                '  if (!window.webkit) window.webkit = {};\n' +
+                '  if (!window.webkit.messageHandlers) window.webkit.messageHandlers = {};\n' +
+                '  window.webkit.messageHandlers.ms = {\n' +
                 '    postMessage: function(data) {\n' +
                 '      var msg = (typeof data === "string") ? JSON.parse(data) : data;\n' +
-                '      msg._panelId = ' + JSON.stringify(id) + ';\n' +
+                '      msg.panel = ' + JSON.stringify(panelId) + ';\n' +
                 '      if (window.parent && window.parent._panelBridge) {\n' +
                 '        window.parent._panelBridge(msg);\n' +
                 '      }\n' +
                 '    }\n' +
-                '  }} };\n' +
+                '  };\n' +
+                '  window.webkit.messageHandlers.msShell = window.webkit.messageHandlers.ms;\n' +
                 '})();\n' +
                 '<\/script>\n';
 
