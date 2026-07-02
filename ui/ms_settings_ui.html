@@ -2959,6 +2959,29 @@
                             ),
                         ),
                     );
+
+                    // GitHub token (only needed for artifacts)
+                    if (src === "artifact") {
+                        const token = S.githubToken || "";
+                        body.appendChild(
+                            row(
+                                "GitHub Token",
+                                token ? "••••••••" + token.slice(-4) : "Required for artifact downloads",
+                                h("input", {
+                                    type: "password",
+                                    cls: "input-sm",
+                                    placeholder: "ghp_...",
+                                    value: token,
+                                    onchange: (e) => {
+                                        sendToHost({
+                                            action: "setGithubToken",
+                                            value: e.target.value,
+                                        });
+                                    },
+                                }),
+                            ),
+                        );
+                    }
                 }
 
                 body.appendChild(divider());

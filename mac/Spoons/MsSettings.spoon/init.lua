@@ -2346,6 +2346,105 @@
         end
         -- END _fetchReleaseInfo --
 
+        -- _fetchArtifactInfo [GitHub Actions artifact helper] --
+        local function _fetchArtifactInfo(callback)
+            local repo = ms._testingRepo or "mudbourn/ms-utils"
+            local workflow = ms._testingWorkflow or "testing"
+            -- Load token from restricted file if not in memory
+            local token = ms._githubToken
+            if not token or token == "" then
+                local tokenPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_github_token"
+                local f = io.open(tokenPath, "r")
+                if f then token = f:read("*l"); f:close() end
+                if token and token ~= "" then ms._githubToken = token end
+            end
+            if not token or token == "" then
+                ms.dev.log({ type = "error", event = "artifact_fetch_failed", reason = "no_token" })
+                if callback then pcall(callback, nil) end
+                return
+            end
+
+            -- Step 1: Get latest completed workflow run
+            local runsURL = "https://api.github.com/repos/" .. repo
+                .. "/actions/workflows/" .. workflow .. ".yml/runs?per_page=1&status=completed"
+            local headers = {
+                ["Accept"] = "application/vnd.github+json",
+                ["Authorization"] = "Bearer " .. token,
+            }
+            hs.http.asyncGet(runsURL, headers, function(code, body, _)
+                if code ~= 200 or not body then
+                    ms.dev.log({ type = "error", event = "artifact_fetch_failed", reason = "runs_http", code = code })
+                    if callback then pcall(callback, nil) end
+                    return
+                end
+                local ok, data = pcall(hs.json.decode, body)
+                if not ok or not data or not data.workflow_runs or #data.workflow_runs == 0 then
+                    if callback then pcall(callback, nil) end
+                    return
+                end
+                local run = data.workflow_runs[1]
+                local runId = run.id
+                local runNumber = run.run_number
+
+                -- Step 2: Get artifacts for this run
+                local artURL = "https://api.github.com/repos/" .. repo
+                    .. "/actions/runs/" .. runId .. "/artifacts"
+                hs.http.asyncGet(artURL, headers, function(code2, body2, _)
+                    if code2 ~= 200 or not body2 then
+                        ms.dev.log({ type = "error", event = "artifact_fetch_failed", reason = "artifacts_http", code = code2 })
+                        if callback then pcall(callback, nil) end
+                        return
+                    end
+                    local ok2, artData = pcall(hs.json.decode, body2)
+                    if not ok2 or not artData or not artData.artifacts then
+                        if callback then pcall(callback, nil) end
+                        return
+                    end
+                    -- Find the macOS artifact (zip)
+                    for _, art in ipairs(artData.artifacts) do
+                        if art.name and art.name:match("macos") and art.name:match("%.zip$") then
+                            local downloadURL = "https://api.github.com/repos/" .. repo
+                                .. "/actions/artifacts/" .. art.id .. "/zip"
+                            ms.dev.log({
+                                type = "system",
+                                event = "artifact_found",
+                                name = art.name,
+                                run = runNumber,
+                            })
+                            if callback then
+                                pcall(callback, {
+                                    version = "pre." .. runNumber,
+                                    downloadUrl = downloadURL,
+                                    headers = headers,
+                                    format = "zip",
+                                })
+                            end
+                            return
+                        end
+                    end
+                    -- No macOS zip found, try any zip
+                    for _, art in ipairs(artData.artifacts) do
+                        if art.name and art.name:match("%.zip$") then
+                            local downloadURL = "https://api.github.com/repos/" .. repo
+                                .. "/actions/artifacts/" .. art.id .. "/zip"
+                            if callback then
+                                pcall(callback, {
+                                    version = "pre." .. runNumber,
+                                    downloadUrl = downloadURL,
+                                    headers = headers,
+                                    format = "zip",
+                                })
+                            end
+                            return
+                        end
+                    end
+                    ms.dev.log({ type = "error", event = "artifact_fetch_failed", reason = "no_artifact" })
+                    if callback then pcall(callback, nil) end
+                end)
+            end)
+        end
+        -- END _fetchArtifactInfo --
+
         -- Update [stable channel] --
         ms.integrity.update = function()
             ms.dev.log({
@@ -2476,16 +2575,29 @@
                 type    = "system",
                 event   = "update_start",
                 channel = "testing",
+                source  = ms._testingSource or "release",
             })
-            ms.alert("Checking for testing update\xe2\x80\xa6", 4, true)
-            _fetchReleaseInfo("testing", function(info)
+            ms.alert("Checking for testing update\\xe2\\x80\\xa6", 4, true)
+
+            local fetchFn = (ms._testingSource == "artifact") and _fetchArtifactInfo
+                or function(cb) _fetchReleaseInfo("testing", cb) end
+
+            fetchFn(function(info)
                 if not info then
                     ms.dev.log({
                         type   = "error",
                         event  = "update_failed",
-                        reason = "release_fetch",
+                        reason = (ms._testingSource == "artifact") and "artifact_fetch" or "release_fetch",
                     })
-                    ms.alert("Update failed: could not fetch testing release info.", 5)
+                    if ms._testingSource == "artifact" then
+                        if not ms._githubToken or ms._githubToken == "" then
+                            ms.alert("Update failed: no GitHub token configured.\\nSet one in Settings \\xe2\\x86\\x92 Developer.", 6)
+                        else
+                            ms.alert("Update failed: could not fetch artifact.\\nCheck your GitHub token has actions:read permission.", 6)
+                        end
+                    else
+                        ms.alert("Update failed: could not fetch testing release info.", 5)
+                    end
                     return
                 end
                 local newVersion = info.version
@@ -2512,7 +2624,7 @@
                     version = newVersion,
                     format  = "bundle",
                 })
-                hs.http.asyncGet(bundleURL, nil, function(fCode, fBody, _)
+                hs.http.asyncGet(bundleURL, info.headers or nil, function(fCode, fBody, _)
                     if fCode ~= 200 or not fBody then
                         ms.dev.log({
                             type    = "error",

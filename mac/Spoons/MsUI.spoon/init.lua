@@ -321,6 +321,12 @@
                 devArchiveLimit         = ms._devArchiveLimit or 15,
                 updateChannel           = ms._updateChannel or "stable",
                 testingSource           = ms._testingSource or "release",
+                githubToken             = (function()
+                    if ms._githubToken then return ms._githubToken end
+                    local f = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_github_token", "r")
+                    if f then local t = f:read("*l"); f:close(); if t then ms._githubToken = t; return t end end
+                    return ""
+                end)(),
                 qrOptions               = ms._qrOptions or {
                     macros   = true,
                     theme    = true,
@@ -625,6 +631,21 @@
                     ms.saveSettings()
                     ms.playSlot("update")
                 end
+                ms.ui.refresh()
+            end,
+
+            setGithubToken = function(data)
+                ms._githubToken = data.value or ""
+                -- Store in a restricted file (for project maintainers only)
+                local tokenPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_github_token"
+                if ms._githubToken ~= "" then
+                    local f = io.open(tokenPath, "w")
+                    if f then f:write(ms._githubToken); f:close() end
+                    os.execute("chmod 600 '" .. tokenPath .. "'")
+                else
+                    os.remove(tokenPath)
+                end
+                ms.playSlot("update")
                 ms.ui.refresh()
             end,
 
