@@ -436,6 +436,17 @@ YQIDAQAB
     if _fmResult == "ok" then
         -- Per-file manifest passed — all files verified via signed manifest
         print("Guardian: per-file manifest verified — all files intact.")
+        -- Also write the old trusted hash format so ms.integrity.check() sees "trusted"
+        pcall(function()
+            local fm = _readFileManifest()
+            if fm and fm.files then
+                local ok, json = pcall(hs.json.encode, fm.files)
+                if ok then
+                    local wf = io.open(_trustPath, "w")
+                    if wf then wf:write(json .. "\n"); wf:close() end
+                end
+            end
+        end)
 
     elseif _fmResult == "legacy" then
         -- No per-file manifest — fall back to old single-hash / JSON behavior
