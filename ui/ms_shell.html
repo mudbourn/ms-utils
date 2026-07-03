@@ -412,6 +412,10 @@
         .sound-opt:hover { background: var(--hover); color: var(--text); }
         .sound-opt.selected { color: var(--accent); }
         .sound-opt .check { font-size: 10px; width: 10px; text-align: center; }
+        .sound-filter-bar { display: flex; gap: 2px; padding: 4px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface2); z-index: 1; }
+        .sound-filter-btn { font-size: 10px; padding: 2px 6px; border-radius: var(--radius-s); background: transparent; color: var(--text3); cursor: pointer; border: none; transition: all 0.15s; }
+        .sound-filter-btn:hover { color: var(--text2); background: var(--hover); }
+        .sound-filter-btn.active { color: var(--accent); background: var(--surface3); }
 
         .divider { height: 1px; background: var(--border); margin: 4px 0; }
         .group-label { padding: 6px 12px 2px; font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -2990,42 +2994,71 @@ function createLogPanel(config) {
                 );
                 const list = h("div", { cls: "sound-list" });
 
-                const opts = [
-                    { name: "None", value: "" },
-                    ...soundNames.map((n) => ({ name: n, value: n })),
-                ];
-                for (const opt of opts) {
-                    const isSelected = opt.value === (assigned || "");
-                    const item = h(
-                        "div",
-                        { cls: "sound-opt" + (isSelected ? " selected" : "") },
-                        h("span", { cls: "check" }, isSelected ? "✓" : ""),
-                        opt.name,
-                    );
-                    item.addEventListener("mouseenter", () =>
-                        playSlot("hover"),
-                    );
-                    item.addEventListener("click", () => {
-                        playSlot("interact");
-                        sendToHost({
-                            action: "setSoundAssign",
-                            slot: slotId,
-                            name: opt.value,
-                        });
-                        if (list._scrollHandler) {
-                            document
-                                .getElementById("scroll")
-                                .removeEventListener(
-                                    "scroll",
-                                    list._scrollHandler,
-                                );
-                            list._scrollHandler = null;
-                        }
-                        list.classList.remove("open");
-                        _openSoundPicker = null;
-                    });
-                    list.appendChild(item);
+                // Filter state
+                let _filter = "all"; // "all" | "default" | "custom" | "macro"
+                const macroNames = new Set((S.macroSoundNames || []).map(n => n));
+                function categoryOf(name) {
+                    if (name.startsWith("d_")) return "default";
+                    if (macroNames.has(name)) return "macro";
+                    return "custom";
                 }
+
+                // Filter bar
+                const filterBar = h("div", { cls: "sound-filter-bar" });
+                const filters = [
+                    { key: "all", label: "All" },
+                    { key: "default", label: "Default" },
+                    { key: "custom", label: "Custom" },
+                    { key: "macro", label: "Macro" },
+                ];
+                function rebuildList() {
+                    // Remove existing items (keep filter bar)
+                    while (list.children.length > 1) list.removeChild(list.lastChild);
+                    const opts = [
+                        { name: "None", value: "" },
+                        ...soundNames
+                            .filter(n => _filter === "all" || categoryOf(n) === _filter)
+                            .map(n => ({ name: n, value: n })),
+                    ];
+                    for (const opt of opts) {
+                        const isSelected = opt.value === (assigned || "");
+                        const item = h(
+                            "div",
+                            { cls: "sound-opt" + (isSelected ? " selected" : "") },
+                            h("span", { cls: "check" }, isSelected ? "✓" : ""),
+                            opt.name,
+                        );
+                        item.addEventListener("mouseenter", () => playSlot("hover"));
+                        item.addEventListener("click", () => {
+                            playSlot("interact");
+                            sendToHost({ action: "setSoundAssign", slot: slotId, name: opt.value });
+                            if (list._scrollHandler) {
+                                document.getElementById("scroll").removeEventListener("scroll", list._scrollHandler);
+                                list._scrollHandler = null;
+                            }
+                            list.classList.remove("open");
+                            _openSoundPicker = null;
+                        });
+                        list.appendChild(item);
+                    }
+                }
+                for (const f of filters) {
+                    const fBtn = h("button", {
+                        cls: "seg-btn sound-filter-btn" + (_filter === f.key ? " active" : ""),
+                        onmouseenter: () => playSlot("hover"),
+                        onclick: (e) => {
+                            e.stopPropagation();
+                            playSlot("interact");
+                            _filter = f.key;
+                            for (const child of filterBar.children) child.classList.remove("active");
+                            fBtn.classList.add("active");
+                            rebuildList();
+                        },
+                    }, f.label);
+                    filterBar.appendChild(fBtn);
+                }
+                list.appendChild(filterBar);
+                rebuildList();
 
                 btn.addEventListener("click", (e) => {
                     e.stopPropagation();
@@ -3917,16 +3950,29 @@ function createLogPanel(config) {
                     { id: "launch", label: "Launch Announcement" },
                 ];
 
-                // ── Loading Sound Presets ─────────────────────────────────
+                // ── Sound Presets (all system slots) ──────────────────────────
                 const presets = S.soundPresets || [];
-                const presetSlotIds = LOAD_SLOTS.map(s => s.id);
+                const ALL_SLOTS = [...LOAD_SLOTS, ...SLOTS];
+                const presetSlotIds = ALL_SLOTS.map(s => s.id);
+
+                // d_* default mapping for all slots
+                const dMap = {
+                    themeLoaded: "d_ThemeLoaded", load: "d_LoadEnd", launch: "d_Launch",
+                    alert: "d_Alert", enabled: "d_MacrosOn", disabled: "d_MacrosOff",
+                    update: "d_Update", updateAvailable: "d_UpdateAvailable",
+                    reset: "d_Reset", interact: "d_Interact", hover: "d_Hover",
+                    back: "d_Back", settingsOpen: "d_SettingsOpen", settingsClose: "d_SettingsClose",
+                };
 
                 // Detect which preset is currently active (if any)
+                // Only checks slots that the preset actually defines
                 let activePreset = null;
                 const sa = S.soundAssign || {};
                 for (const p of presets) {
+                    const pSlots = Object.keys(p.assigns || {});
+                    if (pSlots.length === 0) continue;
                     let match = true;
-                    for (const sid of presetSlotIds) {
+                    for (const sid of pSlots) {
                         const expected = p.assigns[sid] || null;
                         const actual = sa[sid] || null;
                         if (expected !== actual) { match = false; break; }
@@ -3934,17 +3980,12 @@ function createLogPanel(config) {
                     if (match) { activePreset = String(p.num); break; }
                 }
 
-                body.appendChild(groupLabel("Loading Sounds"));
+                body.appendChild(groupLabel("Sound Presets"));
                 const presetWrap = h("div", { cls: "seg" });
                 // Default assigns (d_* sounds)
                 const defaultAssigns = {};
                 for (const sid of presetSlotIds) {
-                    const dSlot = LOAD_SLOTS.find(s => s.id === sid);
-                    if (dSlot) {
-                        // Map slot to its d_* default name
-                        const dMap = { themeLoaded: "d_ThemeLoaded", load: "d_LoadEnd", launch: "d_Launch" };
-                        if (dMap[sid]) defaultAssigns[sid] = dMap[sid];
-                    }
+                    if (dMap[sid]) defaultAssigns[sid] = dMap[sid];
                 }
                 // Check if current assignments match default
                 let isDefault = presetSlotIds.length > 0;

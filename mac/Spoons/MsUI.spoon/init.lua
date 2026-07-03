@@ -135,25 +135,43 @@
             for name in pairs(ms.sounds or {}) do table.insert(soundNames, name) end
             table.sort(soundNames)
 
-            -- Build loading sound presets from numbered variants.
-            -- Slots in the preset group: startup, themeLoaded, load, launch
-            -- Looks for base names (Launch, LoadEnd, etc.) and groups
-            -- numbered variants (Launch2, LoadEnd2, …) into presets.
+            local macroSoundNames = {}
+            for name in pairs(ms.macroSounds or {}) do table.insert(macroSoundNames, name) end
+            table.sort(macroSoundNames)
+
+            -- Build sound presets from numbered variants.
+            -- Looks for base names and groups numbered variants into presets.
+            -- Matches both d_* defaults and bare custom names:
+            --   d_Launch (default), d_Launch2 (default variant),
+            --   Launch2 (custom variant in sounds/active/)
+            -- Covers all 14 system sound slots.
             local presetSlots = {
-                { id = "themeLoaded", bases = { "d_ThemeLoaded", "d_Theme Loaded" } },
-                { id = "load",        bases = { "d_LoadEnd", "d_Load End" } },
-                { id = "launch",      bases = { "d_Launch" } },
+                { id = "themeLoaded",     bases = { "d_ThemeLoaded", "ThemeLoaded" } },
+                { id = "load",            bases = { "d_LoadEnd", "LoadEnd" } },
+                { id = "launch",          bases = { "d_Launch", "Launch" } },
+                { id = "alert",           bases = { "d_Alert", "Alert" } },
+                { id = "enabled",         bases = { "d_MacrosOn", "MacrosOn" } },
+                { id = "disabled",        bases = { "d_MacrosOff", "MacrosOff" } },
+                { id = "update",          bases = { "d_Update", "Update" } },
+                { id = "updateAvailable", bases = { "d_UpdateAvailable", "UpdateAvailable" } },
+                { id = "reset",           bases = { "d_Reset", "Reset" } },
+                { id = "interact",        bases = { "d_Interact", "Interact" } },
+                { id = "hover",           bases = { "d_Hover", "Hover" } },
+                { id = "back",            bases = { "d_Back", "Back" } },
+                { id = "settingsOpen",    bases = { "d_SettingsOpen", "SettingsOpen" } },
+                { id = "settingsClose",   bases = { "d_SettingsClose", "SettingsClose" } },
             }
             local presetMap = {}  -- presetNum → { slotId → soundName }
             for _, ps in ipairs(presetSlots) do
                 for _, base in ipairs(ps.bases) do
-                    -- Find all sounds starting with this base name
                     for sname in pairs(ms.sounds or {}) do
                         local num = sname:match("^" .. base .. "(%d*)$")
                         if num then
                             num = num == "" and "1" or num
                             presetMap[num] = presetMap[num] or {}
-                            presetMap[num][ps.id] = sname
+                            if not presetMap[num][ps.id] then
+                                presetMap[num][ps.id] = sname
+                            end
                         end
                     end
                 end
@@ -298,6 +316,7 @@
                 soundVolume             = ms.soundVolume or 100,
                 soundAssign             = ms.soundAssign or {},
                 soundNames              = soundNames,
+                macroSoundNames         = macroSoundNames,
                 soundPresets            = soundPresets,
                 currentProfile          = meta.name and ms.sanitizeName(meta.name) or "",
                 profiles                = ms.getProfiles(),
@@ -1695,6 +1714,28 @@
                         finish(nil, true)
                     end
                 end)
+            end,
+
+            setSoundPreset = function(data)
+                if not data.assigns or type(data.assigns) ~= "table" then return end
+                ms.soundAssign = ms.soundAssign or {}
+                for slotId, soundName in pairs(data.assigns) do
+                    ms.soundAssign[slotId] = soundName
+                end
+                ms.saveSettings()
+                ms.playSlot("interact")
+                ms.ui.refresh()
+            end,
+
+            clearSoundPreset = function(data)
+                if not data.slots or type(data.slots) ~= "table" then return end
+                ms.soundAssign = ms.soundAssign or {}
+                for _, slotId in ipairs(data.slots) do
+                    ms.soundAssign[slotId] = nil
+                end
+                ms.saveSettings()
+                ms.playSlot("interact")
+                ms.ui.refresh()
             end,
         }
 
