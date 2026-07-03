@@ -10,7 +10,7 @@ The primary use case is game macros: automating repetitive actions, building com
 
 ---
 
-## What it does
+## What it does (After 1.3.0 Release)
 
 - **Write macros in plain Lua** (or AHK on Windows) — no proprietary scripting language to learn
 - **Visual macro builder** — drag-and-drop steps, inline editors, test-run with one click
