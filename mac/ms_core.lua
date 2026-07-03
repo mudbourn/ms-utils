@@ -1120,9 +1120,6 @@
                     ev:setProperty(_camDy, dy)
                     local app = ms._targetHandle or hs.application.get(ms._targetApp)
                     if app then ev:post(app) else ev:post() end
-                    if ms.dev and ms.dev.log then
-                        ms.dev.log({ type = "cam", msg = "cam(" .. dx .. ", " .. dy .. ")", posted = app and "app" or "global" })
-                    end
                     if not _camRebalancing then
                         _camTotalX = _camTotalX + dx
                         _camTotalY = _camTotalY + dy
@@ -1131,19 +1128,27 @@
             })
             -- Suppress wait logging inside ms.cam calls (cam loops are noisy)
             local _origCamCall = getmetatable(ms.cam).__call
-            getmetatable(ms.cam).__call = function(self, dx, dy)
-                if ms.dev and spoon.MsDevTools then
-                    local saved = spoon.MsDevTools:getTraceSuppress()
-                    spoon.MsDevTools:setTraceSuppress(true)
-                    _origCamCall(self, dx, dy)
-                    spoon.MsDevTools:setTraceSuppress(saved)
-                    -- Accumulate cam move for flushing
-                    if ms.dev and spoon.MsDevTools.accCamMove then
-                        spoon.MsDevTools:accCamMove()
+            local _camAccum = 0
+            local _camFlushTimer = nil
+            local _camFlush = function()
+                if _camAccum > 0 then
+                    if ms.dev and ms.dev.log then
+                        ms.dev.log({ type = "step", category = "macro", msg = "cam.move \195\151" .. _camAccum })
                     end
-                else
-                    _origCamCall(self, dx, dy)
+                    _camAccum = 0
                 end
+                _camFlushTimer = nil
+            end
+            getmetatable(ms.cam).__call = function(self, dx, dy)
+                -- Suppress internal wait logging
+                local saved = ms.dev and spoon.MsDevTools and spoon.MsDevTools:getTraceSuppress()
+                if saved ~= nil then spoon.MsDevTools:setTraceSuppress(true) end
+                _origCamCall(self, dx, dy)
+                if saved ~= nil then spoon.MsDevTools:setTraceSuppress(saved) end
+                -- Accumulate and schedule flush
+                _camAccum = _camAccum + 1
+                if _camFlushTimer then _camFlushTimer:stop() end
+                _camFlushTimer = hs.timer.doAfter(0.02, _camFlush)
             end
 
             ms.cam.rebalance = function()
@@ -1433,18 +1438,54 @@
                 end
             end
 
-            ms.fn = function(fn, async)
+            -- Function call accumulator (tracks consecutive same-label calls)
+            ms._fnAccum = { lastLabel = nil, count = 0, startTime = 0, timer = nil }
+            local _fnFlush = function()
+                local a = ms._fnAccum
+                if a.count > 0 and a.lastLabel then
+                    local dur = math.floor((hs.timer.absoluteTime() - a.startTime) / 1e6)
+                    local msg = a.lastLabel
+                    if a.count > 1 then msg = msg .. " \195\151" .. a.count end
+                    if dur > 0 then msg = msg .. " (" .. dur .. "ms)" end
+                    if ms.dev and ms.dev.log then
+                        ms.dev.log({ type = "step", category = "macro", msg = "[" .. a.lastLabel .. "] " .. msg })
+                    end
+                end
+                a.count = 0
+                a.lastLabel = nil
+                a.timer = nil
+            end
+
+            -- ms.fn: wraps a function in a coroutine with error handling and logging
+            ms.fn = function(fn, labelOrAsync)
                 assert(type(fn) == "function", "ms.fn: fn must be a function")
-                if async == false then return fn end
+                if labelOrAsync == false then return fn end
+
+                local fnLabel = type(labelOrAsync) == "string" and labelOrAsync or nil
 
                 return function(...)
+                    local label = fnLabel or ms._pendingLabel or "macro"
+                    ms._pendingLabel = nil
+
+                    -- Accumulate consecutive calls to the same function
+                    local a = ms._fnAccum
+                    if a.lastLabel == label then
+                        a.count = a.count + 1
+                    else
+                        _fnFlush()
+                        a.lastLabel = label
+                        a.count = 1
+                        a.startTime = hs.timer.absoluteTime()
+                    end
+                    -- Reset flush timer (fires after 50ms of no new calls)
+                    if a.timer then a.timer:stop() end
+                    a.timer = hs.timer.doAfter(0.05, _fnFlush)
+
                     local ctx = {
                         cancelled = false,
                         paused    = false,
-                        label     = ms._pendingLabel or "macro",
+                        label     = label,
                     }
-                    local label = ms._pendingLabel or "macro"
-                    ms._pendingLabel = nil
 
                     local coBody = function(...)
                         local xok, xerr = xpcall(fn, debug.traceback, ...)
@@ -1474,6 +1515,35 @@
                         ms._activeContexts[ctx] = nil
                         if ms.dev then spoon.MsDevTools:flushAll() end
                     end
+                end
+            end
+
+            -- ms.logged: lightweight function wrapper with logging (no coroutine)
+            -- Use for helper functions that don't need coroutine/yield support
+            ms.logged = function(label, fn)
+                assert(type(fn) == "function", "ms.logged: fn must be a function")
+                return function(...)
+                    -- Accumulate consecutive calls
+                    local a = ms._fnAccum
+                    if a.lastLabel == label then
+                        a.count = a.count + 1
+                    else
+                        _fnFlush()
+                        a.lastLabel = label
+                        a.count = 1
+                        a.startTime = hs.timer.absoluteTime()
+                    end
+                    if a.timer then a.timer:stop() end
+                    a.timer = hs.timer.doAfter(0.05, _fnFlush)
+
+                    -- Swap coroutine context label so nested actions log under this function's name
+                    local co = coroutine.running()
+                    local ctx = co and ms._coroContext[co]
+                    local prevLabel = ctx and ctx.label
+                    if ctx then ctx.label = label end
+                    local results = { fn(...) }
+                    if ctx then ctx.label = prevLabel end
+                    return unpack(results)
                 end
             end
 
@@ -2870,6 +2940,11 @@
                         _shellView:html(html, baseURL)
                     end
 
+                    -- Apply window radius (transparent bg + CSS variable)
+                    if ms.theme and ms.theme.applyWindowRadius then
+                        ms.theme.applyWindowRadius(_shellView)
+                    end
+
                     hs.timer.doAfter(0.05, function()
                         if not _shellView then return end
                         local themeJson = hs.json.encode(ms._theme or {})
@@ -3481,7 +3556,7 @@
                     for _, step in ipairs(steps) do
                         lines[#lines + 1] = emitStep(step, 1)
                     end
-                    lines[#lines + 1] = "end)"
+                    lines[#lines + 1] = 'end, "' .. name .. '")'
                     lines[#lines + 1] = ""
 
                     -- bind.define call
@@ -3919,6 +3994,7 @@
                     error     = error,
                     assert    = assert,
                     print     = print,
+                    logged    = ms.logged,  -- lightweight function wrapper with logging
                     Move        = Move,        Click       = Click,       DoubleClick  = DoubleClick,
                     TripleClick = TripleClick, Drag        = Drag,        Press        = Press,
                     Release     = Release,
@@ -3953,6 +4029,60 @@
                 })
 
                 ms._macroSandbox = sandbox
+
+                -- Preprocessor: wrap local function definitions with logged() for instrumentation
+                -- Transforms: local X = function(...) → local X = logged("X", function(...)
+                -- Finds matching end and adds closing )
+                ms._wrapMacroFunctions = function(src)
+                    -- Split source into lines
+                    local srcLines = {}
+                    for line in (src .. "\n"):gmatch("([^\n]*)\n") do
+                        srcLines[#srcLines + 1] = line
+                    end
+
+                    local out = {}
+                    local i = 1
+                    while i <= #srcLines do
+                        local line = srcLines[i]
+                        -- Match: local NAME = function(
+                        local indent, name, rest = line:match("^(%s*)local%s+(%w+)%s*=%s*(function%s*%(.*)$")
+                        if name and rest then
+                            out[#out + 1] = indent .. 'local ' .. name .. ' = logged("' .. name .. '", ' .. rest
+                            -- Track depth to find matching end
+                            local depth = 1
+                            i = i + 1
+                            while i <= #srcLines and depth > 0 do
+                                local l = srcLines[i]
+                                -- Count block-opening keywords
+                                for kw in l:gmatch("(%w+)") do
+                                    if kw == "function" or kw == "if" or kw == "for"
+                                    or kw == "while" or kw == "repeat" then
+                                        depth = depth + 1
+                                    end
+                                end
+                                -- Count closing keywords (skip strings)
+                                local stripped = l:gsub('"[^"]*"', '""'):gsub("'[^']*'", "''")
+                                for kw in stripped:gmatch("(%w+)") do
+                                    if kw == "end" then
+                                        depth = depth - 1
+                                    end
+                                end
+                                if depth > 0 then
+                                    out[#out + 1] = l
+                                else
+                                    -- Matching end — add closing )
+                                    local endIndent = l:match("^(%s*)") or ""
+                                    out[#out + 1] = endIndent .. "end)"
+                                end
+                                i = i + 1
+                            end
+                        else
+                            out[#out + 1] = line
+                            i = i + 1
+                        end
+                    end
+                    return table.concat(out, "\n")
+                end
 
                 local rawSrc
                 do
