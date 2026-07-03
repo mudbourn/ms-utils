@@ -237,6 +237,58 @@
                 end
             -- END MsSettings (settings menu & profiles) --
 
+            -- Event Bus (ms.bus) — created early so spoons can register handlers
+                do
+                    local _busSubs = {}
+
+                    ms.bus = {}
+
+                    ms.bus.on = function(topic, fn)
+                        assert(type(topic) == "string", "ms.bus.on: topic must be a string")
+                        assert(type(fn) == "function", "ms.bus.on: fn must be a function")
+                        if not _busSubs[topic] then _busSubs[topic] = {} end
+                        _busSubs[topic][fn] = true
+                    end
+
+                    ms.bus.off = function(topic, fn)
+                        assert(type(topic) == "string", "ms.bus.off: topic must be a string")
+                        assert(type(fn) == "function", "ms.bus.off: fn must be a function")
+                        if _busSubs[topic] then
+                            _busSubs[topic][fn] = nil
+                        end
+                    end
+
+                    ms.bus.emit = function(topic, payload)
+                        assert(type(topic) == "string", "ms.bus.emit: topic must be a string")
+                        local subs = _busSubs[topic]
+                        if subs then
+                            for fn, _ in pairs(subs) do
+                                local ok, err = pcall(fn, topic, payload)
+                                if not ok then
+                                    print("ms.bus handler error [" .. topic .. "]: " .. tostring(err))
+                                end
+                            end
+                        end
+                        -- Wildcard subscribers: "ui:settings:*" matches "ui:settings:ready"
+                        for pattern, fns in pairs(_busSubs) do
+                            local starPos = pattern:find("%*$")
+                            if starPos then
+                                local prefix = pattern:sub(1, starPos - 1)
+                                if topic:sub(1, #prefix) == prefix then
+                                    for fn, _ in pairs(fns) do
+                                        local ok, err = pcall(fn, topic, payload)
+                                        if not ok then
+                                            print("ms.bus handler error [" .. pattern .. "]: " .. tostring(err))
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+
+                    ms.bus._subscribers = _busSubs
+                end
+
             -- MsUI (webview settings panel) --
                 _lUpdate(18, "Configuring UI\u{2026}")
                 local _msUIOk, _msUIErr = pcall(function()
@@ -2455,55 +2507,58 @@
         -- END 9. Bind System & Settings Panel --
 
         -- 10. Event Bus (ms.bus) --
-            do
-                local _busSubs = {}  -- [topic] = { [fn] = true, ... }
+            -- Already created early (before spoons start) — skip if present.
+            if not ms.bus then
+                do
+                    local _busSubs = {}  -- [topic] = { [fn] = true, ... }
 
-                ms.bus = {}
+                    ms.bus = {}
 
-                ms.bus.on = function(topic, fn)
-                    assert(type(topic) == "string", "ms.bus.on: topic must be a string")
-                    assert(type(fn) == "function", "ms.bus.on: fn must be a function")
-                    if not _busSubs[topic] then _busSubs[topic] = {} end
-                    _busSubs[topic][fn] = true
-                end
-
-                ms.bus.off = function(topic, fn)
-                    assert(type(topic) == "string", "ms.bus.off: topic must be a string")
-                    assert(type(fn) == "function", "ms.bus.off: fn must be a function")
-                    if _busSubs[topic] then
-                        _busSubs[topic][fn] = nil
+                    ms.bus.on = function(topic, fn)
+                        assert(type(topic) == "string", "ms.bus.on: topic must be a string")
+                        assert(type(fn) == "function", "ms.bus.on: fn must be a function")
+                        if not _busSubs[topic] then _busSubs[topic] = {} end
+                        _busSubs[topic][fn] = true
                     end
-                end
 
-                ms.bus.emit = function(topic, payload)
-                    assert(type(topic) == "string", "ms.bus.emit: topic must be a string")
-                    local subs = _busSubs[topic]
-                    if subs then
-                        for fn, _ in pairs(subs) do
-                            local ok, err = pcall(fn, topic, payload)
-                            if not ok then
-                                print("ms.bus handler error [" .. topic .. "]: " .. tostring(err))
-                            end
+                    ms.bus.off = function(topic, fn)
+                        assert(type(topic) == "string", "ms.bus.off: topic must be a string")
+                        assert(type(fn) == "function", "ms.bus.off: fn must be a function")
+                        if _busSubs[topic] then
+                            _busSubs[topic][fn] = nil
                         end
                     end
-                    -- Wildcard subscribers: "ui:setSettings:*" matches "ui:setSettings:ready"
-                    for pattern, fns in pairs(_busSubs) do
-                        local starPos = pattern:find("%*$")
-                        if starPos then
-                            local prefix = pattern:sub(1, starPos - 1)
-                            if topic:sub(1, #prefix) == prefix then
-                                for fn, _ in pairs(fns) do
-                                    local ok, err = pcall(fn, topic, payload)
-                                    if not ok then
-                                        print("ms.bus handler error [" .. pattern .. "]: " .. tostring(err))
+
+                    ms.bus.emit = function(topic, payload)
+                        assert(type(topic) == "string", "ms.bus.emit: topic must be a string")
+                        local subs = _busSubs[topic]
+                        if subs then
+                            for fn, _ in pairs(subs) do
+                                local ok, err = pcall(fn, topic, payload)
+                                if not ok then
+                                    print("ms.bus handler error [" .. topic .. "]: " .. tostring(err))
+                                end
+                            end
+                        end
+                        -- Wildcard subscribers: "ui:settings:*" matches "ui:settings:ready"
+                        for pattern, fns in pairs(_busSubs) do
+                            local starPos = pattern:find("%*$")
+                            if starPos then
+                                local prefix = pattern:sub(1, starPos - 1)
+                                if topic:sub(1, #prefix) == prefix then
+                                    for fn, _ in pairs(fns) do
+                                        local ok, err = pcall(fn, topic, payload)
+                                        if not ok then
+                                            print("ms.bus handler error [" .. pattern .. "]: " .. tostring(err))
+                                        end
                                     end
                                 end
                             end
                         end
                     end
-                end
 
-                ms.bus._subscribers = _busSubs  -- privileged debug accessor
+                    ms.bus._subscribers = _busSubs  -- privileged debug accessor
+                end
             end
         -- END 10. Event Bus (ms.bus) --
 
@@ -2577,7 +2632,8 @@
                 ms.shell.eval = function(js)
                     if type(js) ~= "string" then return end
                     if _shellView and _shellReady then
-                        pcall(function() _shellView:evaluateJavaScript(js) end)
+                        local ok, err = pcall(function() _shellView:evaluateJavaScript(js) end)
+                        if not ok then print("[shell→eval] FAIL: " .. tostring(err):sub(1, 200)) end
                     else
                         _shellEvalQ[#_shellEvalQ + 1] = js
                     end
@@ -2593,8 +2649,13 @@
 
                     _shellChannel = hs.webview.usercontent.new("msShell")
                     _shellChannel:setCallback(function(message)
-                        local ok, data = pcall(hs.json.decode, message.body)
-                        if not ok or type(data) ~= "table" then return end
+                        local raw = tostring(message.body or "")
+                        print("[shell←] " .. raw:sub(1, 200))
+                        local ok, data = pcall(hs.json.decode, raw)
+                        if not ok or type(data) ~= "table" then
+                            print("[shell←] DECODE FAILED: " .. tostring(data))
+                            return
+                        end
                         local panel  = data.panel  or "_shell"
                         local action = data.action or "unknown"
                         local body   = data.body
@@ -2611,7 +2672,11 @@
                         end
                         -- Bus routing
                         if ms.bus then
-                            ms.bus.emit("ui:" .. panel .. ":" .. action, body)
+                            local topic = "ui:" .. panel .. ":" .. action
+                            print("[shell→bus] " .. topic)
+                            ms.bus.emit(topic, body)
+                        else
+                            print("[shell←] NO BUS")
                         end
                     end)
 
