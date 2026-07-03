@@ -108,6 +108,16 @@
         }
         .btn-close:hover { background: var(--hover); color: var(--text); }
 
+        /* ── Pop-out Button ── */
+        .btn-popout {
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--surface2); color: var(--text2);
+            font-size: 12px; display: flex; align-items: center; justify-content: center;
+            -webkit-app-region: no-drag; transition: background 0.15s;
+        }
+        .btn-popout:hover { background: var(--hover); color: var(--text); }
+        .btn-popout .icon { width: 14px; height: 14px; }
+
         /* ── Macro Button ── */
         .btn-macro {
             padding: 3px 10px; border-radius: 20px; font-size: 11px;
@@ -632,14 +642,14 @@
                     Clear
                 </button>
                 <button
-                    class="btn-close"
+                    class="btn-popout"
                     onmouseenter="playSlot('hover')"
                     onclick="
-                        playSlot('back');
-                        closePanel();
+                        playSlot('interact');
+                        popOutPanel('console');
                     "
                 >
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
             </div>
         </div>
@@ -711,14 +721,14 @@
                     Clear
                 </button>
                 <button
-                    class="btn-close"
+                    class="btn-popout"
                     onmouseenter="playSlot('hover')"
                     onclick="
                         playSlot('interact');
-                        closePanel();
+                        popOutPanel('watcher');
                     "
                 >
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
             </div>
         </div>
@@ -760,14 +770,14 @@
                     Clear
                 </button>
                 <button
-                    class="btn-close"
+                    class="btn-popout"
                     onmouseenter="playSlot('hover')"
                     onclick="
                         playSlot('interact');
-                        closePanel();
+                        popOutPanel('keys');
                     "
                 >
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
             </div>
         </div>
@@ -877,14 +887,14 @@
                     Clear
                 </button>
                 <button
-                    class="btn-close"
+                    class="btn-popout"
                     onmouseenter="playSlot('hover')"
                     onclick="
-                        playSlot('back');
-                        closePanel();
+                        playSlot('interact');
+                        popOutPanel('window');
                     "
                 >
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
             </div>
         </div>
@@ -1071,10 +1081,10 @@
             <span id="panel-title">mudscript — macro lab</span>
             <div class="header-btns">
                 <button
-                    class="btn-close"
+                    class="btn-popout"
                     onmouseenter="playSlot('hover')"
-                    onclick="playSlot('back'); closePanel();"
-                ><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg></button>
+                    onclick="playSlot('interact'); popOutPanel('macros');"
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
         </div>
         <div id="slot-macros"></div></div>
@@ -1599,13 +1609,7 @@ function createLogPanel(config) {
             window.webkit.messageHandlers.msShell.postMessage(
                 JSON.stringify({ panel: panel, action: action, body: body })
             );
-            // Debug: flash a brief indicator
-            var db = document.getElementById('_ms-debug');
-            if (db) { db.textContent = '→ ' + panel + ':' + action; db.style.opacity = '1'; setTimeout(function(){ db.style.opacity = '0.3'; }, 800); }
-        } catch(e) {
-            var db2 = document.getElementById('_ms-debug');
-            if (db2) { db2.textContent = '✗ DISPATCH ERROR: ' + e; db2.style.opacity = '1'; db2.style.color = '#f44'; }
-        }
+        } catch(e) {}
     };
 
     window.shellPost = function(panel, action, body) {
@@ -1619,19 +1623,21 @@ function createLogPanel(config) {
 
     window.shellReceive = function(panel, action, body) {
         var handler = _panelHandlers[panel];
-        var db = document.getElementById('_ms-debug');
-        if (db) { db.textContent = '← ' + panel + ':' + action; db.style.opacity = '1'; setTimeout(function(){ db.style.opacity = '0.3'; }, 800); }
         if (handler) {
             try { handler(action, body); } catch(e) {
                 console.error("[shell] panel handler error:", panel, action, e);
-                if (db) { db.textContent = '✗ RECEIVE ERROR: ' + panel + ':' + action + ' ' + e; db.style.opacity = '1'; db.style.color = '#f44'; }
             }
-        } else {
-            if (db) { db.textContent = '✗ NO HANDLER: ' + panel; db.style.opacity = '1'; db.style.color = '#fa0'; }
         }
     };
 
     window.currentPanel = 'console';
+
+    // Per-panel pause registry — each panel registers its togglePause
+    window._panelPauseFns = {};
+    window.togglePause = function() {
+        var fn = window._panelPauseFns[window.currentPanel];
+        if (fn) fn();
+    };
 
     window.showPanel = function(id) {
         document.querySelectorAll('[class^="panel-"]').forEach(function(el) {
@@ -1644,6 +1650,10 @@ function createLogPanel(config) {
         });
         currentPanel = id;
         shellDispatch('_shell', 'navigate', { panel: id });
+    };
+
+    window.popOutPanel = function(id) {
+        shellDispatch('_shell', 'popOut', { panel: id });
     };
 
     window._shellApplyTheme = function(theme) {
@@ -1769,7 +1779,7 @@ function createLogPanel(config) {
             });
 
             // ── Expose globals for inline handlers ──────────────────────────
-            window.togglePause = lp.togglePause;
+            window._panelPauseFns['console'] = lp.togglePause;
             window.playSlot    = lp.playSlot;
             window.closePanel  = lp.closePanel;
             window.consoleApplyTheme = lp.applyTheme;
@@ -2052,7 +2062,7 @@ function createLogPanel(config) {
             });
 
             // ── Expose globals for inline handlers ──────────────────────────
-            window.togglePause       = lp.togglePause;
+            window._panelPauseFns['watcher'] = lp.togglePause;
             window.playSlot          = lp.playSlot;
             window.toggleFilterPanel = toggleFilterPanel;
             window.closePanel        = lp.closePanel;
@@ -2115,7 +2125,7 @@ function createLogPanel(config) {
             });
 
             // ── Expose globals for inline handlers ──────────────────────────
-            window.togglePause = lp.togglePause;
+            window._panelPauseFns['keys'] = lp.togglePause;
             window.playSlot    = lp.playSlot;
             window.clearLog    = clearLog;
             window.closePanel  = lp.closePanel;
@@ -2467,7 +2477,7 @@ function createLogPanel(config) {
             });
 
             // ── Expose globals for inline handlers ──────────────────────────
-            window.togglePause = lp.togglePause;
+            window._panelPauseFns['window'] = lp.togglePause;
             window.playSlot    = lp.playSlot;
             window.clearLog    = lp.clearLog;
             window.closePanel  = lp.closePanel;

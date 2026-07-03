@@ -322,6 +322,7 @@
                 updateChannel           = ms._updateChannel or "stable",
                 testingSource           = ms._testingSource or "release",
                 cacheCleanerEnabled     = ms._cacheCleanerEnabled or false,
+                antiTimeoutEnabled      = ms._antiTimeoutEnabled or false,
                 githubToken             = (function()
                     if ms._githubToken then return ms._githubToken end
                     local f = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_github_token", "r")
