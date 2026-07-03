@@ -12,7 +12,7 @@
   },
   "trackpadMode" : false,
   "soundAssign" : {
-    "launch" : "Launch"
+    "launch" : "d_Launch"
   },
   "socdEnabled" : false,
   "independentBinds" : false,

@@ -140,10 +140,10 @@
             -- Looks for base names (Launch, LoadEnd, etc.) and groups
             -- numbered variants (Launch2, LoadEnd2, …) into presets.
             local presetSlots = {
-                { id = "startup",     bases = { "LoadStart", "Load Start" } },
-                { id = "themeLoaded", bases = { "ThemeLoaded", "Theme Loaded" } },
-                { id = "load",        bases = { "LoadEnd", "Load End" } },
-                { id = "launch",      bases = { "Launch" } },
+                { id = "startup",     bases = { "d_LoadStart", "d_Load Start" } },
+                { id = "themeLoaded", bases = { "d_ThemeLoaded", "d_Theme Loaded" } },
+                { id = "load",        bases = { "d_LoadEnd", "d_Load End" } },
+                { id = "launch",      bases = { "d_Launch" } },
             }
             local presetMap = {}  -- presetNum → { slotId → soundName }
             for _, ps in ipairs(presetSlots) do

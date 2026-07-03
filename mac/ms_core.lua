@@ -1601,11 +1601,11 @@
             end
 
             local _slotDefaults = {
-                startup      = { "LoadStart", "Load Start" },
-                load         = { "LoadEnd",   "Load End"   },
-                launch       = { "Launch" },
-                themeLoaded  = { "ThemeLoaded", "Theme Loaded" },
-                updateAvailable = { "UpdateAvailable", "Update Available" },
+                startup      = { "d_LoadStart", "d_Load Start" },
+                load         = { "d_LoadEnd",   "d_Load End"   },
+                launch       = { "d_Launch" },
+                themeLoaded  = { "d_ThemeLoaded", "d_Theme Loaded" },
+                updateAvailable = { "d_UpdateAvailable", "d_Update Available" },
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
@@ -3924,7 +3924,7 @@
                     _lMsgBuffer = {}
                     -- Fade in
                     _lWebView:show()
-                    pcall(function() ms.sound(SoundDefaultsDir .. "Reset.wav") end)
+                    pcall(function() ms.sound(SoundDefaultsDir .. "d_Reset.wav") end)
                     local step, steps = 0, 6
                     _G._loadTimers.fadeIn = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
                         step = step + 1

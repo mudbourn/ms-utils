@@ -276,7 +276,7 @@ YQIDAQAB
     -- Called when integrity check fails and we need to block loading.
     local function _showGuardianBlock(expectedHash, currentHash)
         pcall(function()
-            local _snd = hs.sound.getByFile(_home .. "/.hammerspoon/sounds/Error.wav")
+            local _snd = hs.sound.getByFile(_home .. "/.hammerspoon/sounds/d_Error.wav")
 
             if _snd then _snd:play() end
         end)
