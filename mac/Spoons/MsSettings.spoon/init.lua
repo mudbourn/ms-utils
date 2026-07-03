@@ -174,6 +174,7 @@
             if data.updateChannel == "testing" or data.updateChannel == "stable" then
                 ms._updateChannel = data.updateChannel
             end
+            if data.cacheCleanerEnabled ~= nil then ms._cacheCleanerEnabled = (data.cacheCleanerEnabled == true) end
             if data.testingSource == "release" or data.testingSource == "artifact" then
                 ms._testingSource = data.testingSource
             end
@@ -319,6 +320,7 @@
                 devArchiveLimit  = ms._devArchiveLimit or 15,
                 updateChannel    = ms._updateChannel or "stable",
                 testingSource    = ms._testingSource or "release",
+                cacheCleanerEnabled = ms._cacheCleanerEnabled or false,
                 quickReloaded    = ms._quickReloaded or 0,
                 qrOptions        = ms._qrOptions or {
                     macros   = true,

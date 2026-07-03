@@ -65,13 +65,8 @@ CACHE_PLIST_DST="$HOME/Library/LaunchAgents/com.mudscript.cache-cleaner.plist"
 
 if [ -f "$CACHE_PLIST_TEMPLATE" ] && [ -f "$CACHE_SCRIPT" ]; then
     chmod 755 "$CACHE_SCRIPT"
-    sed "s|%%AGENT_PATH%%|$CACHE_SCRIPT|g" \
-        "$CACHE_PLIST_TEMPLATE" > "$CACHE_PLIST_DST"
-    launchctl unload "$CACHE_PLIST_DST" 2>/dev/null || true
-    launchctl load "$CACHE_PLIST_DST"
     echo ""
-    echo "Roblox cache cleaner installed (every 6 h + at login)."
-    echo "Log file:    $HS/data/cache_cleaner.log"
+    echo "Roblox cache cleaner: available (enable in Settings → Developer)."
 else
     echo ""
     echo "⚠  Cache cleaner files not found — skipping."

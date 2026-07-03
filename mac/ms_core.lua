@@ -303,6 +303,15 @@
             ms.running   = {}
             ms.cooldowns = {}
             ms._robloxActive = false
+            -- Safe zones: system binds fire here even without Roblox focus
+            ms._safeApps = {
+                ["Hammerspoon"]      = true,
+                ["Activity Monitor"] = true,
+            }
+            ms._isSafeZone = function()
+                local front = hs.application.frontmostApplication()
+                return front and ms._safeApps[front:name()] or false
+            end
             ms._menuOpen     = false
             ms._menuVisible  = false
             ms._menuFnFired  = false
@@ -1277,7 +1286,7 @@
 
             hs.hotkey.bind({ "alt" }, "F10", function()
                 if not ms._loadComplete then return end
-                if not ms._robloxActive then return end
+                if not ms._robloxActive and not ms._isSafeZone() then return end
                 ms.setMacros(0)
             end)
 
@@ -1293,7 +1302,7 @@
 
             hs.hotkey.bind({ "alt" }, "p", function()
                 if not ms._loadComplete then return end
-                if not ms._robloxActive then return end
+                if not ms._robloxActive and not ms._isSafeZone() then return end
                 if ms._macroLabEnabled then
                     ms.shell.toggle()
                 else
@@ -2009,28 +2018,28 @@
                     if not c then goto sysBindContinue end
                     if c.type == "key" then
                         ms.systemBinds._handles[id] = ms.key(c.mods, c.key, false, function()
-                            if not ms._robloxActive then return end
+                            if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, nil, true)
                     elseif c.type == "mouse" then
                         ms.systemBinds._handles[id] = ms.mouse(c.button, false, function()
-                            if not ms._robloxActive then return end
+                            if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, true)
                     elseif c.type == "scroll" then
                         ms.systemBinds._handles[id] = ms.scrollBind(c.direction, function()
-                            if not ms._robloxActive then return end
+                            if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end)
                     elseif c.type == "gamepad" then
                         ms.systemBinds._handles[id] = ms.gamepadBind(c.button, function()
-                            if not ms._robloxActive then return end
+                            if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
@@ -2258,28 +2267,28 @@
                     print("rebindSystem: registering " .. id .. " as system bind")
                     if c.type == "key" then
                         ms._systemBindHandles[id] = ms.key(c.mods, c.key, false, function()
-                            if not ms._robloxActive then return end
+                            if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, nil, true)
                     elseif c.type == "mouse" then
                         ms._systemBindHandles[id] = ms.mouse(c.button, false, function()
-                            if not ms._robloxActive then return end
+                            if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, true)
                     elseif c.type == "scroll" then
                         ms._systemBindHandles[id] = ms.scrollBind(c.direction, function()
-                            if not ms._robloxActive then return end
+                            if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end)
                     elseif c.type == "gamepad" then
                         ms._systemBindHandles[id] = ms.gamepadBind(c.button, function()
-                            if not ms._robloxActive then return end
+                            if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
@@ -2799,6 +2808,10 @@
                         if data and data.panel then
                             ms.shell.setActivePanel(data.panel)
                         end
+                    end)
+                    -- Panel close: hide the shell when any panel sends {action:"close"}
+                    ms.bus.on("ui:*:close", function()
+                        pcall(function() ms.shell.hide() end)
                     end)
                 end
             end
@@ -3719,6 +3732,40 @@
         ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)
         ms._discoverSounds()
         ms.loadTheme()
+
+        -- Sync Roblox cache cleaner LaunchAgent with setting
+        do
+            local home = os.getenv("HOME")
+            local plistDst = home .. "/Library/LaunchAgents/com.mudscript.cache-cleaner.plist"
+            local agentExists = hs.fs.attributes(plistDst) ~= nil
+
+            -- Migration: if setting never saved but agent already installed, preserve it
+            if ms._cacheCleanerEnabled == nil then
+                ms._cacheCleanerEnabled = agentExists
+                if agentExists then pcall(ms.saveSettings) end
+            end
+
+            if ms._cacheCleanerEnabled and not agentExists then
+                -- Setting says ON but agent missing — install it
+                local plistSrc = home .. "/.hammerspoon/bin/com.mudscript.cache-cleaner.plist"
+                local scriptSrc = home .. "/.hammerspoon/bin/clean_roblox_cache.sh"
+                if hs.fs.attributes(plistSrc) and hs.fs.attributes(scriptSrc) then
+                    local f = io.open(plistSrc, "r")
+                    if f then
+                        local content = f:read("*all"); f:close()
+                        content = content:gsub("%%AGENT_PATH%%", scriptSrc)
+                        local g = io.open(plistDst, "w")
+                        if g then g:write(content); g:close() end
+                        os.execute("chmod 755 '" .. scriptSrc .. "'")
+                        os.execute("launchctl load '" .. plistDst .. "' 2>/dev/null")
+                    end
+                end
+            elseif not ms._cacheCleanerEnabled and agentExists then
+                -- Setting says OFF but agent present — uninstall it
+                os.execute("launchctl unload '" .. plistDst .. "' 2>/dev/null")
+                os.remove(plistDst)
+            end
+        end
         -- ms.legacycam.updateMultiplier()  -- opt-in: call manually if needed
         os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
         ms.bind._registerSystemBinds()

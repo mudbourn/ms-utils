@@ -321,6 +321,7 @@
                 devArchiveLimit         = ms._devArchiveLimit or 15,
                 updateChannel           = ms._updateChannel or "stable",
                 testingSource           = ms._testingSource or "release",
+                cacheCleanerEnabled     = ms._cacheCleanerEnabled or false,
                 githubToken             = (function()
                     if ms._githubToken then return ms._githubToken end
                     local f = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_github_token", "r")
@@ -632,6 +633,36 @@
                     ms.saveSettings()
                     ms.playSlot("update")
                 end
+                ms.ui.refresh()
+            end,
+
+            setCacheCleanerEnabled = function(data)
+                local enabled = data.value and true or false
+                ms._cacheCleanerEnabled = enabled
+                local home = os.getenv("HOME")
+                local plistSrc = home .. "/.hammerspoon/bin/com.mudscript.cache-cleaner.plist"
+                local scriptSrc = home .. "/.hammerspoon/bin/clean_roblox_cache.sh"
+                local plistDst = home .. "/Library/LaunchAgents/com.mudscript.cache-cleaner.plist"
+                if enabled then
+                    -- Install the launch agent
+                    if hs.fs.attributes(plistSrc) and hs.fs.attributes(scriptSrc) then
+                        local f = io.open(plistSrc, "r")
+                        if f then
+                            local content = f:read("*all"); f:close()
+                            content = content:gsub("%%AGENT_PATH%%", scriptSrc)
+                            local g = io.open(plistDst, "w")
+                            if g then g:write(content); g:close() end
+                            os.execute("chmod 755 '" .. scriptSrc .. "'")
+                            os.execute("launchctl unload '" .. plistDst .. "' 2>/dev/null; launchctl load '" .. plistDst .. "'")
+                        end
+                    end
+                else
+                    -- Uninstall the launch agent
+                    os.execute("launchctl unload '" .. plistDst .. "' 2>/dev/null")
+                    os.remove(plistDst)
+                end
+                ms.saveSettings()
+                ms.playSlot("update")
                 ms.ui.refresh()
             end,
 
