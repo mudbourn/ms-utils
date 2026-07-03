@@ -1511,12 +1511,38 @@ function createLogPanel(config) {
     })();
 
     // ── Default appendEntry / loadHistory (single #log) ────────────────
+    let _lastEntryKey = null;
+    let _lastEntryRow = null;
+    let _repeatCount = 0;
+
+    function _entryKey(entry) {
+        return (entry.type || '') + '|' + (entry.msg || '') + '|' + (entry.event || '') + '|' + (entry.key || '') + '|' + (entry.label || '');
+    }
+
     function appendEntry(entry) {
         if (_paused) return;
         const log = _byId("log");
         if (!log) return;
         const atBottom = _isNearBottom(log, scrollThresh);
-        log.appendChild(buildRow(entry));
+        const key = _entryKey(entry);
+
+        if (key === _lastEntryKey && _lastEntryRow) {
+            _repeatCount++;
+            let badge = _lastEntryRow.querySelector('.repeat-badge');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'repeat-badge';
+                badge.style.cssText = 'font-size:10px;color:var(--text3);margin-left:4px;flex-shrink:0;';
+                _lastEntryRow.appendChild(badge);
+            }
+            badge.textContent = '×' + _repeatCount;
+        } else {
+            _lastEntryRow = buildRow(entry);
+            _lastEntryKey = key;
+            _repeatCount = 1;
+            log.appendChild(_lastEntryRow);
+        }
+
         _trimLog(log, maxEntries);
         if (atBottom) log.scrollTop = log.scrollHeight;
     }
@@ -1525,6 +1551,9 @@ function createLogPanel(config) {
         const log = _byId("log");
         if (!log) return;
         log.innerHTML = "";
+        _lastEntryKey = null;
+        _lastEntryRow = null;
+        _repeatCount = 0;
         const capped =
             entries && entries.length > maxEntries
                 ? entries.slice(-maxEntries)
