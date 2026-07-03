@@ -105,6 +105,7 @@
 
                     ms.bus.emit = function(topic, payload)
                         assert(type(topic) == "string", "ms.bus.emit: topic must be a string")
+                        -- Exact match
                         local subs = _busSubs[topic]
                         if subs then
                             for fn, _ in pairs(subs) do
@@ -1601,7 +1602,6 @@
             end
 
             local _slotDefaults = {
-                startup      = { "d_LoadStart", "d_Load Start" },
                 load         = { "d_LoadEnd",   "d_Load End"   },
                 launch       = { "d_Launch" },
                 themeLoaded  = { "d_ThemeLoaded", "d_Theme Loaded" },
@@ -1609,7 +1609,7 @@
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
-                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "startup" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" then return false end
+                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" then return false end
                 ms._slotHandles = ms._slotHandles or {}
                 -- Stop any currently-playing instance of this slot and replay on top
                 if ms._slotHandles[slotId] then
@@ -2881,7 +2881,9 @@
                                 pcall(function() ms.ui.hide() end)
                                 pcall(function() ms.shell.show() end)
                             end
-                            if ms.saveSettings then pcall(ms.saveSettings) end
+                            -- Save only if saveSettings is fully initialized
+                            -- (skip during boot — value is already in the file)
+                            if ms._settingsLoaded and ms.saveSettings then pcall(ms.saveSettings) end
                         end,
                     })
                 end
@@ -3809,11 +3811,15 @@
         ms._devArchiveLimit   = 15     -- overridden by loadSettings() if previously saved
         ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
         ms.loadSettings()            -- load first so importedSounds/soundAssign are available
-        -- If custom themes disabled, clear loading sound presets at startup
+        -- If custom themes disabled, reset loading sound presets to defaults
         if ms._customThemeDisabled then
-            local loadSlots = { "startup", "themeLoaded", "load", "launch" }
-            for _, sid in ipairs(loadSlots) do
-                ms.soundAssign[sid] = nil
+            local defaultAssigns = {
+                themeLoaded = "d_ThemeLoaded",
+                load        = "d_LoadEnd",
+                launch      = "d_Launch",
+            }
+            for sid, def in pairs(defaultAssigns) do
+                ms.soundAssign[sid] = def
             end
         end
         ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)

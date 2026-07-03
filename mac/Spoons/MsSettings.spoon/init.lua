@@ -417,6 +417,7 @@
                         end
                     end
                     ms._applySettings(data)
+                    ms._settingsLoaded = true
                     ms.dev.log({
                         type   = "system",
                         event  = "settings_loaded",
@@ -435,6 +436,7 @@
                 local data, skipped = ms._convertFlatSettings(oldF)
                 oldF:close()
                 ms._applySettings(data)
+                ms._settingsLoaded = true
                 ms.saveSettings()
                 os.rename(settingsPath, archivePath .. "ms_settings_txt.bak")
                 hs.timer.doAfter(1, function()
@@ -453,6 +455,7 @@
                 local data = hs.json.decode(content)
                 if data then
                     ms._applySettings(data)
+                    ms._settingsLoaded = true
                     return
                 end
             end
@@ -463,6 +466,7 @@
                 local data2 = hs.json.decode(content2)
                 if data2 then ms._applySettings(data2) end
             end
+            ms._settingsLoaded = true
         end
 
         ms.saveDefault = function()
@@ -3993,7 +3997,6 @@
                 })
                 table.insert(sub, { title = "-" })
                 local slots = {
-                    { id = "startup",      label = "Loading Screen Start" },
                     { id = "load",         label = "Loading Screen End"   },
                     { id = "launch",       label = "Launch Announcement"  },
                     { id = "updateAvailable", label = "Update Available" },

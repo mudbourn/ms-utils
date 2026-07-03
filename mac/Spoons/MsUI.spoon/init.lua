@@ -140,7 +140,6 @@
             -- Looks for base names (Launch, LoadEnd, etc.) and groups
             -- numbered variants (Launch2, LoadEnd2, …) into presets.
             local presetSlots = {
-                { id = "startup",     bases = { "d_LoadStart", "d_Load Start" } },
                 { id = "themeLoaded", bases = { "d_ThemeLoaded", "d_Theme Loaded" } },
                 { id = "load",        bases = { "d_LoadEnd", "d_Load End" } },
                 { id = "launch",      bases = { "d_Launch" } },
@@ -589,10 +588,14 @@
                 if ms._customThemeDisabled then
                     -- Revert to defaults
                     for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
-                    -- Clear loading sound presets — custom themes off = base sounds only
-                    local loadSlots = { "startup", "themeLoaded", "load", "launch" }
-                    for _, sid in ipairs(loadSlots) do
-                        ms.soundAssign[sid] = nil
+                    -- Reset loading sound presets to default values (not nil)
+                    local defaultAssigns = {
+                        themeLoaded = "d_ThemeLoaded",
+                        load        = "d_LoadEnd",
+                        launch      = "d_Launch",
+                    }
+                    for sid, def in pairs(defaultAssigns) do
+                        ms.soundAssign[sid] = def
                     end
                 else
                     -- Reload custom theme
@@ -841,7 +844,7 @@
                 if not data.assigns then return end
                 ms.soundAssign = ms.soundAssign or {}
                 -- Clear all loading slots first so missing slots get reset
-                local loadSlots = { "startup", "themeLoaded", "load", "launch" }
+                local loadSlots = { "themeLoaded", "load", "launch" }
                 for _, sid in ipairs(loadSlots) do
                     ms.soundAssign[sid] = nil
                 end

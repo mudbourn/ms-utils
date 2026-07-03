@@ -3919,7 +3919,7 @@ function createLogPanel(config) {
 
                 // ── Loading Sound Presets ─────────────────────────────────
                 const presets = S.soundPresets || [];
-                const presetSlotIds = ["startup", ...LOAD_SLOTS.map(s => s.id)];
+                const presetSlotIds = LOAD_SLOTS.map(s => s.id);
 
                 // Detect which preset is currently active (if any)
                 let activePreset = null;
@@ -3936,9 +3936,24 @@ function createLogPanel(config) {
 
                 body.appendChild(groupLabel("Loading Sounds"));
                 const presetWrap = h("div", { cls: "seg" });
+                // Default assigns (d_* sounds)
+                const defaultAssigns = {};
+                for (const sid of presetSlotIds) {
+                    const dSlot = LOAD_SLOTS.find(s => s.id === sid);
+                    if (dSlot) {
+                        // Map slot to its d_* default name
+                        const dMap = { themeLoaded: "d_ThemeLoaded", load: "d_LoadEnd", launch: "d_Launch" };
+                        if (dMap[sid]) defaultAssigns[sid] = dMap[sid];
+                    }
+                }
+                // Check if current assignments match default
+                let isDefault = presetSlotIds.length > 0;
+                for (const sid of presetSlotIds) {
+                    if ((sa[sid] || "") !== (defaultAssigns[sid] || "")) { isDefault = false; break; }
+                }
                 // "Custom" option
                 const customBtn = h("button", {
-                    cls: "seg-btn" + (activePreset === null ? " active" : ""),
+                    cls: "seg-btn" + (activePreset === null && !isDefault ? " active" : ""),
                     onmouseenter: () => playSlot("hover"),
                     onclick: () => {
                         playSlot("interact");
@@ -3946,6 +3961,16 @@ function createLogPanel(config) {
                     },
                 }, "Custom");
                 presetWrap.appendChild(customBtn);
+                // "Default" option
+                const defaultBtn = h("button", {
+                    cls: "seg-btn" + (isDefault ? " active" : ""),
+                    onmouseenter: () => playSlot("hover"),
+                    onclick: () => {
+                        playSlot("interact");
+                        sendToHost({ action: "setSoundPreset", assigns: defaultAssigns });
+                    },
+                }, "Default");
+                presetWrap.appendChild(defaultBtn);
                 // Numbered presets
                 for (const p of presets) {
                     const pBtn = h("button", {
