@@ -1079,6 +1079,7 @@
         </div>
         <div id="slot-macros"></div></div>
     </main>
+    <div id="_ms-debug" style="position:fixed;bottom:0;right:0;background:var(--surface2);color:var(--text2);font:10px var(--font-mono);padding:2px 8px;border-radius:4px 0 0 0;z-index:999;opacity:0.3;transition:opacity 0.3s;pointer-events:none;">ready</div>
 
     <!-- ═══ Shared: log-panel.js (inlined) ════════════════════════════════════ -->
     <script>
@@ -1583,7 +1584,13 @@ function createLogPanel(config) {
             window.webkit.messageHandlers.msShell.postMessage(
                 JSON.stringify({ panel: panel, action: action, body: body })
             );
-        } catch(e) {}
+            // Debug: flash a brief indicator
+            var db = document.getElementById('_ms-debug');
+            if (db) { db.textContent = '→ ' + panel + ':' + action; db.style.opacity = '1'; setTimeout(function(){ db.style.opacity = '0.3'; }, 800); }
+        } catch(e) {
+            var db2 = document.getElementById('_ms-debug');
+            if (db2) { db2.textContent = '✗ DISPATCH ERROR: ' + e; db2.style.opacity = '1'; db2.style.color = '#f44'; }
+        }
     };
 
     window.shellPost = function(panel, action, body) {
@@ -1597,10 +1604,15 @@ function createLogPanel(config) {
 
     window.shellReceive = function(panel, action, body) {
         var handler = _panelHandlers[panel];
+        var db = document.getElementById('_ms-debug');
+        if (db) { db.textContent = '← ' + panel + ':' + action; db.style.opacity = '1'; setTimeout(function(){ db.style.opacity = '0.3'; }, 800); }
         if (handler) {
             try { handler(action, body); } catch(e) {
                 console.error("[shell] panel handler error:", panel, action, e);
+                if (db) { db.textContent = '✗ RECEIVE ERROR: ' + panel + ':' + action + ' ' + e; db.style.opacity = '1'; db.style.color = '#f44'; }
             }
+        } else {
+            if (db) { db.textContent = '✗ NO HANDLER: ' + panel; db.style.opacity = '1'; db.style.color = '#fa0'; }
         }
     };
 
@@ -4803,6 +4815,12 @@ function createLogPanel(config) {
                 }
                 sendToHost({ action: "ready" });
             });
+
+            // Expose for inline onclick handlers in the HTML
+            window.sendToHost = sendToHost;
+            window.playSlot = playSlot;
+            window.closePanel = function() { sendToHost({ action: 'close' }); };
+            window.toggleQR = toggleQR;
     })();
     </script>
 
