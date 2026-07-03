@@ -709,7 +709,7 @@
                     ms._macroHeldKeys[keyCode] = { mods = mods or {}, hidinject = hidinject }
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, true)
                     if hidinject then
-                        local app = hs.application.get("Roblox")
+                        local app = hs.application.get(ms._targetApp or "Roblox")
                         if app then ev:post(app); return end
                     end
                     ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
@@ -729,7 +729,7 @@
                     ms._macroHeldKeys[keyCode] = nil
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, false)
                     if hidinject then
-                        local app = hs.application.get("Roblox")
+                        local app = hs.application.get(ms._targetApp or "Roblox")
                         if app then ev:post(app); return end
                     end
                     ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
@@ -856,7 +856,7 @@
                         local callbackData = ms._mouseCallbacks[b]
                         if callbackData then
                             if callbackData.swallow and callbackData.hidinject then
-                                local app = hs.application.get("Roblox")
+                                local app = hs.application.get(ms._targetApp or "Roblox")
                                 if app then event:copy():post(app) end
                             end
                             local co = coroutine.create(callbackData.fn)
@@ -998,7 +998,7 @@
                 end
 
                 local btn  = BTNS[button]
-                local _app = hidinject and hs.application.get("Roblox") or nil
+                local _app = hidinject and hs.application.get(ms._targetApp or "Roblox") or nil
 
                 local function resolve(x, y) return ms.resolvePoint(x, y, reference, unscaled) end
 
@@ -1471,7 +1471,7 @@
                 for keyCode, entry in pairs(ms._macroHeldKeys) do
                     local ev = hs.eventtap.event.newKeyEvent(entry.mods, keyCode, false)
                     if entry.hidinject then
-                        local app = hs.application.get("Roblox")
+                        local app = hs.application.get(ms._targetApp or "Roblox")
                         if app then ev:post(app)
                         else
                             ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
@@ -2020,9 +2020,6 @@
                     else
                         ms.antiTimeoutStart()
                     end
-                    -- Persist the state
-                    ms._antiTimeoutEnabled = ms._antiTimeout.running
-                    if ms.saveSettings then pcall(ms.saveSettings) end
                     return ms._antiTimeout.running
                 end
             -- END Anti-Timeout --
@@ -2877,7 +2874,10 @@
                             ms._macroLabEnabled = (val == true)
                             if not ms._macroLabEnabled then
                                 pcall(function() ms.shell.hide() end)
-                            else
+                            elseif ms._settingsLoaded then
+                                -- Only auto-show when user toggles at runtime,
+                                -- not during boot (shell should stay hidden until
+                                -- the user explicitly opens it via Alt+P or menubar).
                                 pcall(function() ms.ui.hide() end)
                                 pcall(function() ms.shell.show() end)
                             end

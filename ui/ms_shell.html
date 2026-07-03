@@ -4402,32 +4402,6 @@ function createLogPanel(config) {
                     ),
                 );
 
-                // Anti-timeout toggle
-                const antiTimeoutOn = S.antiTimeoutEnabled === true;
-                body.appendChild(
-                    row(
-                        "Anti-timeout",
-                        "Send a keypress to Roblox every 15 min to prevent inactivity kick",
-                        h(
-                            "button",
-                            {
-                                cls:
-                                    "btn-macro " +
-                                    (antiTimeoutOn ? "btn-enable" : "btn-disable"),
-                                onmouseenter: () => playSlot("hover"),
-                                onclick: () => {
-                                    playSlot("interact");
-                                    sendToHost({
-                                        action: "setAntiTimeoutEnabled",
-                                        value: !antiTimeoutOn,
-                                    });
-                                },
-                            },
-                            antiTimeoutOn ? "ON" : "OFF",
-                        ),
-                    ),
-                );
-
                 // Enable v2 UI toggle
                 const v2On = S.macroLabEnabled !== false;
                 body.appendChild(

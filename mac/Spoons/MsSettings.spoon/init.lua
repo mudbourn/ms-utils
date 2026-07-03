@@ -175,7 +175,12 @@
                 ms._updateChannel = data.updateChannel
             end
             if data.cacheCleanerEnabled ~= nil then ms._cacheCleanerEnabled = (data.cacheCleanerEnabled == true) end
-            if data.antiTimeoutEnabled ~= nil then ms._antiTimeoutEnabled = (data.antiTimeoutEnabled == true) end
+            -- Legacy migration: antiTimeoutEnabled moved from system to user settings
+            -- Preserves existing toggle value for macro profiles that define it via ms.settings.define
+            if data.antiTimeoutEnabled ~= nil then
+                ms._pendingUserSettings = ms._pendingUserSettings or {}
+                ms._pendingUserSettings["antiTimeoutEnabled"] = (data.antiTimeoutEnabled == true)
+            end
             if data.macroLabEnabled ~= nil then ms._macroLabEnabled = (data.macroLabEnabled == true) end
             if data.testingSource == "release" or data.testingSource == "artifact" then
                 ms._testingSource = data.testingSource
@@ -326,7 +331,6 @@
                 updateChannel    = ms._updateChannel or "stable",
                 testingSource    = ms._testingSource or "release",
                 cacheCleanerEnabled = ms._cacheCleanerEnabled or false,
-                antiTimeoutEnabled = ms._antiTimeoutEnabled or false,
                 macroLabEnabled    = ms._macroLabEnabled ~= false,
                 quickReloaded    = ms._quickReloaded or 0,
                 qrOptions        = ms._qrOptions or {

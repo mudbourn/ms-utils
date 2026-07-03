@@ -1608,7 +1608,10 @@
 
             if ok then
                 pcall(function()
-                    _pushToPanel(_windowPanel, "window", "appendEntry(" .. j .. ");updateCurrentWindow(" .. j .. ")")
+                    _pushToPanel(_windowPanel, "window", "appendEntry(" .. j .. ")")
+                end)
+                pcall(function()
+                    _pushToPanel(_windowPanel, "window", "updateCurrentWindow(" .. j .. ")")
                 end)
             end
         end

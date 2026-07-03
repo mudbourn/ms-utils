@@ -321,7 +321,6 @@
                 updateChannel           = ms._updateChannel or "stable",
                 testingSource           = ms._testingSource or "release",
                 cacheCleanerEnabled     = ms._cacheCleanerEnabled or false,
-                antiTimeoutEnabled      = ms._antiTimeoutEnabled or false,
                 macroLabEnabled         = ms._macroLabEnabled ~= false,
                 githubToken             = (function()
                     if ms._githubToken then return ms._githubToken end
@@ -667,19 +666,6 @@
                     os.execute("launchctl unload '" .. plistDst .. "' 2>/dev/null")
                     os.remove(plistDst)
                 end
-                ms.saveSettings()
-                ms.playSlot("update")
-                ms.ui.refresh()
-            end,
-
-            setAntiTimeoutEnabled = function(data)
-                local enabled = data.value and true or false
-                if enabled then
-                    if ms.antiTimeoutStart then ms.antiTimeoutStart() end
-                else
-                    if ms.antiTimeoutStop then ms.antiTimeoutStop() end
-                end
-                ms._antiTimeoutEnabled = enabled
                 ms.saveSettings()
                 ms.playSlot("update")
                 ms.ui.refresh()

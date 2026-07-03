@@ -82,7 +82,6 @@
   ],
   "devArchiveLimit" : 15,
   "cacheCleanerEnabled" : false,
-  "antiTimeoutEnabled" : false,
   "windowRadius" : 3,
   "macroLabEnabled" : true,
   "shell" : {
