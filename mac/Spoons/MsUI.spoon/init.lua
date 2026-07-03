@@ -323,6 +323,7 @@
                 testingSource           = ms._testingSource or "release",
                 cacheCleanerEnabled     = ms._cacheCleanerEnabled or false,
                 antiTimeoutEnabled      = ms._antiTimeoutEnabled or false,
+                macroLabEnabled         = ms._macroLabEnabled ~= false,
                 githubToken             = (function()
                     if ms._githubToken then return ms._githubToken end
                     local f = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_github_token", "r")
@@ -679,6 +680,23 @@
                 ms._antiTimeoutEnabled = enabled
                 ms.saveSettings()
                 ms.playSlot("update")
+                ms.ui.refresh()
+            end,
+
+            setMacroLabEnabled = function(data)
+                local enabled = data.value and true or false
+                ms._macroLabEnabled = enabled
+                ms.saveSettings()
+                ms.playSlot("update")
+                if not enabled and ms.shell and ms.shell.isReady and ms.shell.isReady() then
+                    -- Close shell and open legacy settings
+                    hs.timer.doAfter(0.3, function()
+                        pcall(function() ms.shell.hide() end)
+                        hs.timer.doAfter(0.2, function()
+                            pcall(function() ms.ui.show() end)
+                        end)
+                    end)
+                end
                 ms.ui.refresh()
             end,
 

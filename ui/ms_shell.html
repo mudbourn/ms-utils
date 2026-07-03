@@ -4411,6 +4411,32 @@ function createLogPanel(config) {
                     ),
                 );
 
+                // Enable v2 UI toggle
+                const v2On = S.macroLabEnabled !== false;
+                body.appendChild(
+                    row(
+                        "Enable v2 UI",
+                        "Use the new Macro Lab shell instead of legacy standalone panels",
+                        h(
+                            "button",
+                            {
+                                cls:
+                                    "btn-macro " +
+                                    (v2On ? "btn-enable" : "btn-disable"),
+                                onmouseenter: () => playSlot("hover"),
+                                onclick: () => {
+                                    playSlot("interact");
+                                    sendToHost({
+                                        action: "setMacroLabEnabled",
+                                        value: !v2On,
+                                    });
+                                },
+                            },
+                            v2On ? "ON" : "OFF",
+                        ),
+                    ),
+                );
+
                 // Log archive limit
                 body.appendChild(
                     buildSlider(

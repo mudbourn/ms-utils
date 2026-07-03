@@ -176,6 +176,7 @@
             end
             if data.cacheCleanerEnabled ~= nil then ms._cacheCleanerEnabled = (data.cacheCleanerEnabled == true) end
             if data.antiTimeoutEnabled ~= nil then ms._antiTimeoutEnabled = (data.antiTimeoutEnabled == true) end
+            if data.macroLabEnabled ~= nil then ms._macroLabEnabled = (data.macroLabEnabled == true) end
             if data.testingSource == "release" or data.testingSource == "artifact" then
                 ms._testingSource = data.testingSource
             end
@@ -323,6 +324,7 @@
                 testingSource    = ms._testingSource or "release",
                 cacheCleanerEnabled = ms._cacheCleanerEnabled or false,
                 antiTimeoutEnabled = ms._antiTimeoutEnabled or false,
+                macroLabEnabled    = ms._macroLabEnabled ~= false,
                 quickReloaded    = ms._quickReloaded or 0,
                 qrOptions        = ms._qrOptions or {
                     macros   = true,
