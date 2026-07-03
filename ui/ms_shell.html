@@ -2107,7 +2107,7 @@ function createLogPanel(config) {
                 channel: "watcher",
                 buildRow,
                 container: _panel,
-                maxEntries: 300,
+                maxEntries: 500,
                 scrollThresh: 48,
                 clearAction: "clearLog",
             });
@@ -2159,7 +2159,7 @@ function createLogPanel(config) {
                 buildRow, // defined below
                 container: _panel,
                 entrySelector: ".log .entry, .log .step",
-                maxEntries: 300,
+                maxEntries: 500,
                 scrollThresh: 48,
                 extractCopyText(el) {
                     const ts = el.querySelector(".ts")?.textContent || "";
@@ -2513,7 +2513,7 @@ function createLogPanel(config) {
                 channel: "window",
                 buildRow,
                 container: _panel,
-                maxEntries: 300,
+                maxEntries: 500,
                 scrollThresh: 48,
                 extractCopyText(el) {
                     const ts = el.querySelector(".ts")?.textContent || "";

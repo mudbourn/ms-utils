@@ -934,7 +934,7 @@
 -- END Branch Tracing --
 
 -- Panel Helpers --
-    local _HIST_MAX = 300
+    local _HIST_MAX = 500
 
     local function _loadDevHistory(panel, categories, shellPanelId)
         local entries = {}
