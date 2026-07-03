@@ -80,12 +80,9 @@
         [class^="panel-"] { width: 100%; height: 100%; display: none; flex-direction: column; overflow: hidden; }
         #panel { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 
-        /* ── Panel Header ── */
+        /* ── Panel Header (hidden — headless shell) ── */
         .panel-header, #header {
-            display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px;
-            background: var(--surface); border-bottom: 1px solid var(--border);
-            box-shadow: 0 1px 12px var(--accent-glow-faint); flex-shrink: 0;
-            -webkit-app-region: drag;
+            display: none;
         }
         #panel-title, #status-text { flex: 1; font-weight: 600; font-size: 13px; }
         .header-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
@@ -1695,7 +1692,11 @@ function createLogPanel(config) {
     window.applyTheme = window._shellApplyTheme;
 
     document.querySelectorAll('.rail-item').forEach(function(btn) {
+        btn.addEventListener('mouseenter', function() {
+            shellDispatch('_shell', 'playSlot', { slot: 'hover' });
+        });
         btn.addEventListener('click', function() {
+            shellDispatch('_shell', 'playSlot', { slot: 'interact' });
             var panel = btn.getAttribute('data-panel');
             if (panel) showPanel(panel);
         });
@@ -2995,12 +2996,12 @@ function createLogPanel(config) {
                 const list = h("div", { cls: "sound-list" });
 
                 // Filter state
-                let _filter = "all"; // "all" | "default" | "custom" | "macro"
-                const macroNames = new Set((S.macroSoundNames || []).map(n => n));
+                let _filter = "all"; // "all" | "default" | "active" | "macro"
                 function categoryOf(name) {
                     if (name.startsWith("d_")) return "default";
-                    if (macroNames.has(name)) return "macro";
-                    return "custom";
+                    if (name.startsWith("m_")) return "macro";
+                    if (name.startsWith("a_")) return "active";
+                    return "other";
                 }
 
                 // Filter bar
@@ -3008,7 +3009,7 @@ function createLogPanel(config) {
                 const filters = [
                     { key: "all", label: "All" },
                     { key: "default", label: "Default" },
-                    { key: "custom", label: "Custom" },
+                    { key: "active", label: "Active" },
                     { key: "macro", label: "Macro" },
                 ];
                 function rebuildList() {
@@ -3953,9 +3954,11 @@ function createLogPanel(config) {
                 // ── Sound Presets (all system slots) ──────────────────────────
                 const presets = S.soundPresets || [];
                 const ALL_SLOTS = [...LOAD_SLOTS, ...SLOTS];
+
+                // Slots managed by presets (all 14 system slots)
                 const presetSlotIds = ALL_SLOTS.map(s => s.id);
 
-                // d_* default mapping for all slots
+                // d_* default mapping for "Default" preset
                 const dMap = {
                     themeLoaded: "d_ThemeLoaded", load: "d_LoadEnd", launch: "d_Launch",
                     alert: "d_Alert", enabled: "d_MacrosOn", disabled: "d_MacrosOff",
@@ -3963,38 +3966,43 @@ function createLogPanel(config) {
                     reset: "d_Reset", interact: "d_Interact", hover: "d_Hover",
                     back: "d_Back", settingsOpen: "d_SettingsOpen", settingsClose: "d_SettingsClose",
                 };
-
-                // Detect which preset is currently active (if any)
-                // Only checks slots that the preset actually defines
-                let activePreset = null;
-                const sa = S.soundAssign || {};
-                for (const p of presets) {
-                    const pSlots = Object.keys(p.assigns || {});
-                    if (pSlots.length === 0) continue;
-                    let match = true;
-                    for (const sid of pSlots) {
-                        const expected = p.assigns[sid] || null;
-                        const actual = sa[sid] || null;
-                        if (expected !== actual) { match = false; break; }
-                    }
-                    if (match) { activePreset = String(p.num); break; }
-                }
-
-                body.appendChild(groupLabel("Sound Presets"));
-                const presetWrap = h("div", { cls: "seg" });
-                // Default assigns (d_* sounds)
                 const defaultAssigns = {};
                 for (const sid of presetSlotIds) {
                     if (dMap[sid]) defaultAssigns[sid] = dMap[sid];
                 }
-                // Check if current assignments match default
+
+                // Detect which preset is currently active
+                // Checks all slots the preset defines
+                let activePreset = null;
+                const sa = S.soundAssign || {};
+
+                // Check if "Default" (all d_*)
                 let isDefault = presetSlotIds.length > 0;
                 for (const sid of presetSlotIds) {
                     if ((sa[sid] || "") !== (defaultAssigns[sid] || "")) { isDefault = false; break; }
                 }
-                // "Custom" option
+                if (isDefault) activePreset = "default";
+
+                // Check numbered presets
+                if (!activePreset) {
+                    for (const p of presets) {
+                        const pSlots = Object.keys(p.assigns || {});
+                        if (pSlots.length === 0) continue;
+                        let match = true;
+                        for (const sid of pSlots) {
+                            const expected = p.assigns[sid] || null;
+                            const actual = sa[sid] || null;
+                            if (expected !== actual) { match = false; break; }
+                        }
+                        if (match) { activePreset = String(p.num); break; }
+                    }
+                }
+
+                body.appendChild(groupLabel("Sound Presets"));
+                const presetWrap = h("div", { cls: "seg" });
+                // "Custom" option — no preset applied
                 const customBtn = h("button", {
-                    cls: "seg-btn" + (activePreset === null && !isDefault ? " active" : ""),
+                    cls: "seg-btn" + (activePreset === null ? " active" : ""),
                     onmouseenter: () => playSlot("hover"),
                     onclick: () => {
                         playSlot("interact");
@@ -4002,9 +4010,9 @@ function createLogPanel(config) {
                     },
                 }, "Custom");
                 presetWrap.appendChild(customBtn);
-                // "Default" option
+                // "Default" option — all d_* sounds
                 const defaultBtn = h("button", {
-                    cls: "seg-btn" + (isDefault ? " active" : ""),
+                    cls: "seg-btn" + (activePreset === "default" ? " active" : ""),
                     onmouseenter: () => playSlot("hover"),
                     onclick: () => {
                         playSlot("interact");

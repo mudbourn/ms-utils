@@ -139,49 +139,57 @@
             for name in pairs(ms.macroSounds or {}) do table.insert(macroSoundNames, name) end
             table.sort(macroSoundNames)
 
-            -- Build sound presets from numbered variants.
-            -- Looks for base names and groups numbered variants into presets.
-            -- Matches both d_* defaults and bare custom names:
-            --   d_Launch (default), d_Launch2 (default variant),
-            --   Launch2 (custom variant in sounds/active/)
-            -- Covers all 14 system sound slots.
-            local presetSlots = {
-                { id = "themeLoaded",     bases = { "d_ThemeLoaded", "ThemeLoaded" } },
-                { id = "load",            bases = { "d_LoadEnd", "LoadEnd" } },
-                { id = "launch",          bases = { "d_Launch", "Launch" } },
-                { id = "alert",           bases = { "d_Alert", "Alert" } },
-                { id = "enabled",         bases = { "d_MacrosOn", "MacrosOn" } },
-                { id = "disabled",        bases = { "d_MacrosOff", "MacrosOff" } },
-                { id = "update",          bases = { "d_Update", "Update" } },
-                { id = "updateAvailable", bases = { "d_UpdateAvailable", "UpdateAvailable" } },
-                { id = "reset",           bases = { "d_Reset", "Reset" } },
-                { id = "interact",        bases = { "d_Interact", "Interact" } },
-                { id = "hover",           bases = { "d_Hover", "Hover" } },
-                { id = "back",            bases = { "d_Back", "Back" } },
-                { id = "settingsOpen",    bases = { "d_SettingsOpen", "SettingsOpen" } },
-                { id = "settingsClose",   bases = { "d_SettingsClose", "SettingsClose" } },
+            -- Build sound presets from d_* (default) and a_* (active) series.
+            -- Default preset: all 14 slots → d_* sounds
+            -- Preset 1/2/3: all 14 slots → a_* sounds, with optional number suffix
+            -- Falls back to d_* if a_* variant doesn't exist.
+            local slotBaseNames = {
+                { id = "themeLoaded",     d = "d_ThemeLoaded",     a = "a_ThemeLoaded" },
+                { id = "load",            d = "d_LoadEnd",         a = "a_LoadEnd" },
+                { id = "launch",          d = "d_Launch",          a = "a_Launch" },
+                { id = "alert",           d = "d_Alert",           a = "a_Alert" },
+                { id = "enabled",         d = "d_MacrosOn",        a = "a_MacrosOn" },
+                { id = "disabled",        d = "d_MacrosOff",       a = "a_MacrosOff" },
+                { id = "update",          d = "d_Update",          a = "a_Update" },
+                { id = "updateAvailable", d = "d_UpdateAvailable", a = "a_UpdateAvailable" },
+                { id = "reset",           d = "d_Reset",           a = "a_Reset" },
+                { id = "interact",        d = "d_Interact",        a = "a_Interact" },
+                { id = "hover",           d = "d_Hover",           a = "a_Hover" },
+                { id = "back",            d = "d_Back",            a = "a_Back" },
+                { id = "settingsOpen",    d = "d_SettingsOpen",    a = "a_SettingsOpen" },
+                { id = "settingsClose",   d = "d_SettingsClose",   a = "a_SettingsClose" },
             }
-            local presetMap = {}  -- presetNum → { slotId → soundName }
-            for _, ps in ipairs(presetSlots) do
-                for _, base in ipairs(ps.bases) do
-                    for sname in pairs(ms.sounds or {}) do
-                        local num = sname:match("^" .. base .. "(%d*)$")
-                        if num then
-                            num = num == "" and "1" or num
-                            presetMap[num] = presetMap[num] or {}
-                            if not presetMap[num][ps.id] then
-                                presetMap[num][ps.id] = sname
-                            end
-                        end
-                    end
-                end
+
+            -- Scan for available numbered variants
+            local allSounds = ms.sounds or {}
+            local function findVariant(base, num)
+                local name = num and (base .. num) or base
+                if allSounds[name] then return name end
+                return nil
             end
-            -- Convert to sorted array
+
+            -- Build presets
+            -- Preset 1: a_* (no suffix), fallback to d_*
+            -- Preset 2/3: a_*N, fallback to a_* (no suffix), fallback to d_*
             local soundPresets = {}
-            for num, assigns in pairs(presetMap) do
-                table.insert(soundPresets, { num = tonumber(num), assigns = assigns })
+            for num = 1, 3 do
+                local assigns = {}
+                for _, slot in ipairs(slotBaseNames) do
+                    local s
+                    if num > 1 then
+                        -- Try a_*N first, then a_* (no suffix), then d_*N, then d_*
+                        s = findVariant(slot.a, tostring(num))
+                            or findVariant(slot.a, nil)
+                            or findVariant(slot.d, tostring(num))
+                            or slot.d
+                    else
+                        -- Preset 1: a_* (no suffix), fallback to d_*
+                        s = findVariant(slot.a, nil) or slot.d
+                    end
+                    assigns[slot.id] = s
+                end
+                table.insert(soundPresets, { num = num, assigns = assigns })
             end
-            table.sort(soundPresets, function(a, b) return a.num < b.num end)
 
             local status, curHash = ms.integrity.check()
             local meta = ms.macroMeta or {}
@@ -602,15 +610,25 @@
 
             setCustomTheme = function(data)
                 ms._customThemeDisabled = not (data.value and true or false)
-                ms.saveSettings()
                 if ms._customThemeDisabled then
                     -- Revert to defaults
                     for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
-                    -- Reset loading sound presets to default values (not nil)
+                    -- Reset all sound slots to d_* defaults
                     local defaultAssigns = {
-                        themeLoaded = "d_ThemeLoaded",
-                        load        = "d_LoadEnd",
-                        launch      = "d_Launch",
+                        themeLoaded     = "d_ThemeLoaded",
+                        load            = "d_LoadEnd",
+                        launch          = "d_Launch",
+                        alert           = "d_Alert",
+                        enabled         = "d_MacrosOn",
+                        disabled        = "d_MacrosOff",
+                        update          = "d_Update",
+                        updateAvailable = "d_UpdateAvailable",
+                        reset           = "d_Reset",
+                        interact        = "d_Interact",
+                        hover           = "d_Hover",
+                        back            = "d_Back",
+                        settingsOpen    = "d_SettingsOpen",
+                        settingsClose   = "d_SettingsClose",
                     }
                     for sid, def in pairs(defaultAssigns) do
                         ms.soundAssign[sid] = def
@@ -619,6 +637,8 @@
                     -- Reload custom theme
                     ms.loadTheme()
                 end
+                -- Save AFTER applying changes
+                ms.saveSettings()
                 -- Re-discover sounds BEFORE playing so paths resolve correctly
                 ms._soundsDirty = true
                 ms._discoverSounds()
@@ -628,6 +648,8 @@
                 ms.playSlot("interact")
                 ms.playSlot("update")
                 ms.ui.refresh()
+                -- Delayed refresh to ensure shell preset detection picks up new soundAssign
+                hs.timer.doAfter(0.2, function() ms.ui.refresh() end)
             end,
 
             setDevArchiveLimit = function(data)

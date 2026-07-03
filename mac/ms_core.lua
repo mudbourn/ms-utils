@@ -1499,11 +1499,57 @@
             end
 
             ms._soundsDirty = true  -- force the first scan at startup
+
+            -- Auto-sort: move misplaced sounds to correct folder based on prefix.
+            -- d_* → sounds/defaults/, a_* → sounds/active/, m_* → sounds/macro/
+            ms._autoSortSounds = function()
+                local SoundLib = hs.configdir .. "/sounds/"
+                local dirs = {
+                    { dir = SoundLib .. "defaults/", prefix = "d_", match = { "d_" } },
+                    { dir = SoundLib .. "active/",   prefix = "a_", match = { "a_" } },
+                    { dir = SoundLib .. "macro/",    prefix = "m_", match = { "m_" } },
+                }
+                for _, info in ipairs(dirs) do
+                    if hs.fs.attributes(info.dir) then
+                        for file in hs.fs.dir(info.dir) do
+                            if file ~= "." and file ~= ".." and file:match("%.wav$") then
+                                local name = file:match("^(.+)%.[^%.]+$")
+                                if name then
+                                    -- Check if prefix matches this directory
+                                    local belongs = false
+                                    for _, pfx in ipairs(info.match) do
+                                        if name:sub(1, #pfx) == pfx then belongs = true; break end
+                                    end
+                                    if not belongs then
+                                        -- Find correct directory
+                                        for _, dest in ipairs(dirs) do
+                                            for _, pfx in ipairs(dest.match) do
+                                                if name:sub(1, #pfx) == pfx then
+                                                    local src = info.dir .. file
+                                                    local dst = dest.dir .. file
+                                                    if src ~= dst then
+                                                        os.rename(src, dst)
+                                                    end
+                                                    break
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
             ms._discoverSounds = function()
                 if not ms._soundsDirty then return end
                 ms._soundsDirty = false
                 ms.sounds      = {}
                 ms.macroSounds = {}
+
+                -- Auto-sort misplaced sounds before scanning
+                pcall(ms._autoSortSounds)
 
                 -- Helper: scan a directory for .wav files into a target table
                 local function scanDir(dir, target)

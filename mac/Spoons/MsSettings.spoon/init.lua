@@ -1862,39 +1862,36 @@
                             end
                         end
                         if hasSounds then
-                            local fileList = ""
-                            for i, f in ipairs(legacyFiles) do
-                                if i <= 10 then
-                                    fileList = fileList .. "  • " .. f:gsub("%.[^%.]+$", "") .. "\n"
+                            -- Auto-sort by prefix: d_* → defaults, a_* → active, m_* → macro
+                            -- Unprefixed files go to active (legacy default)
+                            for _, f in ipairs(legacyFiles) do
+                                local name = f:match("^(.+)%.[^%.]+$") or f
+                                local dest = SoundActiveDir  -- default for unprefixed
+                                if name:sub(1, 2) == "d_" then
+                                    dest = SoundDefaultsDir
+                                elseif name:sub(1, 2) == "m_" then
+                                    dest = SoundMacroDir
+                                elseif name:sub(1, 2) == "a_" then
+                                    dest = SoundActiveDir
                                 end
-                            end
-                            if #legacyFiles > 10 then
-                                fileList = fileList .. "  … and " .. (#legacyFiles - 10) .. " more\n"
-                            end
-                            ms.ui.modal({
-                                title   = "Import Sounds (Legacy Format)",
-                                msg     = #legacyFiles .. " sound(s) in flat directory:\n\n" .. fileList,
-                                confirm = "Theming Sounds",
-                                cancel  = "Macro Sounds",
-                            }, function(r)
-                                local soundDest = r.confirmed and SoundActiveDir or SoundMacroDir
-                                local added = (soundDest == SoundActiveDir) and soundsAdded or macroAdded
-                                _importSndDir(soundsDir, soundDest, added)
-                                if soundDest == SoundActiveDir then
-                                    ms.importedSounds = ms.importedSounds or {}
-                                    for _, name in ipairs(added) do
-                                        for file in hs.fs.dir(soundsDir) do
-                                            if file ~= "." and file ~= ".." then
-                                                local n = file:match("^(.+)%.[^%.]+$") or file
-                                                if n == name then
-                                                    ms.importedSounds[name] = file
-                                                    break
-                                                end
-                                            end
+                                if not hs.fs.attributes(dest) then
+                                    hs.execute("mkdir -p " .. sq(dest))
+                                end
+                                local srcSnd = soundsDir .. f
+                                local dstSnd = dest .. f
+                                if hs.fs.attributes(srcSnd, "mode") == "file" and not hs.fs.attributes(dstSnd) then
+                                    local sf = io.open(srcSnd, "rb")
+                                    if sf then
+                                        local data = sf:read("*all"); sf:close()
+                                        local out = io.open(dstSnd, "wb")
+                                        if out then
+                                            out:write(data); out:close()
+                                            local added = (dest == SoundMacroDir) and macroAdded or soundsAdded
+                                            table.insert(added, name)
                                         end
                                     end
                                 end
-                            end)
+                            end
                         end
                     end
                 end
