@@ -1097,7 +1097,8 @@
                     ev:setProperty(_camBtn, 5)
                     ev:setProperty(_camDx, dx)
                     ev:setProperty(_camDy, dy)
-                    ev:post()
+                    local app = ms._targetHandle or hs.application.get(ms._targetApp)
+                    if app then ev:post(app) else ev:post() end
                     if not _camRebalancing then
                         _camTotalX = _camTotalX + dx
                         _camTotalY = _camTotalY + dy
