@@ -101,7 +101,6 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 │   ├── DOCS_MAC.md             macOS API reference (~1,600 lines)
 │   ├── DOCS_WINDOWS.md         Windows API reference
 │   ├── function-index.md       Quick reference for all ms.* functions
-│   ├── icon-requirements.md    SVG icon specifications
 │   └── ARCHITECTURE.md         This file
 │
 ├── MANIFEST.json               Update manifest — version, sha256, url, bundle, signature.

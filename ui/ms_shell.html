@@ -515,7 +515,7 @@
         .macro-toolbar-btn.error { background: var(--error-bg); border-color: var(--error-state); color: var(--error-text); }
         .macro-rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--recording); margin-right: 4px; vertical-align: middle; animation: macro-rec-dot-pulse 1s ease-in-out infinite; }
         @keyframes macro-rec-dot-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.75); } }
-        .macro-test-toast { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 11px; font-family: var(--font-mono); padding: 6px 14px; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 100; max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 12px rgba(0,0,0,0.4); }
+        .macro-test-toast { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 11px; font-family: var(--font); padding: 6px 14px; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 100; max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 12px rgba(0,0,0,0.4); }
         .macro-test-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
         .macro-test-toast.error-toast { border-color: var(--error-state); color: var(--error-text); white-space: normal; max-width: 500px; }
         .macro-test-toast.success-toast { border-color: var(--success-state); color: var(--success-text); }
@@ -1349,6 +1349,7 @@ function createLogPanel(config) {
     }
 
     function playSlot(slot) {
+        if (slot === "hover" && !document.hasFocus()) return;
         sendToHost({ action: "playSlot", slot });
     }
 
@@ -2906,6 +2907,7 @@ function createLogPanel(config) {
             const _lastSlot = {};
             function playSlot(slot) {
                 if (_dragging) return; // window is being dragged; skip hover sounds
+                if (slot === "hover" && !document.hasFocus()) return;
                 const now = Date.now();
                 if (now - (_lastSlot[slot] || 0) < 50) return;
                 _lastSlot[slot] = now;
@@ -3931,6 +3933,32 @@ function createLogPanel(config) {
                     ),
                 );
 
+                // Enable v2 UI toggle
+                const v2On = S.macroLabEnabled !== false;
+                body.appendChild(
+                    row(
+                        "Enable v2 UI",
+                        "Use the new Macro Lab shell instead of legacy standalone panels",
+                        h(
+                            "button",
+                            {
+                                cls:
+                                    "btn-macro " +
+                                    (v2On ? "btn-enable" : "btn-disable"),
+                                onmouseenter: () => playSlot("hover"),
+                                onclick: () => {
+                                    playSlot("interact");
+                                    sendToHost({
+                                        action: "setMacroLabEnabled",
+                                        value: !v2On,
+                                    });
+                                },
+                            },
+                            v2On ? "ON" : "OFF",
+                        ),
+                    ),
+                );
+
                 // User-defined settings targeting the Settings section
                 const items = S.userSettings || [];
                 const hasSystem =
@@ -4609,32 +4637,6 @@ function createLogPanel(config) {
                                 },
                             },
                             cacheCleaner ? "ON" : "OFF",
-                        ),
-                    ),
-                );
-
-                // Enable v2 UI toggle
-                const v2On = S.macroLabEnabled !== false;
-                body.appendChild(
-                    row(
-                        "Enable v2 UI",
-                        "Use the new Macro Lab shell instead of legacy standalone panels",
-                        h(
-                            "button",
-                            {
-                                cls:
-                                    "btn-macro " +
-                                    (v2On ? "btn-enable" : "btn-disable"),
-                                onmouseenter: () => playSlot("hover"),
-                                onclick: () => {
-                                    playSlot("interact");
-                                    sendToHost({
-                                        action: "setMacroLabEnabled",
-                                        value: !v2On,
-                                    });
-                                },
-                            },
-                            v2On ? "ON" : "OFF",
                         ),
                     ),
                 );

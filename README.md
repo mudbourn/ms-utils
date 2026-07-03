@@ -167,7 +167,6 @@ My position:
 - **[macOS API Reference](docs/DOCS_MAC.md)** — every `ms.*` function documented
 - **[Windows API Reference](docs/DOCS_WINDOWS.md)** — Windows-specific API
 - **[Function Index](docs/function-index.md)** — quick reference for all functions
-- **[Icon Requirements](docs/icon-requirements.md)** — SVG icon specifications
 - **[Architecture](docs/ARCHITECTURE.md)** — technical details, directory layout, security model
 
 ---

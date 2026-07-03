@@ -2755,6 +2755,24 @@
                                 if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
                             end)
                         end
+                        -- Close: hide the shell when any panel sends {action:"close"}
+                        if action == "close" then
+                            pcall(function() ms.shell.hide() end)
+                            return
+                        end
+                        -- Move: drag the shell window (JS sends dx/dy deltas)
+                        if action == "move" and body and body.dx and body.dy then
+                            pcall(function()
+                                local f = _shellView:frame()
+                                _shellView:frame({
+                                    x = f.x + body.dx,
+                                    y = f.y + body.dy,
+                                    w = f.w,
+                                    h = f.h,
+                                })
+                            end)
+                            return
+                        end
                         -- Bus routing
                         if ms.bus then
                             local topic = "ui:" .. panel .. ":" .. action
@@ -2776,7 +2794,7 @@
                     _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
                     pcall(function() _shellView:windowStyle(2 + 4 + 8) end) -- no native title bar (flag 1 = titled)
                     pcall(function() _shellView:allowResizing(true) end)
-                    pcall(function() _shellView:minimumSize({ w = 600, h = 400 }) end)
+                    pcall(function() _shellView:minimumSize({ w = 800, h = 500 }) end)
                     pcall(function() _shellView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
                     pcall(function() _shellView:allowTextEntry(true) end)
                     pcall(function() _shellView:shadow(true) end)
