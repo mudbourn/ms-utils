@@ -100,6 +100,13 @@
 
     local _camMoveAccum  = 0
     local _waitAccum     = 0
+
+    -- Shell-mode helper: returns true when the shell is the active display
+    -- (standalone panels are nil, but shell panels are inline and ready)
+    local function _shellActive()
+        local m = _G.ms
+        return m and m.shell and m.shell.isReady and m.shell.isReady() or false
+    end
     local _waitDuration  = 0
     local _traceSuppress = false
     local _branchState   = {}
@@ -244,13 +251,93 @@
             })
         end
 
-        -- Shell bus subscribers: handle messages from dev tool panels in shell iframes
+        -- Shell bus subscribers: handle messages from dev tool panels in shell
         if ms.bus then
+            -- Console panel actions
             ms.bus.on("ui:console:*", function(topic, body)
                 if not body or type(body) ~= "table" then return end
-                if body.action == "execute" and body.code then
-                    local ok, err = pcall(function() load(body.code)() end)
-                    if not ok then print("[console] execute error: " .. tostring(err)) end
+                local action = body.action
+                if action == "execute" and body.code then
+                    local fn, err = load("return " .. body.code)
+                    if not fn then fn, err = load(body.code) end
+                    if not fn then
+                        self:_devWrite({ type = "error", msg = err or "syntax error" })
+                    else
+                        local res = table.pack(pcall(fn))
+                        local success = table.remove(res, 1)
+                        if not success then
+                            self:_devWrite({ type = "error", msg = tostring(res[1]) })
+                        elseif #res > 0 then
+                            local parts = {}
+                            for _, v in ipairs(res) do parts[#parts + 1] = tostring(v) end
+                            self:_devWrite({ type = "result", msg = table.concat(parts, "\t") })
+                        end
+                    end
+                elseif action == "clear" then
+                    for _, cat in ipairs({"macro", "console", "error", "system", "input"}) do
+                        local p = _catPaths[cat]
+                        if p then local f = io.open(p, "w"); if f then f:close() end end
+                        local r = _readablePaths[cat]
+                        if r then local f = io.open(r, "w"); if f then f:close() end end
+                    end
+                elseif action == "playSlot" and body.slot then
+                    ms.playSlot(body.slot)
+                elseif action == "ready" then
+                    _loadDevHistory(nil, {"macro", "console", "error", "system", "input"}, "console")
+                end
+            end)
+
+            -- Watcher panel actions
+            ms.bus.on("ui:watcher:*", function(topic, body)
+                if not body or type(body) ~= "table" then return end
+                local action = body.action
+                if action == "clear" then
+                    for _, cat in ipairs({"macro", "error", "system"}) do
+                        local p = _catPaths[cat]
+                        if p then local f = io.open(p, "w"); if f then f:close() end end
+                        local r = _readablePaths[cat]
+                        if r then local f = io.open(r, "w"); if f then f:close() end end
+                    end
+                elseif action == "playSlot" and body.slot then
+                    ms.playSlot(body.slot)
+                elseif action == "ready" then
+                    _loadDevHistory(nil, {"macro", "error", "system"}, "watcher")
+                end
+            end)
+
+            -- Inputs (keys) panel actions
+            ms.bus.on("ui:keys:*", function(topic, body)
+                if not body or type(body) ~= "table" then return end
+                local action = body.action
+                if action == "clear" then
+                    local p = _catPaths["input"]
+                    if p then local f = io.open(p, "w"); if f then f:close() end end
+                    local r = _readablePaths["input"]
+                    if r then local f = io.open(r, "w"); if f then f:close() end end
+                elseif action == "playSlot" and body.slot then
+                    ms.playSlot(body.slot)
+                elseif action == "ready" then
+                    if not _keysReady then
+                        _keysReady = true
+                        local _p = hs.mouse.absolutePosition()
+                        _mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
+                    end
+                    _loadDevHistory(nil, {"input"}, "keys")
+                elseif action == "setCoordMode" then
+                    _coordMode = body.mode or "screen"
+                end
+            end)
+
+            -- Window panel actions
+            ms.bus.on("ui:window:*", function(topic, body)
+                if not body or type(body) ~= "table" then return end
+                local action = body.action
+                if action == "clear" then
+                    _windowHistory = {}
+                elseif action == "playSlot" and body.slot then
+                    ms.playSlot(body.slot)
+                elseif action == "ready" then
+                    -- History + current window loaded in showWindow() shell path
                 end
             end)
         end
@@ -490,7 +577,7 @@
 
         local t = entry.type
 
-        if _consolePanel and t ~= "mousemove" and t ~= "step" then
+        if (_consolePanel or _shellActive()) and t ~= "mousemove" and t ~= "step" then
             local send = false
 
             if t == "macro" then
@@ -518,13 +605,13 @@
             end
         end
 
-        if _watcherPanel and (t == "macro" or t == "print" or t == "error" or t == "system" or t == "sound") then
+        if (_watcherPanel or _shellActive()) and (t == "macro" or t == "print" or t == "error" or t == "system" or t == "sound") then
             pcall(function()
                 _pushToPanel(_watcherPanel, "watcher", "appendEntry(" .. json .. ")")
             end)
         end
 
-        if _keysPanel and _keysReady
+        if (_keysPanel or _shellActive()) and _keysReady
             and (t == "key" or t == "mouse" or t == "scroll" or t == "mousemove") then
             pcall(function()
                 _pushToPanel(_keysPanel, "keys", "appendEntry(" .. json .. ")")
@@ -564,7 +651,7 @@
             _activeKeys[keyCode] = nil
         end
 
-        if _keysPanel then
+        if _keysPanel or _shellActive() then
             local active = {}
 
             for code, name in pairs(_activeKeys) do
@@ -950,7 +1037,7 @@
     end
 
     function MsDevTools:pushMouseState(x, y)
-        if not _keysPanel then return end
+        if not _keysPanel and not _shellActive() then return end
 
         local _x   = x or (_mousePos and _mousePos.x) or 0
         local _y   = y or (_mousePos and _mousePos.y) or 0
@@ -1352,7 +1439,8 @@
         if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
             _keysOpen = true
             _keysReady = true
-            pcall(function() ms.shell.mountPanel("keys") end)
+            ms.shell.show()
+            ms.shell.eval("showPanel('keys')")
             hs.timer.doAfter(0.15, function()
                 _loadDevHistory(nil, {"input"}, "keys")
             end)
@@ -1450,7 +1538,7 @@
             table.remove(_windowHistory, 1)
         end
 
-        if _windowPanel then
+        if _windowPanel or _shellActive() then
             local ok, j = pcall(hs.json.encode, entry)
 
             if ok then
@@ -1537,7 +1625,62 @@
         local ms = _G.ms
         if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
             _windowOpen = true
-            pcall(function() ms.shell.mountPanel("window") end)
+            ms.shell.show()
+            ms.shell.eval("showPanel('window')")
+            -- Load window history and current state
+            hs.timer.doAfter(0.15, function()
+                if #_windowHistory > 0 then
+                    local ok, j = pcall(hs.json.encode, _windowHistory)
+                    if ok then
+                        pcall(function() ms.shell.eval("shellReceive('window','loadHistory'," .. j .. ")") end)
+                    end
+                end
+                local win = hs.window.focusedWindow()
+                if win then
+                    local app   = (win:application() and win:application():name()) or "?"
+                    local title = win:title() or ""
+                    local wf    = win:frame()
+                    local ok2, j2 = pcall(hs.json.encode, {
+                        type  = "focus",
+                        ts    = os.date("%H:%M:%S"),
+                        app   = app,
+                        title = title,
+                        w     = math.floor(wf.w),
+                        h     = math.floor(wf.h),
+                        x     = math.floor(wf.x),
+                        y     = math.floor(wf.y),
+                    })
+                    if ok2 then
+                        pcall(function() ms.shell.eval("shellReceive('window','updateCurrentWindow'," .. j2 .. ")") end)
+                    end
+                end
+            end)
+            -- Start window focus poller for shell mode
+            if _windowPoller then _windowPoller:stop() end
+            _windowPoller = hs.timer.doEvery(0.4, function()
+                if not _windowOpen or (not _windowPanel and not _shellActive()) then
+                    if _windowPoller then _windowPoller:stop(); _windowPoller = nil end
+                    return
+                end
+                local win = hs.window.focusedWindow()
+                if not win then return end
+                local winId = win:id()
+                if winId == _windowLast then return end
+                _windowLast = winId
+                local app   = (win:application() and win:application():name()) or "?"
+                local title = win:title() or ""
+                local f     = win:frame()
+                self:_pushWindowEvent({
+                    type  = "focus",
+                    ts    = os.time(),
+                    app   = app,
+                    title = title,
+                    w     = math.floor(f.w),
+                    h     = math.floor(f.h),
+                    x     = math.floor(f.x),
+                    y     = math.floor(f.y),
+                })
+            end)
             return
         end
 
@@ -1581,7 +1724,7 @@
         if _windowPoller then _windowPoller:stop() end
 
         _windowPoller = hs.timer.doEvery(0.4, function()
-            if not _windowOpen or not _windowPanel then
+            if not _windowOpen or (not _windowPanel and not _shellActive()) then
                 if _windowPoller then
                     _windowPoller:stop()
                     _windowPoller = nil
@@ -1691,7 +1834,7 @@
 
         self:log(entry)
 
-        if _watcherPanel then
+        if _watcherPanel or _shellActive() then
             local ok, j = pcall(hs.json.encode, entry)
 
             if ok then
