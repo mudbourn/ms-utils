@@ -1257,8 +1257,22 @@ function applyTheme(t) {
 function defaultExtractCopyText(el) {
     const ts = el.querySelector(".ts")?.textContent || "";
     const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
-    const msg = el.querySelector(".msg")?.textContent || "";
-    return msg ? `${ts} [${badge}] ${msg}` : `${ts} [${badge}]`;
+    // Try .msg first, then .step-msg, then gather all text content as fallback
+    let msg = el.querySelector(".msg")?.textContent || "";
+    if (!msg) msg = el.querySelector(".step-msg")?.textContent || "";
+    if (!msg) {
+        // Fallback: gather non-ts, non-badge text from child spans
+        const parts = [];
+        el.querySelectorAll(".key-name, .mouse-name, .scroll-name, .arrow, .dim, .input").forEach(s => {
+            const t = s.textContent?.trim();
+            if (t) parts.push(t);
+        });
+        msg = parts.join(" ");
+    }
+    const repeat = el.querySelector(".repeat-badge")?.textContent || "";
+    const prefix = badge ? `${ts} [${badge}]` : ts;
+    const suffix = repeat ? ` ${repeat}` : '';
+    return msg ? `${prefix} ${msg}${suffix}` : `${prefix}${suffix}`;
 }
 
 // ── Time helpers ─────────────────────────────────────────────────────────
@@ -1393,7 +1407,18 @@ function createLogPanel(config) {
             }
         }
         const text = lines.join("\n");
-        try { navigator.clipboard.writeText(text); } catch (_) {}
+        // Try native clipboard first, fall back to host
+        try {
+            navigator.clipboard.writeText(text).catch(() => {
+                if (typeof shellDispatch === "function") {
+                    shellDispatch("_shell", "clipboard", { text });
+                }
+            });
+        } catch (_) {
+            if (typeof shellDispatch === "function") {
+                shellDispatch("_shell", "clipboard", { text });
+            }
+        }
         playSlot("update");
     }
 
@@ -1443,6 +1468,9 @@ function createLogPanel(config) {
 
     // Suppress native context menu, show custom menu
     document.addEventListener("contextmenu", (e) => {
+        // Only handle when this panel is visible
+        if (container && container.style.display === "none") return;
+        if (container && getComputedStyle(container).display === "none") return;
         e.preventDefault();
         const row = e.target.closest(".entry, .step");
         const items = [];
@@ -1470,6 +1498,9 @@ function createLogPanel(config) {
     // ── Keyboard shortcuts ─────────────────────────────────────────────
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeCtxMenu();
+        // Only handle shortcuts when this panel is visible
+        if (container && container.style.display === "none") return;
+        if (container && getComputedStyle(container).display === "none") return;
         const inInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
         if ((e.metaKey || e.ctrlKey) && e.key === "a" && !inInput) {
             e.preventDefault();
@@ -1511,12 +1542,35 @@ function createLogPanel(config) {
     })();
 
     // ── Default appendEntry / loadHistory (single #log) ────────────────
-    let _lastEntryKey = null;
-    let _lastEntryRow = null;
-    let _repeatCount = 0;
+    const _lastByLabel = {};
+    const _pendingHolds = {}; // label+key → { row, ts }
 
     function _entryKey(entry) {
-        return (entry.type || '') + '|' + (entry.msg || '') + '|' + (entry.event || '') + '|' + (entry.key || '') + '|' + (entry.label || '');
+        let msg = entry.msg || '';
+        // Strip leading [label] prefix (already tracked by _entryLabel)
+        msg = msg.replace(/^\[[^\]]+\]\s+/, '');
+        // Strip key direction indicators for collapsing: "↓ W" / "↑ W" → "key W"
+        msg = msg.replace(/^[↓↑]\s+/, 'key ');
+        return (entry.type || '') + '|' + msg + '|' + (entry.event || '');
+    }
+
+    function _entryLabel(entry) {
+        const m = (entry.msg || '').match(/^\[([^\]]+)\]\s/);
+        return m ? m[1] : (entry.label || entry.type || '_default');
+    }
+
+    function _isKeyDown(entry) {
+        return (entry.msg || '').includes('] ↓ ');
+    }
+
+    function _isKeyUp(entry) {
+        return (entry.msg || '').includes('] ↑ ');
+    }
+
+    function _holdKey(entry) {
+        // Extract key name from "[label] ↓ W" → "W"
+        const m = (entry.msg || '').match(/\] [↓↑]\s+(.+)$/);
+        return m ? m[1] : null;
     }
 
     function appendEntry(entry) {
@@ -1524,23 +1578,74 @@ function createLogPanel(config) {
         const log = _byId("log");
         if (!log) return;
         const atBottom = _isNearBottom(log, scrollThresh);
-        const key = _entryKey(entry);
+        const label = _entryLabel(entry);
 
-        if (key === _lastEntryKey && _lastEntryRow) {
-            _repeatCount++;
-            let badge = _lastEntryRow.querySelector('.repeat-badge');
+        // Key hold tracking: ↓ stores pending, ↑ replaces with hold entry
+        if (_isKeyDown(entry)) {
+            const keyName = _holdKey(entry);
+            if (keyName) {
+                const holdId = label + ':' + keyName;
+                const row = buildRow(entry);
+                row.dataset.holdId = holdId;
+                _pendingHolds[holdId] = { row, ts: entry.ts };
+                log.appendChild(row);
+                // Update _lastByLabel so this doesn't also get consecutive-collapsed
+                const key = _entryKey(entry);
+                _lastByLabel[label] = { key, row, count: 1 };
+                _trimLog(log, maxEntries);
+                if (atBottom) log.scrollTop = log.scrollHeight;
+                return;
+            }
+        }
+
+        if (_isKeyUp(entry)) {
+            const keyName = _holdKey(entry);
+            if (keyName) {
+                const holdId = label + ':' + keyName;
+                const pending = _pendingHolds[holdId];
+                if (pending && pending.row && pending.row.parentNode) {
+                    // Replace the ↓ row with a hold row
+                    const holdRow = document.createElement('div');
+                    holdRow.className = 'step';
+                    holdRow.dataset.cat = 'keys';
+                    const ts = document.createElement('span');
+                    ts.className = 'ts';
+                    ts.textContent = '[' + (entry.ts || '') + ']';
+                    const msg = document.createElement('span');
+                    msg.className = 'step-msg';
+                    msg.textContent = '[' + label + '] hold ' + keyName;
+                    holdRow.append(ts, msg);
+                    holdRow.onmouseenter = function() { lp.playSlot('hover'); };
+                    holdRow.onclick = lp._handleEntryClick;
+                    pending.row.replaceWith(holdRow);
+                    delete _pendingHolds[holdId];
+                    // Clear lastByLabel so next entry for this label starts fresh
+                    delete _lastByLabel[label];
+                    _trimLog(log, maxEntries);
+                    if (atBottom) log.scrollTop = log.scrollHeight;
+                    return;
+                }
+            }
+        }
+
+        // Default: consecutive suppression per label
+        const key = _entryKey(entry);
+        const prev = _lastByLabel[label];
+
+        if (prev && prev.key === key && prev.row && prev.row.parentNode) {
+            prev.count++;
+            let badge = prev.row.querySelector('.repeat-badge');
             if (!badge) {
                 badge = document.createElement('span');
                 badge.className = 'repeat-badge';
                 badge.style.cssText = 'font-size:10px;color:var(--text3);margin-left:4px;flex-shrink:0;';
-                _lastEntryRow.appendChild(badge);
+                prev.row.appendChild(badge);
             }
-            badge.textContent = '×' + _repeatCount;
+            badge.textContent = '×' + prev.count;
         } else {
-            _lastEntryRow = buildRow(entry);
-            _lastEntryKey = key;
-            _repeatCount = 1;
-            log.appendChild(_lastEntryRow);
+            const row = buildRow(entry);
+            _lastByLabel[label] = { key, row, count: 1 };
+            log.appendChild(row);
         }
 
         _trimLog(log, maxEntries);
@@ -1551,9 +1656,8 @@ function createLogPanel(config) {
         const log = _byId("log");
         if (!log) return;
         log.innerHTML = "";
-        _lastEntryKey = null;
-        _lastEntryRow = null;
-        _repeatCount = 0;
+        for (const k in _lastByLabel) delete _lastByLabel[k];
+        for (const k in _pendingHolds) delete _pendingHolds[k];
         const capped =
             entries && entries.length > maxEntries
                 ? entries.slice(-maxEntries)
@@ -2700,12 +2804,15 @@ function createLogPanel(config) {
                 closeCtxMenu();
                 if (!e.target.closest(".reload-dropdown")) closeReloadDropdown();
             });
+            const _macrosPanel = document.querySelector('.panel-macros');
             document.addEventListener("contextmenu", (e) => {
+                if (_macrosPanel && getComputedStyle(_macrosPanel).display === "none") return;
                 e.preventDefault();
                 closeCtxMenu();
                 closeReloadDropdown();
             });
             document.addEventListener("keydown", (e) => {
+                if (_macrosPanel && getComputedStyle(_macrosPanel).display === "none") return;
                 if (e.key === "Escape") { closeCtxMenu(); closeReloadDropdown(); }
             });
 

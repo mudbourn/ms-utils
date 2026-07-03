@@ -1658,9 +1658,10 @@
                 if not ms.soundEnabled then return false end
                 if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" then return false end
                 ms._slotHandles = ms._slotHandles or {}
-                -- Stop any currently-playing instance of this slot and replay on top
+                -- If this slot is already playing, skip to avoid clipping/restart
                 if ms._slotHandles[slotId] then
-                    pcall(function() ms._slotHandles[slotId]:stop() end)
+                    local ok, playing = pcall(function() return ms._slotHandles[slotId]:playing() end)
+                    if ok and playing then return ms._slotHandles[slotId] end
                     ms._slotHandles[slotId] = nil
                 end
                 local assigned = ms.soundAssign and ms.soundAssign[slotId]
@@ -2948,6 +2949,12 @@
                     -- Panel close: hide the shell when any panel sends {action:"close"}
                     ms.bus.on("ui:*:close", function()
                         pcall(function() ms.shell.hide() end)
+                    end)
+                    -- Clipboard: write text to system clipboard
+                    ms.bus.on("ui:*:clipboard", function(_, body)
+                        if body and body.text then
+                            pcall(function() hs.pasteboard.setContents(body.text) end)
+                        end
                     end)
                 end
             end
