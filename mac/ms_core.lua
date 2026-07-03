@@ -2535,7 +2535,7 @@
                         leftActive = true
                         local co = coroutine.create(function()
                             ms.Mouse(Press, Left, Mouse, 0, 0)
-                            while leftPhysicallyHeld and BindValidity == 1 do ms.wait(10) end
+                            while leftPhysicallyHeld and BindValidity == 1 and ms._robloxActive do ms.wait(1) end
                             ms.Mouse(Release, Left, Mouse, 0, 0)
                             ms.wait(50)
                             leftActive = false
@@ -2568,7 +2568,7 @@
                         rightActive = true
                         local co = coroutine.create(function()
                             ms.Mouse(Press, Right, Mouse, 0, 0)
-                            while rightPhysicallyHeld and BindValidity == 1 do ms.wait(10) end
+                            while rightPhysicallyHeld and BindValidity == 1 and ms._robloxActive do ms.wait(1) end
                             ms.Mouse(Release, Right, Mouse, 0, 0)
                             ms.wait(50)
                             rightActive = false
