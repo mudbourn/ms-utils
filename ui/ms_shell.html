@@ -679,6 +679,8 @@
                 type="text"
                 placeholder="> enter lua…"
                 autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
                 spellcheck="false"
             />
             <button
@@ -1079,7 +1081,7 @@
             <div id="modal">
                 <div id="modal-title"></div>
                 <div id="modal-msg"></div>
-                <input id="modal-input" type="text" />
+                <input id="modal-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                 <div class="modal-btns">
                     <button
                         id="modal-cancel"
@@ -3875,40 +3877,8 @@ function createLogPanel(config) {
             function buildSettings(body) {
                 const hidden = S.hiddenFeatures || {};
 
-                // Camera Sensitivity (moved from Tools)
-                if (!hidden.sensitivity) {
-                    body.appendChild(
-                        buildSlider(
-                            "Camera Sensitivity",
-                            null,
-                            0.1,
-                            4,
-                            0.05,
-                            null,
-                            S.sensitivity ?? 1.5,
-                            (v) =>
-                                sendToHost({
-                                    action: "setSensitivity",
-                                    value: v,
-                                }),
-                            [
-                                {
-                                    icon: "",
-                                    label: "Reset to default",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "resetSetting",
-                                            key: "sensitivity",
-                                        }),
-                                },
-                            ],
-                        ),
-                    );
-                }
-
                 // Independent Binds (moved from Tools)
                 if (!hidden.independentBinds) {
-                    if (!hidden.sensitivity) body.appendChild(divider());
                     body.appendChild(
                         row(
                             "Independent Binds",
@@ -3964,7 +3934,7 @@ function createLogPanel(config) {
                 // User-defined settings targeting the Settings section
                 const items = S.userSettings || [];
                 const hasSystem =
-                    !hidden.sensitivity || !hidden.independentBinds;
+                    !hidden.independentBinds;
                 if (items.length > 0) {
                     if (hasSystem) body.appendChild(divider());
                     for (const item of items) {
@@ -5652,6 +5622,9 @@ function createLogPanel(config) {
         searchInput.type = "text";
         searchInput.placeholder = "Search ms.* functions\u2026";
         searchInput.setAttribute("spellcheck", "false");
+        searchInput.setAttribute("autocomplete", "off");
+        searchInput.setAttribute("autocorrect", "off");
+        searchInput.setAttribute("autocapitalize", "off");
         searchBox.appendChild(searchInput);
         listPane.appendChild(searchBox);
 
@@ -5804,7 +5777,7 @@ function createLogPanel(config) {
 
             switch (p.type) {
                 case "string":
-                    html += '<input type="text" data-param="' + esc(p.name) + '" placeholder="Enter text\u2026">';
+                    html += '<input type="text" data-param="' + esc(p.name) + '" placeholder="Enter text\u2026" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">';
                     break;
 
                 case "number":
@@ -6525,6 +6498,9 @@ function createLogPanel(config) {
     nameInput.type = "text";
     nameInput.placeholder = "Macro name";
     nameInput.setAttribute("spellcheck", "false");
+    nameInput.setAttribute("autocomplete", "off");
+    nameInput.setAttribute("autocorrect", "off");
+    nameInput.setAttribute("autocapitalize", "off");
     toolbar.appendChild(nameInput);
 
     var spacer = document.createElement("div");

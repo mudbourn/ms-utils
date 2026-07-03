@@ -746,6 +746,9 @@ class StepEditor {
         inp.value = (value !== undefined && value !== null) ? String(value) : "";
         inp.placeholder = key + "…";
         inp.setAttribute("spellcheck", "false");
+        inp.setAttribute("autocomplete", "off");
+        inp.setAttribute("autocorrect", "off");
+        inp.setAttribute("autocapitalize", "off");
 
         inp.addEventListener("input", () => {
             this._updateParam(sid, key, inp.value);
@@ -935,6 +938,9 @@ class StepEditor {
         ta.value = (value !== undefined && value !== null) ? String(value) : "";
         ta.placeholder = "Lua expression…";
         ta.setAttribute("spellcheck", "false");
+        ta.setAttribute("autocomplete", "off");
+        ta.setAttribute("autocorrect", "off");
+        ta.setAttribute("autocapitalize", "off");
 
         // Auto-resize
         const autoResize = () => {
@@ -975,6 +981,9 @@ class StepEditor {
                 inp.className = "step-ed-text";
                 inp.value = String(items[i]);
                 inp.setAttribute("spellcheck", "false");
+                inp.setAttribute("autocomplete", "off");
+                inp.setAttribute("autocorrect", "off");
+                inp.setAttribute("autocapitalize", "off");
                 inp.addEventListener("input", () => {
                     items[i] = inp.value;
                     this._updateParam(sid, key, [...items]);

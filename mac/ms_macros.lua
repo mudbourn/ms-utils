@@ -42,3 +42,17 @@ ms.antiTimeout({
     enabled  = true,      -- set true to start automatically
 })
 --]]
+
+-- Camera Sensitivity — Roblox-specific, per-profile
+ms.settings.define({
+    type    = "slider",
+    key     = "cameraSensitivity",
+    label   = "Camera Sensitivity",
+    min     = 0.1,
+    max     = 4,
+    step    = 0.1,
+    default = 1.5,
+    onChange = function(val)
+        CUR_CAM_SENS = val
+    end,
+})

@@ -104,9 +104,14 @@
 
         ms._applySettings = function(data)
             if not data then return end
+            -- Migrate sensitivity to pendingUserSettings for macro profile ownership
             if data.sensitivity ~= nil then
                 local num = tonumber(data.sensitivity)
-                if num and num >= 0.1 and num <= 4 then CUR_CAM_SENS = num end
+                if num and num >= 0.1 and num <= 4 then
+                    ms._pendingUserSettings = ms._pendingUserSettings or {}
+                    ms._pendingUserSettings["cameraSensitivity"] = num
+                    CUR_CAM_SENS = num
+                end
             end
             if data.frameLevel ~= nil then
                 data.user = data.user or {}
@@ -311,7 +316,6 @@
         ms.saveSettings = function()
             if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
             local data = {
-                sensitivity      = CUR_CAM_SENS or 1.5,
                 trackpadMode     = ms.trackpadMode,
                 gamepadEnabled   = ms.gamepadEnabled,
                 socdEnabled      = ms.socdEnabled,
@@ -4318,40 +4322,6 @@
                             ms.alert("SOCD Mode: First Input Wins", 2, true)
                         end },
                     }},
-                    { title = "-" },
-                    { title = "Camera Sensitivity: " .. tostring(CUR_CAM_SENS), disabled = true },
-                    { title = "Set Sensitivity...", fn = function()
-                        ms.playSlot("interact")
-                        ms.ui.prompt({
-                            title   = "Camera Sensitivity",
-                            msg     = "Enter your Roblox camera sensitivity:",
-                            confirm = "Set",
-                            cancel  = "Cancel",
-                            default = tostring(CUR_CAM_SENS),
-                        }, function(r)
-                            if r.confirmed then
-                                local num = tonumber(r.value)
-                                if num and num >= 0.1 and num <= 4 then
-                                    CUR_CAM_SENS = num
-                                    ms.saveSettings()
-                                    -- ms.legacycam.updateMultiplier()
-                                    ms.playSlot("update")
-                                    ms.alert("Sensitivity set to " .. tostring(num), 2, true)
-                                    ms.ui.refresh()
-                                else
-                                    ms.alert("Invalid value. Must be a number between 0.1 and 4.", 2)
-                                end
-                            end
-                        end)
-                    end },
-                    { title = "Reset Sensitivity", fn = function()
-                        local default = (ms.macroDefaults and ms.macroDefaults.sensitivity) or 1.5
-                        CUR_CAM_SENS = default
-                        ms.saveSettings()
-                        -- ms.legacycam.updateMultiplier()
-                        ms.playSlot("reset")
-                        ms.alert("Sensitivity reset to " .. tostring(default), 2, true)
-                    end },
                     { title = "-" },
                     { title = "Sound", menu = buildSoundSubmenu() },
                     { title = "-" },

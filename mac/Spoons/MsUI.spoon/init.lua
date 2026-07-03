@@ -315,7 +315,6 @@
             return {
                 macrosEnabled           = (BindValidity == 1),
                 macros                  = macros,
-                sensitivity             = CUR_CAM_SENS or 1.5,
                 trackpadMode            = ms.trackpadMode or false,
                 socdEnabled             = ms.socdEnabled or false,
                 socdMode                = ms.socdMode or "lastWins",
@@ -753,17 +752,6 @@
                 ms.saveSettings()
                 ms.bind.rebind()
                 ms.playSlot("update")
-                ms.ui.refresh()
-            end,
-
-            setSensitivity = function(data)
-                local num = tonumber(data.value)
-                if num and num >= 0.1 and num <= 4 then
-                    CUR_CAM_SENS = num
-                    ms.saveSettings()
-                    -- ms.legacycam.updateMultiplier()
-                    ms.playSlot("update")
-                end
                 ms.ui.refresh()
             end,
 
@@ -1538,10 +1526,7 @@
             resetSetting = function(data)
                 local key = data.key
                 local def = ms.macroDefaults or {}
-                if key == "sensitivity" then
-                    CUR_CAM_SENS = tonumber(def.sensitivity) or 1.5
-                    ms.saveSettings(); -- ms.legacycam.updateMultiplier()
-                elseif key == "trackpadMode" then
+                if key == "trackpadMode" then
                     ms.trackpadMode = (def.trackpadMode == true)
                     ms.saveSettings(); ms.bind.rebind()
                 elseif key == "socdEnabled" then

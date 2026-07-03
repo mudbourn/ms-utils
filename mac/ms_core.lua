@@ -693,18 +693,24 @@
 
                 ms.press = function(key, mods, hidinject)
                     if ms.dev then spoon.MsDevTools:flushAll() end
-                    if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
-                        local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        spoon.MsDevTools:watcherStep("↓ " .. tostring(key) .. modsStr)
-                    end
-                    if ms.dev then
-                        local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        spoon.MsDevTools:macroLog("↓ " .. tostring(key) .. modsStr)
-                    end
                     local keyCode = getCode(key)
                     if not keyCode then
                         print("Error: Could not find keyCode for " .. tostring(key))
                         return
+                    end
+                    -- Track key hold start time, suppress repeated ↓ for same key
+                    ms._keyHoldStarts = ms._keyHoldStarts or {}
+                    local alreadyHeld = ms._macroHeldKeys[keyCode]
+                    if not alreadyHeld then
+                        ms._keyHoldStarts[keyCode] = hs.timer.absoluteTime()
+                        if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
+                            local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
+                            spoon.MsDevTools:watcherStep("↓ " .. tostring(key) .. modsStr)
+                        end
+                        if ms.dev then
+                            local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
+                            spoon.MsDevTools:macroLog("↓ " .. tostring(key) .. modsStr)
+                        end
                     end
                     ms._macroHeldKeys[keyCode] = { mods = mods or {}, hidinject = hidinject }
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, true)
@@ -718,14 +724,28 @@
 
                 ms.release = function(key, mods, hidinject)
                     if ms.dev then spoon.MsDevTools:flushAll() end
-                    if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
-                        spoon.MsDevTools:watcherStep("↑ " .. tostring(key))
-                    end
-                    if ms.dev then
-                        spoon.MsDevTools:macroLog("↑ " .. tostring(key))
-                    end
                     local keyCode = getCode(key)
                     if not keyCode then return end
+                    -- Calculate hold duration
+                    local durationStr = ""
+                    ms._keyHoldStarts = ms._keyHoldStarts or {}
+                    local startTime = ms._keyHoldStarts[keyCode]
+                    if startTime then
+                        local elapsedNs = hs.timer.absoluteTime() - startTime
+                        local elapsedMs = math.floor(elapsedNs / 1000000)
+                        if elapsedMs >= 1000 then
+                            durationStr = string.format(" (%.1fs)", elapsedMs / 1000)
+                        elseif elapsedMs > 0 then
+                            durationStr = string.format(" (%dms)", elapsedMs)
+                        end
+                        ms._keyHoldStarts[keyCode] = nil
+                    end
+                    if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
+                        spoon.MsDevTools:watcherStep("↑ " .. tostring(key) .. durationStr)
+                    end
+                    if ms.dev then
+                        spoon.MsDevTools:macroLog("↑ " .. tostring(key) .. durationStr)
+                    end
                     ms._macroHeldKeys[keyCode] = nil
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, false)
                     if hidinject then
@@ -3833,7 +3853,6 @@
             end
 
             ms.macroDefaults = {
-                sensitivity  = 1.5,
                 trackpadMode = false,
                 socdEnabled  = false,
                 socdMode     = "lastWins",

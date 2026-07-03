@@ -693,6 +693,14 @@
 
 -- Event Hooks --
     function MsDevTools:onMacroFire(id, label, parentId, parentLabel, trigger)
+        -- Log subroutine handoff when a macro calls a sub-function
+        if parentLabel then
+            self:_devWrite({
+                type  = "step",
+                category = "macro",
+                msg   = "[" .. (parentLabel or "macro") .. "] → " .. (label or id),
+            })
+        end
         self:_devWrite({
             type        = "macro",
             id          = id,
