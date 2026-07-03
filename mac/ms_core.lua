@@ -2752,7 +2752,7 @@
                     end
 
                     _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
-                    pcall(function() _shellView:windowStyle(1 + 2 + 4 + 8) end)
+                    pcall(function() _shellView:windowStyle(2 + 4 + 8) end) -- no native title bar (flag 1 = titled)
                     pcall(function() _shellView:allowResizing(true) end)
                     pcall(function() _shellView:minimumSize({ w = 600, h = 400 }) end)
                     pcall(function() _shellView:level(hs.canvas.windowLevels.popUpMenu or 101) end)

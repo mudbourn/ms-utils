@@ -194,4 +194,14 @@ mudscript is open-source under the [MIT License](LICENSE). Contributions are wel
 
 Built with [Hammerspoon](https://www.hammerspoon.org/) and [AutoHotkey](https://www.autohotkey.com/).
 
-Icons from [Lucide](https://lucide.dev/) and [SVG Repo](https://www.svgrepo.com/).
+Icons from [Lucide](https://lucide.dev/).
+
+### Sound credits
+
+Sound effects sourced from [The Spriters Resource](https://www.spriters-resource.com/):
+
+- **Custom/macro sounds** — [Devil May Cry 3 (PS2)](https://sounds.spriters-resource.com/playstation_2/dmc3/asset/393835/)
+- **Default theme loaded & launch sounds** — [Tomodachi Life: Living the Dream (Switch)](https://sounds.spriters-resource.com/nintendo_switch/tomodachilifelivingthedream/asset/556777/)
+- **All other default sounds** — [Bluey's Quest for the Gold Pen (Mobile)](https://sounds.spriters-resource.com/mobile/blueysquestforthegoldpen/asset/553088/)
+
+Font: [Almendra](https://fonts.google.com/specimen/Almendra) by Ana Sanfelippo, via [Google Fonts](https://fonts.google.com/) (OFL).

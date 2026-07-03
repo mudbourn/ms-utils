@@ -80,9 +80,15 @@
         [class^="panel-"] { width: 100%; height: 100%; display: none; flex-direction: column; overflow: hidden; }
         #panel { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 
-        /* ── Panel Header (hidden — headless shell) ── */
-        .panel-header, #header {
-            display: none;
+        /* ── Panel Header ── */
+        #header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 12px 8px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 1px 12px color-mix(in srgb, var(--accent) 12%, transparent);
+            flex-shrink: 0;
+            -webkit-app-region: drag;
         }
         #panel-title, #status-text { flex: 1; font-weight: 600; font-size: 13px; }
         .header-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
@@ -652,6 +658,14 @@
                 >
                     <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('back');
+                        shellDispatch('_shell', 'close');
+                    "
+                >✕</button>
             </div>
         </div>
 
@@ -731,6 +745,14 @@
                 >
                     <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('back');
+                        shellDispatch('_shell', 'close');
+                    "
+                >✕</button>
             </div>
         </div>
 
@@ -780,6 +802,14 @@
                 >
                     <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('back');
+                        shellDispatch('_shell', 'close');
+                    "
+                >✕</button>
             </div>
         </div>
 
@@ -897,6 +927,14 @@
                 >
                     <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('back');
+                        shellDispatch('_shell', 'close');
+                    "
+                >✕</button>
             </div>
         </div>
 
@@ -972,6 +1010,14 @@
                     >
                         Disable
                     </button>
+                    <button
+                        class="btn-close"
+                        onmouseenter="playSlot('hover')"
+                        onclick="
+                            playSlot('back');
+                            shellDispatch('_shell', 'close');
+                        "
+                    >✕</button>
                 </div>
             </div>
 
@@ -1070,6 +1116,16 @@
         <!-- Header -->
         <div id="header">
             <span id="panel-title">mudscript — macro lab</span>
+            <div class="header-btns">
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('back');
+                        shellDispatch('_shell', 'close');
+                    "
+                >✕</button>
+            </div>
         </div>
         <div id="slot-macros"></div></div>
     </main>
