@@ -340,6 +340,71 @@
                     -- History + current window loaded in showWindow() shell path
                 end
             end)
+
+            -- Rail navigation: load history + start pollers when panel changes
+            ms.bus.on("ui:_shell:navigate", function(data)
+                if not data or not data.panel then return end
+                local p = data.panel
+                if p == "console" then
+                    _consoleOpen = true
+                    hs.timer.doAfter(0.1, function()
+                        _loadDevHistory(nil, {"macro", "console", "error", "system", "input"}, "console")
+                    end)
+                elseif p == "watcher" then
+                    _watcherOpen = true
+                    hs.timer.doAfter(0.1, function()
+                        _loadDevHistory(nil, {"macro", "error", "system"}, "watcher")
+                    end)
+                elseif p == "keys" then
+                    if not _keysReady then _keysReady = true end
+                    hs.timer.doAfter(0.1, function()
+                        _loadDevHistory(nil, {"input"}, "keys")
+                    end)
+                elseif p == "window" then
+                    _windowOpen = true
+                    hs.timer.doAfter(0.15, function()
+                        if #_windowHistory > 0 then
+                            local ok, j = pcall(hs.json.encode, _windowHistory)
+                            if ok then pcall(function() ms.shell.eval("shellReceive('window','loadHistory'," .. j .. ")") end) end
+                        end
+                        local win = hs.window.focusedWindow()
+                        if win then
+                            local app   = (win:application() and win:application():name()) or "?"
+                            local title = win:title() or ""
+                            local wf    = win:frame()
+                            local ok2, j2 = pcall(hs.json.encode, {
+                                type = "focus", ts = os.date("%H:%M:%S"),
+                                app = app, title = title,
+                                w = math.floor(wf.w), h = math.floor(wf.h),
+                                x = math.floor(wf.x), y = math.floor(wf.y),
+                            })
+                            if ok2 then pcall(function() ms.shell.eval("shellReceive('window','updateCurrentWindow'," .. j2 .. ")") end) end
+                        end
+                    end)
+                    -- Start window focus poller
+                    if _windowPoller then _windowPoller:stop() end
+                    _windowPoller = hs.timer.doEvery(0.4, function()
+                        if not _windowOpen or not _shellActive() then
+                            if _windowPoller then _windowPoller:stop(); _windowPoller = nil end
+                            return
+                        end
+                        local win = hs.window.focusedWindow()
+                        if not win then return end
+                        local winId = win:id()
+                        if winId == _windowLast then return end
+                        _windowLast = winId
+                        local app   = (win:application() and win:application():name()) or "?"
+                        local title = win:title() or ""
+                        local f     = win:frame()
+                        self:_pushWindowEvent({
+                            type = "focus", ts = os.time(),
+                            app = app, title = title,
+                            w = math.floor(f.w), h = math.floor(f.h),
+                            x = math.floor(f.x), y = math.floor(f.y),
+                        })
+                    end)
+                end
+            end)
         end
     end
 -- END Lifecycle --
@@ -686,7 +751,7 @@
             _activeButtons[button] = nil
         end
 
-        if _keysPanel and _keysReady then
+        if (_keysPanel or _shellActive()) and _keysReady then
             local active = {}
 
             for btn in pairs(_activeButtons) do

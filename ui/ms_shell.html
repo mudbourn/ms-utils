@@ -636,7 +636,7 @@
                     onmouseenter="playSlot('hover')"
                     onclick="
                         playSlot('interact');
-                        doClear();
+                        clearLog();
                     "
                 >
                     Clear
@@ -971,16 +971,6 @@
                     >
                         Disable
                     </button>
-                    <button
-                        class="btn-close"
-                        onmouseenter="playSlot('hover')"
-                        onclick="
-                            playSlot('back');
-                            sendToHost({ action: 'close' });
-                        "
-                    >
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
-                    </button>
                 </div>
             </div>
 
@@ -1079,17 +1069,9 @@
         <!-- Header -->
         <div id="header">
             <span id="panel-title">mudscript — macro lab</span>
-            <div class="header-btns">
-                <button
-                    class="btn-popout"
-                    onmouseenter="playSlot('hover')"
-                    onclick="playSlot('interact'); popOutPanel('macros');"
-                ><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21H3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3L14 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21L10 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            </div>
         </div>
         <div id="slot-macros"></div></div>
     </main>
-    <div id="_ms-debug" style="position:fixed;bottom:0;right:0;background:var(--surface2);color:var(--text2);font:10px var(--font-mono);padding:2px 8px;border-radius:4px 0 0 0;z-index:999;opacity:0.3;transition:opacity 0.3s;pointer-events:none;">ready</div>
 
     <!-- ═══ Shared: log-panel.js (inlined) ════════════════════════════════════ -->
     <script>
@@ -1639,6 +1621,13 @@ function createLogPanel(config) {
         if (fn) fn();
     };
 
+    // Per-panel clear registry — each panel registers its clearLog
+    window._panelClearFns = {};
+    window.clearLog = function() {
+        var fn = window._panelClearFns[window.currentPanel];
+        if (fn) fn();
+    };
+
     window.showPanel = function(id) {
         document.querySelectorAll('[class^="panel-"]').forEach(function(el) {
             el.style.display = 'none';
@@ -1802,6 +1791,7 @@ function createLogPanel(config) {
 
             window.doRun   = doRun;
             window.doClear = doClear;
+            window._panelClearFns['console'] = doClear;
 
             // ── Input bar: Enter to run ─────────────────────────────────────
             document
@@ -2074,7 +2064,7 @@ function createLogPanel(config) {
                 if (log) log.innerHTML = "";
                 lp.sendToHost({ action: "clear" });
             }
-            window.clearLog = clearLog;
+            window._panelClearFns['watcher'] = clearLog;
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
@@ -2127,7 +2117,7 @@ function createLogPanel(config) {
             // ── Expose globals for inline handlers ──────────────────────────
             window._panelPauseFns['keys'] = lp.togglePause;
             window.playSlot    = lp.playSlot;
-            window.clearLog    = clearLog;
+            window._panelClearFns['keys'] = clearLog;
             window.closePanel  = lp.closePanel;
             window.switchTab   = switchTab;
             window.onCoordModeChange = onCoordModeChange;
@@ -2479,7 +2469,7 @@ function createLogPanel(config) {
             // ── Expose globals for inline handlers ──────────────────────────
             window._panelPauseFns['window'] = lp.togglePause;
             window.playSlot    = lp.playSlot;
-            window.clearLog    = lp.clearLog;
+            window._panelClearFns['window'] = lp.clearLog;
             window.closePanel  = lp.closePanel;
             window.windowApplyTheme = lp.applyTheme;
 
@@ -2782,6 +2772,8 @@ function createLogPanel(config) {
                     _modalResolve = null;
                 }
             }
+            window.openModal = openModal;
+            window.closeModal = closeModal;
 
             // Called by Lua via evaluateJavaScript to show a modal and report the
             // result back through the 'modalResult' action. Always displayed above

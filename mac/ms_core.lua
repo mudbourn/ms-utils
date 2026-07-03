@@ -2870,8 +2870,8 @@
                     pcall(ms.settings.define, {
                         type     = "toggle",
                         key      = "macroLabEnabled",
-                        label    = "Macro Development Lab",
-                        desc     = "Use the modern Macro Lab shell instead of the legacy settings panel",
+                        label    = "Enable v2 UI",
+                        desc     = "Use the new Macro Lab shell instead of legacy standalone panels",
                         default  = false,
                         onChange = function(val)
                             ms._macroLabEnabled = (val == true)
@@ -2889,6 +2889,11 @@
                     ms.bus.on("ui:_shell:navigate", function(data)
                         if data and data.panel then
                             ms.shell.setActivePanel(data.panel)
+                        end
+                    end)
+                    ms.bus.on("ui:_shell:popOut", function(data)
+                        if data and data.panel then
+                            pcall(function() ms.shell.popOut(data.panel) end)
                         end
                     end)
                     -- Panel close: hide the shell when any panel sends {action:"close"}

@@ -1,8 +1,10 @@
 # mudscript
 
-**A macro framework for people who want reliable automation without the sketchy stuff.**
+**A robust macro lab built for games.**
 
 mudscript lets you write, test, and run macros on macOS — with a visual builder, live debugging tools, and a settings panel that actually makes sense. It's built on [Hammerspoon](https://www.hammerspoon.org/), a well-known, open-source automation platform.
+
+The primary use case is game macros: automating repetitive actions, building complex input sequences, and testing them in a safe sandbox. Expanding beyond game-specific automation is planned for a much later phase of development, once real demand for it emerges.
 
 > **Windows support is in early development.** The Windows version is not ready for general use — it exists for maintainer testing only. If you're looking for a macro tool on Windows, mudscript is not there yet.
 
@@ -22,7 +24,7 @@ mudscript lets you write, test, and run macros on macOS — with a visual builde
 
 ## Who it's for
 
-mudscript is for anyone who wants to automate repetitive tasks — whether that's in a game, a creative workflow, or just daily computer use. It's designed to be:
+mudscript is for gamers who want to automate repetitive in-game actions — whether that's farming, combo sequences, inventory management, or testing game mechanics. It's designed to be:
 
 - **Transparent** — you can read every line of code. No obfuscation, no hidden behavior.
 - **Safe** — macros run in a sandbox. The tool can't access your files, network, or system without your explicit permission.
@@ -137,7 +139,8 @@ Switch channels from Settings → Developer → Update Channel.
 
 ## What mudscript is NOT
 
-- **Not a cheat tool.** mudscript is a macro framework. What you do with it is your responsibility.
+- **Not a cheat tool.** mudscript is a macro framework. It provides tools to automate input — nothing more. What you choose to automate, how you use it, and any consequences of doing so are entirely your responsibility.
+- **Not an endorsement of exploits.** I do not condone using mudscript to develop hacks, exploits, or cheats for games. I have no intention of supporting or encouraging that kind of use. If a game's terms of service prohibit automation, respect that — mudscript exists for games where macros are welcome.
 - **Not malware.** Every line of code is readable. The Guardian system protects *you* from tampered versions, not the other way around.
 - **Not a data collector.** mudscript doesn't phone home, doesn't track you, and doesn't send anything anywhere.
 - **Not a black box.** If you want to understand how it works, read the code. It's all there.

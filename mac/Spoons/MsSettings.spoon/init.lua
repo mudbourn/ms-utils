@@ -1070,7 +1070,8 @@
                 if entry ~= "." and entry ~= ".." then
                     local attr = hs.fs.attributes(profilesPath .. entry)
                     if attr and attr.mode == "directory" then
-                        if hs.fs.attributes(profilesPath .. entry .. "/ms_macros.lua") then
+                        if hs.fs.attributes(profilesPath .. entry .. "/ms_macros.lua")
+                            or hs.fs.attributes(profilesPath .. entry .. "/ms_settings.json") then
                             table.insert(list, entry)
                         end
                     end
@@ -1101,23 +1102,27 @@
                 target = targetName,
             })
             local targetFile = profilesPath .. targetName .. "/ms_macros.lua"
-            local tf = io.open(targetFile, "r")
-            if not tf then
-                ms.dev.log({
-                    type   = "error",
-                    event  = "profile_switch_failed",
-                    reason = "cannot_read",
-                    target = targetName,
-                })
-                ms.alert("Profile switch failed: cannot read target profile.", 5)
-                return
-            end
-            local targetSrc = tf:read("*all"); tf:close()
-            local switchErrs = auditMacros(targetSrc)
-            if #switchErrs > 0 then
-                ms.alert("Profile switch rejected — security scan failed:\n  • "
-                    .. table.concat(switchErrs, "\n  • "), 8)
-                return
+            local hasMacros = hs.fs.attributes(targetFile) ~= nil
+            local targetSrc, switchErrs
+            if hasMacros then
+                local tf = io.open(targetFile, "r")
+                if not tf then
+                    ms.dev.log({
+                        type   = "error",
+                        event  = "profile_switch_failed",
+                        reason = "cannot_read",
+                        target = targetName,
+                    })
+                    ms.alert("Profile switch failed: cannot read target profile.", 5)
+                    return
+                end
+                targetSrc = tf:read("*all"); tf:close()
+                switchErrs = auditMacros(targetSrc)
+                if #switchErrs > 0 then
+                    ms.alert("Profile switch rejected — security scan failed:\n  • "
+                        .. table.concat(switchErrs, "\n  • "), 8)
+                    return
+                end
             end
             local currentName = sanitizeName(
                 (ms.macroMeta and ms.macroMeta.name) or "unnamed"
@@ -1125,10 +1130,14 @@
             hs.fs.mkdir(profilesPath)
             hs.fs.mkdir(profilesPath .. currentName)
 
-            local ok, err = moveFile(macrosPath, profilesPath .. currentName .. "/ms_macros.lua")
-            if not ok then
-                ms.alert("Profile switch failed: could not archive current profile.\n" .. tostring(err), 5)
-                return
+            -- Archive current macros (if any)
+            local currentHasMacros = hs.fs.attributes(macrosPath) ~= nil
+            if currentHasMacros then
+                local ok, err = moveFile(macrosPath, profilesPath .. currentName .. "/ms_macros.lua")
+                if not ok then
+                    ms.alert("Profile switch failed: could not archive current profile.\n" .. tostring(err), 5)
+                    return
+                end
             end
             local hadSettings = hs.fs.attributes(jsonPath)   and moveFile(jsonPath,    profilesPath .. currentName .. "/ms_settings.json")
             local hadDefaults = hs.fs.attributes(defaultPath) and moveFile(defaultPath, profilesPath .. currentName .. "/ms_settings_default.json")
@@ -1138,16 +1147,19 @@
             moveDirContents(SoundActiveDir, curSoundsDir .. "active/")
             moveDirContents(SoundMacroDir,  curSoundsDir .. "macro/")
 
-            ok, err = moveFile(profilesPath .. targetName .. "/ms_macros.lua", macrosPath)
-            if not ok then
-                moveFile(profilesPath .. currentName .. "/ms_macros.lua", macrosPath)
-                if hadSettings then moveFile(profilesPath .. currentName .. "/ms_settings.json",         jsonPath)    end
-                if hadDefaults then moveFile(profilesPath .. currentName .. "/ms_settings_default.json", defaultPath) end
-                if hadTheme    then moveFile(profilesPath .. currentName .. "/ms_theme.json",            themePath)   end
-                moveDirContents(profilesPath .. currentName .. "/sounds/active/", SoundActiveDir)
-                moveDirContents(profilesPath .. currentName .. "/sounds/macro/",  SoundMacroDir)
-                ms.alert("Profile switch failed: could not activate \"" .. targetName .. "\".\n" .. tostring(err), 5)
-                return
+            -- Activate target macros (if any)
+            if hasMacros then
+                local ok, err = moveFile(profilesPath .. targetName .. "/ms_macros.lua", macrosPath)
+                if not ok then
+                    if currentHasMacros then moveFile(profilesPath .. currentName .. "/ms_macros.lua", macrosPath) end
+                    if hadSettings then moveFile(profilesPath .. currentName .. "/ms_settings.json",         jsonPath)    end
+                    if hadDefaults then moveFile(profilesPath .. currentName .. "/ms_settings_default.json", defaultPath) end
+                    if hadTheme    then moveFile(profilesPath .. currentName .. "/ms_theme.json",            themePath)   end
+                    moveDirContents(profilesPath .. currentName .. "/sounds/active/", SoundActiveDir)
+                    moveDirContents(profilesPath .. currentName .. "/sounds/macro/",  SoundMacroDir)
+                    ms.alert("Profile switch failed: could to activate \"" .. targetName .. "\".\n" .. tostring(err), 5)
+                    return
+                end
             end
             if hs.fs.attributes(profilesPath .. targetName .. "/ms_settings.json") then
                 moveFile(profilesPath .. targetName .. "/ms_settings.json",         jsonPath)
@@ -1663,11 +1675,58 @@
             os.execute("rm -rf " .. sq(tmpDir))
             os.execute("mkdir -p " .. sq(tmpDir))
             hs.execute("unzip -o " .. sq(selectedPath) .. " -d " .. sq(tmpDir) .. " 2>/dev/null")
+            -- Detect base directory (handles zips with or without a root subfolder)
+            local baseDir = tmpDir
             local macroSrc = tmpDir .. "ms_macros.lua"
             if not hs.fs.attributes(macroSrc) then
-                if roblox then pcall(function() roblox:activate() end) end
-                ms.alert("Import failed: package does not contain ms_macros.lua.", 5)
-                os.execute("rm -rf " .. sq(tmpDir)); return
+                -- Search one level deep for ms_macros.lua or ms_settings.json
+                local found = false
+                for entry in hs.fs.dir(tmpDir) do
+                    if entry ~= "." and entry ~= ".." then
+                        local sub = tmpDir .. entry .. "/"
+                        if hs.fs.attributes(sub) and hs.fs.attributes(sub .. "ms_macros.lua") then
+                            baseDir = sub; macroSrc = sub .. "ms_macros.lua"; found = true; break
+                        end
+                    end
+                end
+                if not found then
+                    -- No ms_macros.lua anywhere — check for settings-only package
+                    for entry in hs.fs.dir(tmpDir) do
+                        if entry ~= "." and entry ~= ".." then
+                            local sub = tmpDir .. entry .. "/"
+                            if hs.fs.attributes(sub) and hs.fs.attributes(sub .. "ms_settings.json") then
+                                baseDir = sub; found = true; break
+                            end
+                        end
+                    end
+                    if not found and hs.fs.attributes(tmpDir .. "ms_settings.json") then
+                        baseDir = tmpDir; found = true
+                    end
+                    if found then
+                        -- Settings-only import: use the zip filename as profile name
+                        local zipName = selectedPath:match("([^/]+)%.mspkg$") or selectedPath:match("([^/]+)%.zip$") or "imported"
+                        local folderName = sanitizeName(zipName)
+                        hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
+                        local settingsSrc = baseDir .. "ms_settings.json"
+                        if hs.fs.attributes(settingsSrc) then
+                            hs.execute("/bin/cp " .. sq(settingsSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
+                        end
+                        local defSrc = baseDir .. "ms_settings_default.json"
+                        if hs.fs.attributes(defSrc) then
+                            hs.execute("/bin/cp " .. sq(defSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
+                        end
+                        local themeSrc = baseDir .. "ms_theme.json"
+                        if hs.fs.attributes(themeSrc) then
+                            hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
+                        end
+                        if roblox then pcall(function() roblox:activate() end) end
+                        ms.alert("Imported settings as \"" .. zipName .. "\".\n(no macros in package)", 4)
+                        os.execute("rm -rf " .. sq(tmpDir)); return
+                    end
+                    if roblox then pcall(function() roblox:activate() end) end
+                    ms.alert("Import failed: package does not contain ms_macros.lua or ms_settings.json.", 5)
+                    os.execute("rm -rf " .. sq(tmpDir)); return
+                end
             end
             local mf = io.open(macroSrc, "rb")
             if not mf then
@@ -1705,15 +1764,15 @@
                     ms.alert("Import failed: could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if needed.", 5)
                     os.execute("rm -rf " .. sq(tmpDir)); return
                 end
-                local settingsSrc = tmpDir .. "ms_settings.json"
+                local settingsSrc = baseDir .. "ms_settings.json"
                 if hs.fs.attributes(settingsSrc) then
                     hs.execute("/bin/cp " .. sq(settingsSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings.json"))
                 end
-                local defSrc = tmpDir .. "ms_settings_default.json"
+                local defSrc = baseDir .. "ms_settings_default.json"
                 if hs.fs.attributes(defSrc) then
                     hs.execute("/bin/cp " .. sq(defSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_settings_default.json"))
                 end
-                local themeSrc = tmpDir .. "ms_theme.json"
+                local themeSrc = baseDir .. "ms_theme.json"
                 if hs.fs.attributes(themeSrc) then
                     hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
                 end
@@ -1747,7 +1806,7 @@
                         end
                     end
                 end
-                local soundsDir = tmpDir .. "sounds/"
+                local soundsDir = baseDir .. "sounds/"
                 if hs.fs.attributes(soundsDir) then
                     -- New format: subdirectory structure (sounds/active/, sounds/defaults/, sounds/macro/)
                     local hasSubdirs = hs.fs.attributes(soundsDir .. "active/")
@@ -1807,7 +1866,7 @@
                     end
                 end
                 -- Legacy: import from separate macro/ directory (old package format)
-                local macroSrc = tmpDir .. "macro/"
+                local macroSrc = baseDir .. "macro/"
                 if hs.fs.attributes(macroSrc) then
                     _importSndDir(macroSrc, SoundMacroDir, macroAdded)
                 end
@@ -1819,7 +1878,7 @@
                 -- Auto-install fonts from package
                 local fontsAdded = 0
                 do
-                    local fontsDir = tmpDir .. "fonts/"
+                    local fontsDir = baseDir .. "fonts/"
                     if hs.fs.attributes(fontsDir) then
                         local dstDir = os.getenv("HOME") .. "/Library/Fonts/"
                         hs.fs.mkdir(dstDir)
