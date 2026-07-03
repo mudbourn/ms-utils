@@ -1,23 +1,24 @@
 /**
- * StepBlock — visual macro step block renderer and drag-and-drop manager.
+ * ToolBlock — visual macro tool block renderer and drag-and-drop manager.
  *
- * Renders macro steps as draggable blocks with nesting support (if/for/while).
+ * Renders macro tools as draggable blocks with nesting support (if/for/while).
+ *
  * Each block shows an icon, action name, parameter summary, drag handle, and
  * delete button. Blocks can be reordered via drag-and-drop and nested inside
  * control-flow containers.
  *
  * Usage (ES module):
  *
- *   import { StepCanvas } from "./modules/step-block.js";
- *   const canvas = new StepCanvas(containerEl, { onChange, svgBase });
+ *   import { ToolCanvas } from "./modules/tool-block.js";
+ *   const canvas = new ToolCanvas(containerEl, { onChange, svgBase });
  *   canvas.load(macroDef.steps);
- *   canvas.addStep({ action: "ms.type", params: { key: "/", mods: [] } });
- *   const steps = canvas.serialize();
+ *   canvas.addTool({ action: "ms.type", params: { key: "/", mods: [] } });
+ *   const tools = canvas.serialize();
  *
  * Usage (IIFE — in ms_shell.html or other non-module contexts):
  *
- *   // Already available as window.StepCanvas after this script loads.
- *   const canvas = new window.StepCanvas(containerEl, { onChange, svgBase });
+ *   // Already available as window.ToolCanvas after this script loads.
+ *   const canvas = new window.ToolCanvas(containerEl, { onChange, svgBase });
  *   ...
  */
 
@@ -113,9 +114,9 @@ function paramSummary(action, params) {
 }
 
 // ── Step ID generator ───────────────────────────────────────────────────
-let _stepIdCounter = 0;
-function nextStepId() {
-    return "_step_" + (++_stepIdCounter) + "_" + Date.now().toString(36);
+let _toolIdCounter = 0;
+function nextToolId() {
+    return "_tool_" + (++_toolIdCounter) + "_" + Date.now().toString(36);
 }
 
 function deepClone(obj) {
@@ -131,7 +132,7 @@ function injectCSS() {
     const style = document.createElement("style");
     style.textContent = `
 /* ── Step Canvas (ES module) ─────────────────────────────────────── */
-.step-canvas {
+.tool-canvas {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -141,12 +142,12 @@ function injectCSS() {
     position: relative;
 }
 
-.step-canvas::-webkit-scrollbar { width: 4px; }
-.step-canvas::-webkit-scrollbar-track { background: transparent; }
-.step-canvas::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
-.step-canvas::-webkit-scrollbar-thumb:hover { background: var(--border); }
+.tool-canvas::-webkit-scrollbar { width: 4px; }
+.tool-canvas::-webkit-scrollbar-track { background: transparent; }
+.tool-canvas::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
+.tool-canvas::-webkit-scrollbar-thumb:hover { background: var(--border); }
 
-.step-canvas-empty {
+.tool-canvas-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -158,9 +159,9 @@ function injectCSS() {
     gap: 6px;
     user-select: none;
 }
-.step-canvas-empty .step-canvas-empty-icon { font-size: 28px; opacity: 0.25; }
+.tool-canvas-empty .tool-canvas-empty-icon { font-size: 28px; opacity: 0.25; }
 
-.step-block {
+.tool-block {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -175,13 +176,13 @@ function injectCSS() {
     -webkit-user-select: none;
     min-height: 32px;
 }
-.step-block:hover { background: var(--surface2); border-color: var(--border); }
-.step-block.selected {
+.tool-block:hover { background: var(--surface2); border-color: var(--border); }
+.tool-block.selected {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent-glow-faint, rgba(196,26,26,0.12));
 }
 
-.step-block.drag-over-above::before {
+.tool-block.drag-over-above::before {
     content: "";
     position: absolute;
     top: -3px;
@@ -192,7 +193,7 @@ function injectCSS() {
     border-radius: 1px;
     z-index: 10;
 }
-.step-block.drag-over-below::after {
+.tool-block.drag-over-below::after {
     content: "";
     position: absolute;
     bottom: -3px;
@@ -203,29 +204,29 @@ function injectCSS() {
     border-radius: 1px;
     z-index: 10;
 }
-.step-block.drag-over-nest {
+.tool-block.drag-over-nest {
     border-color: var(--accent);
     background: var(--accent-glow-faint, rgba(196,26,26,0.12));
 }
-.step-block.dragging { opacity: 0.4; }
+.tool-block.dragging { opacity: 0.4; }
 
-.step-drag-handle {
+.tool-drag-handle {
     width: 14px; height: 14px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     cursor: grab; opacity: 0.35; transition: opacity 0.15s;
 }
-.step-drag-handle:hover { opacity: 0.8; }
-.step-drag-handle:active { cursor: grabbing; }
-.step-drag-handle svg { width: 14px; height: 14px; }
-.step-drag-handle svg path, .step-drag-handle svg g { stroke: var(--text); fill: none; }
+.tool-drag-handle:hover { opacity: 0.8; }
+.tool-drag-handle:active { cursor: grabbing; }
+.tool-drag-handle svg { width: 14px; height: 14px; }
+.tool-drag-handle svg path, .tool-drag-handle svg g { stroke: var(--text); fill: none; }
 
-.step-icon {
+.tool-icon {
     width: 16px; height: 16px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
 }
-.step-icon svg { width: 14px; height: 14px; }
-.step-icon svg path, .step-icon svg g,
-.step-icon svg circle, .step-icon svg rect { stroke: var(--accent); fill: none; }
+.tool-icon svg { width: 14px; height: 14px; }
+.tool-icon svg path, .tool-icon svg g,
+.tool-icon svg circle, .tool-icon svg rect { stroke: var(--accent); fill: none; }
 
 .step-action-name {
     font-family: "SF Mono", "Menlo", "Consolas", monospace;
@@ -243,7 +244,7 @@ function injectCSS() {
     display: flex; align-items: center; gap: 2px;
     flex-shrink: 0; opacity: 0; transition: opacity 0.15s;
 }
-.step-block:hover .step-actions { opacity: 1; }
+.tool-block:hover .step-actions { opacity: 1; }
 
 .step-action-btn {
     width: 18px; height: 18px;
@@ -257,16 +258,16 @@ function injectCSS() {
 .step-action-btn.del:hover { background: var(--danger-bg); }
 .step-action-btn.del:hover svg path { stroke: var(--danger); }
 
-.step-block-container { display: flex; flex-direction: column; }
+.tool-block-container { display: flex; flex-direction: column; }
 
-.step-nest-body {
+.tool-nest-body {
     margin-left: 20px;
     border-left: 2px solid var(--border-dim);
     padding-left: 8px; padding-top: 2px; padding-bottom: 2px;
     display: flex; flex-direction: column; gap: 2px;
     min-height: 28px; position: relative;
 }
-.step-nest-body.drag-target {
+.tool-nest-body.drag-target {
     border-left-color: var(--accent);
     background: var(--accent-glow-faint, rgba(196,26,26,0.06));
     border-radius: var(--radius);
@@ -276,37 +277,37 @@ function injectCSS() {
     text-transform: uppercase; letter-spacing: 0.6px;
     color: var(--text3); padding: 2px 0 0;
 }
-.step-nest-body-empty {
+.tool-nest-body-empty {
     font-size: 10px; color: var(--text3);
     font-style: italic; padding: 4px 0; opacity: 0.6;
 }
 
-.step-nest-toggle {
+.tool-nest-toggle {
     width: 14px; height: 14px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; opacity: 0.5;
     transition: opacity 0.15s, transform 0.15s;
     font-size: 10px; color: var(--text);
 }
-.step-nest-toggle:hover { opacity: 1; }
-.step-nest-toggle.collapsed { transform: rotate(-90deg); }
-.step-nest-toggle svg { width: 12px; height: 12px; }
-.step-nest-toggle svg path { stroke: var(--text); fill: none; }
-.step-nest-body.collapsed { display: none; }
+.tool-nest-toggle:hover { opacity: 1; }
+.tool-nest-toggle.collapsed { transform: rotate(-90deg); }
+.tool-nest-toggle svg { width: 12px; height: 12px; }
+.tool-nest-toggle svg path { stroke: var(--text); fill: none; }
+.tool-nest-body.collapsed { display: none; }
 `;
     document.head.appendChild(style);
 }
 
-// ── StepCanvas class ────────────────────────────────────────────────────
+// ── ToolCanvas class ────────────────────────────────────────────────────
 
 /**
  * @param {HTMLElement} container — DOM element to render into
  * @param {Object} opts
- * @param {function} [opts.onChange] — called when steps change (receives serialized steps)
+ * @param {function} [opts.onChange] — called when tools change (receives serialized tools)
  * @param {string}   [opts.svgBase] — base URL for svg/ directory
- * @param {function} [opts.onSelect] — called when a step is selected (stepId, stepData)
+ * @param {function} [opts.onSelect] — called when a tool is selected (toolId, toolData)
  */
-export class StepCanvas {
+export class ToolCanvas {
     constructor(container, opts = {}) {
         injectCSS();
 
@@ -316,14 +317,14 @@ export class StepCanvas {
         this._svgBase = opts.svgBase || "./svg/";
 
         // Internal storage
-        this._steps = [];
+        this._tools = [];
         this._map = {};
         this._selId = null;
         this._dragId = null;
 
         // Build root
         this._root = document.createElement("div");
-        this._root.className = "step-canvas";
+        this._root.className = "tool-canvas";
         this._el.appendChild(this._root);
 
         this._renderEmpty();
@@ -338,50 +339,50 @@ export class StepCanvas {
         for (const name of needed) await fetchSVG(this._svgBase, name);
     }
 
-    // ── Step ID management ─────────────────────────────────────────────
+    // ── Tool ID management ──────────────────────────────────────────────
 
-    _assignIds(steps) {
-        for (const step of steps) {
-            if (!step._sid) step._sid = nextStepId();
-            this._map[step._sid] = step;
-            if (step.then) this._assignIds(step.then);
-            if (step.else) this._assignIds(step.else);
-            if (step.body) this._assignIds(step.body);
+    _assignIds(tools) {
+        for (const tool of tools) {
+            if (!tool._sid) tool._sid = nextToolId();
+            this._map[tool._sid] = tool;
+            if (tool.then) this._assignIds(tool.then);
+            if (tool.else) this._assignIds(tool.else);
+            if (tool.body) this._assignIds(tool.body);
         }
     }
 
-    // ── Load steps ─────────────────────────────────────────────────────
+    // ── Load tools ─────────────────────────────────────────────────────
 
-    load(steps) {
-        this._steps = steps || [];
+    load(tools) {
+        this._tools = tools || [];
         this._map = {};
-        this._assignIds(this._steps);
+        this._assignIds(this._tools);
         this._selId = null;
         this._render();
     }
 
-    // ── Add a step ─────────────────────────────────────────────────────
+    // ── Add a tool ─────────────────────────────────────────────────────
 
-    addStep(stepDef, afterId) {
-        const step = deepClone(stepDef);
-        step._sid = nextStepId();
-        this._map[step._sid] = step;
+    addTool(toolDef, afterId) {
+        const tool = deepClone(toolDef);
+        tool._sid = nextToolId();
+        this._map[tool._sid] = tool;
 
         if (afterId) {
-            const idx = this._findIdx(this._steps, afterId);
-            if (idx !== -1) this._steps.splice(idx + 1, 0, step);
-            else this._steps.push(step);
+            const idx = this._findIdx(this._tools, afterId);
+            if (idx !== -1) this._tools.splice(idx + 1, 0, tool);
+            else this._tools.push(tool);
         } else {
-            this._steps.push(step);
+            this._tools.push(tool);
         }
         this._render();
         this._fireChange();
     }
 
-    // ── Remove a step ──────────────────────────────────────────────────
+    // ── Remove a tool ──────────────────────────────────────────────────
 
-    removeStep(sid) {
-        if (this._removeFrom(this._steps, sid)) {
+    removeTool(sid) {
+        if (this._removeFrom(this._tools, sid)) {
             delete this._map[sid];
             if (this._selId === sid) this._selId = null;
             this._render();
@@ -407,30 +408,30 @@ export class StepCanvas {
         return -1;
     }
 
-    // ── Move step ──────────────────────────────────────────────────────
+    // ── Move tool ──────────────────────────────────────────────────────
 
-    moveStep(dragId, targetId, pos) {
-        const step = this._map[dragId];
-        if (!step) return;
-        this._removeFrom(this._steps, dragId);
+    moveTool(dragId, targetId, pos) {
+        const tool = this._map[dragId];
+        if (!tool) return;
+        this._removeFrom(this._tools, dragId);
 
         if (pos === "nest") {
             const tgt = this._map[targetId];
             if (tgt) {
                 if (tgt.action === "if") {
                     if (!tgt.then) tgt.then = [];
-                    tgt.then.push(step);
+                    tgt.then.push(tool);
                 } else {
                     if (!tgt.body) tgt.body = [];
-                    tgt.body.push(step);
+                    tgt.body.push(tool);
                 }
             }
         } else {
-            const ti = this._findIdx(this._steps, targetId);
+            const ti = this._findIdx(this._tools, targetId);
             if (ti !== -1) {
-                this._steps.splice(pos === "above" ? ti : ti + 1, 0, step);
+                this._tools.splice(pos === "above" ? ti : ti + 1, 0, tool);
             } else {
-                this._steps.push(step);
+                this._tools.push(tool);
             }
         }
         this._render();
@@ -440,25 +441,25 @@ export class StepCanvas {
     // ── Serialize ──────────────────────────────────────────────────────
 
     serialize() {
-        return this._strip(deepClone(this._steps));
+        return this._strip(deepClone(this._tools));
     }
 
-    _strip(steps) {
-        for (const step of steps) {
-            delete step._sid;
-            if (step.then) this._strip(step.then);
-            if (step.else) this._strip(step.else);
-            if (step.body) this._strip(step.body);
+    _strip(tools) {
+        for (const tool of tools) {
+            delete tool._sid;
+            if (tool.then) this._strip(tool.then);
+            if (tool.else) this._strip(tool.else);
+            if (tool.body) this._strip(tool.body);
         }
-        return steps;
+        return tools;
     }
 
     // ── Update params ──────────────────────────────────────────────────
 
-    updateStep(sid, newParams) {
-        const step = this._map[sid];
-        if (!step) return;
-        Object.assign(step.params, newParams);
+    updateTool(sid, newParams) {
+        const tool = this._map[sid];
+        if (!tool) return;
+        Object.assign(tool.params, newParams);
         this._render();
         this._fireChange();
     }
@@ -466,13 +467,57 @@ export class StepCanvas {
     // ── Selection ──────────────────────────────────────────────────────
 
     getSelectedId() { return this._selId; }
-    getSelectedStep() { return this._selId ? this._map[this._selId] : null; }
+    getSelectedTool() { return this._selId ? this._map[this._selId] : null; }
 
-    _selectStep(sid) {
+    // ── Clipboard (copy / cut / paste) ─────────────────────────────────
+
+    copySelected() {
+        const tool = this.getSelectedTool();
+        if (!tool) return false;
+        const clone = deepClone(tool);
+        this._strip([clone]);
+        try { navigator.clipboard.writeText(JSON.stringify(clone)); } catch(e) {}
+        this._clipboard = clone;
+        return true;
+    }
+
+    cutSelected() {
+        const sid = this._selId;
+        if (!sid || !this._map[sid]) return false;
+        this.copySelected();
+        this.removeTool(sid);
+        return true;
+    }
+
+    pasteAfter() {
+        if (!this._clipboard) return false;
+        const clone = deepClone(this._clipboard);
+        clone._sid = nextToolId();
+        this._map[clone._sid] = clone;
+        // Assign IDs to children
+        if (clone.then) this._assignIds(clone.then);
+        if (clone.else) this._assignIds(clone.else);
+        if (clone.body) this._assignIds(clone.body);
+
+        const afterId = this._selId;
+        if (afterId) {
+            const idx = this._findIdx(this._tools, afterId);
+            if (idx !== -1) this._tools.splice(idx + 1, 0, clone);
+            else this._tools.push(clone);
+        } else {
+            this._tools.push(clone);
+        }
+        this._selId = clone._sid;
+        this._render();
+        this._fireChange();
+        return true;
+    }
+
+    _selectTool(sid) {
         this._selId = sid;
-        this._root.querySelectorAll(".step-block.selected").forEach(el => el.classList.remove("selected"));
+        this._root.querySelectorAll(".tool-block.selected").forEach(el => el.classList.remove("selected"));
         const el = this._root.querySelector(
-            `[data-sid="${sid}"] > .step-block[data-sid="${sid}"], .step-block[data-sid="${sid}"]`
+            `[data-sid="${sid}"] > .tool-block[data-sid="${sid}"], .tool-block[data-sid="${sid}"]`
         );
         if (el) el.classList.add("selected");
         this._onSelect(sid, this._map[sid]);
@@ -486,18 +531,18 @@ export class StepCanvas {
 
     _render() {
         this._root.innerHTML = "";
-        if (this._steps.length === 0) { this._renderEmpty(); return; }
-        for (const step of this._steps) {
-            this._root.appendChild(this._renderStep(step));
+        if (this._tools.length === 0) { this._renderEmpty(); return; }
+        for (const tool of this._tools) {
+            this._root.appendChild(this._renderTool(tool));
         }
     }
 
     _renderEmpty() {
         this._root.innerHTML = "";
         const d = document.createElement("div");
-        d.className = "step-canvas-empty";
-        d.innerHTML = '<span class="step-canvas-empty-icon">▶</span>'
-            + 'No steps yet<br><span style="font-size:10px">Click <b>+ Add Step</b> to begin</span>';
+        d.className = "tool-canvas-empty";
+        d.innerHTML = '<span class="tool-canvas-empty-icon">▶</span>'
+            + 'No tools yet<br><span style="font-size:10px">Click <b>+ Add Tool</b> to begin</span>';
         this._root.appendChild(d);
     }
 
@@ -505,34 +550,34 @@ export class StepCanvas {
         return s.action === "if" || s.action === "for" || s.action === "while";
     }
 
-    _renderStep(step) {
-        return this._isContainer(step) ? this._renderContainer(step) : this._renderLeaf(step);
+    _renderTool(tool) {
+        return this._isContainer(tool) ? this._renderContainer(tool) : this._renderLeaf(tool);
     }
 
-    _renderLeaf(step) {
+    _renderLeaf(tool) {
         const el = document.createElement("div");
-        el.className = "step-block" + (step._sid === this._selId ? " selected" : "");
-        el.setAttribute("data-sid", step._sid);
+        el.className = "tool-block" + (tool._sid === this._selId ? " selected" : "");
+        el.setAttribute("data-sid", tool._sid);
         el.setAttribute("draggable", "true");
 
         const handle = document.createElement("div");
-        handle.className = "step-drag-handle";
+        handle.className = "tool-drag-handle";
         handle.innerHTML = _svgCache["drag"] || "⠿";
         el.appendChild(handle);
 
         const icon = document.createElement("div");
-        icon.className = "step-icon";
-        icon.innerHTML = _svgCache[iconForAction(step.action)] || "";
+        icon.className = "tool-icon";
+        icon.innerHTML = _svgCache[iconForAction(tool.action)] || "";
         el.appendChild(icon);
 
         const name = document.createElement("span");
         name.className = "step-action-name";
-        name.textContent = step.action;
+        name.textContent = tool.action;
         el.appendChild(name);
 
         const params = document.createElement("span");
         params.className = "step-params";
-        params.textContent = paramSummary(step.action, step.params);
+        params.textContent = paramSummary(tool.action, tool.params);
         el.appendChild(params);
 
         const acts = document.createElement("div");
@@ -540,62 +585,62 @@ export class StepCanvas {
         const del = document.createElement("div");
         del.className = "step-action-btn del";
         del.innerHTML = _svgCache["trash"] || "×";
-        del.addEventListener("click", e => { e.stopPropagation(); this.removeStep(step._sid); });
+        del.addEventListener("click", e => { e.stopPropagation(); this.removeTool(tool._sid); });
         acts.appendChild(del);
         const editBtn = document.createElement("div");
         editBtn.className = "step-action-btn edit";
         editBtn.innerHTML = _svgCache["edit"] || "✎";
-        editBtn.addEventListener("click", e => { e.stopPropagation(); this._selectStep(step._sid); });
+        editBtn.addEventListener("click", e => { e.stopPropagation(); this._selectTool(tool._sid); });
         acts.appendChild(editBtn);
         el.appendChild(acts);
 
         el.addEventListener("click", e => {
-            if (e.target.closest(".step-action-btn") || e.target.closest(".step-drag-handle")) return;
-            this._selectStep(step._sid);
+            if (e.target.closest(".step-action-btn") || e.target.closest(".tool-drag-handle")) return;
+            this._selectTool(tool._sid);
         });
-        this._wireDrag(el, step);
+        this._wireDrag(el, tool);
         return el;
     }
 
-    _renderContainer(step) {
+    _renderContainer(tool) {
         const wrap = document.createElement("div");
-        wrap.className = "step-block-container";
-        wrap.setAttribute("data-sid", step._sid);
+        wrap.className = "tool-block-container";
+        wrap.setAttribute("data-sid", tool._sid);
 
         const header = document.createElement("div");
-        header.className = "step-block" + (step._sid === this._selId ? " selected" : "");
-        header.setAttribute("data-sid", step._sid);
+        header.className = "tool-block" + (tool._sid === this._selId ? " selected" : "");
+        header.setAttribute("data-sid", tool._sid);
         header.setAttribute("draggable", "true");
 
         const handle = document.createElement("div");
-        handle.className = "step-drag-handle";
+        handle.className = "tool-drag-handle";
         handle.innerHTML = _svgCache["drag"] || "⠿";
         header.appendChild(handle);
 
         const toggle = document.createElement("div");
-        toggle.className = "step-nest-toggle";
+        toggle.className = "tool-nest-toggle";
         toggle.innerHTML = _svgCache["chevdown"] || "▾";
         toggle.addEventListener("click", e => {
             e.stopPropagation();
             toggle.classList.toggle("collapsed");
-            const body = wrap.querySelector(".step-nest-body");
+            const body = wrap.querySelector(".tool-nest-body");
             if (body) body.classList.toggle("collapsed");
         });
         header.appendChild(toggle);
 
         const icon = document.createElement("div");
-        icon.className = "step-icon";
-        icon.innerHTML = _svgCache[iconForAction(step.action)] || "";
+        icon.className = "tool-icon";
+        icon.innerHTML = _svgCache[iconForAction(tool.action)] || "";
         header.appendChild(icon);
 
         const name = document.createElement("span");
         name.className = "step-action-name";
-        name.textContent = step.action;
+        name.textContent = tool.action;
         header.appendChild(name);
 
         const params = document.createElement("span");
         params.className = "step-params";
-        params.textContent = paramSummary(step.action, step.params);
+        params.textContent = paramSummary(tool.action, tool.params);
         header.appendChild(params);
 
         const acts = document.createElement("div");
@@ -603,51 +648,51 @@ export class StepCanvas {
         const del = document.createElement("div");
         del.className = "step-action-btn del";
         del.innerHTML = _svgCache["trash"] || "×";
-        del.addEventListener("click", e => { e.stopPropagation(); this.removeStep(step._sid); });
+        del.addEventListener("click", e => { e.stopPropagation(); this.removeTool(tool._sid); });
         acts.appendChild(del);
         const editBtn = document.createElement("div");
         editBtn.className = "step-action-btn edit";
         editBtn.innerHTML = _svgCache["edit"] || "✎";
-        editBtn.addEventListener("click", e => { e.stopPropagation(); this._selectStep(step._sid); });
+        editBtn.addEventListener("click", e => { e.stopPropagation(); this._selectTool(tool._sid); });
         acts.appendChild(editBtn);
         header.appendChild(acts);
 
         header.addEventListener("click", e => {
-            if (e.target.closest(".step-action-btn") || e.target.closest(".step-drag-handle") || e.target.closest(".step-nest-toggle")) return;
-            this._selectStep(step._sid);
+            if (e.target.closest(".step-action-btn") || e.target.closest(".tool-drag-handle") || e.target.closest(".tool-nest-toggle")) return;
+            this._selectTool(tool._sid);
         });
-        this._wireDrag(header, step);
+        this._wireDrag(header, tool);
         wrap.appendChild(header);
 
-        if (step.action === "if") {
+        if (tool.action === "if") {
             const tl = document.createElement("div");
             tl.className = "step-nest-label"; tl.textContent = "then";
             wrap.appendChild(tl);
-            wrap.appendChild(this._renderNest(step.then || [], "then", step));
+            wrap.appendChild(this._renderNest(tool.then || [], "then", tool));
 
             const el2 = document.createElement("div");
             el2.className = "step-nest-label"; el2.textContent = "else";
             wrap.appendChild(el2);
-            wrap.appendChild(this._renderNest(step.else || [], "else", step));
+            wrap.appendChild(this._renderNest(tool.else || [], "else", tool));
         } else {
-            wrap.appendChild(this._renderNest(step.body || [], "body", step));
+            wrap.appendChild(this._renderNest(tool.body || [], "body", tool));
         }
         return wrap;
     }
 
-    _renderNest(steps, branch, parent) {
+    _renderNest(tools, branch, parent) {
         const body = document.createElement("div");
-        body.className = "step-nest-body";
+        body.className = "tool-nest-body";
         body.setAttribute("data-nest-parent", parent._sid);
         body.setAttribute("data-nest-branch", branch);
 
-        if (steps.length === 0) {
+        if (tools.length === 0) {
             const empty = document.createElement("div");
-            empty.className = "step-nest-body-empty";
+            empty.className = "tool-nest-body-empty";
             empty.textContent = "empty";
             body.appendChild(empty);
         } else {
-            for (const child of steps) body.appendChild(this._renderStep(child));
+            for (const child of tools) body.appendChild(this._renderTool(child));
         }
 
         body.addEventListener("dragover", e => {
@@ -660,12 +705,12 @@ export class StepCanvas {
         body.addEventListener("drop", e => {
             e.preventDefault(); e.stopPropagation();
             if (!this._dragId) return;
-            const step = this._map[this._dragId];
-            if (!step) return;
-            this._removeFrom(this._steps, this._dragId);
-            if (branch === "then") { if (!parent.then) parent.then = []; parent.then.push(step); }
-            else if (branch === "else") { if (!parent.else) parent.else = []; parent.else.push(step); }
-            else { if (!parent.body) parent.body = []; parent.body.push(step); }
+            const tool = this._map[this._dragId];
+            if (!tool) return;
+            this._removeFrom(this._tools, this._dragId);
+            if (branch === "then") { if (!parent.then) parent.then = []; parent.then.push(tool); }
+            else if (branch === "else") { if (!parent.else) parent.else = []; parent.else.push(tool); }
+            else { if (!parent.body) parent.body = []; parent.body.push(tool); }
             body.classList.remove("drag-target");
             this._dragId = null;
             this._render();
@@ -687,12 +732,12 @@ export class StepCanvas {
         return false;
     }
 
-    _wireDrag(el, step) {
+    _wireDrag(el, tool) {
         el.addEventListener("dragstart", e => {
-            this._dragId = step._sid;
+            this._dragId = tool._sid;
             el.classList.add("dragging");
             e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("text/plain", step._sid);
+            e.dataTransfer.setData("text/plain", tool._sid);
             const ghost = el.cloneNode(true);
             ghost.style.width = el.offsetWidth + "px";
             ghost.style.opacity = "0.7";
@@ -710,13 +755,13 @@ export class StepCanvas {
         });
 
         el.addEventListener("dragover", e => {
-            if (!this._dragId || this._dragId === step._sid) return;
+            if (!this._dragId || this._dragId === tool._sid) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = "move";
             const rect = el.getBoundingClientRect();
             const y = e.clientY - rect.top;
             const h = rect.height;
-            const isC = this._isContainer(step);
+            const isC = this._isContainer(tool);
             el.classList.remove("drag-over-above", "drag-over-below", "drag-over-nest");
             if (isC && y > h * 0.3 && y < h * 0.7) el.classList.add("drag-over-nest");
             else if (y < h / 2) el.classList.add("drag-over-above");
@@ -730,17 +775,17 @@ export class StepCanvas {
         el.addEventListener("drop", e => {
             e.preventDefault();
             e.stopPropagation();
-            if (!this._dragId || this._dragId === step._sid) return;
+            if (!this._dragId || this._dragId === tool._sid) return;
             const rect = el.getBoundingClientRect();
             const y = e.clientY - rect.top;
             const h = rect.height;
-            const isC = this._isContainer(step);
+            const isC = this._isContainer(tool);
             let pos;
             if (isC && y > h * 0.3 && y < h * 0.7) pos = "nest";
             else if (y < h / 2) pos = "above";
             else pos = "below";
-            if (pos === "nest" && this._isDesc(step._sid, this._dragId)) { this._clearDrops(); return; }
-            this.moveStep(this._dragId, step._sid, pos);
+            if (pos === "nest" && this._isDesc(tool._sid, this._dragId)) { this._clearDrops(); return; }
+            this.moveTool(this._dragId, tool._sid, pos);
             this._clearDrops();
         });
     }
@@ -756,12 +801,12 @@ export class StepCanvas {
 
     destroy() {
         this._root.innerHTML = "";
-        this._steps = [];
+        this._tools = [];
         this._map = {};
     }
 }
 
 // ── Expose on window for IIFE contexts ──────────────────────────────────
 if (typeof window !== "undefined") {
-    window.StepCanvas = StepCanvas;
+    window.ToolCanvas = ToolCanvas;
 }

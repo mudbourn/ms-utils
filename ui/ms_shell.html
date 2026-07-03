@@ -88,7 +88,6 @@
             border-bottom: 1px solid var(--border);
             box-shadow: 0 1px 12px color-mix(in srgb, var(--accent) 12%, transparent);
             flex-shrink: 0;
-            -webkit-app-region: drag;
         }
         #panel-title, #status-text { flex: 1; font-weight: 600; font-size: 13px; }
         .header-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
@@ -527,57 +526,57 @@
         .macros-layout { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; position: relative; }
         #slot-macros { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
         .macros-main { flex: 1; display: flex; flex-direction: row; overflow: hidden; position: relative; }
-        .macros-step-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }
-        .macros-step-area .step-canvas { flex: 1; }
-        .macros-add-step-btn { position: absolute; bottom: 14px; right: 14px; display: flex; align-items: center; gap: 5px; background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius); font-size: 11px; font-weight: 700; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; text-transform: uppercase; letter-spacing: 0.5px; z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
-        .macros-add-step-btn:hover { opacity: 0.85; }
-        .macros-add-step-btn svg { width: 12px; height: 12px; }
-        .macros-add-step-btn svg path { stroke: var(--bg); fill: none; }
+        .macros-tool-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+        .macros-tool-area .tool-canvas { flex: 1; }
+        .macros-add-tool-btn { position: absolute; bottom: 14px; right: 14px; display: flex; align-items: center; gap: 5px; background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius); font-size: 11px; font-weight: 700; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; text-transform: uppercase; letter-spacing: 0.5px; z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+        .macros-add-tool-btn:hover { opacity: 0.85; }
+        .macros-add-tool-btn svg { width: 12px; height: 12px; }
+        .macros-add-tool-btn svg path { stroke: var(--bg); fill: none; }
 
         /* ── Step Canvas ─────────────────────────────────────────────── */
-        .step-canvas { display: flex; flex-direction: column; gap: 2px; padding: 8px; min-height: 100%; overflow-y: auto; position: relative; }
-        .step-canvas::-webkit-scrollbar { width: 4px; }
-        .step-canvas::-webkit-scrollbar-track { background: transparent; }
-        .step-canvas::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
-        .step-canvas::-webkit-scrollbar-thumb:hover { background: var(--border); }
-        .step-canvas-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text3); font-size: 11px; padding: 40px 20px; text-align: center; gap: 6px; user-select: none; }
-        .step-canvas-empty-icon { font-size: 28px; opacity: 0.25; }
-        .step-block { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--surface); border: 1px solid var(--border-dim); border-radius: var(--radius); cursor: default; transition: background 0.1s, border-color 0.15s, box-shadow 0.15s; position: relative; user-select: none; min-height: 32px; }
-        .step-block:hover { background: var(--surface2); border-color: var(--border); }
-        .step-block.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow-faint); }
-        .step-block.drag-over-above::before { content: ''; position: absolute; top: -3px; left: 4px; right: 4px; height: 2px; background: var(--accent); border-radius: 1px; z-index: 10; }
-        .step-block.drag-over-below::after { content: ''; position: absolute; bottom: -3px; left: 4px; right: 4px; height: 2px; background: var(--accent); border-radius: 1px; z-index: 10; }
-        .step-block.drag-over-nest { border-color: var(--accent); background: var(--accent-glow-faint); }
-        .step-block.dragging { opacity: 0.4; }
-        .step-drag-handle { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: grab; opacity: 0.35; transition: opacity 0.15s; }
-        .step-drag-handle:hover { opacity: 0.8; }
-        .step-drag-handle:active { cursor: grabbing; }
-        .step-drag-handle svg { width: 14px; height: 14px; }
-        .step-drag-handle svg path, .step-drag-handle svg g { stroke: var(--text); fill: none; }
-        .step-icon { width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-        .step-icon svg { width: 14px; height: 14px; }
-        .step-icon svg path, .step-icon svg g, .step-icon svg circle, .step-icon svg rect { stroke: var(--accent); fill: none; }
+        .tool-canvas { display: flex; flex-direction: column; gap: 2px; padding: 8px; min-height: 100%; overflow-y: auto; position: relative; }
+        .tool-canvas::-webkit-scrollbar { width: 4px; }
+        .tool-canvas::-webkit-scrollbar-track { background: transparent; }
+        .tool-canvas::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
+        .tool-canvas::-webkit-scrollbar-thumb:hover { background: var(--border); }
+        .tool-canvas-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text3); font-size: 11px; padding: 40px 20px; text-align: center; gap: 6px; user-select: none; }
+        .tool-canvas-empty-icon { font-size: 28px; opacity: 0.25; }
+        .tool-block { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--surface); border: 1px solid var(--border-dim); border-radius: var(--radius); cursor: default; transition: background 0.1s, border-color 0.15s, box-shadow 0.15s; position: relative; user-select: none; min-height: 32px; }
+        .tool-block:hover { background: var(--surface2); border-color: var(--border); }
+        .tool-block.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow-faint); }
+        .tool-block.drag-over-above::before { content: ''; position: absolute; top: -3px; left: 4px; right: 4px; height: 2px; background: var(--accent); border-radius: 1px; z-index: 10; }
+        .tool-block.drag-over-below::after { content: ''; position: absolute; bottom: -3px; left: 4px; right: 4px; height: 2px; background: var(--accent); border-radius: 1px; z-index: 10; }
+        .tool-block.drag-over-nest { border-color: var(--accent); background: var(--accent-glow-faint); }
+        .tool-block.dragging { opacity: 0.4; }
+        .tool-drag-handle { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: grab; opacity: 0.35; transition: opacity 0.15s; }
+        .tool-drag-handle:hover { opacity: 0.8; }
+        .tool-drag-handle:active { cursor: grabbing; }
+        .tool-drag-handle svg { width: 14px; height: 14px; }
+        .tool-drag-handle svg path, .tool-drag-handle svg g { stroke: var(--text); fill: none; }
+        .tool-icon { width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+        .tool-icon svg { width: 14px; height: 14px; }
+        .tool-icon svg path, .tool-icon svg g, .tool-icon svg circle, .tool-icon svg rect { stroke: var(--accent); fill: none; }
         .step-action-name { font-family: var(--font-mono); font-size: 11px; color: var(--text); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
         .step-params { font-family: var(--font-mono); font-size: 10px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
         .step-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
-        .step-block:hover .step-actions { opacity: 1; }
+        .tool-block:hover .step-actions { opacity: 1; }
         .step-action-btn { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-s); cursor: pointer; opacity: 0.5; transition: opacity 0.1s, background 0.1s; }
         .step-action-btn:hover { opacity: 1; background: var(--hover); }
         .step-action-btn svg { width: 12px; height: 12px; }
         .step-action-btn svg path, .step-action-btn svg g { stroke: var(--text); fill: none; }
         .step-action-btn.del:hover { background: var(--danger-bg); }
         .step-action-btn.del:hover svg path, .step-action-btn.del:hover svg g { stroke: var(--danger); }
-        .step-block-container { display: flex; flex-direction: column; }
-        .step-nest-body { margin-left: 20px; border-left: 2px solid var(--border-dim); padding-left: 8px; padding-top: 2px; padding-bottom: 2px; display: flex; flex-direction: column; gap: 2px; min-height: 28px; position: relative; }
-        .step-nest-body.drag-target { border-left-color: var(--accent); background: var(--accent-glow-faint); border-radius: var(--radius); }
+        .tool-block-container { display: flex; flex-direction: column; }
+        .tool-nest-body { margin-left: 20px; border-left: 2px solid var(--border-dim); padding-left: 8px; padding-top: 2px; padding-bottom: 2px; display: flex; flex-direction: column; gap: 2px; min-height: 28px; position: relative; }
+        .tool-nest-body.drag-target { border-left-color: var(--accent); background: var(--accent-glow-faint); border-radius: var(--radius); }
         .step-nest-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text3); padding: 2px 0 0; }
-        .step-nest-body-empty { font-size: 10px; color: var(--text3); font-style: italic; padding: 4px 0; opacity: 0.6; }
-        .step-nest-toggle { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.5; transition: opacity 0.15s, transform 0.15s; font-size: 10px; color: var(--text); }
-        .step-nest-toggle:hover { opacity: 1; }
-        .step-nest-toggle.collapsed { transform: rotate(-90deg); }
-        .step-nest-toggle svg { width: 12px; height: 12px; }
-        .step-nest-toggle svg path { stroke: var(--text); fill: none; }
-        .step-nest-body.collapsed { display: none; }
+        .tool-nest-body-empty { font-size: 10px; color: var(--text3); font-style: italic; padding: 4px 0; opacity: 0.6; }
+        .tool-nest-toggle { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.5; transition: opacity 0.15s, transform 0.15s; font-size: 10px; color: var(--text); }
+        .tool-nest-toggle:hover { opacity: 1; }
+        .tool-nest-toggle.collapsed { transform: rotate(-90deg); }
+        .tool-nest-toggle svg { width: 12px; height: 12px; }
+        .tool-nest-toggle svg path { stroke: var(--text); fill: none; }
+        .tool-nest-body.collapsed { display: none; }
 
         .fn-picker-overlay { position: absolute; top: 0; right: 0; bottom: 0; width: 440px; max-width: 70%; background: var(--surface); border-left: 1px solid var(--border-dim); box-shadow: -4px 0 16px rgba(0,0,0,0.3); display: flex; flex-direction: column; z-index: 30; transform: translateX(100%); transition: transform 0.2s ease; }
         .fn-picker-overlay.open { transform: translateX(0); }
@@ -591,7 +590,7 @@
         .fn-picker-overlay-close svg path { stroke: var(--text); fill: none; }
 
     </style>
-    <script src="./modules/step-editor.js"></script>
+    <script src="./modules/tool-editor.js"></script>
 </head>
 <body>
 
@@ -1544,9 +1543,34 @@ function createLogPanel(config) {
         });
     })();
 
+    // ── Minimum size enforcement ───────────────────────────────────────
+    (function () {
+        const MIN_W = 800, MIN_H = 500;
+        let _resizeTimer = null;
+        function checkSize() {
+            if (window.innerWidth < MIN_W || window.innerHeight < MIN_H) {
+                sendToHost({
+                    action: "clampSize",
+                    w: Math.max(window.innerWidth, MIN_W),
+                    h: Math.max(window.innerHeight, MIN_H),
+                });
+            }
+        }
+        window.addEventListener("resize", function() {
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(checkSize, 150);
+        });
+    })();
+
     // ── Default appendEntry / loadHistory (single #log) ────────────────
     const _lastByLabel = {};
     const _pendingHolds = {}; // label+key → { row, ts }
+    // Sequence loop detection
+    const _seqBuffer = [];
+    let _loopActive = false;
+    let _loopPattern = null;
+    let _loopCount = 0;
+    let _loopStartRow = null;
 
     function _entryKey(entry) {
         let msg = entry.msg || '';
@@ -1631,7 +1655,7 @@ function createLogPanel(config) {
             }
         }
 
-        // Default: consecutive suppression per label
+        // Consecutive suppression per label
         const key = _entryKey(entry);
         const prev = _lastByLabel[label];
 
@@ -1649,6 +1673,80 @@ function createLogPanel(config) {
             const row = buildRow(entry);
             _lastByLabel[label] = { key, row, count: 1 };
             log.appendChild(row);
+        }
+
+        // ── Sequence loop detection ────────────────────────────────────
+        // Track recent entries by key to detect repeating patterns
+        _seqBuffer.push(key);
+        if (_seqBuffer.length > 200) _seqBuffer.shift();
+
+        // Check for repeating sequences of length 2..10
+        if (!_loopActive && _seqBuffer.length >= 6) {
+            for (let patLen = 2; patLen <= 10; patLen++) {
+                const total = _seqBuffer.length;
+                if (total < patLen * 3) continue; // need at least 3 repeats
+                const pattern = _seqBuffer.slice(total - patLen);
+                let repeats = 0;
+                for (let r = 0; r < 6; r++) {
+                    const start = total - patLen * (r + 1);
+                    if (start < 0) break;
+                    const chunk = _seqBuffer.slice(start, start + patLen);
+                    if (chunk.join('|') === pattern.join('|')) repeats++;
+                    else break;
+                }
+                if (repeats >= 3) {
+                    _loopActive = true;
+                    _loopPattern = pattern;
+                    _loopCount = repeats;
+                    _loopStartRow = null;
+                    // Insert loop marker before the repeated block
+                    const marker = document.createElement('div');
+                    marker.className = 'step';
+                    marker.style.cssText = 'color:var(--accent);font-weight:600;font-size:11px;padding:2px 0;';
+                    const ts = document.createElement('span');
+                    ts.className = 'ts';
+                    ts.textContent = '[' + (entry.ts || '') + ']';
+                    const msg = document.createElement('span');
+                    msg.className = 'step-msg';
+                    msg.textContent = '▸ loop ×' + repeats;
+                    marker.append(ts, msg);
+                    marker.onmouseenter = function() { lp.playSlot('hover'); };
+                    // Remove the repeated rows and insert marker
+                    const rows = log.querySelectorAll('.step');
+                    const removeCount = patLen * repeats;
+                    for (let i = rows.length - removeCount; i < rows.length; i++) {
+                        if (rows[i]) rows[i].remove();
+                    }
+                    log.appendChild(marker);
+                    _loopStartRow = marker;
+                    break;
+                }
+            }
+        } else if (_loopActive) {
+            // Check if current entry continues the loop pattern
+            const pos = (_seqBuffer.length - 1) % _loopPattern.length;
+            if (key === _loopPattern[pos]) {
+                _loopCount++;
+                if (_loopStartRow) {
+                    const msg = _loopStartRow.querySelector('.step-msg');
+                    if (msg) msg.textContent = '▸ loop ×' + _loopCount;
+                }
+                // Remove the last appended row (it's part of the loop)
+                const lastRow = log.lastElementChild;
+                if (lastRow && lastRow !== _loopStartRow) lastRow.remove();
+            } else {
+                // Pattern broken, end the loop
+                _loopActive = false;
+                if (_loopStartRow) {
+                    const msg = _loopStartRow.querySelector('.step-msg');
+                    if (msg) msg.textContent = '▸ loop ×' + _loopCount + ' end';
+                    _loopStartRow.style.color = 'var(--text3)';
+                    _loopStartRow.style.fontWeight = '400';
+                }
+                _loopPattern = null;
+                _loopCount = 0;
+                _loopStartRow = null;
+            }
         }
 
         _trimLog(log, maxEntries);
@@ -5749,7 +5847,7 @@ function createLogPanel(config) {
 
             // Footer
             html += '<div class="fn-detail-footer">';
-            html += '<button class="fn-add-btn" id="fn-add-btn">Add Step</button>';
+            html += '<button class="fn-add-btn" id="fn-add-btn">Add Tool</button>';
             html += '<span class="fn-step-preview" id="fn-step-preview"></span>';
             html += '</div>';
 
@@ -5960,11 +6058,11 @@ function createLogPanel(config) {
             }
 
             // Add step directly to canvas via macroLab API
-            if (window.macroLab && window.macroLab.addStep) {
-                window.macroLab.addStep({ action: fn.name, params: params });
+            if (window.macroLab && window.macroLab.addTool) {
+                window.macroLab.addTool({ action: fn.name, params: params });
             }
             // Also send to Lua for bus event
-            window.shellPost("macros", "addStep", {
+            window.shellPost("macros", "addTool", {
                 action: fn.name,
                 params: params
             });
@@ -6082,28 +6180,28 @@ function createLogPanel(config) {
     }
 
     /* ── Step ID generator ───────────────────────────────────────── */
-    var _idCounter = 0;
-    function nextId() { return "_s" + (++_idCounter) + "_" + Date.now().toString(36); }
+    var _toolIdCounter = 0;
+    function nextToolId() { return "_s" + (++_toolIdCounter) + "_" + Date.now().toString(36); }
 
     function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
 
-    /* ── StepCanvas class (IIFE version) ─────────────────────────── */
-    function StepCanvas(container, opts) {
+    /* ── ToolCanvas class (IIFE version) ─────────────────────────── */
+    function ToolCanvas(container, opts) {
         this._el = container;
         this._onChange = (opts && opts.onChange) || function(){};
         this._onSelect = (opts && opts.onSelect) || function(){};
-        this._steps = [];
+        this._tools = [];
         this._map = {};
         this._selId = null;
         this._dragId = null;
         this._root = document.createElement("div");
-        this._root.className = "step-canvas";
+        this._root.className = "tool-canvas";
         this._el.appendChild(this._root);
         this._renderEmpty();
         this._preloadIcons();
     }
 
-    StepCanvas.prototype._preloadIcons = function() {
+    ToolCanvas.prototype._preloadIcons = function() {
         var needed = ["drag","close","chevdown","macros"];
         for (var a in ACTION_ICON) { if (needed.indexOf(ACTION_ICON[a]) === -1) needed.push(ACTION_ICON[a]); }
         var self = this;
@@ -6111,10 +6209,10 @@ function createLogPanel(config) {
         needed.forEach(function(n) { chain = chain.then(function(){ return _fetchSVG(n); }); });
     };
 
-    StepCanvas.prototype._assignIds = function(steps) {
+    ToolCanvas.prototype._assignIds = function(steps) {
         for (var i = 0; i < steps.length; i++) {
             var s = steps[i];
-            if (!s._sid) s._sid = nextId();
+            if (!s._sid) s._sid = nextToolId();
             this._map[s._sid] = s;
             if (s.then) this._assignIds(s.then);
             if (s.else) this._assignIds(s.else);
@@ -6122,31 +6220,31 @@ function createLogPanel(config) {
         }
     };
 
-    StepCanvas.prototype.load = function(steps) {
-        this._steps = steps || [];
+    ToolCanvas.prototype.load = function(steps) {
+        this._tools = steps || [];
         this._map = {};
-        this._assignIds(this._steps);
+        this._assignIds(this._tools);
         this._selId = null;
         this._render();
     };
 
-    StepCanvas.prototype.addStep = function(def, afterId) {
+    ToolCanvas.prototype.addTool = function(def, afterId) {
         var step = deepClone(def);
-        step._sid = nextId();
+        step._sid = nextToolId();
         this._map[step._sid] = step;
         if (afterId) {
-            var idx = this._findIdx(this._steps, afterId);
-            if (idx !== -1) this._steps.splice(idx+1, 0, step);
-            else this._steps.push(step);
+            var idx = this._findIdx(this._tools, afterId);
+            if (idx !== -1) this._tools.splice(idx+1, 0, step);
+            else this._tools.push(step);
         } else {
-            this._steps.push(step);
+            this._tools.push(step);
         }
         this._render();
         this._fireChange();
     };
 
-    StepCanvas.prototype.removeStep = function(sid) {
-        if (this._removeFrom(this._steps, sid)) {
+    ToolCanvas.prototype.removeTool = function(sid) {
+        if (this._removeFrom(this._tools, sid)) {
             delete this._map[sid];
             if (this._selId === sid) this._selId = null;
             this._render();
@@ -6154,7 +6252,7 @@ function createLogPanel(config) {
         }
     };
 
-    StepCanvas.prototype._removeFrom = function(list, sid) {
+    ToolCanvas.prototype._removeFrom = function(list, sid) {
         for (var i = 0; i < list.length; i++) {
             if (list[i]._sid === sid) { list.splice(i,1); return true; }
             var s = list[i];
@@ -6165,15 +6263,15 @@ function createLogPanel(config) {
         return false;
     };
 
-    StepCanvas.prototype._findIdx = function(list, sid) {
+    ToolCanvas.prototype._findIdx = function(list, sid) {
         for (var i = 0; i < list.length; i++) { if (list[i]._sid === sid) return i; }
         return -1;
     };
 
-    StepCanvas.prototype.moveStep = function(dragId, targetId, pos) {
+    ToolCanvas.prototype.moveTool = function(dragId, targetId, pos) {
         var step = this._map[dragId];
         if (!step) return;
-        this._removeFrom(this._steps, dragId);
+        this._removeFrom(this._tools, dragId);
         if (pos === "nest") {
             var tgt = this._map[targetId];
             if (tgt) {
@@ -6181,19 +6279,19 @@ function createLogPanel(config) {
                 else { if(!tgt.body) tgt.body=[]; tgt.body.push(step); }
             }
         } else {
-            var ti = this._findIdx(this._steps, targetId);
-            if (ti !== -1) this._steps.splice(pos==="above"?ti:ti+1, 0, step);
-            else this._steps.push(step);
+            var ti = this._findIdx(this._tools, targetId);
+            if (ti !== -1) this._tools.splice(pos==="above"?ti:ti+1, 0, step);
+            else this._tools.push(step);
         }
         this._render();
         this._fireChange();
     };
 
-    StepCanvas.prototype.serialize = function() {
-        return this._strip(deepClone(this._steps));
+    ToolCanvas.prototype.serialize = function() {
+        return this._strip(deepClone(this._tools));
     };
 
-    StepCanvas.prototype._strip = function(steps) {
+    ToolCanvas.prototype._strip = function(steps) {
         for (var i=0;i<steps.length;i++) {
             delete steps[i]._sid;
             if (steps[i].then) this._strip(steps[i].then);
@@ -6203,46 +6301,46 @@ function createLogPanel(config) {
         return steps;
     };
 
-    StepCanvas.prototype._fireChange = function() { this._onChange(this.serialize()); };
+    ToolCanvas.prototype._fireChange = function() { this._onChange(this.serialize()); };
 
-    StepCanvas.prototype._render = function() {
+    ToolCanvas.prototype._render = function() {
         this._root.innerHTML = "";
-        if (this._steps.length === 0) { this._renderEmpty(); return; }
-        for (var i=0;i<this._steps.length;i++) {
-            this._root.appendChild(this._renderStep(this._steps[i]));
+        if (this._tools.length === 0) { this._renderEmpty(); return; }
+        for (var i=0;i<this._tools.length;i++) {
+            this._root.appendChild(this._renderTool(this._tools[i]));
         }
     };
 
-    StepCanvas.prototype._renderEmpty = function() {
+    ToolCanvas.prototype._renderEmpty = function() {
         this._root.innerHTML = "";
         var d = document.createElement("div");
-        d.className = "step-canvas-empty";
-        d.innerHTML = '<span class="step-canvas-empty-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.6582 9.28638C18.098 10.1862 18.8178 10.6361 19.0647 11.2122C19.2803 11.7152 19.2803 12.2847 19.0647 12.7878C18.8178 13.3638 18.098 13.8137 16.6582 14.7136L9.896 18.94C8.29805 19.9387 7.49907 20.4381 6.83973 20.385C6.26501 20.3388 5.73818 20.0469 5.3944 19.584C5 19.053 5 18.1108 5 16.2264V7.77357C5 5.88919 5 4.94701 5.3944 4.41598C5.73818 3.9531 6.26501 3.66111 6.83973 3.6149C7.49907 3.5619 8.29805 4.06126 9.896 5.05998L16.6582 9.28638Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>No steps yet<br><span style="font-size:10px">Click <b>+ Add Step</b> to begin</span>';
+        d.className = "tool-canvas-empty";
+        d.innerHTML = '<span class="tool-canvas-empty-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.6582 9.28638C18.098 10.1862 18.8178 10.6361 19.0647 11.2122C19.2803 11.7152 19.2803 12.2847 19.0647 12.7878C18.8178 13.3638 18.098 13.8137 16.6582 14.7136L9.896 18.94C8.29805 19.9387 7.49907 20.4381 6.83973 20.385C6.26501 20.3388 5.73818 20.0469 5.3944 19.584C5 19.053 5 18.1108 5 16.2264V7.77357C5 5.88919 5 4.94701 5.3944 4.41598C5.73818 3.9531 6.26501 3.66111 6.83973 3.6149C7.49907 3.5619 8.29805 4.06126 9.896 5.05998L16.6582 9.28638Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>No tools yet<br><span style="font-size:10px">Click <b>+ Add Tool</b> to begin</span>';
         this._root.appendChild(d);
     };
 
-    StepCanvas.prototype._isContainer = function(s) {
+    ToolCanvas.prototype._isContainer = function(s) {
         return s.action==="if" || s.action==="for" || s.action==="while";
     };
 
-    StepCanvas.prototype._renderStep = function(step) {
+    ToolCanvas.prototype._renderTool = function(step) {
         return this._isContainer(step) ? this._renderContainer(step) : this._renderLeaf(step);
     };
 
-    StepCanvas.prototype._renderLeaf = function(step) {
+    ToolCanvas.prototype._renderLeaf = function(step) {
         var self = this;
         var el = document.createElement("div");
-        el.className = "step-block" + (step._sid===this._selId?" selected":"");
+        el.className = "tool-block" + (step._sid===this._selId?" selected":"");
         el.setAttribute("data-sid", step._sid);
         el.setAttribute("draggable","true");
 
         var h = document.createElement("div");
-        h.className = "step-drag-handle";
+        h.className = "tool-drag-handle";
         h.innerHTML = _svgCache["drag"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3V9M12 3L9 6M12 3L15 6M12 15V21M12 21L15 18M12 21L9 18M3 12H9M3 12L6 15M3 12L6 9M15 12H21M21 12L18 9M21 12L18 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         el.appendChild(h);
 
         var ic = document.createElement("div");
-        ic.className = "step-icon";
+        ic.className = "tool-icon";
         ic.innerHTML = _svgCache[iconFor(step.action)] || "";
         el.appendChild(ic);
 
@@ -6261,48 +6359,48 @@ function createLogPanel(config) {
         var db = document.createElement("div");
         db.className = "step-action-btn del";
         db.innerHTML = _svgCache["close"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>';
-        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeStep(step._sid); });
+        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeTool(step._sid); });
         acts.appendChild(db);
         el.appendChild(acts);
 
         el.addEventListener("click", function(e) {
-            if (e.target.closest(".step-action-btn") || e.target.closest(".step-drag-handle")) return;
-            self._selectStep(step._sid);
+            if (e.target.closest(".step-action-btn") || e.target.closest(".tool-drag-handle")) return;
+            self._selectTool(step._sid);
         });
 
         this._wireDrag(el, step);
         return el;
     };
 
-    StepCanvas.prototype._renderContainer = function(step) {
+    ToolCanvas.prototype._renderContainer = function(step) {
         var self = this;
         var wrap = document.createElement("div");
-        wrap.className = "step-block-container";
+        wrap.className = "tool-block-container";
         wrap.setAttribute("data-sid", step._sid);
 
         var header = document.createElement("div");
-        header.className = "step-block" + (step._sid===this._selId?" selected":"");
+        header.className = "tool-block" + (step._sid===this._selId?" selected":"");
         header.setAttribute("data-sid", step._sid);
         header.setAttribute("draggable","true");
 
         var h = document.createElement("div");
-        h.className = "step-drag-handle";
+        h.className = "tool-drag-handle";
         h.innerHTML = _svgCache["drag"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3V9M12 3L9 6M12 3L15 6M12 15V21M12 21L15 18M12 21L9 18M3 12H9M3 12L6 15M3 12L6 9M15 12H21M21 12L18 9M21 12L18 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         header.appendChild(h);
 
         var tg = document.createElement("div");
-        tg.className = "step-nest-toggle";
+        tg.className = "tool-nest-toggle";
         tg.innerHTML = _svgCache["chevdown"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 13L12 18L17 13M7 6L12 11L17 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         tg.addEventListener("click", function(e) {
             e.stopPropagation();
             tg.classList.toggle("collapsed");
-            var b = wrap.querySelector(".step-nest-body");
+            var b = wrap.querySelector(".tool-nest-body");
             if (b) b.classList.toggle("collapsed");
         });
         header.appendChild(tg);
 
         var ic = document.createElement("div");
-        ic.className = "step-icon";
+        ic.className = "tool-icon";
         ic.innerHTML = _svgCache[iconFor(step.action)] || "";
         header.appendChild(ic);
 
@@ -6321,13 +6419,13 @@ function createLogPanel(config) {
         var db = document.createElement("div");
         db.className = "step-action-btn del";
         db.innerHTML = _svgCache["close"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>';
-        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeStep(step._sid); });
+        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeTool(step._sid); });
         acts.appendChild(db);
         header.appendChild(acts);
 
         header.addEventListener("click", function(e) {
-            if (e.target.closest(".step-action-btn")||e.target.closest(".step-drag-handle")||e.target.closest(".step-nest-toggle")) return;
-            self._selectStep(step._sid);
+            if (e.target.closest(".step-action-btn")||e.target.closest(".tool-drag-handle")||e.target.closest(".tool-nest-toggle")) return;
+            self._selectTool(step._sid);
         });
         this._wireDrag(header, step);
 
@@ -6344,20 +6442,20 @@ function createLogPanel(config) {
         return wrap;
     };
 
-    StepCanvas.prototype._renderNest = function(steps, branch, parent) {
+    ToolCanvas.prototype._renderNest = function(steps, branch, parent) {
         var self = this;
         var body = document.createElement("div");
-        body.className = "step-nest-body";
+        body.className = "tool-nest-body";
         body.setAttribute("data-nest-parent", parent._sid);
         body.setAttribute("data-nest-branch", branch);
 
         if (steps.length === 0) {
             var emp = document.createElement("div");
-            emp.className = "step-nest-body-empty";
+            emp.className = "tool-nest-body-empty";
             emp.textContent = "empty";
             body.appendChild(emp);
         } else {
-            for (var i=0;i<steps.length;i++) body.appendChild(this._renderStep(steps[i]));
+            for (var i=0;i<steps.length;i++) body.appendChild(this._renderTool(steps[i]));
         }
 
         body.addEventListener("dragover", function(e) {
@@ -6369,7 +6467,7 @@ function createLogPanel(config) {
             e.preventDefault(); e.stopPropagation();
             if (!self._dragId) return;
             var step = self._map[self._dragId]; if (!step) return;
-            self._removeFrom(self._steps, self._dragId);
+            self._removeFrom(self._tools, self._dragId);
             if (branch==="then") { if(!parent.then)parent.then=[]; parent.then.push(step); }
             else if (branch==="else") { if(!parent.else)parent.else=[]; parent.else.push(step); }
             else { if(!parent.body)parent.body=[]; parent.body.push(step); }
@@ -6380,16 +6478,16 @@ function createLogPanel(config) {
         return body;
     };
 
-    StepCanvas.prototype._selectStep = function(sid) {
+    ToolCanvas.prototype._selectTool = function(sid) {
         this._selId = sid;
-        var prev = this._root.querySelector(".step-block.selected");
+        var prev = this._root.querySelector(".tool-block.selected");
         if (prev) prev.classList.remove("selected");
-        var el = this._root.querySelector('[data-sid="'+sid+'"] > .step-block[data-sid="'+sid+'"], .step-block[data-sid="'+sid+'"]');
+        var el = this._root.querySelector('[data-sid="'+sid+'"] > .tool-block[data-sid="'+sid+'"], .tool-block[data-sid="'+sid+'"]');
         if (el) el.classList.add("selected");
         this._onSelect(sid, this._map[sid]);
     };
 
-    StepCanvas.prototype._isDesc = function(pid, cid) {
+    ToolCanvas.prototype._isDesc = function(pid, cid) {
         var p = this._map[pid]; if (!p) return false;
         var ch = [].concat(p.then||[], p.else||[], p.body||[]);
         for (var i=0;i<ch.length;i++) {
@@ -6399,7 +6497,7 @@ function createLogPanel(config) {
         return false;
     };
 
-    StepCanvas.prototype._wireDrag = function(el, step) {
+    ToolCanvas.prototype._wireDrag = function(el, step) {
         var self = this;
         el.addEventListener("dragstart", function(e) {
             self._dragId = step._sid;
@@ -6442,26 +6540,65 @@ function createLogPanel(config) {
             else if (y < h/2) pos = "above";
             else pos = "below";
             if (pos === "nest" && self._isDesc(step._sid, self._dragId)) { self._clearDrops(); return; }
-            self.moveStep(self._dragId, step._sid, pos);
+            self.moveTool(self._dragId, step._sid, pos);
             self._clearDrops();
         });
     };
 
-    StepCanvas.prototype._clearDrops = function() {
+    ToolCanvas.prototype._clearDrops = function() {
         this._root.querySelectorAll(".drag-over-above,.drag-over-below,.drag-over-nest").forEach(function(el) {
             el.classList.remove("drag-over-above","drag-over-below","drag-over-nest");
         });
         this._root.querySelectorAll(".drag-target").forEach(function(el) { el.classList.remove("drag-target"); });
     };
 
-    StepCanvas.prototype.updateStep = function(sid, params) {
+    ToolCanvas.prototype.updateTool = function(sid, params) {
         var s = this._map[sid]; if (!s) return;
         for (var k in params) { if (params.hasOwnProperty(k)) s.params[k] = params[k]; }
         this._render(); this._fireChange();
     };
 
-    StepCanvas.prototype.getSelectedId = function() { return this._selId; };
-    StepCanvas.prototype.getSelectedStep = function() { return this._selId ? this._map[this._selId] : null; };
+    ToolCanvas.prototype.getSelectedId = function() { return this._selId; };
+    ToolCanvas.prototype.getSelectedTool = function() { return this._selId ? this._map[this._selId] : null; };
+
+    /* ── Clipboard (copy / cut / paste) ─────────────────────────────── */
+    ToolCanvas.prototype.copySelected = function() {
+        var step = this.getSelectedTool();
+        if (!step) return false;
+        var clone = deepClone(step);
+        this._strip([clone]);
+        try { navigator.clipboard.writeText(JSON.stringify(clone)); } catch(e) {}
+        this._clipboard = clone;
+        return true;
+    };
+    ToolCanvas.prototype.cutSelected = function() {
+        var sid = this._selId;
+        if (!sid || !this._map[sid]) return false;
+        this.copySelected();
+        this.removeTool(sid);
+        return true;
+    };
+    ToolCanvas.prototype.pasteAfter = function() {
+        if (!this._clipboard) return false;
+        var clone = deepClone(this._clipboard);
+        clone._sid = nextToolId();
+        this._map[clone._sid] = clone;
+        if (clone.then) this._assignIds(clone.then);
+        if (clone.else) this._assignIds(clone.else);
+        if (clone.body) this._assignIds(clone.body);
+        var afterId = this._selId;
+        if (afterId) {
+            var idx = this._findIdx(this._tools, afterId);
+            if (idx !== -1) this._tools.splice(idx + 1, 0, clone);
+            else this._tools.push(clone);
+        } else {
+            this._tools.push(clone);
+        }
+        this._selId = clone._sid;
+        this._render();
+        this._fireChange();
+        return true;
+    };
 
     /* ── Macro Management State ──────────────────────────────────── */
     var _currentMacroId = null;
@@ -6532,7 +6669,7 @@ function createLogPanel(config) {
     var recordBtn = document.createElement("button");
     recordBtn.className = "macro-toolbar-btn";
     recordBtn.innerHTML = '<span class="macro-rec-dot" style="display:none"></span> Record';
-    recordBtn.title = "Record user actions into steps";
+    recordBtn.title = "Record user actions into tools";
     toolbar.appendChild(recordBtn);
 
     // Delete button
@@ -6546,26 +6683,26 @@ function createLogPanel(config) {
     var mainArea = document.createElement("div");
     mainArea.className = "macros-main";
 
-    // Step canvas area
-    var stepArea = document.createElement("div");
-    stepArea.className = "macros-step-area";
-    // Canvas container (StepCanvas will be mounted here)
+    // Tool canvas area
+    var toolArea = document.createElement("div");
+    toolArea.className = "macros-tool-area";
+    // Canvas container (ToolCanvas will be mounted here)
     var canvasContainer = document.createElement("div");
     canvasContainer.style.cssText = "flex:1;overflow:hidden;position:relative";
-    stepArea.appendChild(canvasContainer);
+    toolArea.appendChild(canvasContainer);
 
-    mainArea.appendChild(stepArea);
+    mainArea.appendChild(toolArea);
 
-    // Floating add-step button
-    var addStepBtn = document.createElement("button");
-    addStepBtn.className = "macros-add-step-btn";
-    addStepBtn.innerHTML = (_svgCache["add"] || "+") + " Add Step";
-    stepArea.appendChild(addStepBtn);
+    // Floating add-tool button
+    var addToolBtn = document.createElement("button");
+    addToolBtn.className = "macros-add-tool-btn";
+    addToolBtn.innerHTML = (_svgCache["add"] || "+") + " Add Tool";
+    toolArea.appendChild(addToolBtn);
 
     // Test run / recording toast
     var testToast = document.createElement("div");
     testToast.className = "macro-test-toast";
-    stepArea.appendChild(testToast);
+    toolArea.appendChild(testToast);
 
     // Fn-picker overlay (the existing picker, restructured)
     var overlay = document.createElement("div");
@@ -6575,7 +6712,7 @@ function createLogPanel(config) {
     overlayHeader.className = "fn-picker-overlay-header";
     var overlayTitle = document.createElement("span");
     overlayTitle.className = "fn-picker-overlay-title";
-    overlayTitle.textContent = "Add Step";
+    overlayTitle.textContent = "Add Tool";
     overlayHeader.appendChild(overlayTitle);
     var overlayClose = document.createElement("div");
     overlayClose.className = "fn-picker-overlay-close";
@@ -6598,28 +6735,52 @@ function createLogPanel(config) {
     layout.appendChild(mainArea);
     slot.appendChild(layout);
 
-    // ── Step Canvas instance ──
-    _canvas = new StepCanvas(canvasContainer, {
+    // ── Tool Canvas instance ──
+    _canvas = new ToolCanvas(canvasContainer, {
         onChange: function(steps) {
             _macroDirty = true;
             updateSaveBtnState();
         },
         onSelect: function(sid, step) {
-            if (_stepEditor) _stepEditor.open(sid);
+            if (_toolEditor) _toolEditor.open(sid);
         }
     });
 
-    // Inline step parameter editor
-    var _stepEditor = null;
-    if (window.StepEditor) {
-        _stepEditor = new StepEditor({ canvas: _canvas });
+    // ── Tool keyboard shortcuts (copy/cut/paste/delete) ─────────────
+    toolArea.addEventListener("keydown", function(e) {
+        var mod = e.metaKey || e.ctrlKey;
+        if (mod && e.key === "c") {
+            e.preventDefault();
+            _canvas.copySelected();
+        } else if (mod && e.key === "x") {
+            e.preventDefault();
+            _canvas.cutSelected();
+            _macroDirty = true;
+            updateSaveBtnState();
+        } else if (mod && e.key === "v") {
+            e.preventDefault();
+            _canvas.pasteAfter();
+            _macroDirty = true;
+            updateSaveBtnState();
+        } else if ((e.key === "Delete" || e.key === "Backspace") && _canvas.getSelectedId()) {
+            e.preventDefault();
+            _canvas.removeTool(_canvas.getSelectedId());
+            _macroDirty = true;
+            updateSaveBtnState();
+        }
+    });
+
+    // Inline tool parameter editor
+    var _toolEditor = null;
+    if (window.ToolEditor) {
+        _toolEditor = new ToolEditor({ canvas: _canvas });
     } else {
-        console.warn("[macros] StepEditor not loaded — inline editing disabled");
+        console.warn("[macros] ToolEditor not loaded — inline editing disabled");
     }
 
     /* ── Preload add icon ────────────────────────────────────────── */
     _fetchSVG("add").then(function(svg) {
-        if (svg) addStepBtn.innerHTML = svg + " Add Step";
+        if (svg) addToolBtn.innerHTML = svg + " Add Tool";
     });
     _fetchSVG("close").then(function(svg) {
         if (svg) overlayClose.innerHTML = svg;
@@ -6632,7 +6793,7 @@ function createLogPanel(config) {
     function closeFnOverlay() {
         overlay.classList.remove("open");
     }
-    addStepBtn.addEventListener("click", function() {
+    addToolBtn.addEventListener("click", function() {
         openFnOverlay();
     });
 
@@ -6820,7 +6981,7 @@ function createLogPanel(config) {
         } else {
             recordBtn.className = "macro-toolbar-btn";
             recordBtn.innerHTML = '<span class="macro-rec-dot" style="display:none"></span> Record';
-            recordBtn.title = "Record user actions into steps";
+            recordBtn.title = "Record user actions into tools";
         }
     }
 
@@ -6862,9 +7023,9 @@ function createLogPanel(config) {
         if (window.fnPicker && window.fnPicker.handler) {
             window.fnPicker.handler(action, body);
         }
-        // Step-canvas messages
-        if (action === "addStep" && body) {
-            _canvas.addStep(body);
+        // Tool-canvas messages
+        if (action === "addTool" && body) {
+            _canvas.addTool(body);
             _macroDirty = true;
             updateSaveBtnState();
             return;
@@ -6901,7 +7062,7 @@ function createLogPanel(config) {
             return;
         }
         if (action === "recordStep" && body) {
-            _canvas.addStep({ action: body.action, params: body.params });
+            _canvas.addTool({ action: body.action, params: body.params });
             _macroDirty = true;
             updateSaveBtnState();
             return;
@@ -6911,13 +7072,13 @@ function createLogPanel(config) {
     /* ── External API ────────────────────────────────────────────── */
     window.macroLab = {
         canvas: _canvas,
-        editor: _stepEditor,
+        editor: _toolEditor,
         loadMacro: loadMacro,
         saveMacro: saveMacro,
         refreshList: refreshMacroList,
         setMacroList: setMacroList,
         setMacroDef: setMacroDef,
-        addStep: function(def) { _canvas.addStep(def); closeFnOverlay(); },
+        addTool: function(def) { _canvas.addTool(def); closeFnOverlay(); },
         // Test Run & Record Mode
         testRun: function() { testBtn.click(); },
         startRecording: function() { if (!_isRecording) recordBtn.click(); },

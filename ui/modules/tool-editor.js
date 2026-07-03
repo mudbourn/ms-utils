@@ -1,17 +1,17 @@
 /**
- * StepEditor — inline parameter editor for macro step blocks.
+ * ToolEditor — inline parameter editor for macro tool blocks.
  *
- * Opens an editable form below a selected step block, with appropriate input
+ * Opens an editable form below a selected tool block, with appropriate input
  * widgets for each parameter type (key capture, modifier chips, number spinners,
  * text inputs, dropdown selects, condition editors, array editors).
  *
  * Usage (IIFE — in ms_shell.html or other non-module contexts):
  *
- *   // Available as window.StepEditor after this script loads.
- *   var editor = new StepEditor({ canvas: stepCanvasInstance });
- *   editor.open(stepSid);  // opens editor below the step block
+ *   // Available as window.ToolEditor after this script loads.
+ *   var editor = new ToolEditor({ canvas: toolCanvasInstance });
+ *   editor.open(toolSid);  // opens editor below the tool block
  *
- * The editor hooks into StepCanvas._render to persist through re-renders
+ * The editor hooks into ToolCanvas._render to persist through re-renders
  * and auto-closes on click outside or Escape key.
  */
 
@@ -98,10 +98,10 @@ function injectCSS() {
     if (_cssInjected) return;
     _cssInjected = true;
     const style = document.createElement("style");
-    style.id = "step-editor-css";
+    style.id = "tool-editor-css";
     style.textContent = `
 /* ── Step Inline Editor ──────────────────────────────────────────── */
-.step-editor-panel {
+.tool-editor-panel {
     background: var(--surface);
     border: 1px solid var(--border);
     border-top: 2px solid var(--accent);
@@ -115,13 +115,13 @@ function injectCSS() {
     box-sizing: border-box;
     position: relative;
 }
-.step-editor-panel.open {
+.tool-editor-panel.open {
     max-height: 500px;
     opacity: 1;
     padding: 10px 12px 12px 12px;
 }
 
-.step-editor-header {
+.tool-editor-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -129,7 +129,7 @@ function injectCSS() {
     padding-bottom: 6px;
     border-bottom: 1px solid var(--border-dim);
 }
-.step-editor-title {
+.tool-editor-title {
     font-family: "SF Mono", "Menlo", "Consolas", monospace;
     font-size: 10px;
     font-weight: 700;
@@ -137,7 +137,7 @@ function injectCSS() {
     letter-spacing: 0.6px;
     color: var(--text3);
 }
-.step-editor-close {
+.tool-editor-close {
     width: 18px; height: 18px;
     display: flex; align-items: center; justify-content: center;
     border-radius: var(--radius-s);
@@ -145,25 +145,25 @@ function injectCSS() {
     opacity: 0.4;
     transition: opacity 0.1s, background 0.1s;
 }
-.step-editor-close:hover {
+.tool-editor-close:hover {
     opacity: 1;
     background: var(--hover);
 }
-.step-editor-close svg { width: 12px; height: 12px; }
-.step-editor-close svg path { stroke: var(--text); fill: none; }
+.tool-editor-close svg { width: 12px; height: 12px; }
+.tool-editor-close svg path { stroke: var(--text); fill: none; }
 
 /* ── Form Grid ──────────────────────────────────────────────────── */
-.step-editor-form {
+.tool-editor-form {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
-.step-editor-row {
+.tool-editor-row {
     display: flex;
     align-items: center;
     gap: 8px;
 }
-.step-editor-label {
+.tool-editor-label {
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
@@ -174,7 +174,7 @@ function injectCSS() {
     text-align: right;
     padding-right: 4px;
 }
-.step-editor-control {
+.tool-editor-control {
     flex: 1;
     min-width: 0;
     display: flex;
@@ -183,7 +183,7 @@ function injectCSS() {
 }
 
 /* ── Text Input ─────────────────────────────────────────────────── */
-.step-ed-text {
+.tool-ed-text {
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border-dim);
@@ -198,16 +198,16 @@ function injectCSS() {
     -webkit-user-select: text;
     box-sizing: border-box;
 }
-.step-ed-text:focus { border-color: var(--accent); }
+.tool-ed-text:focus { border-color: var(--accent); }
 
 /* ── Number Input ───────────────────────────────────────────────── */
-.step-ed-number-wrap {
+.tool-ed-number-wrap {
     display: flex;
     align-items: center;
     gap: 0;
     flex: 1;
 }
-.step-ed-number {
+.tool-ed-number {
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border-dim);
@@ -223,11 +223,11 @@ function injectCSS() {
     -moz-appearance: textfield;
     box-sizing: border-box;
 }
-.step-ed-number::-webkit-inner-spin-button,
-.step-ed-number::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.step-ed-number:focus { border-color: var(--accent); }
+.tool-ed-number::-webkit-inner-spin-button,
+.tool-ed-number::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.tool-ed-number:focus { border-color: var(--accent); }
 
-.step-ed-num-btn {
+.tool-ed-num-btn {
     width: 24px;
     height: 26px;
     display: flex;
@@ -244,17 +244,17 @@ function injectCSS() {
     -webkit-user-select: none;
     flex-shrink: 0;
 }
-.step-ed-num-btn:hover {
+.tool-ed-num-btn:hover {
     background: var(--hover);
     color: var(--text);
     border-color: var(--border);
 }
-.step-ed-num-btn:first-child { border-radius: var(--radius) 0 0 var(--radius); border-right: none; }
-.step-ed-num-btn:last-child  { border-radius: 0 var(--radius) var(--radius) 0; border-left: none; }
-.step-ed-num-btn:only-child  { border-radius: var(--radius); }
+.tool-ed-num-btn:first-child { border-radius: var(--radius) 0 0 var(--radius); border-right: none; }
+.tool-ed-num-btn:last-child  { border-radius: 0 var(--radius) var(--radius) 0; border-left: none; }
+.tool-ed-num-btn:only-child  { border-radius: var(--radius); }
 
 /* ── Key Capture Button ─────────────────────────────────────────── */
-.step-ed-key-btn {
+.tool-ed-key-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -272,18 +272,18 @@ function injectCSS() {
     user-select: text;
     -webkit-user-select: text;
 }
-.step-ed-key-btn:hover { border-color: var(--accent); }
-.step-ed-key-btn.capturing {
+.tool-ed-key-btn:hover { border-color: var(--accent); }
+.tool-ed-key-btn.capturing {
     border-color: var(--accent);
     background: rgba(196, 26, 26, 0.15);
     color: var(--accent-hi);
-    animation: step-ed-pulse 1s ease-in-out infinite;
+    animation: tool-ed-pulse 1s ease-in-out infinite;
 }
-@keyframes step-ed-pulse {
+@keyframes tool-ed-pulse {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.5; }
 }
-.step-ed-key-hint {
+.tool-ed-key-hint {
     font-size: 9px;
     color: var(--text3);
     opacity: 0.6;
@@ -291,11 +291,11 @@ function injectCSS() {
 }
 
 /* ── Modifier Chips ─────────────────────────────────────────────── */
-.step-ed-mods {
+.tool-ed-mods {
     display: flex;
     gap: 3px;
 }
-.step-ed-mod-chip {
+.tool-ed-mod-chip {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -314,18 +314,18 @@ function injectCSS() {
     text-transform: uppercase;
     letter-spacing: 0.3px;
 }
-.step-ed-mod-chip:hover {
+.tool-ed-mod-chip:hover {
     border-color: var(--accent);
     color: var(--text);
 }
-.step-ed-mod-chip.on {
+.tool-ed-mod-chip.on {
     background: rgba(196, 26, 26, 0.18);
     border-color: var(--accent);
     color: var(--accent-hi);
 }
 
 /* ── Select Dropdown ────────────────────────────────────────────── */
-.step-ed-select {
+.tool-ed-select {
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border-dim);
@@ -342,11 +342,11 @@ function injectCSS() {
     -webkit-appearance: none;
     box-sizing: border-box;
 }
-.step-ed-select:focus { border-color: var(--accent); }
-.step-ed-select option { background: var(--surface); color: var(--text); }
+.tool-ed-select:focus { border-color: var(--accent); }
+.tool-ed-select option { background: var(--surface); color: var(--text); }
 
 /* ── Condition / Expression Editor ──────────────────────────────── */
-.step-ed-condition {
+.tool-ed-condition {
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border-dim);
@@ -365,22 +365,22 @@ function injectCSS() {
     -webkit-user-select: text;
     box-sizing: border-box;
 }
-.step-ed-condition:focus { border-color: var(--accent); }
+.tool-ed-condition:focus { border-color: var(--accent); }
 
 /* ── Array Editor ───────────────────────────────────────────────── */
-.step-ed-array {
+.tool-ed-array {
     display: flex;
     flex-direction: column;
     gap: 4px;
     width: 100%;
 }
-.step-ed-array-item {
+.tool-ed-array-item {
     display: flex;
     align-items: center;
     gap: 4px;
 }
-.step-ed-array-item .step-ed-text { flex: 1; }
-.step-ed-array-remove {
+.tool-ed-array-item .tool-ed-text { flex: 1; }
+.tool-ed-array-remove {
     width: 20px; height: 20px;
     display: flex; align-items: center; justify-content: center;
     border-radius: var(--radius-s);
@@ -392,8 +392,8 @@ function injectCSS() {
     font-size: 14px;
     font-weight: 700;
 }
-.step-ed-array-remove:hover { opacity: 1; background: var(--danger-bg); color: var(--danger); }
-.step-ed-array-add {
+.tool-ed-array-remove:hover { opacity: 1; background: var(--danger-bg); color: var(--danger); }
+.tool-ed-array-add {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -410,10 +410,10 @@ function injectCSS() {
     text-transform: uppercase;
     letter-spacing: 0.3px;
 }
-.step-ed-array-add:hover { border-color: var(--accent); color: var(--text); }
+.tool-ed-array-add:hover { border-color: var(--accent); color: var(--text); }
 
 /* ── No-params ──────────────────────────────────────────────────── */
-.step-ed-no-params {
+.tool-ed-no-params {
     color: var(--text3);
     font-size: 11px;
     font-style: italic;
@@ -423,15 +423,15 @@ function injectCSS() {
     document.head.appendChild(style);
 }
 
-// ── StepEditor Class ───────────────────────────────────────────────────
+// ── ToolEditor Class ───────────────────────────────────────────────────
 
 /**
  * @param {Object} opts
- * @param {Object} opts.canvas — StepCanvas instance (IIFE or ES module)
+ * @param {Object} opts.canvas — ToolCanvas instance (IIFE or ES module)
  * @param {string} [opts.svgBase] — base URL for svg/ directory (default: "./svg/")
  * @param {function} [opts.onUpdate] — called after a param is updated (sid, params)
  */
-class StepEditor {
+class ToolEditor {
     constructor(opts = {}) {
         injectCSS();
 
@@ -439,8 +439,8 @@ class StepEditor {
         this._svgBase = opts.svgBase || "./svg/";
         this._onUpdate = opts.onUpdate || (() => {});
 
-        this._stepSid   = null;   // currently edited step's _sid
-        this._stepEl    = null;   // DOM element of the step block
+        this._toolSid   = null;   // currently edited tool's _sid
+        this._toolEl    = null;   // DOM element of the tool block
         this._panelEl   = null;   // the editor panel DOM element
         this._formEl    = null;   // the form container inside the panel
         this._open      = false;
@@ -459,7 +459,7 @@ class StepEditor {
         };
     }
 
-    // ── Hook into StepCanvas._render ───────────────────────────────────
+    // ── Hook into ToolCanvas._render ───────────────────────────────────
 
     _hookCanvasRender() {
         if (!this._canvas) return;
@@ -470,7 +470,7 @@ class StepEditor {
         this._canvas._render = function() {
             origRender.call(this);
             // After re-render, re-inject the editor panel if it was open
-            if (editor._open && editor._stepSid) {
+            if (editor._open && editor._toolSid) {
                 editor._reInject();
             }
         };
@@ -478,71 +478,71 @@ class StepEditor {
 
     /**
      * Re-inject the editor panel after a canvas re-render.
-     * Finds the new step element by its _sid and appends the panel to it.
+     * Finds the new tool element by its _sid and appends the panel to it.
      */
     _reInject() {
-        if (!this._stepSid) return;
-        const step = this._canvas._map[this._stepSid];
-        if (!step) {
-            // Step was deleted
+        if (!this._toolSid) return;
+        const tool = this._canvas._map[this._toolSid];
+        if (!tool) {
+            // Tool was deleted
             this.close();
             return;
         }
         const root = this._canvas._root;
         if (!root) { this.close(); return; }
 
-        // Find the new step element
+        // Find the new tool element
         const newEl = root.querySelector(
-            `[data-sid="${this._stepSid}"] > .step-block[data-sid="${this._stepSid}"], ` +
-            `.step-block[data-sid="${this._stepSid}"]`
+            `[data-sid="${this._toolSid}"] > .tool-block[data-sid="${this._toolSid}"], ` +
+            `.tool-block[data-sid="${this._toolSid}"]`
         );
         if (!newEl) { this.close(); return; }
 
-        this._stepEl = newEl;
-        // Rebuild form with fresh step data
-        this._buildForm(step);
-        // Re-append panel to the step element
+        this._toolEl = newEl;
+        // Rebuild form with fresh tool data
+        this._buildForm(tool);
+        // Re-append panel to the tool element
         if (this._panelEl && !this._panelEl.parentNode) {
-            this._stepEl.parentNode.insertBefore(this._panelEl, this._stepEl.nextSibling);
+            this._toolEl.parentNode.insertBefore(this._panelEl, this._toolEl.nextSibling);
         }
     }
 
     // ── Open / Close ───────────────────────────────────────────────────
 
     /**
-     * Open the editor for a given step.
-     * @param {string} sid — step _sid
+     * Open the editor for a given tool.
+     * @param {string} sid — tool _sid
      */
     open(sid) {
         if (!this._canvas) return;
-        const step = this._canvas._map[sid];
-        if (!step) return;
+        const tool = this._canvas._map[sid];
+        if (!tool) return;
 
-        // Find the step block DOM element
+        // Find the tool block DOM element
         const root = this._canvas._root;
         if (!root) return;
         const stepEl = root.querySelector(
-            `[data-sid="${sid}"] > .step-block[data-sid="${sid}"], ` +
-            `.step-block[data-sid="${sid}"]`
+            `[data-sid="${sid}"] > .tool-block[data-sid="${sid}"], ` +
+            `.tool-block[data-sid="${sid}"]`
         );
         if (!stepEl) return;
 
         // Close previous
-        if (this._open && this._stepSid !== sid) {
+        if (this._open && this._toolSid !== sid) {
             this._removePanel();
         }
 
-        this._stepSid = sid;
-        this._stepEl  = stepEl;
+        this._toolSid = sid;
+        this._toolEl  = stepEl;
         this._open    = true;
 
         // Create panel
         this._panelEl = document.createElement("div");
-        this._panelEl.className = "step-editor-panel";
+        this._panelEl.className = "tool-editor-panel";
 
-        this._buildForm(step);
+        this._buildForm(tool);
 
-        // Insert after the step block element in the DOM
+        // Insert after the tool block element in the DOM
         stepEl.parentNode.insertBefore(this._panelEl, stepEl.nextSibling);
 
         // Trigger open animation
@@ -554,7 +554,7 @@ class StepEditor {
         setTimeout(() => {
             document.addEventListener("click", this._onClickOutside = (e) => {
                 if (!this._panelEl) return;
-                if (!this._panelEl.contains(e.target) && !this._stepEl.contains(e.target)) {
+                if (!this._panelEl.contains(e.target) && !this._toolEl.contains(e.target)) {
                     this.close();
                 }
             }, true);
@@ -580,8 +580,8 @@ class StepEditor {
         document.removeEventListener("keydown", this._onEscape, true);
 
         this._removePanel();
-        this._stepSid = null;
-        this._stepEl  = null;
+        this._toolSid = null;
+        this._toolEl  = null;
     }
 
     _removePanel() {
@@ -599,21 +599,21 @@ class StepEditor {
 
     // ── Build Form ─────────────────────────────────────────────────────
 
-    _buildForm(step) {
+    _buildForm(tool) {
         if (!this._panelEl) return;
         this._panelEl.innerHTML = "";
 
         // Header
         const header = document.createElement("div");
-        header.className = "step-editor-header";
+        header.className = "tool-editor-header";
 
         const title = document.createElement("div");
-        title.className = "step-editor-title";
-        title.textContent = step.action + " — parameters";
+        title.className = "tool-editor-title";
+        title.textContent = tool.action + " — parameters";
         header.appendChild(title);
 
         const closeBtn = document.createElement("div");
-        closeBtn.className = "step-editor-close";
+        closeBtn.className = "tool-editor-close";
         closeBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke-width="2" stroke-linecap="round"/></svg>';
         closeBtn.addEventListener("click", (e) => { e.stopPropagation(); this.close(); });
         header.appendChild(closeBtn);
@@ -622,16 +622,16 @@ class StepEditor {
 
         // Form
         this._formEl = document.createElement("div");
-        this._formEl.className = "step-editor-form";
+        this._formEl.className = "tool-editor-form";
         this._panelEl.appendChild(this._formEl);
 
         // Get param defs for this action
-        const defs = this._getParamDefs(step);
+        const defs = this._getParamDefs(tool);
         const keys = Object.keys(defs);
 
         if (keys.length === 0) {
             const nope = document.createElement("div");
-            nope.className = "step-ed-no-params";
+            nope.className = "tool-ed-no-params";
             nope.textContent = "No editable parameters.";
             this._formEl.appendChild(nope);
             return;
@@ -639,18 +639,18 @@ class StepEditor {
 
         for (const key of keys) {
             const def = defs[key];
-            const value = step.params ? step.params[key] : undefined;
-            const row = this._buildParamRow(key, def, value, step._sid);
+            const value = tool.params ? tool.params[key] : undefined;
+            const row = this._buildParamRow(key, def, value, tool._sid);
             if (row) this._formEl.appendChild(row);
         }
     }
 
     /**
-     * Get parameter definitions for a step.
+     * Get parameter definitions for a tool.
      * Uses the predefined map if available, otherwise infers from values.
      */
-    _getParamDefs(step) {
-        const action = step.action;
+    _getParamDefs(tool) {
+        const action = tool.action;
 
         // Check predefined map
         if (PARAM_DEFS[action]) {
@@ -666,9 +666,9 @@ class StepEditor {
         }
 
         // Infer from actual params
-        if (!step.params) return {};
+        if (!tool.params) return {};
         const defs = {};
-        for (const [key, value] of Object.entries(step.params)) {
+        for (const [key, value] of Object.entries(tool.params)) {
             if (STRUCTURAL_KEYS.has(key)) continue;
             defs[key] = { type: this._inferType(key, value) };
         }
@@ -694,15 +694,15 @@ class StepEditor {
 
     _buildParamRow(key, def, value, sid) {
         const row = document.createElement("div");
-        row.className = "step-editor-row";
+        row.className = "tool-editor-row";
 
         const label = document.createElement("div");
-        label.className = "step-editor-label";
+        label.className = "tool-editor-label";
         label.textContent = key;
         row.appendChild(label);
 
         const control = document.createElement("div");
-        control.className = "step-editor-control";
+        control.className = "tool-editor-control";
 
         switch (def.type) {
             case "string":
@@ -742,7 +742,7 @@ class StepEditor {
     _createStringInput(key, value, sid) {
         const inp = document.createElement("input");
         inp.type = "text";
-        inp.className = "step-ed-text";
+        inp.className = "tool-ed-text";
         inp.value = (value !== undefined && value !== null) ? String(value) : "";
         inp.placeholder = key + "…";
         inp.setAttribute("spellcheck", "false");
@@ -763,22 +763,22 @@ class StepEditor {
      */
     _createNumberInput(key, value, sid) {
         const wrap = document.createElement("div");
-        wrap.className = "step-ed-number-wrap";
+        wrap.className = "tool-ed-number-wrap";
 
         const btnMinus = document.createElement("button");
-        btnMinus.className = "step-ed-num-btn";
+        btnMinus.className = "tool-ed-num-btn";
         btnMinus.textContent = "−";
         wrap.appendChild(btnMinus);
 
         const inp = document.createElement("input");
         inp.type = "number";
-        inp.className = "step-ed-number";
+        inp.className = "tool-ed-number";
         inp.value = (value !== undefined && value !== null) ? String(value) : "0";
         inp.step = "1";
         wrap.appendChild(inp);
 
         const btnPlus = document.createElement("button");
-        btnPlus.className = "step-ed-num-btn";
+        btnPlus.className = "tool-ed-num-btn";
         btnPlus.textContent = "+";
         wrap.appendChild(btnPlus);
 
@@ -812,12 +812,12 @@ class StepEditor {
         wrap.style.cssText = "display:flex;align-items:center;gap:8px";
 
         const btn = document.createElement("button");
-        btn.className = "step-ed-key-btn";
+        btn.className = "tool-ed-key-btn";
         btn.textContent = (value != null && value !== "") ? String(value) : "Click to set";
         wrap.appendChild(btn);
 
         const hint = document.createElement("span");
-        hint.className = "step-ed-key-hint";
+        hint.className = "tool-ed-key-hint";
         hint.textContent = "press a key…";
         wrap.appendChild(hint);
 
@@ -877,18 +877,18 @@ class StepEditor {
         const currentMods = Array.isArray(value) ? value : [];
 
         const wrap = document.createElement("div");
-        wrap.className = "step-ed-mods";
+        wrap.className = "tool-ed-mods";
 
         for (const mod of MOD_LIST) {
             const chip = document.createElement("button");
-            chip.className = "step-ed-mod-chip" + (currentMods.includes(mod) ? " on" : "");
+            chip.className = "tool-ed-mod-chip" + (currentMods.includes(mod) ? " on" : "");
             chip.textContent = mod;
             chip.addEventListener("click", (e) => {
                 e.stopPropagation();
                 chip.classList.toggle("on");
                 // Gather active mods
                 const active = [];
-                wrap.querySelectorAll(".step-ed-mod-chip.on").forEach(c => active.push(c.textContent));
+                wrap.querySelectorAll(".tool-ed-mod-chip.on").forEach(c => active.push(c.textContent));
                 this._updateParam(sid, key, active);
             });
             wrap.appendChild(chip);
@@ -902,7 +902,7 @@ class StepEditor {
      */
     _createSelectInput(key, value, options, sid) {
         const sel = document.createElement("select");
-        sel.className = "step-ed-select";
+        sel.className = "tool-ed-select";
 
         if (!options || options.length === 0) {
             options = [String(value || "")];
@@ -933,7 +933,7 @@ class StepEditor {
      */
     _createConditionInput(key, value, sid) {
         const ta = document.createElement("textarea");
-        ta.className = "step-ed-condition";
+        ta.className = "tool-ed-condition";
         ta.rows = 1;
         ta.value = (value !== undefined && value !== null) ? String(value) : "";
         ta.placeholder = "Lua expression…";
@@ -966,19 +966,19 @@ class StepEditor {
     _createArrayEditor(key, value, sid) {
         const items = Array.isArray(value) ? [...value] : [];
         const wrap = document.createElement("div");
-        wrap.className = "step-ed-array";
+        wrap.className = "tool-ed-array";
 
         const renderItems = () => {
             // Clear existing items (keep the add button if present)
-            wrap.querySelectorAll(".step-ed-array-item").forEach(el => el.remove());
+            wrap.querySelectorAll(".tool-ed-array-item").forEach(el => el.remove());
 
             for (let i = 0; i < items.length; i++) {
                 const itemRow = document.createElement("div");
-                itemRow.className = "step-ed-array-item";
+                itemRow.className = "tool-ed-array-item";
 
                 const inp = document.createElement("input");
                 inp.type = "text";
-                inp.className = "step-ed-text";
+                inp.className = "tool-ed-text";
                 inp.value = String(items[i]);
                 inp.setAttribute("spellcheck", "false");
                 inp.setAttribute("autocomplete", "off");
@@ -992,7 +992,7 @@ class StepEditor {
                 itemRow.appendChild(inp);
 
                 const removeBtn = document.createElement("div");
-                removeBtn.className = "step-ed-array-remove";
+                removeBtn.className = "tool-ed-array-remove";
                 removeBtn.textContent = "×";
                 removeBtn.addEventListener("click", (e) => {
                     e.stopPropagation();
@@ -1009,7 +1009,7 @@ class StepEditor {
         renderItems();
 
         const addBtn = document.createElement("button");
-        addBtn.className = "step-ed-array-add";
+        addBtn.className = "tool-ed-array-add";
         addBtn.textContent = "+ add item";
         addBtn.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -1025,11 +1025,11 @@ class StepEditor {
     // ── Update Parameter ───────────────────────────────────────────────
 
     /**
-     * Update a single parameter on the step and notify the canvas.
+     * Update a single parameter on the tool and notify the canvas.
      */
     _updateParam(sid, key, value) {
         if (!this._canvas) return;
-        this._canvas.updateStep(sid, { [key]: value });
+        this._canvas.updateTool(sid, { [key]: value });
         this._onUpdate(sid, { [key]: value });
     }
 
@@ -1043,5 +1043,5 @@ class StepEditor {
 
 // ── Expose for IIFE contexts ───────────────────────────────────────────
 if (typeof window !== "undefined") {
-    window.StepEditor = StepEditor;
+    window.ToolEditor = ToolEditor;
 }

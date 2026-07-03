@@ -758,18 +758,19 @@
 
                 ms.type = function(key, mods, hidinject, holdMs)
                     if ms.dev then spoon.MsDevTools:flushAll() end
+                    local _hold = holdMs or 15
                     if ms.dev._watcherPanel then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        spoon.MsDevTools:watcherStep("type " .. tostring(key) .. modsStr)
+                        spoon.MsDevTools:watcherStep("type " .. tostring(key) .. modsStr .. " (" .. _hold .. "ms)")
                     end
                     if ms.dev then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        spoon.MsDevTools:macroLog("type " .. tostring(key) .. modsStr)
+                        spoon.MsDevTools:macroLog("type " .. tostring(key) .. modsStr .. " (" .. _hold .. "ms)")
                     end
                     local _saved = spoon.MsDevTools:getTraceSuppress()
                     spoon.MsDevTools:setTraceSuppress(true)
                     ms.press(key, mods, hidinject)
-                    ms.wait(holdMs or 15)
+                    ms.wait(_hold)
                     ms.release(key, mods, hidinject)
                     spoon.MsDevTools:setTraceSuppress(_saved)  -- restore rather than reset; safe across cancellation
                 end
@@ -1119,12 +1120,31 @@
                     ev:setProperty(_camDy, dy)
                     local app = ms._targetHandle or hs.application.get(ms._targetApp)
                     if app then ev:post(app) else ev:post() end
+                    if ms.dev and ms.dev.log then
+                        ms.dev.log({ type = "cam", msg = "cam(" .. dx .. ", " .. dy .. ")", posted = app and "app" or "global" })
+                    end
                     if not _camRebalancing then
                         _camTotalX = _camTotalX + dx
                         _camTotalY = _camTotalY + dy
                     end
                 end,
             })
+            -- Suppress wait logging inside ms.cam calls (cam loops are noisy)
+            local _origCamCall = getmetatable(ms.cam).__call
+            getmetatable(ms.cam).__call = function(self, dx, dy)
+                if ms.dev and spoon.MsDevTools then
+                    local saved = spoon.MsDevTools:getTraceSuppress()
+                    spoon.MsDevTools:setTraceSuppress(true)
+                    _origCamCall(self, dx, dy)
+                    spoon.MsDevTools:setTraceSuppress(saved)
+                    -- Accumulate cam move for flushing
+                    if ms.dev and spoon.MsDevTools.accCamMove then
+                        spoon.MsDevTools:accCamMove()
+                    end
+                else
+                    _origCamCall(self, dx, dy)
+                end
+            end
 
             ms.cam.rebalance = function()
                 if _camTotalX == 0 and _camTotalY == 0 then return end
@@ -1387,6 +1407,32 @@
         -- END 7. Macro Bind Controller --
 
         -- 8. Utilities --
+
+            -- Control flow logging helpers for hand-written macros
+            -- Usage:  ms.log("if", condition, true)  → "[label] if (condition) → true"
+            --         ms.log("for", "i=1,14", 14)    → "[label] for i=1,14 (14 iterations)"
+            --         ms.log("while", condition, 5)   → "[label] while condition (5 iterations)"
+            --         ms.log("repeat", condition, 3)  → "[label] repeat until condition (3 iterations)"
+            --         ms.log("msg", "doing thing")    → "[label] doing thing"
+            ms.log = function(kind, a, b)
+                if not ms.dev then return end
+                local msg
+                if kind == "if" then
+                    msg = "if (" .. tostring(a) .. ") → " .. tostring(b)
+                elseif kind == "for" then
+                    msg = "for " .. tostring(a) .. " (" .. tostring(b) .. " iterations)"
+                elseif kind == "while" then
+                    msg = "while " .. tostring(a) .. " (" .. tostring(b) .. " iterations)"
+                elseif kind == "repeat" then
+                    msg = "repeat until " .. tostring(a) .. " (" .. tostring(b) .. " iterations)"
+                else
+                    msg = tostring(kind) .. (a and (" " .. tostring(a)) or "")
+                end
+                if spoon and spoon.MsDevTools then
+                    spoon.MsDevTools:macroLog(msg)
+                end
+            end
+
             ms.fn = function(fn, async)
                 assert(type(fn) == "function", "ms.fn: fn must be a function")
                 if async == false then return fn end
@@ -2773,6 +2819,20 @@
                             end)
                             return
                         end
+                        -- ClampSize: enforce minimum window dimensions
+                        if action == "clampSize" and body and body.w and body.h then
+                            pcall(function()
+                                local f = _shellView:frame()
+                                if f.w < body.w or f.h < body.h then
+                                    _shellView:frame({
+                                        x = f.x, y = f.y,
+                                        w = math.max(f.w, body.w),
+                                        h = math.max(f.h, body.h),
+                                    })
+                                end
+                            end)
+                            return
+                        end
                         -- Bus routing
                         if ms.bus then
                             local topic = "ui:" .. panel .. ":" .. action
@@ -2794,6 +2854,8 @@
                     _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
                     pcall(function() _shellView:windowStyle(2 + 4 + 8) end) -- no native title bar (flag 1 = titled)
                     pcall(function() _shellView:allowResizing(true) end)
+                    -- Note: minimumSize is unreliable on borderless webviews.
+                    -- JS-side enforcement handles the actual clamping.
                     pcall(function() _shellView:minimumSize({ w = 800, h = 500 }) end)
                     pcall(function() _shellView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
                     pcall(function() _shellView:allowTextEntry(true) end)
@@ -2891,13 +2953,25 @@
                     end
                 end
 
-                -- popOut: extract a panel into its own standalone webview
+                -- popOut: load standalone panel HTML into its own webview
                 local _popouts = {}
+                local _panelFiles = {
+                    console = "ms_console.html",
+                    watcher = "ms_watcher.html",
+                    keys    = "ms_keys.html",
+                    window  = "ms_window.html",
+                }
                 ms.shell.popOut = function(panelId)
                     if _popouts[panelId] then
                         pcall(function() _popouts[panelId].view:show() end)
                         return true
                     end
+                    local fileName = _panelFiles[panelId]
+                    if not fileName then
+                        print("[popOut] no file mapping for panel: " .. tostring(panelId))
+                        return false
+                    end
+
                     require("hs.webview")
                     require("hs.webview.usercontent")
 
@@ -2908,10 +2982,39 @@
                         local panel  = data.panel  or panelId
                         local action = data.action or "unknown"
                         local body   = data.body
+                        -- Route playSlot back through ms.playSlot
+                        if action == "playSlot" and body and body.slot then
+                            pcall(function() ms.playSlot(body.slot) end)
+                            return
+                        end
+                        -- Close: destroy the popout window
+                        if action == "close" then
+                            pcall(function() popView:delete() end)
+                            _popouts[panelId] = nil
+                            if ms.bus then ms.bus.emit("panel:poppedIn", { id = panelId }) end
+                            return
+                        end
                         if ms.bus then
                             ms.bus.emit("ui:" .. panel .. ":" .. action, body)
                         end
                     end)
+
+                    -- Read standalone HTML and swap channel to msShell
+                    local htmlPath = hs.configdir .. "/ui/" .. fileName
+                    local f = io.open(htmlPath, "r")
+                    if not f then
+                        print("[popOut] could not open: " .. htmlPath)
+                        return false
+                    end
+                    local html = f:read("*all"); f:close()
+                    local origChannel = 'channel: "' .. panelId .. '"'
+                    local newChannel  = 'channel: "msShell"'
+                    if html:find(origChannel, 1, true) then
+                        html = html:gsub(origChannel, newChannel, 1)
+                        print("[popOut] channel swapped for " .. panelId)
+                    else
+                        print("[popOut] WARNING: channel pattern not found in " .. fileName)
+                    end
 
                     local sf = hs.screen.mainScreen():frame()
                     local w, h = 800, 500
@@ -2919,13 +3022,20 @@
                     local y = sf.y + math.floor((sf.h - h) / 2) + 40
 
                     local popView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, popChannel)
+                    if not popView then
+                        print("[popOut] hs.webview.new returned nil")
+                        return false
+                    end
                     pcall(function() popView:windowStyle(1 + 2 + 4) end)
                     pcall(function() popView:level(hs.canvas.windowLevels.normal or 4) end)
                     pcall(function() popView:allowTextEntry(true) end)
                     pcall(function() popView:shadow(true) end)
+                    pcall(function() popView:minimumSize({ w = 400, h = 300 }) end)
 
-                    -- Tell the shell to extract the panel HTML for pop-out
-                    ms.shell.eval("shellDispatch('_shell','popOut',{panel:'" .. panelId .. "'})")
+                    local baseURL = "file://" .. hs.configdir .. "/ui/"
+                    popView:html(html, baseURL)
+                    popView:show()
+                    print("[popOut] showing " .. panelId .. " popout")
 
                     _popouts[panelId] = { view = popView, channel = popChannel }
                     if ms.bus then ms.bus.emit("panel:poppedOut", { id = panelId }) end
@@ -3199,10 +3309,13 @@
 
                 -- Control flow ---------------------------------------------
 
+                local _flowCounter = 0
+
                 emitters["if"] = function(step, lvl)
                     local cond = step.condition or "true"
                     local lines = {}
                     lines[#lines + 1] = indent(lvl) .. "if " .. cond .. " then"
+                    lines[#lines + 1] = indent(lvl + 1) .. "ms.log('if', '" .. cond:gsub("'", "\\'") .. "', true)"
                     if step.then_steps then
                         for _, s in ipairs(step.then_steps) do
                             lines[#lines + 1] = emitStep(s, lvl + 1)
@@ -3210,6 +3323,7 @@
                     end
                     if step.else_steps then
                         lines[#lines + 1] = indent(lvl) .. "else"
+                        lines[#lines + 1] = indent(lvl + 1) .. "ms.log('if', '" .. cond:gsub("'", "\\'") .. "', false)"
                         for _, s in ipairs(step.else_steps) do
                             lines[#lines + 1] = emitStep(s, lvl + 1)
                         end
@@ -3227,39 +3341,54 @@
                     local lines = {}
                     local forArgs = tostring(from) .. ", " .. tostring(to)
                     if stepVal then forArgs = forArgs .. ", " .. tostring(stepVal) end
+                    _flowCounter = _flowCounter + 1
+                    local fc = "_fc" .. _flowCounter
+                    lines[#lines + 1] = indent(lvl) .. "local " .. fc .. " = 0"
                     lines[#lines + 1] = indent(lvl) .. "for " .. varName .. " = " .. forArgs .. " do"
+                    lines[#lines + 1] = indent(lvl + 1) .. fc .. " = " .. fc .. " + 1"
                     if step.body then
                         for _, s in ipairs(step.body) do
                             lines[#lines + 1] = emitStep(s, lvl + 1)
                         end
                     end
                     lines[#lines + 1] = indent(lvl) .. "end"
+                    lines[#lines + 1] = indent(lvl) .. "ms.log('for', '" .. varName .. "=" .. forArgs .. "', " .. fc .. ")"
                     return table.concat(lines, "\n")
                 end
 
                 emitters["while"] = function(step, lvl)
                     local cond = step.condition or "true"
                     local lines = {}
+                    _flowCounter = _flowCounter + 1
+                    local fc = "_fc" .. _flowCounter
+                    lines[#lines + 1] = indent(lvl) .. "local " .. fc .. " = 0"
                     lines[#lines + 1] = indent(lvl) .. "while " .. cond .. " do"
+                    lines[#lines + 1] = indent(lvl + 1) .. fc .. " = " .. fc .. " + 1"
                     if step.body then
                         for _, s in ipairs(step.body) do
                             lines[#lines + 1] = emitStep(s, lvl + 1)
                         end
                     end
                     lines[#lines + 1] = indent(lvl) .. "end"
+                    lines[#lines + 1] = indent(lvl) .. "ms.log('while', '" .. cond:gsub("'", "\\'") .. "', " .. fc .. ")"
                     return table.concat(lines, "\n")
                 end
 
                 emitters["repeat"] = function(step, lvl)
                     local cond = step.condition or "true"
                     local lines = {}
+                    _flowCounter = _flowCounter + 1
+                    local fc = "_fc" .. _flowCounter
+                    lines[#lines + 1] = indent(lvl) .. "local " .. fc .. " = 0"
                     lines[#lines + 1] = indent(lvl) .. "repeat"
+                    lines[#lines + 1] = indent(lvl + 1) .. fc .. " = " .. fc .. " + 1"
                     if step.body then
                         for _, s in ipairs(step.body) do
                             lines[#lines + 1] = emitStep(s, lvl + 1)
                         end
                     end
                     lines[#lines + 1] = indent(lvl) .. "until " .. cond
+                    lines[#lines + 1] = indent(lvl) .. "ms.log('repeat', '" .. cond:gsub("'", "\\'") .. "', " .. fc .. ")"
                     return table.concat(lines, "\n")
                 end
 

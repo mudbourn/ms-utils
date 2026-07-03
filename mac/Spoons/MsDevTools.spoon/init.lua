@@ -859,6 +859,7 @@
     end
 
     function MsDevTools:accWait(duration)
+        if _traceSuppress then return end
         if _waitAccum > 0 and duration == _waitDuration then
             _waitAccum = _waitAccum + 1
         else
