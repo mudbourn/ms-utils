@@ -232,6 +232,9 @@
                                 pcall(uDef.onChange, validated)
                             end
                         end
+                    else
+                        -- Not yet defined — store for later apply at define-time
+                        ms._pendingUserSettings[key] = value
                     end
                 end
             end
@@ -303,7 +306,7 @@
         ms.saveSettings = function()
             if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
             local data = {
-                sensitivity      = CUR_CAM_SENS,
+                sensitivity      = CUR_CAM_SENS or 1.5,
                 trackpadMode     = ms.trackpadMode,
                 gamepadEnabled   = ms.gamepadEnabled,
                 socdEnabled      = ms.socdEnabled,
@@ -380,7 +383,6 @@
                 data.macros[id].cooldown = cooldown
             end
             -- Phase 6: Macro Lab & Shell State --
-            data.macroLabEnabled = ms._macroLabEnabled or false
             data.shell = ms._shellState or {
                 x = nil, y = nil, w = 900, h = 600,
                 lastPanel = "macros", visible = false,
@@ -390,9 +392,6 @@
             if f then
                 f:write(hs.json.encode(data, true))
                 f:close()
-                print("saveSettings: wrote " .. jsonPath)
-            else
-                print("saveSettings: FAILED to open " .. jsonPath .. " for writing")
             end
         end
 
@@ -405,6 +404,18 @@
                 f:close()
                 local data = hs.json.decode(content)
                 if data then
+                    -- Merge defaults for any missing critical fields
+                    local df = io.open(defaultPath, "r")
+                    if df then
+                        local defContent = df:read("*all"); df:close()
+                        local defData = hs.json.decode(defContent)
+                        if defData then
+                            if (not data.soundAssign or next(data.soundAssign) == nil)
+                                and defData.soundAssign then
+                                data.soundAssign = defData.soundAssign
+                            end
+                        end
+                    end
                     ms._applySettings(data)
                     ms.dev.log({
                         type   = "system",
@@ -533,6 +544,7 @@
             ms._userSettingDefs  = {}
             ms._userSettingIndex = {}
             ms._userSettingVals  = {}
+            ms._pendingUserSettings = {}  -- raw saved values from file, applied at define-time
 
             local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
             local af = io.open(macrosPath, "r")
@@ -734,6 +746,19 @@
                 ms._userSettingIndex[key] = def
                 table.insert(ms._userSettingDefs, def)
                 if t == "action" then return end
+                -- Use saved value if available, otherwise default
+                local savedVal = ms._pendingUserSettings and ms._pendingUserSettings[key]
+                if savedVal ~= nil then
+                    local validated = _validateUserValue(def, savedVal)
+                    if validated ~= nil then
+                        ms._userSettingVals[key] = validated
+                        ms._pendingUserSettings[key] = nil
+                        if type(def.onChange) == "function" then
+                            pcall(def.onChange, validated)
+                        end
+                        return
+                    end
+                end
                 ms._userSettingVals[key] = def.default
                 if def.default ~= nil and type(def.onChange) == "function" then
                     pcall(def.onChange, def.default)

@@ -621,7 +621,6 @@
 
             setUpdateChannel = function(data)
                 local ch = data.value
-                print("setUpdateChannel: received value=" .. tostring(ch))
                 if ch == "testing" or ch == "stable" then
                     ms._updateChannel = ch
                     ms.saveSettings()
@@ -686,6 +685,7 @@
             setMacroLabEnabled = function(data)
                 local enabled = data.value and true or false
                 ms._macroLabEnabled = enabled
+                if ms._userSettingVals then ms._userSettingVals["macroLabEnabled"] = enabled end
                 ms.saveSettings()
                 ms.playSlot("update")
                 if not enabled and ms.shell and ms.shell.isReady and ms.shell.isReady() then
@@ -935,8 +935,9 @@
                 if not hs.fs.attributes(slibDir) then
                     hs.execute("mkdir -p '" .. SoundLib .. "'")
                 end
-                -- Ensure active/ subdirectory exists for theme sounds
-                hs.execute("mkdir -p '" .. SoundLib .. "active/'")
+                -- Ensure subdirectories exist
+                hs.execute("mkdir -p " .. sq(SoundActiveDir))
+                hs.execute("mkdir -p " .. sq(SoundMacroDir))
                 if not hs.fs.attributes(slibDir) then
                     ms.ui.show()
                     ms.alert("Could not create sounds folder:\n" .. SoundLib, 4)
@@ -950,7 +951,7 @@
                     if not filename or not importName then
                         table.insert(failed, srcPath)
                     else
-                        local dst    = SoundLib .. filename
+                        local dst    = SoundActiveDir .. filename
                         local copied = false
                         if srcPath ~= dst then
                             local f = io.open(srcPath, "rb")
@@ -1024,7 +1025,7 @@
                 if not filename or not importName then
                     ms.ui.show(); ms.alert("Could not read filename.", 3); return
                 end
-                local dst    = SoundLib .. filename
+                local dst    = SoundActiveDir .. filename
                 local copied = false
                 if selectedPath ~= dst then
                     local f = io.open(selectedPath, "rb")
@@ -1876,6 +1877,22 @@
     -- ms.ui.modal --
         ms.ui.modal = function(data, callback)
             if not callback then return end
+            -- Shell path: use the shell's built-in modal
+            if ms.shell and ms.shell.isReady and ms.shell.isReady() then
+                local ok, json = pcall(hs.json.encode, {
+                    title   = data.title   or "",
+                    msg     = data.msg     or "",
+                    confirm = data.confirm or "OK",
+                    cancel  = data.cancel  or "Cancel",
+                })
+                if not ok then pcall(callback, { confirmed = false }); return end
+                ms.ui._modalCallback = callback
+                pcall(function()
+                    ms.shell.eval("openLuaModal(" .. json .. ")")
+                end)
+                return
+            end
+            -- Legacy path: v1 standalone panel
             if not ms.ui._panel then
                 pcall(callback, { confirmed = false })
                 return
@@ -1900,6 +1917,24 @@
     -- ms.ui.prompt --
         ms.ui.prompt = function(data, callback)
             if not callback then return end
+            -- Shell path: use the shell's built-in modal
+            if ms.shell and ms.shell.isReady and ms.shell.isReady() then
+                local ok, json = pcall(hs.json.encode, {
+                    title        = data.title   or "",
+                    msg          = data.msg     or "",
+                    confirm      = data.confirm or "OK",
+                    cancel       = data.cancel  or "Cancel",
+                    hasInput     = true,
+                    inputDefault = data.default or "",
+                })
+                if not ok then pcall(callback, { confirmed = false, value = "" }); return end
+                ms.ui._modalCallback = callback
+                pcall(function()
+                    ms.shell.eval("openLuaModal(" .. json .. ")")
+                end)
+                return
+            end
+            -- Legacy path: v1 standalone panel
             if not ms.ui._panel then
                 pcall(callback, { confirmed = false, value = "" })
                 return
