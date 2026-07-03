@@ -175,6 +175,7 @@
                 ms._updateChannel = data.updateChannel
             end
             if data.cacheCleanerEnabled ~= nil then ms._cacheCleanerEnabled = (data.cacheCleanerEnabled == true) end
+            if data.antiTimeoutEnabled ~= nil then ms._antiTimeoutEnabled = (data.antiTimeoutEnabled == true) end
             if data.testingSource == "release" or data.testingSource == "artifact" then
                 ms._testingSource = data.testingSource
             end
@@ -321,6 +322,7 @@
                 updateChannel    = ms._updateChannel or "stable",
                 testingSource    = ms._testingSource or "release",
                 cacheCleanerEnabled = ms._cacheCleanerEnabled or false,
+                antiTimeoutEnabled = ms._antiTimeoutEnabled or false,
                 quickReloaded    = ms._quickReloaded or 0,
                 qrOptions        = ms._qrOptions or {
                     macros   = true,

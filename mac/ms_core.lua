@@ -1953,6 +1953,79 @@
                 return note
             end
 
+            -- Anti-Timeout — prevents Roblox 20-minute inactivity kick
+                ms._antiTimeout = { fn = nil, interval = 900, timer = nil, running = false }
+
+                ms.antiTimeout = function(config)
+                    assert(type(config) == "table", "ms.antiTimeout: config must be a table")
+                    assert(type(config.action) == "function", "ms.antiTimeout: config.action must be a function")
+
+                    ms._antiTimeout.fn       = config.action
+                    ms._antiTimeout.interval = tonumber(config.interval) or 900
+
+                    -- Respect the settings toggle
+                    local enabled  = config.enabled
+                    if enabled == nil then enabled = true end
+                    -- Settings toggle overrides macro config when explicitly set
+                    if ms._antiTimeoutEnabled == true then
+                        enabled = true
+                    elseif ms._antiTimeoutEnabled == false then
+                        enabled = false
+                    end
+
+                    -- Stop any existing timer
+                    if ms._antiTimeout.timer then
+                        ms._antiTimeout.timer:stop()
+                        ms._antiTimeout.timer = nil
+                    end
+
+                    if enabled then
+                        ms._antiTimeout.running = true
+                        local wrappedFn = ms.fn(ms._antiTimeout.fn)
+                        ms._antiTimeout.timer = hs.timer.doEvery(ms._antiTimeout.interval, function()
+                            if not ms._antiTimeout.running then return end
+                            if not ms._robloxActive then return end
+                            pcall(wrappedFn)
+                        end)
+                    else
+                        ms._antiTimeout.running = false
+                    end
+                end
+
+                ms.antiTimeoutStop = function()
+                    ms._antiTimeout.running = false
+                    if ms._antiTimeout.timer then
+                        ms._antiTimeout.timer:stop()
+                        ms._antiTimeout.timer = nil
+                    end
+                end
+
+                ms.antiTimeoutStart = function()
+                    if not ms._antiTimeout.fn then return end
+                    ms._antiTimeout.running = true
+                    if not ms._antiTimeout.timer then
+                        local wrappedFn = ms.fn(ms._antiTimeout.fn)
+                        ms._antiTimeout.timer = hs.timer.doEvery(ms._antiTimeout.interval, function()
+                            if not ms._antiTimeout.running then return end
+                            if not ms._robloxActive then return end
+                            pcall(wrappedFn)
+                        end)
+                    end
+                end
+
+                ms.antiTimeoutToggle = function()
+                    if ms._antiTimeout.running then
+                        ms.antiTimeoutStop()
+                    else
+                        ms.antiTimeoutStart()
+                    end
+                    -- Persist the state
+                    ms._antiTimeoutEnabled = ms._antiTimeout.running
+                    if ms.saveSettings then pcall(ms.saveSettings) end
+                    return ms._antiTimeout.running
+                end
+            -- END Anti-Timeout --
+
         -- END 8. Utilities --
 
         -- 9. Bind System & Settings Panel --

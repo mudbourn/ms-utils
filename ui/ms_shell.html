@@ -639,7 +639,7 @@
                         closePanel();
                     "
                 >
-                    ✕
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
                 </button>
             </div>
         </div>
@@ -718,7 +718,7 @@
                         closePanel();
                     "
                 >
-                    ✕
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
                 </button>
             </div>
         </div>
@@ -767,7 +767,7 @@
                         closePanel();
                     "
                 >
-                    ✕
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
                 </button>
             </div>
         </div>
@@ -884,7 +884,7 @@
                         closePanel();
                     "
                 >
-                    ✕
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
                 </button>
             </div>
         </div>
@@ -969,7 +969,7 @@
                             sendToHost({ action: 'close' });
                         "
                     >
-                        ✕
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
                     </button>
                 </div>
             </div>
@@ -1074,7 +1074,7 @@
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
                     onclick="playSlot('back'); closePanel();"
-                >✕</button>
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg></button>
             </div>
         </div>
         <div id="slot-macros"></div></div>
@@ -1103,6 +1103,7 @@
  *   const lp = createLogPanel({
  *     channel: "msConsole",
  *     buildRow(entry) { ... return HTMLElement; },
+ *     container: document.querySelector('.panel-console'), // scopes #log lookups
  *     // optional overrides:
  *     entrySelector: "#log .entry, #log .step",
  *     extractCopyText(el) { return "..."; },
@@ -1254,12 +1255,19 @@ function createLogPanel(config) {
     const {
         channel,
         buildRow,
+        container = null,
         entrySelector = "#log .entry, #log .step",
         extractCopyText = defaultExtractCopyText,
         clearAction = "clearLog",
         maxEntries = 300,
         scrollThresh = 48,
     } = config;
+
+    // Scoped DOM queries — container.querySelector finds the right #log
+    // even when multiple panels share the same id="log"
+    const _root = container || document;
+    function _byId(id) { return _root.querySelector('#' + id); }
+    function _queryAll(sel) { return _root.querySelectorAll(sel); }
 
     // ── Host bridge ────────────────────────────────────────────────────
     function sendToHost(msg) {
@@ -1283,7 +1291,7 @@ function createLogPanel(config) {
     let _paused = false;
     function togglePause() {
         _paused = !_paused;
-        const btn = document.getElementById("pause-btn");
+        const btn = _byId("pause-btn");
         if (btn) btn.textContent = _paused ? "Resume" : "Pause";
     }
 
@@ -1292,7 +1300,7 @@ function createLogPanel(config) {
     let _lastClicked = null;
 
     function _getEntries() {
-        return Array.from(document.querySelectorAll(entrySelector));
+        return Array.from(_queryAll(entrySelector));
     }
 
     function _updateSelectionVisuals() {
@@ -1348,11 +1356,13 @@ function createLogPanel(config) {
 
     // ── Context menu ───────────────────────────────────────────────────
     function closeCtxMenu() {
-        document.getElementById("ctx-menu").classList.remove("open");
+        const el = _byId("ctx-menu");
+        if (el) el.classList.remove("open");
     }
 
     function showCtxMenu(x, y, items) {
-        const el = document.getElementById("ctx-menu");
+        const el = _byId("ctx-menu");
+        if (!el) return;
         el.innerHTML = "";
         for (const item of items) {
             if (item === "divider") {
@@ -1425,7 +1435,7 @@ function createLogPanel(config) {
     // ── Header drag ────────────────────────────────────────────────────
     (function () {
         let _drag = null;
-        const header = document.getElementById("header");
+        const header = _byId("header");
         if (!header) return;
         header.addEventListener("mousedown", (e) => {
             if (e.button !== 0) return;
@@ -1454,7 +1464,7 @@ function createLogPanel(config) {
     // ── Default appendEntry / loadHistory (single #log) ────────────────
     function appendEntry(entry) {
         if (_paused) return;
-        const log = document.getElementById("log");
+        const log = _byId("log");
         if (!log) return;
         const atBottom = _isNearBottom(log, scrollThresh);
         log.appendChild(buildRow(entry));
@@ -1463,7 +1473,7 @@ function createLogPanel(config) {
     }
 
     function loadHistory(entries) {
-        const log = document.getElementById("log");
+        const log = _byId("log");
         if (!log) return;
         log.innerHTML = "";
         const capped =
@@ -1478,7 +1488,7 @@ function createLogPanel(config) {
 
     // ── Actions ────────────────────────────────────────────────────────
     function clearLog() {
-        const log = document.getElementById("log");
+        const log = _byId("log");
         if (log) log.innerHTML = "";
         sendToHost({ action: "clear" });
     }
@@ -1572,6 +1582,11 @@ function createLogPanel(config) {
     in: '<g transform="scale(0.7500)"> <title>down-in</title> <path d="M0 26.016q0 2.496 1.792 4.256t4.224 1.728h20q2.464 0 4.224-1.76t1.76-4.224v-20q0-2.496-1.76-4.256t-4.224-1.76h-4v4h4q0.8 0 1.408 0.608t0.576 1.408v20q0 0.832-0.576 1.408t-1.408 0.576h-20q-0.832 0-1.44-0.576t-0.576-1.408v-20q0-0.832 0.576-1.408t1.44-0.608h4v-4h-4q-2.496 0-4.256 1.76t-1.76 4.256v20zM6.016 26.016h20l-4-6.016h-12zM10.016 8l5.984 8 6.016-8h-4v-8h-4v8h-4z"></path> </g>',
     folderopen: '<path d="M9 13H15M12 10V16M12.0627 6.06274L11.9373 5.93726C11.5914 5.59135 11.4184 5.4184 11.2166 5.29472C11.0376 5.18506 10.8425 5.10425 10.6385 5.05526C10.4083 5 10.1637 5 9.67452 5H6.2C5.0799 5 4.51984 5 4.09202 5.21799C3.71569 5.40973 3.40973 5.71569 3.21799 6.09202C3 6.51984 3 7.07989 3 8.2V15.8C3 16.9201 3 17.4802 3.21799 17.908C3.40973 18.2843 3.71569 18.5903 4.09202 18.782C4.51984 19 5.07989 19 6.2 19H17.8C18.9201 19 19.4802 19 19.908 18.782C20.2843 18.5903 20.5903 18.2843 20.782 17.908C21 17.4802 21 16.9201 21 15.8V10.2C21 9.0799 21 8.51984 20.782 8.09202C20.5903 7.71569 20.2843 7.40973 19.908 7.21799C19.4802 7 18.9201 7 17.8 7H14.3255C13.8363 7 13.5917 7 13.3615 6.94474C13.1575 6.89575 12.9624 6.81494 12.7834 6.70528C12.5816 6.5816 12.4086 6.40865 12.0627 6.06274Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     folderclose: '<path d="M10 11L14 15M14 11L10 15M12.0627 6.06274L11.9373 5.93726C11.5914 5.59135 11.4184 5.4184 11.2166 5.29472C11.0376 5.18506 10.8425 5.10425 10.6385 5.05526C10.4083 5 10.1637 5 9.67452 5H6.2C5.0799 5 4.51984 5 4.09202 5.21799C3.71569 5.40973 3.40973 5.71569 3.21799 6.09202C3 6.51984 3 7.07989 3 8.2V15.8C3 16.9201 3 17.4802 3.21799 17.908C3.40973 18.2843 3.71569 18.5903 4.09202 18.782C4.51984 19 5.07989 19 6.2 19H17.8C18.9201 19 19.4802 19 19.908 18.782C20.2843 18.5903 20.5903 18.2843 20.782 17.908C21 17.4802 21 16.9201 21 15.8V10.2C21 9.0799 21 8.51984 20.782 8.09202C20.5903 7.71569 20.2843 7.40973 19.908 7.21799C19.4802 7 18.9201 7 17.8 7H14.3255C13.8363 7 13.5917 7 13.3615 6.94474C13.1575 6.89575 12.9624 6.81494 12.7834 6.70528C12.5816 6.5816 12.4086 6.40865 12.0627 6.06274Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    dot: '<circle cx="12" cy="12" r="4" fill="currentColor"/>',
+    "chevron-right": '<path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    "arrow-up": '<path d="M12 19V5M5 12L12 5L19 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    "arrow-down": '<path d="M12 5V19M19 12L12 19L5 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    multiply: '<path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
     function icon(name, cls) {
@@ -1744,9 +1759,11 @@ function createLogPanel(config) {
             }
 
             // ── Create LogPanel ─────────────────────────────────────────────
+            const _panel = document.querySelector('.panel-console');
             const lp = createLogPanel({
                 channel: "console",
                 buildRow,
+                container: _panel,
                 maxEntries: 500,
                 scrollThresh: 60,
             });
@@ -1754,8 +1771,6 @@ function createLogPanel(config) {
             // ── Expose globals for inline handlers ──────────────────────────
             window.togglePause = lp.togglePause;
             window.playSlot    = lp.playSlot;
-            window.appendEntry = lp.appendEntry;
-            window.loadHistory = lp.loadHistory;
             window.closePanel  = lp.closePanel;
             window.consoleApplyTheme = lp.applyTheme;
 
@@ -1770,7 +1785,8 @@ function createLogPanel(config) {
             }
 
             function doClear() {
-                document.getElementById("log").innerHTML = "";
+                const log = _panel ? _panel.querySelector("#log") : document.getElementById("log");
+                if (log) log.innerHTML = "";
                 lp.sendToHost({ action: "clear" });
             }
 
@@ -1792,8 +1808,8 @@ function createLogPanel(config) {
                 // Shell integration: register for incoming Lua pushes
                 if (typeof registerPanel === "function") {
                     registerPanel("console", function(action, body) {
-                        if (action === "appendEntry" && body) window.appendEntry(body);
-                        else if (action === "loadHistory" && body) window.loadHistory(body);
+                        if (action === "appendEntry" && body) lp.appendEntry(body);
+                        else if (action === "loadHistory" && body) lp.loadHistory(body);
                     });
                 }
                 // Strip window-chrome when embedded in shell
@@ -1835,13 +1851,17 @@ function createLogPanel(config) {
                 return "other";
             }
 
+            // ── Panel container (for scoped DOM queries) ──────────────────
+            const _panel = document.querySelector('.panel-watcher');
+
             // ── Mute state ──────────────────────────────────────────────────
             const _muted = new Set();
 
             function isMuted(cat) { return _muted.has(cat); }
 
             function setMute(cat, on) {
-                const log = document.getElementById("log");
+                const log = _panel ? _panel.querySelector("#log") : document.getElementById("log");
+                if (!log) return;
                 if (on) {
                     _muted.add(cat);
                     log.classList.add("mute-" + cat);
@@ -1977,7 +1997,7 @@ function createLogPanel(config) {
 
                     const dot = document.createElement("span");
                     dot.className = "dot";
-                    dot.textContent = "●";
+                    dot.innerHTML = ICONS.dot;
                     row.appendChild(dot);
 
                     const msg = document.createElement("span");
@@ -1988,7 +2008,7 @@ function createLogPanel(config) {
                         );
                         const sep = document.createElement("span");
                         sep.className = "sub-sep";
-                        sep.textContent = "›";
+                        sep.innerHTML = ICONS["chevron-right"];
                         const sub = document.createElement("span");
                         sub.className = "sub-name";
                         sub.textContent = entry.label || entry.id || "";
@@ -2025,6 +2045,7 @@ function createLogPanel(config) {
             const lp = createLogPanel({
                 channel: "watcher",
                 buildRow,
+                container: _panel,
                 maxEntries: 300,
                 scrollThresh: 48,
                 clearAction: "clearLog",
@@ -2039,21 +2060,18 @@ function createLogPanel(config) {
 
             // ── Watcher clearLog ────────────────────────────────────────────
             function clearLog() {
-                document.getElementById("log").innerHTML = "";
+                const log = _panel ? _panel.querySelector("#log") : document.getElementById("log");
+                if (log) log.innerHTML = "";
                 lp.sendToHost({ action: "clear" });
             }
             window.clearLog = clearLog;
-
-            // ── Expose for Lua evaluateJavaScript ───────────────────────────
-            window.appendEntry = lp.appendEntry;
-            window.loadHistory = lp.loadHistory;
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("watcher", function(action, body) {
-                        if (action === "appendEntry" && body) window.appendEntry(body);
-                        else if (action === "loadHistory" && body) window.loadHistory(body);
+                        if (action === "appendEntry" && body) lp.appendEntry(body);
+                        else if (action === "loadHistory" && body) lp.loadHistory(body);
                     });
                 }
                 if (window.shellPost) {
@@ -2071,10 +2089,14 @@ function createLogPanel(config) {
     /* panel: keys */
     (function() {
     "use strict";
+// ── Panel container ──────────────────────────────────────────────
+            const _panel = document.querySelector('.panel-keys');
+
 // ── Create LogPanel (selection, context menu, keyboard, drag, theme) ──
             const lp = createLogPanel({
                 channel: "keys",
                 buildRow, // defined below
+                container: _panel,
                 entrySelector: ".log .entry, .log .step",
                 maxEntries: 300,
                 scrollThresh: 48,
@@ -2192,9 +2214,12 @@ function createLogPanel(config) {
                 const t = entry.type;
                 const isMouseSide =
                     t === "mouse" || t === "scroll" || t === "mousemove";
-                const log = document.getElementById(
-                    isMouseSide ? "mouse-log" : "keys-log",
+                const log = _panel ? _panel.querySelector(
+                    isMouseSide ? "#mouse-log" : "#keys-log"
+                ) : document.getElementById(
+                    isMouseSide ? "mouse-log" : "keys-log"
                 );
+                if (!log) return;
                 const atBottom = lp.isNearBottom(log);
                 log.appendChild(buildRow(entry));
                 lp.trimLog(log);
@@ -2202,8 +2227,9 @@ function createLogPanel(config) {
             }
 
             function loadHistory(entries) {
-                const kl = document.getElementById("keys-log");
-                const ml = document.getElementById("mouse-log");
+                const kl = _panel ? _panel.querySelector("#keys-log") : document.getElementById("keys-log");
+                const ml = _panel ? _panel.querySelector("#mouse-log") : document.getElementById("mouse-log");
+                if (!kl || !ml) return;
                 kl.innerHTML = ml.innerHTML = "";
                 const capped =
                     entries && entries.length > lp.maxEntries
@@ -2249,11 +2275,12 @@ function createLogPanel(config) {
 
             // ── Mouse state (position + active buttons) ─────────────────────
             function updateMouseState(state) {
-                if (state.x != null)
-                    document.getElementById("mx-display").textContent = state.x;
-                if (state.y != null)
-                    document.getElementById("my-display").textContent = state.y;
-                const row = document.getElementById("mouse-pills");
+                const mx = _panel ? _panel.querySelector("#mx-display") : document.getElementById("mx-display");
+                const my = _panel ? _panel.querySelector("#my-display") : document.getElementById("my-display");
+                if (state.x != null && mx) mx.textContent = state.x;
+                if (state.y != null && my) my.textContent = state.y;
+                const row = _panel ? _panel.querySelector("#mouse-pills") : document.getElementById("mouse-pills");
+                if (!row) return;
                 row.innerHTML = "";
                 const btns = Array.isArray(state.buttons)
                     ? state.buttons
@@ -2279,10 +2306,10 @@ function createLogPanel(config) {
             }
 
             function updateMousePos(pos) {
-                if (pos.x != null)
-                    document.getElementById("mx-display").textContent = pos.x;
-                if (pos.y != null)
-                    document.getElementById("my-display").textContent = pos.y;
+                const mx = _panel ? _panel.querySelector("#mx-display") : document.getElementById("mx-display");
+                const my = _panel ? _panel.querySelector("#my-display") : document.getElementById("my-display");
+                if (pos.x != null && mx) mx.textContent = pos.x;
+                if (pos.y != null && my) my.textContent = pos.y;
             }
 
             // ── Flag row ────────────────────────────────────────────────────
@@ -2348,8 +2375,6 @@ function createLogPanel(config) {
             }
 
             // ── Expose for Lua evaluateJavaScript ───────────────────────────
-            window.appendEntry      = appendEntry;
-            window.loadHistory      = loadHistory;
             window.updateActiveKeys = updateActiveKeys;
             window.updateMouseState = updateMouseState;
             window.updateMousePos   = updateMousePos;
@@ -2358,10 +2383,10 @@ function createLogPanel(config) {
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("keys", function(action, body) {
-                        if (action === "appendEntry" && body) window.appendEntry(body);
-                        else if (action === "loadHistory" && body) window.loadHistory(body);
-                        else if (action === "updateActiveKeys" && body) window.updateActiveKeys(body);
-                        else if (action === "updateMouseState" && body) window.updateMouseState(body);
+                        if (action === "appendEntry" && body) appendEntry(body);
+                        else if (action === "loadHistory" && body) loadHistory(body);
+                        else if (action === "updateActiveKeys" && body) updateActiveKeys(body);
+                        else if (action === "updateMouseState" && body) updateMouseState(body);
                     });
                 }
                 if (window.shellPost) {
@@ -2391,7 +2416,7 @@ function createLogPanel(config) {
 
                 const dot = document.createElement("span");
                 dot.className = "entry-dot";
-                dot.textContent = "●";
+                dot.innerHTML = ICONS.dot;
                 row.appendChild(dot);
 
                 const app = document.createElement("span");
@@ -2401,7 +2426,7 @@ function createLogPanel(config) {
 
                 const sep = document.createElement("span");
                 sep.className = "entry-sep";
-                sep.textContent = "›";
+                sep.innerHTML = ICONS["chevron-right"];
                 row.appendChild(sep);
 
                 const title = document.createElement("span");
@@ -2422,9 +2447,11 @@ function createLogPanel(config) {
             }
 
             // ── Create LogPanel ─────────────────────────────────────────────
+            const _panel = document.querySelector('.panel-window');
             const lp = createLogPanel({
                 channel: "window",
                 buildRow,
+                container: _panel,
                 maxEntries: 300,
                 scrollThresh: 48,
                 extractCopyText(el) {
@@ -2448,10 +2475,12 @@ function createLogPanel(config) {
 
             // ── Current window display ──────────────────────────────────────
             function updateCurrentWindow(entry) {
-                const empty = document.getElementById("current-empty");
-                const appEl = document.getElementById("current-app");
-                const titleEl = document.getElementById("current-title");
-                const dimEl = document.getElementById("current-dim");
+                const empty = _panel ? _panel.querySelector("#current-empty") : document.getElementById("current-empty");
+                const appEl = _panel ? _panel.querySelector("#current-app") : document.getElementById("current-app");
+                const titleEl = _panel ? _panel.querySelector("#current-title") : document.getElementById("current-title");
+                const dimEl = _panel ? _panel.querySelector("#current-dim") : document.getElementById("current-dim");
+
+                if (!empty || !appEl || !titleEl || !dimEl) return;
 
                 if (!entry || (!entry.app && !entry.title)) {
                     empty.style.display = "";
@@ -2484,16 +2513,14 @@ function createLogPanel(config) {
                 }
             }
 
-            window.appendEntry      = lp.appendEntry;
-            window.loadHistory      = loadHistory;
             window.updateCurrentWindow = updateCurrentWindow;
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("window", function(action, body) {
-                        if (action === "updateCurrentWindow" && body) window.updateCurrentWindow(body);
-                        else if (action === "loadHistory" && body) window.loadHistory(body);
+                        if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
+                        else if (action === "loadHistory" && body) loadHistory(body);
                     });
                 }
                 if (window.shellPost) {
@@ -4344,6 +4371,32 @@ function createLogPanel(config) {
                                 },
                             },
                             cacheCleaner ? "ON" : "OFF",
+                        ),
+                    ),
+                );
+
+                // Anti-timeout toggle
+                const antiTimeoutOn = S.antiTimeoutEnabled === true;
+                body.appendChild(
+                    row(
+                        "Anti-timeout",
+                        "Send a keypress to Roblox every 15 min to prevent inactivity kick",
+                        h(
+                            "button",
+                            {
+                                cls:
+                                    "btn-macro " +
+                                    (antiTimeoutOn ? "btn-enable" : "btn-disable"),
+                                onmouseenter: () => playSlot("hover"),
+                                onclick: () => {
+                                    playSlot("interact");
+                                    sendToHost({
+                                        action: "setAntiTimeoutEnabled",
+                                        value: !antiTimeoutOn,
+                                    });
+                                },
+                            },
+                            antiTimeoutOn ? "ON" : "OFF",
                         ),
                     ),
                 );

@@ -668,6 +668,19 @@
                 ms.ui.refresh()
             end,
 
+            setAntiTimeoutEnabled = function(data)
+                local enabled = data.value and true or false
+                if enabled then
+                    if ms.antiTimeoutStart then ms.antiTimeoutStart() end
+                else
+                    if ms.antiTimeoutStop then ms.antiTimeoutStop() end
+                end
+                ms._antiTimeoutEnabled = enabled
+                ms.saveSettings()
+                ms.playSlot("update")
+                ms.ui.refresh()
+            end,
+
             setGithubToken = function(data)
                 ms._githubToken = data.value or ""
                 -- Store in a restricted file (not settings.json, not keychain)
