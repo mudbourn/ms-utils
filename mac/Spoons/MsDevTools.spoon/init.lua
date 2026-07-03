@@ -8,17 +8,19 @@
     MsDevTools.logDir       = "~/Documents/ms_dev_logs/"
     MsDevTools.branchTrace  = true
 
-    -- Panel push helper: route through shellDispatch when panel is in shell,
+    -- Panel push helper: route through shellReceive when panel is in shell,
     -- fall back to direct evaluateJavaScript for standalone webviews.
     local function _pushToPanel(panelView, panelId, js)
-        -- Try shell path first (panel mounted in shell iframe)
+        -- Try shell path first (panel inline in shell)
         local ms = _G.ms
         if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
             -- Extract function call: "appendEntry({...})" → fn="appendEntry", args="{...}"
             local fnName, argStr = js:match("^(%w+)%((.+)%)$")
             if fnName and argStr then
-                local dispatchJs = "shellDispatch(\"" .. panelId .. "\",\"" .. fnName .. "\"," .. argStr .. ")"
-                pcall(function() ms.shell.eval(dispatchJs) end)
+                -- shellReceive routes to the registered JS panel handler
+                -- (shellDispatch would send BACK to Lua — wrong direction)
+                local receiveJs = "shellReceive(\"" .. panelId .. "\",\"" .. fnName .. "\"," .. argStr .. ")"
+                pcall(function() ms.shell.eval(receiveJs) end)
                 return
             end
         end
@@ -1092,11 +1094,12 @@
     end
 
     function MsDevTools:showConsole()
-        -- Shell path: mount in shell and load history
+        -- Shell path: switch to console tab and load history
         local ms = _G.ms
         if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
             _consoleOpen = true
-            pcall(function() ms.shell.mountPanel("console") end)
+            ms.shell.show()
+            ms.shell.eval("showPanel('console')")
             hs.timer.doAfter(0.15, function()
                 _loadDevHistory(nil, {"macro", "console", "error", "system", "input"}, "console")
             end)
@@ -1204,7 +1207,8 @@
         local ms = _G.ms
         if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
             _watcherOpen = true
-            pcall(function() ms.shell.mountPanel("watcher") end)
+            ms.shell.show()
+            ms.shell.eval("showPanel('watcher')")
             hs.timer.doAfter(0.15, function()
                 _loadDevHistory(nil, {"macro", "error", "system"}, "watcher")
             end)

@@ -390,7 +390,9 @@
                 -- Push to shell if active
                 if ms.shell and ms.shell.isReady and ms.shell.isReady() then
                     pcall(function()
-                        ms.shell.eval("shellDispatch('settings', 'state', " .. (_uiStateJSON:match("^receiveState%((.*)%);$") or "null") .. ")")
+                        -- shellReceive routes to the registered "settings" panel handler
+                        -- (shellDispatch would send BACK to Lua — wrong direction)
+                        ms.shell.eval("shellReceive('settings', 'state', " .. (_uiStateJSON:match("^receiveState%((.*)%);$") or "null") .. ")")
                     end)
                 end
             end
