@@ -168,6 +168,8 @@
                 end
             -- END MsAlert (toast notifications) --
 
+            -- MsCamera removed (ms.cam uses CGEvent directly) --
+
             -- MsSettings (settings menu & profiles) --
                 _lUpdate(15, "Configuring Settings\u{2026}")
                 local _msSettingsOk, _msSettingsErr = pcall(function()
@@ -417,51 +419,24 @@
                 --- Apply transparent window + CSS --ms-window-radius to a webview panel.
                 --- Call AFTER hs.webview.new + windowStyle(0), BEFORE panel:html().
                 ms.theme.applyWindowRadius = function(panel)
-                    pcall(function()
-                        local r = (ms._theme and ms._theme.windowRadius)
-                            or (ms._themeDefaults and ms._themeDefaults.windowRadius)
-                            or 3
-                        if r > 0 then
-                            panel:transparent(true)
-                        end
-                    end)
-                end
-
-                --- Push updated --ms-window-radius CSS variable into a live webview panel.
-                --- Safe to call on any panel that was built with applyWindowRadius.
-                ms.theme._pushWindowRadius = function(panel)
-                    pcall(function()
-                        local r = (ms._theme and ms._theme.windowRadius) or 3
-                        local js = string.format(
-                            "document.documentElement.style.setProperty('--ms-window-radius','%dpx')",
-                            r
-                        )
-                        panel:evaluateJavaScript(js)
-                    end)
-                end
-
-                --- Register a callback to fire whenever the theme changes (live-update).
-                --- Returns an ID that can be passed to _unwatchTheme.
-                ms.theme._watchers = ms.theme._watchers or {}
-                ms.theme._nextWatcherId = ms.theme._nextWatcherId or 1
-
-                ms.theme.onChanged = function(fn)
-                    local id = ms.theme._nextWatcherId
-                    ms.theme._nextWatcherId = id + 1
-                    ms.theme._watchers[id] = fn
-                    return id
-                end
-
-                ms.theme._unwatch = function(id)
-                    ms.theme._watchers[id] = nil
-                end
-
-                --- Fire all registered theme-changed watchers.
-                --- Call this from wherever the theme is reloaded/re-applied.
-                ms.theme._fireChanged = function()
-                    for _, fn in pairs(ms.theme._watchers) do
-                        pcall(fn)
+                    if not panel then return end
+                    local r = (ms._theme and ms._theme.windowRadius)
+                        or (ms._themeDefaults and ms._themeDefaults.windowRadius)
+                        or 0
+                    if r > 0 then
+                        pcall(function() panel:transparent(true) end)
+                        pcall(function() panel:shadow(false) end)
                     end
+                    local js = string.format(
+                        "document.documentElement.style.setProperty('--ms-window-radius', '%dpx');"
+                        .. "document.documentElement.style.background='transparent';"
+                        .. "document.body.style.background='transparent';",
+                        r
+                    )
+                    -- Queue for after html() loads
+                    hs.timer.doAfter(0.05, function()
+                        pcall(function() panel:evaluateJavaScript(js) end)
+                    end)
                 end
             -- END Window Radius Helper --
 
@@ -651,6 +626,7 @@
 
                 return false
             end):start()
+
 
                 ms.press = function(key, mods, hidinject)
                     if ms.dev then spoon.MsDevTools:flushAll() end
@@ -924,6 +900,7 @@
                     end,
                 }
             end
+
 
             ms.Mouse = function(operation, button, reference, ...)
                 local OPS  = { Move=true, Click=true, DoubleClick=true,
@@ -1241,7 +1218,7 @@
                 if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                 if state == 1 and BindValidity ~= 1 then
                     BindValidity = 1
-
+                    pcall(function() end)  -- ms.legacycam.enable() opt-in
                     ms.dev.log({ type = "system", event = "macros_enabled" })
                     if not silent then _doNotify(1) end
                 elseif state == 0 and BindValidity ~= 0 then
@@ -1252,7 +1229,7 @@
                         if timer and timer.stop then timer:stop() end
                     end
                     ms.running = {}
-
+                    pcall(function() end)  -- ms.legacycam.disable() opt-in
                     ms.dev.log({ type = "system", event = "macros_disabled" })
                     if not silent then _doNotify(0) end
                 end
@@ -1266,11 +1243,11 @@
                         ms._inputOpen = false
                         ms._robloxActive = true
                         ms.dev.log({ type = "system", event = "roblox_focus", fromDialog = fromDialog or false })
-
+                        -- ms.legacycam._setupWatcher()  -- opt-in
                         if not ms._loadComplete then return end
                         if fromDialog then
                             BindValidity = 1
-
+                            -- pcall(function() ms.legacycam.enable() end)  -- opt-in
                         else
                             ms.setMacros(1)
                         end
@@ -1284,6 +1261,7 @@
                         end
                     end
                 elseif ms._targetApp and eventType == hs.application.watcher.launched and appName == ms._targetApp then
+                    -- ms.legacycam._setupWatcher()
                 end
             end):start()
             _G.__ms_appWatcher = ms._appWatcher  -- survives reload (lives outside the ms table) so next load's stop-guard can find this generation
@@ -1292,22 +1270,14 @@
                 local frontApp = hs.application.frontmostApplication()
                 if ms._targetApp and frontApp and frontApp:name() == ms._targetApp then
                     ms._robloxActive = true
-
+                    -- ms.legacycam._setupWatcher()
+                    -- ms.legacycam.enable()
                 end
             end)
 
-            local function _inSafeSpace()
-                if ms._robloxActive then return true end
-                local front = hs.application.frontmostApplication()
-                if not front then return false end
-                local name = front:name()
-                return name == "Hammerspoon" or name == "Activity Monitor"
-                    or (ms.shell and ms.shell.isPoppedOut and pcall(function() return ms.shell.isPoppedOut() end) and ms.shell.isPoppedOut())
-            end
-
             hs.hotkey.bind({ "alt" }, "F10", function()
                 if not ms._loadComplete then return end
-                if not _inSafeSpace() then return end
+                if not ms._robloxActive then return end
                 ms.setMacros(0)
             end)
 
@@ -1323,7 +1293,7 @@
 
             hs.hotkey.bind({ "alt" }, "p", function()
                 if not ms._loadComplete then return end
-                if not _inSafeSpace() then return end
+                if not ms._robloxActive then return end
                 if ms._macroLabEnabled then
                     ms.shell.toggle()
                 else
@@ -2588,15 +2558,13 @@
 
         -- 12. Shell Infrastructure (ms.shell) --
             do
-                local _shellView     = nil   -- hs.webview instance
-                local _shellChannel  = nil   -- hs.webview.usercontent instance
+                local _shellView     = nil
+                local _shellChannel  = nil
                 local _shellReady    = false
-                local _shellEvalQ    = {}    -- queued JS calls before ready
+                local _shellEvalQ    = {}
 
                 ms.shell = {}
 
-                -- ms.shell.eval(js) — push JS into the shell webview
-                -- Replaces per-Spoon panel:evaluateJavaScript(...) pattern
                 ms.shell.eval = function(js)
                     if type(js) ~= "string" then return end
                     if _shellView and _shellReady then
@@ -2606,66 +2574,33 @@
                     end
                 end
 
-                -- ms.shell.isReady() — check if shell webview has loaded
-                ms.shell.isReady = function()
-                    return _shellReady
-                end
+                ms.shell.isReady = function() return _shellReady end
+                ms.shell.webview = function() return _shellView end
 
-                -- ms.shell.webview() — get the raw hs.webview (privileged)
-                ms.shell.webview = function()
-                    return _shellView
-                end
-
-                -- ms.shell.init() — create the shell webview + channel (hidden)
                 ms.shell.init = function()
-                    if _shellView then print("[shell] init: already initialized, skipping"); return end
-                    print("[shell] init: creating webview...")
+                    if _shellView then return end
                     require("hs.webview")
                     require("hs.webview.usercontent")
 
                     _shellChannel = hs.webview.usercontent.new("msShell")
                     _shellChannel:setCallback(function(message)
                         local ok, data = pcall(hs.json.decode, message.body)
-                        if not ok or type(data) ~= "table" then
-                            print("[shell] Failed to decode message: " .. tostring(data))
-                            return
-                        end
+                        if not ok or type(data) ~= "table" then return end
                         local panel  = data.panel  or "_shell"
                         local action = data.action or "unknown"
                         local body   = data.body
-                        -- Route ready signal
+
                         if panel == "_shell" and action == "ready" then
                             _shellReady = true
-                            print("[shell] Ready signal received, flushing " .. #_shellEvalQ .. " queued items")
-                            -- Flush queued JS
                             for _, js in ipairs(_shellEvalQ) do
                                 pcall(function() _shellView:evaluateJavaScript(js) end)
                             end
                             _shellEvalQ = {}
-                            -- Auto-mount built-in panels
-                            hs.timer.doAfter(0.05, function()
-                                pcall(function() ms.shell.mountPanel("settings") end)
-                                hs.timer.doAfter(0.1, function()
-                                    if ms.ui and ms.ui.refresh then
-                                        pcall(ms.ui.refresh)
-                                    end
-                                end)
+                            hs.timer.doAfter(0.1, function()
+                                if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
                             end)
                         end
-                        -- Route pop-out/pop-in requests from JS
-                        if panel == "_shell" and action == "popOut" and body and body.panel then
-                            pcall(function() ms.shell.popOut(body.panel) end)
-                            return
-                        end
-                        if panel == "_shell" and action == "popIn" and body and body.panel then
-                            pcall(function() ms.shell.popIn(body.panel) end)
-                            return
-                        end
-                        -- Auto-mount panels on navigate (rail click)
-                        if action == "navigate" and panel ~= "_shell" then
-                            pcall(function() ms.shell.mountPanel(panel) end)
-                        end
-                        -- Emit on the bus: ui:<panel>:<action>
+                        -- Bus routing
                         if ms.bus then
                             ms.bus.emit("ui:" .. panel .. ":" .. action, body)
                         end
@@ -2675,7 +2610,6 @@
                     local w, h = 900, 600
                     local x = sf.x + math.floor((sf.w - w) / 2)
                     local y = sf.y + math.floor((sf.h - h) / 2)
-                    -- Restore persisted position if available
                     local st = ms._shellState
                     if st and st.x and st.y then
                         x, y = st.x, st.y
@@ -2684,7 +2618,7 @@
                     end
 
                     _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
-                    pcall(function() _shellView:windowStyle(1 + 2 + 4 + 8) end)  -- titled + closable + miniaturizable + resizable
+                    pcall(function() _shellView:windowStyle(1 + 2 + 4 + 8) end)
                     pcall(function() _shellView:allowResizing(true) end)
                     pcall(function() _shellView:minimumSize({ w = 600, h = 400 }) end)
                     pcall(function() _shellView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
@@ -2697,41 +2631,9 @@
                     local f = io.open(htmlPath, "r")
                     if f then
                         local html = f:read("*all"); f:close()
-
-                        -- Inject log-panel.js as IIFE global.
-                        -- html()-loaded documents can't import external modules (file:// blocked).
-                        -- Solution: Lua reads the ES module, strips 'export', wraps as IIFE.
-                        local lpPath = hs.configdir .. "/ui/modules/log-panel.js"
-                        local lpF = io.open(lpPath, "r")
-                        if lpF then
-                            local lpCode = lpF:read("*all"); lpF:close()
-                            -- Strip 'export ' keyword from 'export function createLogPanel'
-                            lpCode = lpCode:gsub("export%s+function", "function")
-                            -- Wrap in IIFE that exposes createLogPanel globally
-                            lpCode = "(function() {\n" .. lpCode
-                                .. "\nwindow.createLogPanel = createLogPanel;\n"
-                                .. "window._msApplyTheme = applyTheme;\n"
-                                .. "})();\n"
-                            -- Use find+sub to replace only the FIRST </head> (gsub would
-                            -- match all occurrences including ones inside string literals)
-                            local headPos = html:find("</head>")
-                            if headPos then
-                                html = html:sub(1, headPos - 1)
-                                    .. "<script>" .. lpCode .. "</script>\n"
-                                    .. html:sub(headPos)
-                            end
-                            print("[shell] Injected log-panel.js as IIFE (" .. #lpCode .. " bytes)")
-                        else
-                            print("[shell] WARNING: cannot read " .. lpPath)
-                        end
-
-                        print("[shell] Loading HTML: " .. #html .. " bytes from " .. htmlPath)
                         _shellView:html(html, baseURL)
-                    else
-                        print("ms.shell: cannot open " .. htmlPath)
                     end
 
-                    -- Inject theme
                     hs.timer.doAfter(0.05, function()
                         if not _shellView then return end
                         local themeJson = hs.json.encode(ms._theme or {})
@@ -2739,64 +2641,6 @@
                     end)
                 end
 
-                -- ms.shell.testModules() — spike: verify ES modules work in shell context
-                -- Creates a temporary webview, loads _es_module_test.html via html(),
-                -- and reports whether relative imports from ./modules/ succeed.
-                ms.shell.testModules = function()
-                    print("[shell] testModules: starting ES module spike...")
-                    require("hs.webview")
-                    require("hs.webview.usercontent")
-
-                    local testChannel = hs.webview.usercontent.new("msShell")
-                    testChannel:setCallback(function(message)
-                        local ok, data = pcall(hs.json.decode, message.body)
-                        if ok and data and data.body then
-                            local r = data.body
-                            print("[shell] testModules RESULTS:")
-                            print("  Inline module:     " .. tostring(r.inlineOk))
-                            print("  Import map in DOM: " .. tostring(r.hasMap) .. " (count: " .. tostring(r.importmapCount) .. ")")
-                            print("  Absolute file://:  " .. tostring(r.absoluteImport))
-                            print("  createLogPanel:    " .. tostring(r.absoluteHasFn))
-                            if r.absoluteError then print("  Error: " .. r.absoluteError) end
-                            print("  ALL PASS:          " .. tostring(r.allPass))
-                            if r.absoluteImport then
-                                print("[shell] testModules: Absolute file:// import WORKS. Use this for DOM-native panels.")
-                            else
-                                print("[shell] testModules: Absolute file:// import FAILED. Must use IIFE fallback.")
-                            end
-                        end
-                    end)
-
-                    local sf = hs.screen.mainScreen():frame()
-                    local w, h = 560, 400
-                    local x = sf.x + math.floor((sf.w - w) / 2)
-                    local y = sf.y + math.floor((sf.h - h) / 2)
-
-                    local testView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, testChannel)
-                    pcall(function() testView:windowStyle(1 + 2 + 4) end)
-                    pcall(function() testView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
-
-                    local htmlPath = hs.configdir .. "/ui/_es_module_test.html"
-                    local baseURL  = "file://" .. hs.configdir .. "/ui/"
-                    local f = io.open(htmlPath, "r")
-                    if f then
-                        local html = f:read("*all"); f:close()
-                        print("[shell] testModules: loaded " .. #html .. " bytes")
-                        testView:html(html, baseURL)
-                        testView:show()
-                        testView:alpha(1)
-                        -- Auto-close after 5 seconds
-                        hs.timer.doAfter(5, function()
-                            pcall(function() testView:delete() end)
-                            print("[shell] testModules: test webview closed")
-                        end)
-                    else
-                        print("[shell] testModules: ERROR cannot read " .. htmlPath)
-                    end
-                end
-
-                -- ms.shell.show() / hide() / toggle()
-                -- ms.shell.saveState() — persist position, size, lastPanel to settings
                 ms.shell.saveState = function()
                     if not _shellView then return end
                     local ok, frame = pcall(function() return _shellView:frame() end)
@@ -2810,7 +2654,6 @@
                     end
                 end
 
-                -- ms.shell._restoreFrame() — restore position/size from saved state
                 ms.shell._restoreFrame = function()
                     if not _shellView then return end
                     local st = ms._shellState
@@ -2820,7 +2663,6 @@
                     end)
                 end
 
-                -- ms.shell.setActivePanel(id) — track last active panel for persistence
                 ms.shell._activePanel = "macros"
                 ms.shell.setActivePanel = function(id)
                     if type(id) ~= "string" then return end
@@ -2831,7 +2673,6 @@
 
                 ms.shell.show = function()
                     if not _shellView then ms.shell.init() end
-                    -- Restore persisted frame before showing
                     ms.shell._restoreFrame()
                     _shellView:show()
                     _shellView:alpha(1)
@@ -2842,7 +2683,6 @@
 
                 ms.shell.hide = function()
                     if _shellView then
-                        -- Save frame before hiding
                         ms.shell.saveState()
                         _shellView:hide()
                         _shellView:alpha(0)
@@ -2860,7 +2700,6 @@
                     end
                 end
 
-                -- ms.shell.destroy() — tear down the shell webview
                 ms.shell.destroy = function()
                     if _shellView then
                         pcall(function() _shellView:delete() end)
@@ -2871,309 +2710,20 @@
                     _shellEvalQ    = {}
                 end
 
-                -- Panel Registry & Mounting --
-
-                -- JSON-encode a single string value (hs.json.encode requires a table)
-                local function _jsonStr(s)
-                    return hs.json.encode({s}):sub(2, -2)
-                end
-
-                -- _jsonStr safe for embedding in HTML <script> context.
-                -- Escapes < to \x3C so the HTML parser never sees </script> in string literals.
-                -- JS engine decodes \x3C back to < at runtime.
-                local function _safeJsonStr(s)
-                    return _jsonStr(s):gsub("<", "\\x3C")
-                end
-
-                local _panelRegistry = {}  -- [id] = config
-                local _popouts      = {}  -- [id] = { view, channel }
-
-                -- ms.shell.registerPanel(id, config)
-                -- Register a panel module with the shell.
-                -- config: { title, icon, htmlPath (relative to ui/), onLoad, onUnload }
-                ms.shell.registerPanel = function(id, config)
-                    assert(type(id) == "string", "registerPanel: id must be string")
-                    assert(type(config) == "table", "registerPanel: config must be table")
-                    config.id = id
-                    _panelRegistry[id] = config
-                    -- Tell the shell to add a rail item if it's ready
-                    if _shellReady then
-                        -- Build JSON manually (config may contain non-serializable functions)
-                        local railJson = '{"id":' .. _jsonStr(id)
-                            .. ',"title":' .. _jsonStr(config.title or id)
-                            .. ',"icon":' .. _jsonStr(config.icon or "▪") .. '}'
-                        ms.shell.eval("PanelManager.addRailItem(" .. railJson .. ")")
+                -- shellDispatch: route messages from inline panels to Lua handlers
+                ms.shell.dispatch = function(panel, action, body)
+                    if ms.bus then
+                        ms.bus.emit("ui:" .. panel .. ":" .. action, body)
                     end
                 end
 
-                -- Panel name → HTML file mapping for built-in panels
-                local _builtinPanels = {
-                    console  = "ms_console.html",
-                    watcher  = "ms_watcher.html",
-                    keys     = "ms_keys.html",
-                    window   = "ms_window.html",
-                    settings = "ms_settings_ui.html",
-                    macros   = nil,
-                }
-
-                -- Panels that use DOM-native injection (CSS+JS into slot, no iframe)
-                local _domNativePanels = {
-                    console  = true,
-                    watcher  = true,
-                    keys     = true,
-                    window   = true,
-                    settings = true,
-                }
-                local _domNativeMounted = {}  -- [id] = true when DOM has been injected
-
-                -- _injectPanelDom(id, htmlContent)
-                -- DOM-native panel injection: extracts CSS/HTML/JS from a panel HTML file,
-                -- scopes CSS with #slot-{id} prefix, injects into the shell panel slot.
-                local function _injectPanelDom(id, htmlContent)
-                    if not htmlContent or htmlContent == "" then
-                        print("[shell] _injectPanelDom: no HTML for " .. id)
-                        return false
-                    end
-
-                    -- Strip injected log-panel IIFE (added by ms.shell.init before
-                    -- </head>) so it doesn't get picked up as the panel script.
-                    -- Only needed when the panel uses plain <script> (not module),
-                    -- because the IIFE is also plain <script> and would match first.
-                    local hasModule = htmlContent:find('<script type="module">')
-                    if not hasModule then
-                        local iifeEnd = htmlContent:find("</script>")
-                        if iifeEnd then
-                            local iifeStart = htmlContent:find("<script>")
-                            if iifeStart and iifeStart < iifeEnd then
-                                htmlContent = htmlContent:sub(1, iifeStart - 1)
-                                    .. htmlContent:sub(iifeEnd + 9)
-                            end
-                        end
-                    end
-
-                    -- Extract <style>...</style>
-                    local css = htmlContent:match("<style>(.-)</style>")
-                    -- Extract <body>...</body> inner HTML
-                    local bodyHtml = htmlContent:match("<body>(.-)</body>")
-                    -- Extract script: try <script type="module"> first, then plain <script>
-                    local script = htmlContent:match('<script type="module">(.-)</script>')
-                    local isModule = script ~= nil
-                    if not script then
-                        script = htmlContent:match("<script>(.-)</script>")
-                    end
-
-                    if not css or not bodyHtml or not script then
-                        print("[shell] _injectPanelDom: failed to extract parts for " .. id)
-                        return false
-                    end
-
-                    -- Strip ALL <script> tags from body HTML (innerHTML doesn't execute them,
-                    -- and they'd render as visible text)
-                    bodyHtml = bodyHtml:gsub("<script[^>]*>.-</script>", "")
-
-                    -- Strip ES module import (createLogPanel is already a global IIFE)
-                    if isModule then
-                        script = script:gsub('import%s+{.-}%s+from%s+"[^"]*";?', '')
-                    end
-
-                    -- Scope CSS: prefix selectors with #slot-{id}
-                    -- First strip CSS comments (they confuse the {/} parser)
-                    css = css:gsub("/%*.-%*/", "")
-                    local prefix = "#slot-" .. id
-                    local scoped = ""
-                    local pos = 1
-                    while pos <= #css do
-                        local bStart = css:find("{", pos)
-                        if not bStart then
-                            scoped = scoped .. css:sub(pos)
-                            break
-                        end
-                        local selector = css:sub(pos, bStart - 1)
-                        local bEnd = css:find("}", bStart)
-                        if not bEnd then
-                            scoped = scoped .. css:sub(pos)
-                            break
-                        end
-                        local block = css:sub(bStart, bEnd)
-                        local trimSel = selector:match("^%s*(.-)%s*$") or ""
-                        if trimSel:match("^@font%-face") or trimSel:match("^@keyframes") then
-                            -- @font-face and @keyframes can't be scoped; leave as-is
-                            scoped = scoped .. selector .. block .. "\n"
-                        elseif trimSel == ":root" then
-                            -- Scope :root to the slot element (CSS variables cascade to children)
-                            scoped = scoped .. prefix .. " " .. block .. "\n"
-                        elseif trimSel ~= "" then
-                            -- Prefix each comma-separated selector
-                            local scopedSel = trimSel:gsub("([^,]+)", function(s)
-                                s = s:match("^%s*(.-)%s*$")
-                                -- Replace html/body with the slot itself (no such elements inside slot)
-                                if s == "html" or s == "body" then return prefix end
-                                return prefix .. " " .. s
-                            end)
-                            -- When html/body was mapped to the slot, strip the display property
-                            -- (the shell controls slot visibility via .panel-slot CSS)
-                            if trimSel:match("^html") or trimSel:match("^body") or
-                               trimSel:match(",%s*html") or trimSel:match(",%s*body") then
-                                block = block:gsub("display%s*:%s*[^;]+;?", "")
-                            end
-                            scoped = scoped .. scopedSel .. " " .. block .. "\n"
-                        end
-                        pos = bEnd + 1
-                    end
-
-                    -- Wrap in IIFE to prevent const/let redeclaration collisions
-                    -- between panels (each panel declares `const lp = ...` etc.)
-                    -- Save/restore shell's applyTheme: panels expose their own on
-                    -- window (for inline handlers), but the shell's version must
-                    -- remain the global so Lua-side theme calls work correctly.
-                    -- Panel's applyTheme is stashed on slot._applyTheme for
-                    -- shell-level theme forwarding.
-                    script = "(function(){\n"
-                        .. "var _savedAT = window.applyTheme;\n"
-                        .. script
-                        .. "\nif (typeof applyTheme === 'function') {"
-                        .. "  window.applyTheme = applyTheme;"
-                        .. "  var _slot = document.getElementById('slot-" .. id .. "');"
-                        .. "  if (_slot) _slot._applyTheme = applyTheme;"
-                        .. "}\n"
-                        -- Expose functions used by inline HTML event handlers
-                        .. "if (typeof sendToHost === 'function') window.sendToHost = sendToHost;\n"
-                        .. "if (typeof playSlot === 'function') window.playSlot = playSlot;\n"
-                        .. "if (typeof closeModal === 'function') window.closeModal = closeModal;\n"
-                        .. "if (typeof toggleQR === 'function') window.toggleQR = toggleQR;\n"
-                        .. "if (_savedAT) window.applyTheme = _savedAT;\n"
-                        .. "})();\n"
-
-                    -- Build JS to inject into the shell webview
-                    local parts = {}
-                    parts[#parts + 1] = "(function() {"
-                    parts[#parts + 1] = "var slot = document.getElementById('slot-" .. id .. "');"
-                    parts[#parts + 1] = "if (!slot) return;"
-                    parts[#parts + 1] = "slot.innerHTML = " .. _safeJsonStr(bodyHtml) .. ";"
-                    parts[#parts + 1] = "var st = document.createElement('style');"
-                    parts[#parts + 1] = "st.textContent = " .. _safeJsonStr(scoped) .. ";"
-                    parts[#parts + 1] = "slot.prepend(st);"
-                    parts[#parts + 1] = "var sc = document.createElement('script');"
-                    parts[#parts + 1] = "sc.textContent = " .. _safeJsonStr(script) .. ";"
-                    parts[#parts + 1] = "slot.appendChild(sc);"
-                    -- Dispatch DOMContentLoaded so panels that listen for it will init
-                    parts[#parts + 1] = "document.dispatchEvent(new Event('DOMContentLoaded'));"
-                    parts[#parts + 1] = "})()"
-                    local finalJs = table.concat(parts, "\n")
-
-                    ms.shell.eval(finalJs)
-                    return true
-                end
-
-                -- ms.shell.mountPanel(id)
-                -- Mount a registered panel into the shell content area.
-                -- Loads the panel's HTML into an iframe inside its slot.
-                ms.shell.mountPanel = function(id)
-                    -- Auto-register built-in panels if not explicitly registered
-                    if not _panelRegistry[id] and _builtinPanels[id] then
-                        _panelRegistry[id] = {
-                            id = id,
-                            title = id,
-                            icon = "▪",
-                            htmlPath = _builtinPanels[id],
-                        }
-                    end
-
-                    local cfg = _panelRegistry[id]
-                    if not cfg then
-                        print("[shell] mountPanel: unknown panel '" .. tostring(id) .. "'")
-                        return false
-                    end
-
-                    -- Read panel HTML
-                    local htmlContent = nil
-                    if cfg.htmlPath then
-                        local fullPath = hs.configdir .. "/ui/" .. cfg.htmlPath
-                        local fh = io.open(fullPath, "r")
-                        if fh then
-                            htmlContent = fh:read("*all")
-                            fh:close()
-                        else
-                            print("[shell] mountPanel: cannot read " .. fullPath)
-                            return false
-                        end
-                    end
-
-                    -- Mount via DOM-native injection or iframe (PanelManager)
-                    if _domNativePanels[id] then
-                        if not _domNativeMounted[id] then
-                            local ok = _injectPanelDom(id, htmlContent)
-                            if ok then _domNativeMounted[id] = true end
-                        end
-                    else
-                        -- Escape HTML for safe JS embedding via JSON encoding
-                        local baseURL     = "file://" .. hs.configdir .. "/ui/"
-                        local idJson      = _jsonStr(id)
-                        local htmlJson    = htmlContent and _jsonStr(htmlContent) or "\"\""
-                        local baseURLJson = _jsonStr(baseURL)
-                        local js = "PanelManager.mount(" .. idJson .. "," .. htmlJson .. "," .. baseURLJson .. ")"
-                        pcall(function() ms.shell.eval(js) end)
-                    end
-
-                    -- Call onLoad callback
-                    if cfg.onLoad then pcall(cfg.onLoad) end
-
-                    -- Emit bus event
-                    if ms.bus then ms.bus.emit("panel:opened", { id = id }) end
-                    return true
-                end
-
-                -- ms.shell.unmountPanel(id)
-                -- Unmount a panel from the shell content area.
-                ms.shell.unmountPanel = function(id)
-                    local cfg = _panelRegistry[id]
-                    if not cfg then return false end
-
-                    if _domNativeMounted[id] then
-                        _domNativeMounted[id] = nil
-                        -- Clear slot content via eval
-                        ms.shell.eval("(function(){var s=document.getElementById('slot-" .. id .. "');if(s)s.innerHTML='';})()")
-                    else
-                        ms.shell.eval("PanelManager.unmount(" .. _jsonStr(id) .. ")")
-                    end
-
-                    if cfg.onUnload then pcall(cfg.onUnload) end
-                    if ms.bus then ms.bus.emit("panel:closed", { id = id }) end
-                    return true
-                end
-
-                -- ms.shell.popOut(panelId)
-                -- Unmount from shell, create a standalone webview with the same HTML.
+                -- popOut: extract a panel into its own standalone webview
+                local _popouts = {}
                 ms.shell.popOut = function(panelId)
-                    -- Auto-register built-in panels if not explicitly registered
-                    if not _panelRegistry[panelId] and _builtinPanels[panelId] then
-                        _panelRegistry[panelId] = {
-                            id = panelId,
-                            title = panelId,
-                            icon = "▪",
-                            htmlPath = _builtinPanels[panelId],
-                        }
-                    end
-
-                    local cfg = _panelRegistry[panelId]
-                    if not cfg then
-                        print("ms.shell.popOut: unknown panel '" .. tostring(panelId) .. "'")
-                        return false
-                    end
-                    if not cfg.htmlPath then
-                        print("ms.shell.popOut: panel '" .. tostring(panelId) .. "' has no standalone HTML")
-                        return false
-                    end
                     if _popouts[panelId] then
-                        -- Already popped out — just focus it
                         pcall(function() _popouts[panelId].view:show() end)
                         return true
                     end
-
-                    -- Unmount from shell first
-                    ms.shell.unmountPanel(panelId)
-
-                    -- Create standalone webview
                     require("hs.webview")
                     require("hs.webview.usercontent")
 
@@ -3200,54 +2750,23 @@
                     pcall(function() popView:allowTextEntry(true) end)
                     pcall(function() popView:shadow(true) end)
 
-                    -- Load via url() so ES module imports (from "log-panel") work.
-                    -- html()-loaded documents block external module imports; url() does not.
-                    local panelURL = "file://" .. hs.configdir .. "/ui/" .. (cfg.htmlPath or "")
-                    popView:url(panelURL)
-
-                    -- Inject theme
-                    hs.timer.doAfter(0.05, function()
-                        if not popView then return end
-                        local themeJson = hs.json.encode(ms._theme or {})
-                        pcall(function() popView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)
-                    end)
-
-                    popView:show()
-                    popView:alpha(1)
+                    -- Tell the shell to extract the panel HTML for pop-out
+                    ms.shell.eval("shellDispatch('_shell','popOut',{panel:'" .. panelId .. "'})")
 
                     _popouts[panelId] = { view = popView, channel = popChannel }
-
-                    -- Notify shell that panel was popped out
-                    ms.shell.eval("PanelManager.markPoppedOut(" .. _jsonStr(panelId) .. ", true)")
-
                     if ms.bus then ms.bus.emit("panel:poppedOut", { id = panelId }) end
                     return true
                 end
 
-                -- ms.shell.popIn(panelId)
-                -- Destroy standalone webview, remount in shell.
                 ms.shell.popIn = function(panelId)
                     local pop = _popouts[panelId]
-                    if not pop then
-                        print("ms.shell.popIn: panel '" .. tostring(panelId) .. "' is not popped out")
-                        return false
-                    end
-
-                    -- Destroy standalone webview
+                    if not pop then return false end
                     pcall(function() pop.view:delete() end)
                     _popouts[panelId] = nil
-
-                    -- Notify shell
-                    ms.shell.eval("PanelManager.markPoppedOut(" .. _jsonStr(panelId) .. ", false)")
-
-                    -- Remount in shell
-                    ms.shell.mountPanel(panelId)
-
                     if ms.bus then ms.bus.emit("panel:poppedIn", { id = panelId }) end
                     return true
                 end
 
-                -- ms.shell.isPoppedOut(panelId) — check if panel is in standalone mode
                 ms.shell.isPoppedOut = function(panelId)
                     return _popouts[panelId] ~= nil
                 end
@@ -3256,7 +2775,6 @@
 
         -- 12a. Macro Lab Setting (ms.settings.define) --
             do
-                -- Define macroLabEnabled in the settings system
                 if ms.settings and type(ms.settings.define) == "function" then
                     pcall(ms.settings.define, {
                         type     = "toggle",
@@ -3266,30 +2784,27 @@
                         default  = false,
                         onChange = function(val)
                             ms._macroLabEnabled = (val == true)
-                            -- When switching to Modern: hide legacy, don't auto-show shell
-                            -- When switching to Legacy: hide shell
                             if not ms._macroLabEnabled then
                                 pcall(function() ms.shell.hide() end)
                             else
                                 pcall(function() ms.ui.hide() end)
+                                pcall(function() ms.shell.show() end)
                             end
                             if ms.saveSettings then pcall(ms.saveSettings) end
                         end,
                     })
                 end
-                -- Track rail tab changes from the shell for persistence
                 if ms.bus then
                     ms.bus.on("ui:_shell:navigate", function(data)
                         if data and data.panel then
                             ms.shell.setActivePanel(data.panel)
-                            pcall(function() ms.shell.mountPanel(data.panel) end)
                         end
                     end)
                 end
             end
         -- END 12a --
 
-        -- 12b. Visual Macro Compiler (ms.compiler) --
+        -- 13. Visual Macro Compiler (ms.compiler) --
             do
                 local home       = os.getenv("HOME")
                 local dataDir    = home .. "/.hammerspoon/data"
@@ -3943,20 +3458,16 @@
                     data = dataDir,
                 }
             end
-        -- END 12b. Visual Macro Compiler (ms.compiler) --
-        -- 12c. Macro Lab Shell ↔ Compiler bridge --
-            do
-                -- This bridge handles messages from the Step Canvas in ms_shell.html
-                -- and routes them to ms.compiler, pushing results back to JS.
-                -- It must run AFTER both ms.compiler and ms.bus are initialized.
+        -- END 13. Visual Macro Compiler (ms.compiler) --
 
+        -- 13a. Macro Lab Shell ↔ Compiler bridge --
+            do
                 local function _macroShellEval(js)
                     if ms.shell and ms.shell.eval then
                         ms.shell.eval(js)
                     end
                 end
 
-                -- listMacros → push array of IDs back to JS
                 if ms.bus then
                     ms.bus.on("ui:macros:listMacros", function(body)
                         local ids = ms.compiler.list()
@@ -3964,7 +3475,6 @@
                         _macroShellEval("if(window.macroLab)macroLab.setMacroList(" .. json .. ")")
                     end)
 
-                    -- getMacro → push full definition back to JS
                     ms.bus.on("ui:macros:getMacro", function(body)
                         if not body or not body.id then return end
                         local def = ms.compiler.get(body.id)
@@ -3974,7 +3484,6 @@
                         end
                     end)
 
-                    -- saveMacro → write to compiler and confirm
                     ms.bus.on("ui:macros:saveMacro", function(body)
                         if not body or not body.id or not body.def then return end
                         local ok, err = pcall(ms.compiler.write, body.id, body.def)
@@ -3985,7 +3494,6 @@
                         end
                     end)
 
-                    -- deleteMacro → remove and confirm
                     ms.bus.on("ui:macros:deleteMacro", function(body)
                         if not body or not body.id then return end
                         local ok, err = pcall(ms.compiler.delete, body.id)
@@ -3997,309 +3505,9 @@
                     end)
                 end
             end
-        -- END 12c. Macro Lab Shell ↔ Compiler bridge --
+        -- END 13a. Macro Lab Shell ↔ Compiler bridge --
 
-        -- 12d. Test Run & Record Mode --
-            do
-                local function _testShellEval(js)
-                    if ms.shell and ms.shell.eval then
-                        ms.shell.eval(js)
-                    end
-                end
-
-                -- ── Test Run ──────────────────────────────────────────────
-                -- Compiles and executes a macro definition in the sandbox.
-                -- Returns (ok:bool, err:string|nil)
-
-                ms.shell._testRun = function(macroDef)
-                    if not macroDef or type(macroDef) ~= "table" then
-                        return false, "Invalid macro definition"
-                    end
-                    if not macroDef.id or type(macroDef.id) ~= "string" then
-                        -- Generate a temporary id for test runs
-                        macroDef.id = "_testRun_" .. tostring(math.random(100000, 999999))
-                    end
-                    if not macroDef.steps then macroDef.steps = {} end
-
-                    -- Compile
-                    local compileOk, src = pcall(ms.compiler.compile, macroDef)
-                    if not compileOk then
-                        return false, "Compile error: " .. tostring(src)
-                    end
-
-                    -- Load into sandbox
-                    local sandbox = ms._macroSandbox
-                    if not sandbox then
-                        return false, "Macro sandbox not initialized"
-                    end
-
-                    local chunk, loadErr
-                    if _VERSION and _VERSION >= "Lua 5.2" or not setfenv then
-                        chunk, loadErr = load(src, "@testRun_" .. macroDef.id, "bt", sandbox)
-                    else
-                        chunk, loadErr = loadstring(src, "@testRun_" .. macroDef.id)
-                        if chunk then setfenv(chunk, sandbox) end
-                    end
-                    if not chunk then
-                        return false, "Load error: " .. tostring(loadErr)
-                    end
-
-                    -- Execute (pcall-wrapped)
-                    local runOk, runErr = pcall(chunk)
-                    if not runOk then
-                        return false, "Runtime error: " .. tostring(runErr)
-                    end
-
-                    return true, nil
-                end
-
-                -- ── Record Mode ──────────────────────────────────────────
-
-                local _recordTap      = nil
-                local _recording      = false
-                local _lastEventTime  = nil
-                local _waitThreshold  = 0.05  -- 50ms default
-                local _recordMouseMoves = false  -- off by default
-
-                -- Key code → ms key name (macOS virtual key codes)
-                local _keyCodeMap = {
-                    [0x00] = "a", [0x01] = "s", [0x02] = "d", [0x03] = "f",
-                    [0x04] = "h", [0x05] = "g", [0x06] = "z", [0x07] = "x",
-                    [0x08] = "c", [0x09] = "v", [0x0B] = "b", [0x0C] = "q",
-                    [0x0D] = "w", [0x0E] = "e", [0x0F] = "r", [0x10] = "y",
-                    [0x11] = "t", [0x12] = "1", [0x13] = "2", [0x14] = "3",
-                    [0x15] = "4", [0x16] = "6", [0x17] = "5", [0x18] = "=",
-                    [0x19] = "9", [0x1A] = "7", [0x1B] = "-", [0x1C] = "8",
-                    [0x1D] = "0", [0x1E] = "]", [0x1F] = "o", [0x20] = "u",
-                    [0x21] = "[", [0x22] = "i", [0x23] = "p", [0x25] = "l",
-                    [0x26] = "j", [0x27] = "'", [0x28] = "k", [0x29] = ";",
-                    [0x2A] = "\\", [0x2B] = ",", [0x2C] = "/", [0x2D] = "n",
-                    [0x2E] = "m", [0x2F] = ".", [0x32] = "`",
-                    [0x24] = "return", [0x30] = "tab", [0x31] = "space",
-                    [0x33] = "delete", [0x35] = "escape",
-                    [0x7A] = "f1",  [0x78] = "f2",  [0x63] = "f3",
-                    [0x76] = "f4",  [0x60] = "f5",  [0x61] = "f6",
-                    [0x62] = "f7",  [0x64] = "f8",  [0x65] = "f9",
-                    [0x6D] = "f10", [0x67] = "f11", [0x6F] = "f12",
-                    [0x72] = "help",    [0x73] = "home",     [0x74] = "pageup",
-                    [0x75] = "forwarddelete", [0x77] = "end", [0x79] = "pagedown",
-                    [0x7B] = "left",    [0x7C] = "right",
-                    [0x7D] = "down",    [0x7E] = "up",
-                }
-
-                -- Extract modifier names from event flags
-                local function _extractMods(flags)
-                    local mods = {}
-                    -- Use rawFlagMasks for reliable detection
-                    if flags.ctrl   then mods[#mods + 1] = "ctrl"  end
-                    if flags.alt    then mods[#mods + 1] = "alt"   end
-                    if flags.shift  then mods[#mods + 1] = "shift" end
-                    if flags.cmd    then mods[#mods + 1] = "cmd"   end
-                    return mods
-                end
-
-                -- Send a recorded step to JS
-                local function _sendRecordStep(step)
-                    local json = hs.json.encode(step)
-                    _testShellEval("shellDispatch('macros','recordStep'," .. json .. ")")
-                end
-
-                -- Auto-insert ms.wait if time gap exceeds threshold
-                local function _checkAutoWait()
-                    if not _lastEventTime then return end
-                    local now = hs.timer.secondsSinceEpoch()
-                    local elapsed = now - _lastEventTime
-                    if elapsed >= _waitThreshold then
-                        local waitMs = math.floor(elapsed * 1000)
-                        _sendRecordStep({ action = "ms.wait", params = { ms = waitMs } })
-                    end
-                end
-
-                -- Start recording
-                ms.shell._startRecording = function(opts)
-                    if _recording then return true end
-                    opts = opts or {}
-
-                    _recording = true
-                    _lastEventTime = hs.timer.secondsSinceEpoch()
-                    _waitThreshold = (opts.waitThreshold or 50) / 1000  -- convert ms to seconds
-                    _recordMouseMoves = opts.recordMouseMoves or false
-
-                    local eventTypes = {
-                        hs.eventtap.event.types.keyDown,
-                        hs.eventtap.event.types.leftMouseDown,
-                        hs.eventtap.event.types.rightMouseDown,
-                        hs.eventtap.event.types.otherMouseDown,
-                        hs.eventtap.event.types.leftMouseDragged,
-                        hs.eventtap.event.types.scrollWheel,
-                    }
-
-                    _recordTap = hs.eventtap.new(eventTypes, function(event)
-                        local eventType = event:getType()
-                        local now = hs.timer.secondsSinceEpoch()
-
-                        -- Auto-insert wait before each action
-                        _checkAutoWait()
-                        _lastEventTime = now
-
-                        if eventType == hs.eventtap.event.types.keyDown then
-                            local keyCode = event:getKeyCode()
-                            local flags = event:getFlags()
-                            local keyName = _keyCodeMap[keyCode]
-                            if not keyName then
-                                keyName = "key" .. tostring(keyCode)
-                            end
-
-                            -- Skip modifier-only keys
-                            if keyName == "ctrl" or keyName == "alt"
-                               or keyName == "shift" or keyName == "cmd" then
-                                return false
-                            end
-
-                            local mods = _extractMods(flags)
-                            _sendRecordStep({
-                                action = "ms.type",
-                                params = { key = keyName, mods = mods },
-                            })
-
-                        elseif eventType == hs.eventtap.event.types.leftMouseDown then
-                            local pos = hs.mouse.absolutePosition()
-                            _sendRecordStep({
-                                action = "ms.Mouse",
-                                params = {
-                                    operation = "Click",
-                                    button    = "Left",
-                                    reference = "Mouse",
-                                    x = math.floor(pos.x),
-                                    y = math.floor(pos.y),
-                                },
-                            })
-
-                        elseif eventType == hs.eventtap.event.types.rightMouseDown then
-                            local pos = hs.mouse.absolutePosition()
-                            _sendRecordStep({
-                                action = "ms.Mouse",
-                                params = {
-                                    operation = "Click",
-                                    button    = "Right",
-                                    reference = "Mouse",
-                                    x = math.floor(pos.x),
-                                    y = math.floor(pos.y),
-                                },
-                            })
-
-                        elseif eventType == hs.eventtap.event.types.otherMouseDown then
-                            local pos = hs.mouse.absolutePosition()
-                            local btnNum = event:getProperty(
-                                hs.eventtap.event.properties.mouseEventButtonNumber)
-                            local btnName = "Button" .. tostring(btnNum + 1)
-                            _sendRecordStep({
-                                action = "ms.Mouse",
-                                params = {
-                                    operation = "Click",
-                                    button    = btnName,
-                                    reference = "Mouse",
-                                    x = math.floor(pos.x),
-                                    y = math.floor(pos.y),
-                                },
-                            })
-
-                        elseif eventType == hs.eventtap.event.types.leftMouseDragged then
-                            local pos = hs.mouse.absolutePosition()
-                            _sendRecordStep({
-                                action = "ms.Mouse",
-                                params = {
-                                    operation = "Drag",
-                                    button    = "Left",
-                                    reference = "Mouse",
-                                    x = math.floor(pos.x),
-                                    y = math.floor(pos.y),
-                                },
-                            })
-
-                        elseif eventType == hs.eventtap.event.types.scrollWheel then
-                            local dy = event:getProperty(
-                                hs.eventtap.event.properties.scrollWheelEventDeltaAxis1)
-                            if dy and dy ~= 0 then
-                                local direction = dy > 0 and "up" or "down"
-                                local clicks = math.min(math.abs(dy), 10)
-                                _sendRecordStep({
-                                    action = "ms.scroll",
-                                    params = {
-                                        direction = direction,
-                                        clicks = clicks,
-                                    },
-                                })
-                            end
-                        end
-
-                        return false  -- don't swallow events
-                    end)
-
-                    _recordTap:start()
-                    return true
-                end
-
-                -- Stop recording
-                ms.shell._stopRecording = function()
-                    if not _recording then return true end
-                    _recording = false
-                    if _recordTap then
-                        _recordTap:stop()
-                        _recordTap = nil
-                    end
-                    _lastEventTime = nil
-                    return true
-                end
-
-                -- Is currently recording?
-                ms.shell._isRecording = function()
-                    return _recording
-                end
-
-                -- ── Bus Wiring ───────────────────────────────────────────
-
-                if ms.bus then
-                    -- Test Run
-                    ms.bus.on("ui:macros:testRun", function(body)
-                        if not body then
-                            _testShellEval("shellDispatch('macros','testRunResult',{ok:false,err:'No macro data received'})")
-                            return
-                        end
-                        local ok, err = ms.shell._testRun(body)
-                        if ok then
-                            _testShellEval("shellDispatch('macros','testRunResult',{ok:true})")
-                        else
-                            local safeErr = tostring(err or "unknown error")
-                                :gsub("\\", "\\\\"):gsub("'", "\\'"):gsub("\n", "\\n")
-                            _testShellEval("shellDispatch('macros','testRunResult',{ok:false,err:'" .. safeErr .. "'})")
-                        end
-                    end)
-
-                    -- Start Recording
-                    ms.bus.on("ui:macros:startRecording", function(body)
-                        local ok, result = pcall(ms.shell._startRecording, body)
-                        if not ok then
-                            print("ms.shell._startRecording error: " .. tostring(result))
-                            local safeErr = tostring(result):gsub("\\", "\\\\"):gsub("'", "\\'"):gsub("\n", "\\n")
-                            _testShellEval("shellDispatch('macros','testRunResult',{ok:false,err:'Recording failed: " .. safeErr .. "'})")
-                        elseif result ~= true then
-                            _testShellEval("shellDispatch('macros','testRunResult',{ok:false,err:'Recording failed to start'})")
-                        end
-                    end)
-
-                    -- Stop Recording
-                    ms.bus.on("ui:macros:stopRecording", function(body)
-                        local ok, err = pcall(ms.shell._stopRecording)
-                        if not ok then
-                            print("ms.shell._stopRecording error: " .. tostring(err))
-                        end
-                    end)
-                end
-            end
-        -- END 12d. Test Run & Record Mode --
-
-        -- 13. Safety Nets --
+        -- 14. Safety Nets --
             do
                 local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
 
@@ -4477,7 +3685,7 @@
                     spawnAlt = { enabled = false },
                 },
             }
-        -- END 13. Safety Nets --
+        -- END 14. Safety Nets --
     -- END Hammerspoon mudscript Utility Library --
 
     -- Startup Executions --
@@ -4511,7 +3719,7 @@
         ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)
         ms._discoverSounds()
         ms.loadTheme()
-
+        -- ms.legacycam.updateMultiplier()  -- opt-in: call manually if needed
         os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
         ms.bind._registerSystemBinds()
         ms.bind.rebind()
@@ -4638,21 +3846,6 @@
                     ms._loadComplete = true
                     ms.dev.log({ type = "system", event = "startup_complete" })
                     if ms._robloxActive then ms.setMacros(1, true) end
-                    -- Phase 6: Auto-open shell if it was visible last session
-                    hs.timer.doAfter(0.5, function()
-                        pcall(function()
-                            if ms._macroLabEnabled and ms._shellState and ms._shellState.visible then
-                                ms.shell.show()
-                                -- Restore last active panel
-                                local lp = ms._shellState.lastPanel
-                                if lp and lp ~= "macros" then
-                                    hs.timer.doAfter(0.3, function()
-                                        pcall(function() ms.shell.mountPanel(lp) end)
-                                    end)
-                                end
-                            end
-                        end)
-                    end)
                     _G._loadTimers.integrityWarn = hs.timer.doAfter(10, function()
                         if _needsIntegrityWarning then
                             ms.alert("\u{26a0} Integrity Error\nNo trusted manifest on record.\nSettings \u{2192} Developer \u{2192} Trust Current Version.", 10)
@@ -4794,11 +3987,10 @@
                             end
                         end
                     end
-                    -- MANIFEST doesn't match or missing — trust current files
-                    -- (user deleted hash = consent to trust current state)
-                    ms.integrity.trustCurrent()
+                    _needsIntegrityWarning = true
                 end)
             end)
+
 
             if roblox then roblox:activate() end
 

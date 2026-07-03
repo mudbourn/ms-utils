@@ -23,3 +23,7 @@ ignore/
 mac/bin/hidinject-rs/target/
 docs/function-index.md
 docs/icon-requirements.md
+ui/_build_shell_v2.py
+mac/Spoons/MsGuardian.spoon/init.lua.129.bak
+ui/_build_shell.py
+mac/ms_core_pre_pivot.lua.bak
