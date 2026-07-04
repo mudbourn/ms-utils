@@ -109,21 +109,7 @@
             /* ── Macro name (top-right) ──────────────────────────────────────── */
             #macro-name {
                 position: absolute;
-                top: 22px;
-                right: 16px;
-                font-size: 10px;
-                color: var(--warning);
-                text-align: right;
-                max-width: 50%;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-
-            /* ── Profile name (top-right) ───────────────────────────────────── */
-            #profile-name {
-                position: absolute;
-                top: 12px;
+                top: 24px;
                 right: 16px;
                 font-size: 10px;
                 color: var(--warning);
@@ -200,7 +186,6 @@
             <div id="title">mudscript</div>
             <div id="version">v1.3.0-pre.16</div>
             <div id="macro-name"></div>
-            <div id="profile-name"></div>
             <div id="status">Starting up…</div>
             <div id="track"></div>
             <div id="fill"></div>
@@ -239,12 +224,6 @@
                 document.getElementById("fill").style.width =
                     Math.max(0, Math.min(100, pct)) + "%";
                 if (msg) document.getElementById("status").textContent = msg;
-            }
-
-            /* ── Profile name ────────────────────────────────────────────────── */
-            function setProfileName(name) {
-                var el = document.getElementById("profile-name");
-                if (el && name) el.textContent = name;
             }
 
             /* ── Macro name ──────────────────────────────────────────────────── */

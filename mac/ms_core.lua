@@ -4345,6 +4345,11 @@
                     -- Inject theme and state
                     local themeJson = hs.json.encode(ms._theme or {})
                     _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                    -- Set macro name
+                    if ms.macroMeta and ms.macroMeta.name then
+                        _lWebView:evaluateJavaScript("setMacroName(" ..
+                            '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
+                    end
                     -- Replay buffered messages
                     for _, entry in ipairs(_lMsgBuffer) do
                         local encoded = entry.msg and ('"' .. entry.msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
@@ -4366,17 +4371,6 @@
 
         -- Loading Screen — Fade, Announce & Timers --
             _lUpdate(20, "Initializing\u{2026}")
-
-            -- Set macro name on loading screen
-            hs.timer.doAfter(0.2, function()
-                if ms.macroMeta and ms.macroMeta.name and _lWebView then
-                    print("[loading] Setting macro name: " .. ms.macroMeta.name)
-                    _lWebView:evaluateJavaScript("setMacroName(" ..
-                        '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
-                else
-                    print("[loading] macroMeta not available or webview not ready")
-                end
-            end)
 
             _lFadeOut = function()
                 if not _lWebView or _lFadingOut then return end
@@ -4436,12 +4430,6 @@
                         end
                     end)
                 end)
-            end
-
-            -- Set profile name on loading screen
-            if ms.macroMeta and ms.macroMeta.name and _lWebView then
-                _lWebView:evaluateJavaScript("setProfileName(" ..
-                    '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
             end
 
             _G._timers = {}
