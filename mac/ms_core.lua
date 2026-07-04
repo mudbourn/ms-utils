@@ -182,10 +182,12 @@
                         flushAll         = function() end,
                         flushCam         = function() end,
                         flushWait        = function() end,
+                        flushKey         = function() end,
                         watcherStep      = function() end,
                         macroLog         = function() end,
                         accCamMove       = function() end,
                         accWait          = function() end,
+                        accKey           = function() end,
                         startTrace       = function() end,
                         stopTrace        = function() end,
                         flushTraceBuffer = function() end,
@@ -537,14 +539,6 @@
         -- 2. Settings, Profiles & UI --
             ms.app = function() return hs.application.frontmostApplication():name() end
 
-            ms._menubar = ms._menubar or hs.menubar.new()
-            ms._menubar:setClickCallback(function()
-                if ms._macroLabEnabled then
-                    ms.shell.toggle()
-                else
-                    ms.ui.toggle()
-                end
-            end)
         -- END 2. Settings, Profiles & UI --
 
         -- 3. Keyboard Actions --
@@ -690,6 +684,28 @@
                 return false
             end):start()
 
+            -- Key press/release/type accumulator (mirrors cam pattern)
+            local _keyAccum      = 0
+            local _keyMsg        = nil
+            local _keyFlushTimer = nil
+            local _keyFlushLabel = nil
+            local _keyFlush = function()
+                if _keyAccum > 0 then
+                    local msg = _keyMsg
+                    if _keyAccum > 1 then msg = msg .. " ×" .. _keyAccum end
+                    if ms.dev and spoon.MsDevTools then
+                        spoon.MsDevTools:macroLog(msg, _keyFlushLabel)
+                        if ms.dev._watcherPanel then
+                            spoon.MsDevTools:watcherStep(msg, _keyFlushLabel)
+                        end
+                    end
+                    _keyAccum      = 0
+                    _keyMsg        = nil
+                    _keyFlushLabel = nil
+                end
+                _keyFlushTimer = nil
+            end
+            -- END Key accumulator --
 
                 ms.press = function(key, mods, hidinject)
                     if ms.dev then spoon.MsDevTools:flushAll() end
@@ -703,13 +719,19 @@
                     local alreadyHeld = ms._macroHeldKeys[keyCode]
                     if not alreadyHeld then
                         ms._keyHoldStarts[keyCode] = hs.timer.absoluteTime()
-                        if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
+                        if ms.dev and not spoon.MsDevTools:getTraceSuppress() then
                             local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                            spoon.MsDevTools:watcherStep("↓ " .. tostring(key) .. modsStr)
-                        end
-                        if ms.dev then
-                            local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                            spoon.MsDevTools:macroLog("↓ " .. tostring(key) .. modsStr)
+                            local msg = "↓ " .. tostring(key) .. modsStr
+                            if _keyAccum > 0 and msg == _keyMsg then
+                                _keyAccum = _keyAccum + 1
+                            else
+                                _keyFlush()
+                                _keyAccum = 1
+                                _keyMsg   = msg
+                            end
+                            if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
+                            if _keyFlushTimer then _keyFlushTimer:stop() end
+                            _keyFlushTimer = hs.timer.doAfter(0.02, _keyFlush)
                         end
                     end
                     ms._macroHeldKeys[keyCode] = { mods = mods or {}, hidinject = hidinject }
@@ -740,11 +762,18 @@
                         end
                         ms._keyHoldStarts[keyCode] = nil
                     end
-                    if ms.dev._watcherPanel and not spoon.MsDevTools:getTraceSuppress() then
-                        spoon.MsDevTools:watcherStep("↑ " .. tostring(key) .. durationStr)
-                    end
-                    if ms.dev then
-                        spoon.MsDevTools:macroLog("↑ " .. tostring(key) .. durationStr)
+                    if ms.dev and not spoon.MsDevTools:getTraceSuppress() then
+                        local msg = "↑ " .. tostring(key) .. durationStr
+                        if _keyAccum > 0 and msg == _keyMsg then
+                            _keyAccum = _keyAccum + 1
+                        else
+                            _keyFlush()
+                            _keyAccum = 1
+                            _keyMsg   = msg
+                        end
+                        if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
+                        if _keyFlushTimer then _keyFlushTimer:stop() end
+                        _keyFlushTimer = hs.timer.doAfter(0.02, _keyFlush)
                     end
                     ms._macroHeldKeys[keyCode] = nil
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, false)
@@ -759,13 +788,19 @@
                 ms.type = function(key, mods, hidinject, holdMs)
                     if ms.dev then spoon.MsDevTools:flushAll() end
                     local _hold = holdMs or 15
-                    if ms.dev._watcherPanel then
-                        local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        spoon.MsDevTools:watcherStep("type " .. tostring(key) .. modsStr .. " (" .. _hold .. "ms)")
-                    end
                     if ms.dev then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
-                        spoon.MsDevTools:macroLog("type " .. tostring(key) .. modsStr .. " (" .. _hold .. "ms)")
+                        local msg = "type " .. tostring(key) .. modsStr .. " (" .. _hold .. "ms)"
+                        if _keyAccum > 0 and msg == _keyMsg then
+                            _keyAccum = _keyAccum + 1
+                        else
+                            _keyFlush()
+                            _keyAccum = 1
+                            _keyMsg   = msg
+                        end
+                        if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
+                        if _keyFlushTimer then _keyFlushTimer:stop() end
+                        _keyFlushTimer = hs.timer.doAfter(0.02, _keyFlush)
                     end
                     local _saved = spoon.MsDevTools:getTraceSuppress()
                     spoon.MsDevTools:setTraceSuppress(true)
@@ -1141,15 +1176,16 @@
             -- Expose for app watcher
             ms._updateCamAnchor = _updateCamAnchor
             ms._activateCam = _activateCam
+            ms._resetCamActivated = function() _camActivated = false end
 
             ms.cam = setmetatable({}, {
                 __call = function(_, dx, dy)
                     -- Activate camera on first use
                     if not _camActivated then _activateCam() end
-                    
+
                     dx = math.floor(dx + 0.5)
                     dy = math.floor(dy + 0.5)
-                    
+
                     -- Use current cursor position for relative anchoring
                     local pos = hs.mouse.absolutePosition()
                     local ev  = hs.eventtap.event.newMouseEvent(_camEvType, pos)
@@ -1159,9 +1195,9 @@
                     -- Mark as synthetic event to prevent cursor movement
                     ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
                     ev:post()
-                    
+
                     -- No need to restore cursor - we never moved it
-                    
+
                     if not _camRebalancing then
                         _camTotalX = _camTotalX + dx
                         _camTotalY = _camTotalY + dy
@@ -1179,12 +1215,14 @@
             local _origCamCall = getmetatable(ms.cam).__call
             local _camAccum = 0
             local _camFlushTimer = nil
+            local _camFlushLabel = nil
             local _camFlush = function()
                 if _camAccum > 0 then
-                    if ms.dev and ms.dev.log then
-                        ms.dev.log({ type = "step", category = "macro", msg = "cam.move \195\151" .. _camAccum })
+                    if ms.dev and spoon.MsDevTools then
+                        spoon.MsDevTools:macroLog("cam.move ×" .. _camAccum, _camFlushLabel)
                     end
                     _camAccum = 0
+                    _camFlushLabel = nil
                 end
                 _camFlushTimer = nil
             end
@@ -1196,14 +1234,22 @@
                 if saved ~= nil then spoon.MsDevTools:setTraceSuppress(saved) end
                 -- Accumulate and schedule flush
                 _camAccum = _camAccum + 1
+                if not _camFlushLabel then _camFlushLabel = ms._getCallChain() end
                 if _camFlushTimer then _camFlushTimer:stop() end
                 _camFlushTimer = hs.timer.doAfter(0.02, _camFlush)
             end
 
-            ms.cam.rebalance = function()
+            ms.cam.rebalance = function(granularity)
+                if granularity == nil then
+                    granularity = 4
+                end
                 if _camTotalX == 0 and _camTotalY == 0 then return end
                 _camRebalancing = true
-                ms.cam(-_camTotalX, -_camTotalY)
+                div = 1/granularity
+                for i = 1, granularity do
+                    ms.cam(-_camTotalX * div, -_camTotalY * div)
+                    ms.wait(1)
+                end
                 _camTotalX = 0
                 _camTotalY = 0
                 _camRebalancing = false
@@ -1226,10 +1272,10 @@
                 if co then
                     local ctx = ms._coroContext[co]
                     if ctx and ctx.callStack then
-                        capturedStack = { unpack(ctx.callStack) }
+                        capturedStack = { table.unpack(ctx.callStack) }
                     end
                 elseif ms._capturedStack then
-                    capturedStack = { unpack(ms._capturedStack) }
+                    capturedStack = { table.unpack(ms._capturedStack) }
                 end
                 return hs.timer.doAfter(ms_time / 1000, function()
                     if capturedStack then
@@ -1247,7 +1293,7 @@
                     if ms.dev then spoon.MsDevTools:flushCam() end
 
                     if ms.dev then
-                        spoon.MsDevTools:accWait(tonumber(ms_time) or 0, ms._getLabel())
+                        spoon.MsDevTools:accWait(tonumber(ms_time) or 0, ms._getCallChain())
                     end
                     hs.timer.doAfter(ms_time / 1000, function()
                         if ctx and (ctx.cancelled or ctx.paused) then return end
@@ -1259,6 +1305,8 @@
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
                             if ms.dev then spoon.MsDevTools:stopTrace(co) end
+                            if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
+                            _keyFlush()
                             local flushLabel = ctx and ctx.callStack and ctx.callStack[1]
                             if ms.dev then spoon.MsDevTools:flushAll(flushLabel) end
                         end
@@ -1423,6 +1471,8 @@
                         ms.dev.log({ type = "system", event = "roblox_focus", fromDialog = fromDialog or false })
                         -- Update camera anchor when Roblox gains focus
                         if ms._updateCamAnchor then ms._updateCamAnchor() end
+                        -- Reset cam activation so next ms.cam re-registers with Roblox
+                        if ms._resetCamActivated then ms._resetCamActivated() end
                         -- ms.legacycam._setupWatcher()  -- opt-in
                         if not ms._loadComplete then return end
                         if fromDialog then
@@ -1561,7 +1611,13 @@
                     }
 
                     local coBody = function(...)
+                        if ms.dev and ms.dev.log then
+                            ms.dev.log({ type = "step", category = "macro", msg = "[" .. label .. "] ▶" })
+                        end
                         local xok, xerr = xpcall(fn, debug.traceback, ...)
+                        if ms.dev and ms.dev.log then
+                            ms.dev.log({ type = "step", category = "macro", msg = "[" .. label .. "] ■" })
+                        end
                         if not xok then
                             local tb = tostring(xerr)
                             print("═══ ms.fn error [" .. label .. "] ═══\n" .. tb)
@@ -1586,6 +1642,8 @@
                         if ms.dev then spoon.MsDevTools:stopTrace(co) end
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
+                        if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
+                        _keyFlush()
                         if ms.dev then spoon.MsDevTools:flushAll(ctx and ctx.callStack and ctx.callStack[1]) end
                     end
                 end
@@ -1594,8 +1652,24 @@
             -- Call stack helpers
             ms._capturedStack = nil
 
-            -- Get root label (display label) from call stack or captured stack
+            -- Get current (innermost) label from call stack or captured stack
+            -- Returns nil if not inside a macro context
             ms._getLabel = function()
+                local co = coroutine.running()
+                if co then
+                    local ctx = ms._coroContext[co]
+                    if ctx and ctx.callStack and #ctx.callStack > 0 then
+                        return ctx.callStack[#ctx.callStack]
+                    end
+                end
+                if ms._capturedStack and #ms._capturedStack > 0 then
+                    return ms._capturedStack[#ms._capturedStack]
+                end
+                return nil
+            end
+
+            -- Get root (outermost) label — used for pause/resume identification
+            ms._getRootLabel = function()
                 local co = coroutine.running()
                 if co then
                     local ctx = ms._coroContext[co]
@@ -1606,20 +1680,26 @@
                 if ms._capturedStack and #ms._capturedStack > 0 then
                     return ms._capturedStack[1]
                 end
-                return ms._pendingLabel or "macro"
+                return nil
             end
 
-            -- Get current (innermost) sub-function label from call stack
-            ms._getSubLabel = function()
+            -- Get full call chain as "Root › Innermost" string (cap 2 levels)
+            ms._getCallChain = function()
                 local co = coroutine.running()
+                local stack = nil
                 if co then
                     local ctx = ms._coroContext[co]
-                    if ctx and ctx.callStack and #ctx.callStack > 1 then
-                        return ctx.callStack[#ctx.callStack]
-                    end
+                    stack = ctx and ctx.callStack
                 end
-                if ms._capturedStack and #ms._capturedStack > 1 then
-                    return ms._capturedStack[#ms._capturedStack]
+                if not stack and ms._capturedStack then
+                    stack = ms._capturedStack
+                end
+                if stack and #stack > 0 then
+                    if #stack == 1 then
+                        return stack[1]
+                    else
+                        return stack[1] .. " › " .. stack[#stack]
+                    end
                 end
                 return nil
             end
@@ -1635,14 +1715,14 @@
                         table.insert(ctx.callStack, label)
                         local results = { fn(...) }
                         table.remove(ctx.callStack)
-                        return unpack(results)
+                        return table.unpack(results)
                     end
                     -- Not in coroutine — check captured stack (ms.after callback)
                     if ms._capturedStack then
                         table.insert(ms._capturedStack, label)
                         local results = { fn(...) }
                         table.remove(ms._capturedStack)
-                        return unpack(results)
+                        return table.unpack(results)
                     end
                     return fn(...)
                 end
@@ -1672,6 +1752,8 @@
                         if ms.dev then spoon.MsDevTools:stopTrace(co) end
                         ms._coroContext[co] = nil
                         ms._activeContexts[ctx] = nil
+                        if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
+                        _keyFlush()
                         if ms.dev then spoon.MsDevTools:flushAll(ctx.callStack and ctx.callStack[1]) end
                     end
                 end
@@ -1837,14 +1919,14 @@
                     if fname ~= ms._lastSoundLog then
                         ms._lastSoundLog = fname
                         if ms.dev then
-                            local displayLabel = ms._getLabel()
-                            local subFuncName = ms._getSubLabel()
-
-                            ms.dev.log({
-                                type = "sound",
-                                msg = "[" .. displayLabel .. "] " .. fname .. (subFuncName and " (" .. subFuncName .. ")" or ""),
-                                category = "macro"
-                            })
+                            local displayLabel = ms._getCallChain()
+                            if displayLabel then
+                                ms.dev.log({
+                                    type = "sound",
+                                    msg = "[" .. displayLabel .. "] " .. fname,
+                                    category = "macro"
+                                })
+                            end
                         end
                     end
                 end
@@ -1879,6 +1961,8 @@
                                     if ms.dev then spoon.MsDevTools:stopTrace(co) end
                                     ms._coroContext[co] = nil
                                     if ctx then ms._activeContexts[ctx] = nil end
+                                    if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
+                                    _keyFlush()
                                     if ms.dev then spoon.MsDevTools:flushAll() end
                                 end
                             end
@@ -3248,7 +3332,7 @@
                         key      = "macroLabEnabled",
                         label    = "Enable v2 UI",
                         desc     = "Use the new Macro Lab shell instead of legacy standalone panels",
-                        default  = false,
+                        default  = true,
                         onChange = function(val)
                             ms._macroLabEnabled = (val == true)
                             if not ms._macroLabEnabled then

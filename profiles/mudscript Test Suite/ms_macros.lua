@@ -214,19 +214,22 @@
 
 -- Test Macros --
     -- Helpers --
-        local function stepDelay()
+        local stepDelay = ms.sub("stepDelay", function()
             if ms.settings.get("fastMode") then
+                ms.log("if", "fastMode", true)
                 return 10
             end
+            ms.log("if", "fastMode", false)
             return ms.settings.get("baseDelay") or 50
-        end
+        end)
 
-        local function verbose(msg)
+        local verbose = ms.sub("verbose", function(msg)
             if ms.settings.get("verboseAlerts") then
+                ms.log("if", "verboseAlerts", true)
                 ms.alert(msg, 2, true)
                 print("[mudscript Test Suite] " .. tostring(msg))
             end
-        end
+        end)
     -- END --
 
     -- Hello World --
@@ -283,6 +286,7 @@
                 ms.type("e")
                 ms.wait(d)
             end
+            ms.log("for", "i=1," .. count, count)
 
             ms.scroll("up", 1)
             ms.wait(d)
@@ -331,7 +335,7 @@
         local CameraSweepFn = ms.fn(function()
             local d = stepDelay()
 
-            local function sweepFull()
+            local sweepFull = ms.sub("sweepFull", function()
                 ms.cam.move(0,    -600)
                 ms.wait(d)
                 ms.cam.move(0,     600)
@@ -339,17 +343,19 @@
                 ms.cam.move(-600,  0)
                 ms.wait(d)
                 ms.cam.move( 600,  0)
-            end
+            end)
 
-            local function sweepUp()
+            local sweepUp = ms.sub("sweepUp", function()
                 ms.cam.move(0, -600)
                 ms.wait(d)
                 ms.cam.move(0,  600)
-            end
+            end)
 
             if ms.isSub("sweepUpOnly") then
+                ms.log("if", "isSub(sweepUpOnly)", true)
                 sweepUp()
             else
+                ms.log("if", "isSub(sweepUpOnly)", false)
                 sweepFull()
             end
         end)
@@ -413,7 +419,10 @@
             ms.release("c")
 
             if ms.keystate("shift") then
+                ms.log("if", "keystate(shift)", true)
                 verbose("Shift was held during key hold test.")
+            else
+                ms.log("if", "keystate(shift)", false)
             end
         end), {
             group    = "optional",

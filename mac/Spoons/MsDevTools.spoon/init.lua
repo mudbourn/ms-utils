@@ -101,6 +101,7 @@
     local _camMoveAccum  = 0
     local _waitAccum     = 0
     local _waitDuration  = 0
+    local _waitRounded   = 0
     local _waitLabel     = nil
     local _traceSuppress = false
 
@@ -821,10 +822,18 @@
 -- END Event Hooks --
 
 -- Watcher Helpers --
+    -- Build display label: explicit label, or full call chain from stack
+    local function _buildDisplayLabel(label)
+        if label then return label end
+        if not (ms and ms._getCallChain) then return nil end
+        return ms._getCallChain()
+    end
+
     function MsDevTools:watcherStep(msg, label)
         if not _watcherPanel then return end
 
-        local displayLabel = label or (ms._getLabel and ms._getLabel()) or "macro"
+        local displayLabel = _buildDisplayLabel(label)
+        if not displayLabel then return end
 
         local ok, j = pcall(hs.json.encode, {
             type = "step",
@@ -840,13 +849,13 @@
     end
 
     function MsDevTools:macroLog(msg, label)
-        local displayLabel = label or (ms._getLabel and ms._getLabel()) or "macro"
-        local subFuncName  = ms._getSubLabel and ms._getSubLabel() or nil
+        local displayLabel = _buildDisplayLabel(label)
+        if not displayLabel then return end
 
         self:log({
             type     = "step",
             category = "macro",
-            msg      = "[" .. displayLabel .. "] " .. msg .. (subFuncName and " (" .. subFuncName .. ")" or ""),
+            msg      = "[" .. displayLabel .. "] " .. msg,
         })
     end
 
@@ -892,12 +901,15 @@
 
     function MsDevTools:accWait(duration, label)
         if _traceSuppress then return end
-        if _waitAccum > 0 and duration == _waitDuration then
+        -- Round to nearest ms for comparison (so 0.5 and 1 collapse)
+        local rounded = math.floor(duration + 0.5)
+        if _waitAccum > 0 and rounded == _waitRounded then
             _waitAccum = _waitAccum + 1
         else
             self:flushWait()
             _waitAccum    = 1
             _waitDuration = duration
+            _waitRounded  = rounded
         end
         -- Store the label for use when flushing
         if label then _waitLabel = label end

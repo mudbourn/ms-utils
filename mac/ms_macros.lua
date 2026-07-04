@@ -228,7 +228,7 @@
             return d3
         end
 
-        local JumpHigh = function()
+        local JumpHigh = ms.sub("JumpHigh", function()
             if ms.isSub("jumpHigh") then
                 ms.log("if", "isSub(jumpHigh)", true)
                 ms.sound(JumpHighSound, true)
@@ -238,13 +238,14 @@
                     ms.cam(-3145, 0)
                     ms.wait(.5)
                 end
+                ms.cam.rebalance(8)
                 ms.log("for", "i=1,60", 60)
                 return true
             end
             return false
-        end
+        end)
 
-        local JumpLow = function()
+        local JumpLow = ms.sub("JumpLow", function()
             if ms.isSub("jumpLow") then
                 ms.log("if", "isSub(jumpLow)", true)
                 ms.sound(JumpLowSound, true)
@@ -254,24 +255,26 @@
                     ms.cam(-370 * 0.6, 0)
                     ms.wait(.5)
                 end
+                ms.cam.rebalance(8)
                 ms.log("for", "i=1,14", 14)
                 return true
             end
             return false
-        end
+        end)
 
-        local JumpDefault = function()
+        local JumpDefault = ms.sub("JumpDefault", function()
             ms.sound(JumpNormalSound, true)
             for i = 1, 14 do
-                ms.cam(-185 * 0.6, 0)
+                ms.cam(-185 * 0.75, 0)
                 ms.wait(1)
-                ms.cam(-185 * 0.6, 0)
+                ms.cam(-185 * 0.75, 0)
                 ms.wait(.5)
             end
+            ms.cam.rebalance(4)
             ms.log("for", "i=1,14", 14)
-        end
+        end)
 
-        local MovementChecker = function()
+        local MovementChecker = ms.sub("MovementChecker", function()
             if Running == 0 then
                 Running = 1
                 local function check()
@@ -286,9 +289,9 @@
                 end
                 check()
             end
-        end
+        end)
 
-        local EndMovementChecker = function()
+        local EndMovementChecker = ms.sub("EndMovementChecker", function()
             Running = 0
             if _movementTimer then
                 _movementTimer:stop()
@@ -298,9 +301,9 @@
             if not moving then
                 ms.release("w")
             end
-        end
+        end)
 
-        local ThrowLow = function()
+        local ThrowLow = ms.sub("ThrowLow", function()
             if ms.isSub("throwLow") then
                 ms.log("if", "isSub(throwLow)", true)
                 for i = 1, 15 do
@@ -335,9 +338,9 @@
                 return true
             end
             return false
-        end
+        end)
 
-        local ThrowDefault = function()
+        local ThrowDefault = ms.sub("ThrowDefault", function()
             for i = 1, 60 do
                 ms.cam(-3145, 0)
                 ms.wait(2)
@@ -367,7 +370,7 @@
             ms.scroll("down", 2000)
             ms.sound(ThrowTrickEndSound, true)
             ms.wait(3000)
-        end
+        end)
 
     -- END Helper Variables & Functions --
 
@@ -398,7 +401,6 @@
                 else
                     ms.log("if", "jumpHigh", true)
                 end
-                ms.cam.rebalance()
 
                 ms.release("space")
                 ms.wait(100)

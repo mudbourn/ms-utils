@@ -979,7 +979,7 @@
                 soundVolume      = 100,
                 soundAssign      = {},
                 macros           = {},
-                macroLabEnabled  = false,
+                macroLabEnabled  = true,
                 shell            = {
                     x = nil, y = nil, w = 900, h = 600,
                     lastPanel = "macros", visible = false,
