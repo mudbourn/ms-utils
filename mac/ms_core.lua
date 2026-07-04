@@ -1220,7 +1220,24 @@
 
         -- 5. Timing --
             ms.after = function(ms_time, fn)
-                return hs.timer.doAfter(ms_time / 1000, fn)
+                -- Capture call stack for context propagation into async callbacks
+                local capturedStack = nil
+                local co = coroutine.running()
+                if co then
+                    local ctx = ms._coroContext[co]
+                    if ctx and ctx.callStack then
+                        capturedStack = { unpack(ctx.callStack) }
+                    end
+                elseif ms._capturedStack then
+                    capturedStack = { unpack(ms._capturedStack) }
+                end
+                return hs.timer.doAfter(ms_time / 1000, function()
+                    if capturedStack then
+                        ms._capturedStack = capturedStack
+                    end
+                    fn()
+                    ms._capturedStack = nil
+                end)
             end
 
             ms.wait = function(ms_time)
@@ -1230,12 +1247,7 @@
                     if ms.dev then spoon.MsDevTools:flushCam() end
 
                     if ms.dev then
-                        -- Capture display label before yielding
-                        local waitLabel = nil
-                        if ctx then
-                            waitLabel = ctx.parentLabel or ctx.label
-                        end
-                        spoon.MsDevTools:accWait(tonumber(ms_time) or 0, waitLabel)
+                        spoon.MsDevTools:accWait(tonumber(ms_time) or 0, ms._getLabel())
                     end
                     hs.timer.doAfter(ms_time / 1000, function()
                         if ctx and (ctx.cancelled or ctx.paused) then return end
@@ -1247,8 +1259,7 @@
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
                             if ms.dev then spoon.MsDevTools:stopTrace(co) end
-                            -- Flush with the display label (parentLabel takes priority)
-                            local flushLabel = ctx and (ctx.parentLabel or ctx.label)
+                            local flushLabel = ctx and ctx.callStack and ctx.callStack[1]
                             if ms.dev then spoon.MsDevTools:flushAll(flushLabel) end
                         end
                     end)
@@ -1544,9 +1555,9 @@
                     a.timer = hs.timer.doAfter(0.05, _fnFlush)
 
                     local ctx = {
-                        cancelled = false,
-                        paused    = false,
-                        label     = label,
+                        cancelled  = false,
+                        paused     = false,
+                        callStack  = { label },
                     }
 
                     local coBody = function(...)
@@ -1575,43 +1586,65 @@
                         if ms.dev then spoon.MsDevTools:stopTrace(co) end
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
-                        if ms.dev then spoon.MsDevTools:flushAll(ctx and ctx.label) end
+                        if ms.dev then spoon.MsDevTools:flushAll(ctx and ctx.callStack and ctx.callStack[1]) end
                     end
                 end
             end
 
-            -- ms.logged: lightweight function wrapper with logging (no coroutine)
-            -- Use for helper functions that don't need coroutine/yield support
-            ms.logged = function(label, fn)
-                assert(type(fn) == "function", "ms.logged: fn must be a function")
-                return function(...)
-                    -- Accumulate consecutive calls
-                    local a = ms._fnAccum
-                    if a.lastLabel == label then
-                        a.count = a.count + 1
-                    else
-                        _fnFlush()
-                        a.lastLabel = label
-                        a.count = 1
-                        a.startTime = hs.timer.absoluteTime()
-                    end
-                    if a.timer then a.timer:stop() end
-                    a.timer = hs.timer.doAfter(0.05, _fnFlush)
+            -- Call stack helpers
+            ms._capturedStack = nil
 
-                    -- Swap coroutine context label so nested actions log under this function's name
+            -- Get root label (display label) from call stack or captured stack
+            ms._getLabel = function()
+                local co = coroutine.running()
+                if co then
+                    local ctx = ms._coroContext[co]
+                    if ctx and ctx.callStack and #ctx.callStack > 0 then
+                        return ctx.callStack[1]
+                    end
+                end
+                if ms._capturedStack and #ms._capturedStack > 0 then
+                    return ms._capturedStack[1]
+                end
+                return ms._pendingLabel or "macro"
+            end
+
+            -- Get current (innermost) sub-function label from call stack
+            ms._getSubLabel = function()
+                local co = coroutine.running()
+                if co then
+                    local ctx = ms._coroContext[co]
+                    if ctx and ctx.callStack and #ctx.callStack > 1 then
+                        return ctx.callStack[#ctx.callStack]
+                    end
+                end
+                if ms._capturedStack and #ms._capturedStack > 1 then
+                    return ms._capturedStack[#ms._capturedStack]
+                end
+                return nil
+            end
+
+            -- ms.sub: register a sub-function with automatic call stack tracking
+            ms.sub = function(label, fn)
+                assert(type(fn) == "function", "ms.sub: fn must be a function")
+                return function(...)
                     local co = coroutine.running()
                     local ctx = co and ms._coroContext[co]
-                    local prevLabel = ctx and ctx.label
-                    if ctx then 
-                        ctx.parentLabel = ctx.parentLabel or prevLabel  -- Track parent label
-                        ctx.label = label 
+                    if ctx then
+                        if not ctx.callStack then ctx.callStack = {} end
+                        table.insert(ctx.callStack, label)
+                        local results = { fn(...) }
+                        table.remove(ctx.callStack)
+                        return unpack(results)
                     end
-                    local results = { fn(...) }
-                    if ctx then 
-                        ctx.label = prevLabel  -- Restore previous label
-                        ctx.parentLabel = nil  -- Clear parent label when exiting sub-function
+                    -- Not in coroutine — check captured stack (ms.after callback)
+                    if ms._capturedStack then
+                        table.insert(ms._capturedStack, label)
+                        local results = { fn(...) }
+                        table.remove(ms._capturedStack)
+                        return unpack(results)
                     end
-                    return unpack(results)
+                    return fn(...)
                 end
             end
 
@@ -1621,7 +1654,7 @@
                     return
                 end
                 for _, ctx in pairs(ms._activeContexts) do
-                    if ctx.label == id then ctx.paused = true; return end
+                    if ctx.callStack and ctx.callStack[1] == id then ctx.paused = true; return end
                 end
             end
 
@@ -1633,13 +1666,13 @@
                     if coroutine.status(co) ~= "suspended" then return end
                     local ok, err = coroutine.resume(co)
                     if not ok then
-                        print("═══ ms.resume error [" .. (ctx.label or "?") .. "] ═══\n" .. tostring(err))
+                        print("═══ ms.resume error [" .. (ctx.callStack and ctx.callStack[1] or "?") .. "] ═══\n" .. tostring(err))
                     end
                     if coroutine.status(co) == "dead" then
                         if ms.dev then spoon.MsDevTools:stopTrace(co) end
                         ms._coroContext[co] = nil
                         ms._activeContexts[ctx] = nil
-                        if ms.dev then spoon.MsDevTools:flushAll() end
+                        if ms.dev then spoon.MsDevTools:flushAll(ctx.callStack and ctx.callStack[1]) end
                     end
                 end
                 if not id then
@@ -1647,7 +1680,7 @@
                     return
                 end
                 for co, ctx in pairs(ms._coroContext) do
-                    if ctx.label == id then _resume(co); return end
+                    if ctx.callStack and ctx.callStack[1] == id then _resume(co); return end
                 end
             end
 
@@ -1804,22 +1837,13 @@
                     if fname ~= ms._lastSoundLog then
                         ms._lastSoundLog = fname
                         if ms.dev then
-                            -- Get label from coroutine context
-                            local co = coroutine.running()
-                            local ctx = co and ms._coroContext[co]
-                            local currentLabel = (ctx and ctx.label) or ms._pendingLabel or "macro"
-                            local displayLabel = currentLabel
-                            local subFuncName = nil
-                            
-                            if ctx and ctx.parentLabel then
-                                displayLabel = ctx.parentLabel
-                                subFuncName = currentLabel
-                            end
-                            
-                            ms.dev.log({ 
-                                type = "sound", 
+                            local displayLabel = ms._getLabel()
+                            local subFuncName = ms._getSubLabel()
+
+                            ms.dev.log({
+                                type = "sound",
                                 msg = "[" .. displayLabel .. "] " .. fname .. (subFuncName and " (" .. subFuncName .. ")" or ""),
-                                category = "macro" 
+                                category = "macro"
                             })
                         end
                     end
@@ -4078,7 +4102,7 @@
                     error     = error,
                     assert    = assert,
                     print     = print,
-                    logged    = ms.logged,  -- lightweight function wrapper with logging
+                    sub       = ms.sub,       -- sub-function wrapper with call stack tracking
                     Move        = Move,        Click       = Click,       DoubleClick  = DoubleClick,
                     TripleClick = TripleClick, Drag        = Drag,        Press        = Press,
                     Release     = Release,
@@ -4114,8 +4138,8 @@
 
                 ms._macroSandbox = sandbox
 
-                -- Preprocessor: wrap local function definitions with logged() for instrumentation
-                -- Transforms: local X = function(...) → local X = logged("X", function(...)
+                -- Preprocessor: wrap local function definitions with sub() for instrumentation
+                -- Transforms: local X = function(...) → local X = sub("X", function(...)
                 -- Finds matching end and adds closing )
                 ms._wrapMacroFunctions = function(src)
                     -- Split source into lines
@@ -4131,7 +4155,7 @@
                         -- Match: local NAME = function(
                         local indent, name, rest = line:match("^(%s*)local%s+(%w+)%s*=%s*(function%s*%(.*)$")
                         if name and rest then
-                            out[#out + 1] = indent .. 'local ' .. name .. ' = logged("' .. name .. '", ' .. rest
+                            out[#out + 1] = indent .. 'local ' .. name .. ' = sub("' .. name .. '", ' .. rest
                             -- Track depth to find matching end
                             local depth = 1
                             i = i + 1
@@ -4345,11 +4369,6 @@
                     -- Inject theme and state
                     local themeJson = hs.json.encode(ms._theme or {})
                     _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
-                    -- Set macro name
-                    if ms.macroMeta and ms.macroMeta.name then
-                        _lWebView:evaluateJavaScript("setMacroName(" ..
-                            '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
-                    end
                     -- Replay buffered messages
                     for _, entry in ipairs(_lMsgBuffer) do
                         local encoded = entry.msg and ('"' .. entry.msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
@@ -4358,6 +4377,11 @@
                     _lMsgBuffer = {}
                     -- Fade in
                     _lWebView:show()
+                    -- Set macro name (after show, webview is now accepting JS)
+                    if ms.macroMeta and ms.macroMeta.name then
+                        _lWebView:evaluateJavaScript("setMacroName(" ..
+                            '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
+                    end
                     pcall(function() ms.sound(SoundDefaultsDir .. "d_Reset.wav") end)
                     local step, steps = 0, 6
                     _G._loadTimers.fadeIn = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()

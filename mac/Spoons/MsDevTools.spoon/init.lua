@@ -824,12 +824,7 @@
     function MsDevTools:watcherStep(msg, label)
         if not _watcherPanel then return end
 
-        local co  = coroutine.running()
-        local ctx = co and ms._coroContext[co]
-
-        if ctx and ctx.cancelled then return end
-
-        local displayLabel = label or (ctx and (ctx.parentLabel or ctx.label)) or "macro"
+        local displayLabel = label or (ms._getLabel and ms._getLabel()) or "macro"
 
         local ok, j = pcall(hs.json.encode, {
             type = "step",
@@ -845,23 +840,8 @@
     end
 
     function MsDevTools:macroLog(msg, label)
-        local co  = coroutine.running()
-        local ctx = co and ms._coroContext[co]
-
-        if ctx and ctx.cancelled then return end
-
-        -- Use provided label, or get from context
-        local currentLabel = label or (ctx and ctx.label) or ms._pendingLabel or "macro"
-        
-        -- Determine display label: use parent label if available, otherwise current
-        local displayLabel = currentLabel
-        local subFuncName = nil
-        
-        if ctx and ctx.parentLabel then
-            -- We're in a sub-function: show parent label, append sub-function name
-            displayLabel = ctx.parentLabel
-            subFuncName = currentLabel  -- The current label is the sub-function name
-        end
+        local displayLabel = label or (ms._getLabel and ms._getLabel()) or "macro"
+        local subFuncName  = ms._getSubLabel and ms._getSubLabel() or nil
 
         self:log({
             type     = "step",
