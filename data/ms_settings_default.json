@@ -1,7 +1,6 @@
 {
   "customThemeDisabled" : false,
   "socdMode" : "lastWins",
-  "skipDevPrewarm" : false,
   "socdEnabled" : false,
   "trackpadMode" : false,
   "soundEnabled" : true,

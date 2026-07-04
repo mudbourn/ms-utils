@@ -100,6 +100,9 @@
 
     local _camMoveAccum  = 0
     local _waitAccum     = 0
+    local _waitDuration  = 0
+    local _waitLabel     = nil
+    local _traceSuppress = false
 
     -- Shell-mode helper: returns true when the shell is the active display
     -- (standalone panels are nil, but shell panels are inline and ready)
@@ -107,8 +110,6 @@
         local m = _G.ms
         return m and m.shell and m.shell.isReady and m.shell.isReady() or false
     end
-    local _waitDuration  = 0
-    local _traceSuppress = false
     local _branchState   = {}
 
     local _devFadeTimers = {}
@@ -249,6 +250,44 @@
                 type = "print",
                 msg  = table.concat(parts, "\t"),
             })
+        end
+
+        -- History loader (must be before bus handlers)
+        local _HIST_MAX = 500
+        local function _loadDevHistory(panel, categories, shellPanelId)
+            local entries = {}
+            for _, cat in ipairs(categories) do
+                local path = _catPaths[cat]
+                if path then
+                    local f = io.open(path, "r")
+                    if f then
+                        for line in f:lines() do
+                            local ok, entry = pcall(hs.json.decode, line)
+                            if ok and entry then
+                                entries[#entries + 1] = entry
+                            end
+                        end
+                        f:close()
+                    end
+                end
+            end
+            if #entries == 0 then return end
+            table.sort(entries, function(a, b)
+                return (a.ts or "") < (b.ts or "")
+            end)
+            while #entries > _HIST_MAX do
+                table.remove(entries, 1)
+            end
+            local ok, json = pcall(hs.json.encode, entries)
+            if ok then
+                if shellPanelId then
+                    _pushToPanel(nil, shellPanelId, "loadHistory(" .. json .. ")")
+                elseif panel then
+                    pcall(function()
+                        panel:evaluateJavaScript("loadHistory(" .. json .. ")")
+                    end)
+                end
+            end
         end
 
         -- Shell bus subscribers: handle messages from dev tool panels in shell
@@ -782,7 +821,7 @@
 -- END Event Hooks --
 
 -- Watcher Helpers --
-    function MsDevTools:watcherStep(msg)
+    function MsDevTools:watcherStep(msg, label)
         if not _watcherPanel then return end
 
         local co  = coroutine.running()
@@ -790,12 +829,12 @@
 
         if ctx and ctx.cancelled then return end
 
-        local label = (ctx and ctx.label) or "macro"
+        local displayLabel = label or (ctx and (ctx.parentLabel or ctx.label)) or "macro"
 
         local ok, j = pcall(hs.json.encode, {
             type = "step",
             ts   = os.date("%H:%M:%S"),
-            msg  = "[" .. label .. "] " .. msg,
+            msg  = "[" .. displayLabel .. "] " .. msg,
         })
 
         if ok then
@@ -805,60 +844,73 @@
         end
     end
 
-    function MsDevTools:macroLog(msg)
+    function MsDevTools:macroLog(msg, label)
         local co  = coroutine.running()
         local ctx = co and ms._coroContext[co]
 
         if ctx and ctx.cancelled then return end
 
-        local label = (ctx and ctx.label) or ms._pendingLabel or "macro"
+        -- Use provided label, or get from context
+        local currentLabel = label or (ctx and ctx.label) or ms._pendingLabel or "macro"
+        
+        -- Determine display label: use parent label if available, otherwise current
+        local displayLabel = currentLabel
+        local subFuncName = nil
+        
+        if ctx and ctx.parentLabel then
+            -- We're in a sub-function: show parent label, append sub-function name
+            displayLabel = ctx.parentLabel
+            subFuncName = currentLabel  -- The current label is the sub-function name
+        end
 
         self:log({
             type     = "step",
             category = "macro",
-            msg      = "[" .. label .. "] " .. msg,
+            msg      = "[" .. displayLabel .. "] " .. msg .. (subFuncName and " (" .. subFuncName .. ")" or ""),
         })
     end
 
-    function MsDevTools:flushCam()
+    function MsDevTools:flushCam(label)
         if _camMoveAccum > 1 then
             if _watcherPanel then
-                self:watcherStep("cam.move \195\151" .. _camMoveAccum)
+                self:watcherStep("cam.move ×" .. _camMoveAccum, label)
             end
 
-            self:macroLog("cam.move \195\151" .. _camMoveAccum)
+            self:macroLog("cam.move ×" .. _camMoveAccum, label)
         end
 
         _camMoveAccum = 0
     end
 
-    function MsDevTools:flushWait()
+    function MsDevTools:flushWait(label)
         if _waitAccum > 0 then
+            local effectiveLabel = label or _waitLabel
             local msg = "wait " .. _waitDuration .. "ms"
 
             if _waitAccum > 1 then
-                msg = msg .. " \195\151" .. _waitAccum
+                msg = msg .. " ×" .. _waitAccum
             end
 
             if _watcherPanel then
-                self:watcherStep(msg)
+                self:watcherStep(msg, effectiveLabel)
             end
 
-            self:macroLog(msg)
+            self:macroLog(msg, effectiveLabel)
             _waitAccum = 0
+            _waitLabel = nil
         end
     end
 
-    function MsDevTools:flushAll()
-        self:flushCam()
-        self:flushWait()
+    function MsDevTools:flushAll(label)
+        self:flushCam(label)
+        self:flushWait(label)
     end
 
     function MsDevTools:accCamMove()
         _camMoveAccum = _camMoveAccum + 1
     end
 
-    function MsDevTools:accWait(duration)
+    function MsDevTools:accWait(duration, label)
         if _traceSuppress then return end
         if _waitAccum > 0 and duration == _waitDuration then
             _waitAccum = _waitAccum + 1
@@ -867,6 +919,8 @@
             _waitAccum    = 1
             _waitDuration = duration
         end
+        -- Store the label for use when flushing
+        if label then _waitLabel = label end
     end
 
     function MsDevTools:setTraceSuppress(val)
@@ -943,53 +997,6 @@
 -- END Branch Tracing --
 
 -- Panel Helpers --
-    local _HIST_MAX = 500
-
-    local function _loadDevHistory(panel, categories, shellPanelId)
-        local entries = {}
-
-        for _, cat in ipairs(categories) do
-            local path = _catPaths[cat]
-
-            if path then
-                local f = io.open(path, "r")
-
-                if f then
-                    for line in f:lines() do
-                        local ok, entry = pcall(hs.json.decode, line)
-
-                        if ok and entry then
-                            entries[#entries + 1] = entry
-                        end
-                    end
-
-                    f:close()
-                end
-            end
-        end
-
-        if #entries == 0 then return end
-
-        table.sort(entries, function(a, b)
-            return (a.ts or "") < (b.ts or "")
-        end)
-
-        while #entries > _HIST_MAX do
-            table.remove(entries, 1)
-        end
-
-        local ok, json = pcall(hs.json.encode, entries)
-
-        if ok then
-            if shellPanelId then
-                _pushToPanel(nil, shellPanelId, "loadHistory(" .. json .. ")")
-            elseif panel then
-                pcall(function()
-                    panel:evaluateJavaScript("loadHistory(" .. json .. ")")
-                end)
-            end
-        end
-    end
 
     local function _devThemeJS()
         local t = ms._theme or {}

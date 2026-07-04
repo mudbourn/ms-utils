@@ -2734,7 +2734,8 @@ function createLogPanel(config) {
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("window", function(action, body) {
-                        if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
+                        if (action === "appendEntry" && body) lp.appendEntry(body);
+                        else if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
                         else if (action === "loadHistory" && body) loadHistory(body);
                     });
                 }
@@ -4606,32 +4607,6 @@ function createLogPanel(config) {
                 );
 
                 body.appendChild(divider());
-
-                // Preload dev tools on startup toggle
-                const preload = S.preloadDevTools !== false;
-                body.appendChild(
-                    row(
-                        "Preload dev tools",
-                        "Build panels at startup for instant opens",
-                        h(
-                            "button",
-                            {
-                                cls:
-                                    "btn-macro " +
-                                    (preload ? "btn-enable" : "btn-disable"),
-                                onmouseenter: () => playSlot("hover"),
-                                onclick: () => {
-                                    playSlot("interact");
-                                    sendToHost({
-                                        action: "setPreloadDevTools",
-                                        value: !preload,
-                                    });
-                                },
-                            },
-                            preload ? "ON" : "OFF",
-                        ),
-                    ),
-                );
 
                 // Roblox cache cleaner toggle
                 const cacheCleaner = S.cacheCleanerEnabled === true;

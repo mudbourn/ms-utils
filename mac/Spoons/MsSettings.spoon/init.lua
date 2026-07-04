@@ -170,7 +170,6 @@
                 if data.qrOptions.settings ~= nil then qr.settings = (data.qrOptions.settings == true) end
                 if data.qrOptions.ui       ~= nil then qr.ui       = (data.qrOptions.ui       == true) end
             end
-            if data.skipDevPrewarm ~= nil then ms._skipDevPrewarm = (data.skipDevPrewarm == true) end
             if data.customThemeDisabled ~= nil then ms._customThemeDisabled = (data.customThemeDisabled == true) end
             if data.devArchiveLimit ~= nil then
                 local n = tonumber(data.devArchiveLimit)
@@ -329,7 +328,6 @@
                 soundVolume      = ms.soundVolume,
                 soundAssign      = ms.soundAssign,
                 importedSounds   = ms.importedSounds or {},
-                skipDevPrewarm   = ms._skipDevPrewarm or false,
                 customThemeDisabled = ms._customThemeDisabled or false,
                 devArchiveLimit  = ms._devArchiveLimit or 15,
                 updateChannel    = ms._updateChannel or "stable",

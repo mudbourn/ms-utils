@@ -341,7 +341,6 @@
                 userSoundSlots          = userSoundSlots,
                 userMenus               = userMenus,
                 hiddenFeatures          = ms._hiddenFeatures,
-                preloadDevTools         = not (ms._skipDevPrewarm or false),
                 customThemeEnabled      = not (ms._customThemeDisabled or false),
                 devArchiveLimit         = ms._devArchiveLimit or 15,
                 updateChannel           = ms._updateChannel or "stable",
@@ -598,13 +597,6 @@
                     ms.saveSettings()
                     ms.playSlot("interact")
                 end
-            end,
-
-            setPreloadDevTools = function(data)
-                ms._skipDevPrewarm = not (data.value and true or false)
-                ms.saveSettings()
-                ms.playSlot("update")
-                ms.ui.refresh()
             end,
 
             setCustomTheme = function(data)

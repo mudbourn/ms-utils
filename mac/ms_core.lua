@@ -1108,24 +1108,73 @@
             local _camTotalX  = 0
             local _camTotalY  = 0
             local _camRebalancing = false
+            local _camAnchor  = nil  -- Window center anchor for stable camera control
+            local _camActivated = false  -- Track if camera has been activated
+
+            -- Update anchor to window center (prevents shiftlock drift)
+            local function _updateCamAnchor()
+                local win = ms.getTargetWin()
+                if win then
+                    local f = win:frame()
+                    _camAnchor = { x = f.x + (f.w / 2), y = f.y + (f.h / 2) }
+                end
+            end
+
+            -- Activate camera control (post mouse down/up to register with Roblox)
+            local function _activateCam()
+                if _camActivated then return end
+                -- Use current cursor position, not anchor
+                local pos = hs.mouse.absolutePosition()
+                local downEv = hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.otherMouseDown, pos)
+                local upEv = hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.otherMouseUp, pos)
+                downEv:setProperty(_camBtn, 5)
+                upEv:setProperty(_camBtn, 5)
+                -- Mark as synthetic events
+                downEv:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                upEv:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                downEv:post()
+                hs.timer.usleep(10000)  -- 10ms delay
+                upEv:post()
+                _camActivated = true
+            end
+
+            -- Expose for app watcher
+            ms._updateCamAnchor = _updateCamAnchor
+            ms._activateCam = _activateCam
 
             ms.cam = setmetatable({}, {
                 __call = function(_, dx, dy)
+                    -- Activate camera on first use
+                    if not _camActivated then _activateCam() end
+                    
                     dx = math.floor(dx + 0.5)
                     dy = math.floor(dy + 0.5)
+                    
+                    -- Use current cursor position for relative anchoring
                     local pos = hs.mouse.absolutePosition()
                     local ev  = hs.eventtap.event.newMouseEvent(_camEvType, pos)
                     ev:setProperty(_camBtn, 5)
                     ev:setProperty(_camDx, dx)
                     ev:setProperty(_camDy, dy)
-                    local app = ms._targetHandle or hs.application.get(ms._targetApp)
-                    if app then ev:post(app) else ev:post() end
+                    -- Mark as synthetic event to prevent cursor movement
+                    ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    ev:post()
+                    
+                    -- No need to restore cursor - we never moved it
+                    
                     if not _camRebalancing then
                         _camTotalX = _camTotalX + dx
                         _camTotalY = _camTotalY + dy
                     end
                 end,
             })
+
+            -- Update anchor when Roblox gains focus
+            ms.bus.on("ui:_shell:navigate", function(data)
+                if data and data.panel then
+                    _updateCamAnchor()
+                end
+            end)
             -- Suppress wait logging inside ms.cam calls (cam loops are noisy)
             local _origCamCall = getmetatable(ms.cam).__call
             local _camAccum = 0
@@ -1181,7 +1230,12 @@
                     if ms.dev then spoon.MsDevTools:flushCam() end
 
                     if ms.dev then
-                        spoon.MsDevTools:accWait(tonumber(ms_time) or 0)
+                        -- Capture display label before yielding
+                        local waitLabel = nil
+                        if ctx then
+                            waitLabel = ctx.parentLabel or ctx.label
+                        end
+                        spoon.MsDevTools:accWait(tonumber(ms_time) or 0, waitLabel)
                     end
                     hs.timer.doAfter(ms_time / 1000, function()
                         if ctx and (ctx.cancelled or ctx.paused) then return end
@@ -1193,7 +1247,9 @@
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
                             if ms.dev then spoon.MsDevTools:stopTrace(co) end
-                            if ms.dev then spoon.MsDevTools:flushAll() end
+                            -- Flush with the display label (parentLabel takes priority)
+                            local flushLabel = ctx and (ctx.parentLabel or ctx.label)
+                            if ms.dev then spoon.MsDevTools:flushAll(flushLabel) end
                         end
                     end)
                     if ms._branchTrace then spoon.MsDevTools:flushTraceBuffer(co) end
@@ -1328,6 +1384,8 @@
                 if state == 1 and BindValidity ~= 1 then
                     BindValidity = 1
                     pcall(function() end)  -- ms.legacycam.enable() opt-in
+                    -- Update camera anchor when macros are enabled
+                    if ms._updateCamAnchor then ms._updateCamAnchor() end
                     ms.dev.log({ type = "system", event = "macros_enabled" })
                     if not silent then _doNotify(1) end
                 elseif state == 0 and BindValidity ~= 0 then
@@ -1352,6 +1410,8 @@
                         ms._inputOpen = false
                         ms._robloxActive = true
                         ms.dev.log({ type = "system", event = "roblox_focus", fromDialog = fromDialog or false })
+                        -- Update camera anchor when Roblox gains focus
+                        if ms._updateCamAnchor then ms._updateCamAnchor() end
                         -- ms.legacycam._setupWatcher()  -- opt-in
                         if not ms._loadComplete then return end
                         if fromDialog then
@@ -1365,6 +1425,8 @@
                         ms._inputOpen    = (appName == "Hammerspoon") and ms._robloxActive
                         ms._robloxActive = false
                         ms.dev.log({ type = "system", event = "roblox_blur", to = appName })
+                        -- Reset camera activation state when Roblox loses focus
+                        if ms._camActivated ~= nil then ms._camActivated = false end
                         if BindValidity == 1 then
                             ms.setMacros(0, ms._inputOpen)
                         end
@@ -1513,7 +1575,7 @@
                         if ms.dev then spoon.MsDevTools:stopTrace(co) end
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
-                        if ms.dev then spoon.MsDevTools:flushAll() end
+                        if ms.dev then spoon.MsDevTools:flushAll(ctx and ctx.label) end
                     end
                 end
             end
@@ -1540,9 +1602,15 @@
                     local co = coroutine.running()
                     local ctx = co and ms._coroContext[co]
                     local prevLabel = ctx and ctx.label
-                    if ctx then ctx.label = label end
+                    if ctx then 
+                        ctx.parentLabel = ctx.parentLabel or prevLabel  -- Track parent label
+                        ctx.label = label 
+                    end
                     local results = { fn(...) }
-                    if ctx then ctx.label = prevLabel end
+                    if ctx then 
+                        ctx.label = prevLabel  -- Restore previous label
+                        ctx.parentLabel = nil  -- Clear parent label when exiting sub-function
+                    end
                     return unpack(results)
                 end
             end
@@ -1736,7 +1804,23 @@
                     if fname ~= ms._lastSoundLog then
                         ms._lastSoundLog = fname
                         if ms.dev then
-                            ms.dev.log({ type = "sound", msg = fname, category = "macro" })
+                            -- Get label from coroutine context
+                            local co = coroutine.running()
+                            local ctx = co and ms._coroContext[co]
+                            local currentLabel = (ctx and ctx.label) or ms._pendingLabel or "macro"
+                            local displayLabel = currentLabel
+                            local subFuncName = nil
+                            
+                            if ctx and ctx.parentLabel then
+                                displayLabel = ctx.parentLabel
+                                subFuncName = currentLabel
+                            end
+                            
+                            ms.dev.log({ 
+                                type = "sound", 
+                                msg = "[" .. displayLabel .. "] " .. fname .. (subFuncName and " (" .. subFuncName .. ")" or ""),
+                                category = "macro" 
+                            })
                         end
                     end
                 end
@@ -4157,7 +4241,6 @@
                 ms.binds[id] = def.enabled
             end
         end
-        ms._skipDevPrewarm   = false  -- overridden by loadSettings() if previously saved
         ms._devArchiveLimit   = 15     -- overridden by loadSettings() if previously saved
         ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
         ms.loadSettings()            -- load first so importedSounds/soundAssign are available
@@ -4228,14 +4311,6 @@
                 _ucLoad:setCallback(function(message)
                     local ok, data = pcall(hs.json.decode, message.body)
                     if not ok or type(data) ~= "table" then return end
-                    if data.action == "toggleSkipPreload" then
-                        ms._skipDevPrewarm = not ms._skipDevPrewarm
-                        pcall(function() ms.saveSettings() end)
-                        if ms._skipDevPrewarm and not _lFadingOut then
-                            _lUpdate(100, "Developer tools skipped.")
-                            hs.timer.doAfter(0.8, _lFadeOut)
-                        end
-                    end
                 end)
 
                 local htmlPath = hs.configdir .. "/ui/ms_loading.html"
@@ -4270,8 +4345,6 @@
                     -- Inject theme and state
                     local themeJson = hs.json.encode(ms._theme or {})
                     _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
-                    _lWebView:evaluateJavaScript(
-                        "setSkipPreloadState(" .. (ms._skipDevPrewarm and "true" or "false") .. ")")
                     -- Replay buffered messages
                     for _, entry in ipairs(_lMsgBuffer) do
                         local encoded = entry.msg and ('"' .. entry.msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
@@ -4293,6 +4366,17 @@
 
         -- Loading Screen — Fade, Announce & Timers --
             _lUpdate(20, "Initializing\u{2026}")
+
+            -- Set macro name on loading screen
+            hs.timer.doAfter(0.2, function()
+                if ms.macroMeta and ms.macroMeta.name and _lWebView then
+                    print("[loading] Setting macro name: " .. ms.macroMeta.name)
+                    _lWebView:evaluateJavaScript("setMacroName(" ..
+                        '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
+                else
+                    print("[loading] macroMeta not available or webview not ready")
+                end
+            end)
 
             _lFadeOut = function()
                 if not _lWebView or _lFadingOut then return end
@@ -4361,18 +4445,17 @@
             end
 
             _G._timers = {}
-            -- Timing: when dev tools are skipped, compress the chain
-            local _skip = ms._skipDevPrewarm
-            local t1 = _skip and 0.2 or 0.3
-            local t2 = _skip and 0.3 or 0.5
-            local t3 = _skip and 0.5 or 0.8
-            local t4 = _skip and 0.7 or 1.3
-            local t5 = _skip and 1.0 or 2.0
-            local t6 = _skip and 1.0 or 2.6   -- same as t5 when skipped
-            local t7 = _skip and 1.0 or 3.2
-            local t8 = _skip and 1.0 or 3.8
-            local t9 = _skip and 1.2 or 4.2
-            local t10 = _skip and 1.5 or 4.6
+            -- Timing for loading sequence
+            local t1 = 0.3
+            local t2 = 0.5
+            local t3 = 0.8
+            local t4 = 1.3
+            local t5 = 2.0
+            local t6 = 2.6
+            local t7 = 3.2
+            local t8 = 3.8
+            local t9 = 4.2
+            local t10 = 4.6
             _G._timers[1] = hs.timer.doAfter(0, function()
                 print("[startup] t=0: prebuild")
                 pcall(function() ms.ui.prebuild() end)
@@ -4405,34 +4488,30 @@
             end)
             _G._timers[6] = hs.timer.doAfter(t5, function()
                 print("[startup] t=" .. t5 .. ": console")
-                if ms._skipDevPrewarm then return end
                 _lUpdate(62, "Loading console\u{2026}")
                 _G._timers[60] = hs.timer.doAfter(0, function()
-                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("console") end) end
+                    pcall(function() ms.dev.prewarmStep("console") end)
                 end)
             end)
             _G._timers[7] = hs.timer.doAfter(t6, function()
                 print("[startup] t=" .. t6 .. ": watcher")
-                if ms._skipDevPrewarm then return end
                 _lUpdate(72, "Loading macro monitor\u{2026}")
                 _G._timers[70] = hs.timer.doAfter(0, function()
-                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("watcher") end) end
+                    pcall(function() ms.dev.prewarmStep("watcher") end)
                 end)
             end)
             _G._timers[8] = hs.timer.doAfter(t7, function()
                 print("[startup] t=" .. t7 .. ": keys")
-                if ms._skipDevPrewarm then return end
                 _lUpdate(82, "Loading input monitor\u{2026}")
                 _G._timers[80] = hs.timer.doAfter(0, function()
-                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("keys") end) end
+                    pcall(function() ms.dev.prewarmStep("keys") end)
                 end)
             end)
             _G._timers[9] = hs.timer.doAfter(t8, function()
                 print("[startup] t=" .. t8 .. ": window")
-                if ms._skipDevPrewarm then return end
                 _lUpdate(90, "Loading window monitor\u{2026}")
                 _G._timers[90] = hs.timer.doAfter(0, function()
-                    if not ms._skipDevPrewarm then pcall(function() ms.dev.prewarmStep("window") end) end
+                    pcall(function() ms.dev.prewarmStep("window") end)
                 end)
             end)
             _G._timers[10] = hs.timer.doAfter(t9, function()
