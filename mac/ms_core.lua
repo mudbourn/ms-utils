@@ -404,9 +404,9 @@
             end
             notice = 0
             loadfinish = 0
-            REF_W = 1680
-            REF_H = 1044
-            REF_SENS = 1.5
+            REF_W = REF_W or 1680
+            REF_H = REF_H or 1044
+            REF_SENS = REF_SENS or 1.5
             Move        = "Move";    Click       = "Click";    DoubleClick = "DoubleClick"
             TripleClick = "TripleClick";   Drag   = "Drag";    Press       = "Press";    Release     = "Release"
             Left        = "Left";    Right       = "Right";   Center      = "Center"
@@ -1248,7 +1248,7 @@
                 div = 1/granularity
                 for i = 1, granularity do
                     ms.cam(-_camTotalX * div, -_camTotalY * div)
-                    ms.wait(1)
+                    ms.wait(.5)
                 end
                 _camTotalX = 0
                 _camTotalY = 0

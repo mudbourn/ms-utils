@@ -6,6 +6,12 @@
     }
 -- END Creator Credits --
 
+-- Reference Resolution (used by ms.getScaled, ms.mousePos, coordinate helpers) --
+    REF_W    = 1680
+    REF_H    = 1044
+    REF_SENS = 1.5
+-- END Reference Resolution --
+
 -- Pack Settings --
     -- Camera Sensitivity --
         ms.settings.define({
