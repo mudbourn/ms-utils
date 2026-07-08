@@ -42,6 +42,7 @@
                 --warning: #aaaaaa;
                 --text: #d8d8d8;
                 --radius: 2px;
+                --ms-window-radius: 0px;
             }
 
             /* ── Reset ──────────────────────────────────────────────────────── */
@@ -56,7 +57,7 @@
             body {
                 height: 100%;
                 overflow: hidden;
-                background: var(--bg);
+                background: transparent;
                 font-family: Arial, "Almendra", sans-serif;
                 font-size: 13px;
                 color: var(--text);
@@ -70,7 +71,7 @@
                 position: relative;
                 background: var(--surface2);
                 border: 1px solid var(--hover);
-                border-radius: var(--radius);
+                border-radius: var(--ms-window-radius);
                 overflow: hidden;
             }
 
@@ -118,6 +119,20 @@
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
+            }
+
+            /* ── Profile name (below title) ─────────────────────────────────── */
+            #profile-name {
+                position: absolute;
+                top: 38px;
+                left: 16px;
+                font-size: 10px;
+                color: var(--warning);
+                opacity: 0.7;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                max-width: 60%;
             }
 
             /* ── Status ─────────────────────────────────────────────────────── */
@@ -186,6 +201,7 @@
             <div id="title">mudscript</div>
             <div id="version">v1.3.0-pre.16</div>
             <div id="macro-name"></div>
+            <div id="profile-name"></div>
             <div id="status">Starting up…</div>
             <div id="track"></div>
             <div id="fill"></div>
@@ -214,6 +230,7 @@
                 if (t.warning) r.setProperty("--warning", t.warning);
                 if (t.text) r.setProperty("--text", t.text);
                 if (t.radius) r.setProperty("--radius", t.radius + "px");
+                if (t.windowRadius !== undefined) r.setProperty("--ms-window-radius", t.windowRadius + "px");
                 if (t.font)
                     document.body.style.fontFamily =
                         t.font + ', "Almendra", Arial, sans-serif';
@@ -230,6 +247,12 @@
             function setMacroName(name) {
                 var el = document.getElementById("macro-name");
                 if (el && name) el.textContent = name;
+            }
+
+            /* ── Profile name ────────────────────────────────────────────────── */
+            function setProfileName(name) {
+                var el = document.getElementById("profile-name");
+                if (el && name) el.textContent = "profile: " + name;
             }
         </script>
     </body>

@@ -30,8 +30,9 @@
 
         /* Layer 2: Reset ──────────────────────────────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-        html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; min-width: 800px; min-height: 500px; }
-        body { display: flex; flex-direction: row; border-radius: var(--ms-window-radius, 0px); }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; min-width: 800px; min-height: 500px; }
+        body { margin: 0; padding: 0; }
+        #shell-root { display: flex; flex-direction: row; width: 100%; height: 100%; background: var(--bg); border-radius: var(--ms-window-radius, 0px); overflow: hidden; }
         button { cursor: pointer; border: none; background: none; color: inherit; font: inherit; }
         input, select { font: inherit; color: inherit; background: none; border: none; outline: none; }
         input[type="range"] { -webkit-appearance: none; appearance: none; }
@@ -83,7 +84,7 @@
         /* ── Panel Header ── */
         #header {
             display: flex; align-items: center; gap: 8px;
-            padding: 10px 12px 8px;
+            height: 40px; padding: 0 12px;
             background: var(--surface);
             border-bottom: 1px solid var(--border);
             box-shadow: 0 1px 12px color-mix(in srgb, var(--accent) 12%, transparent);
@@ -103,22 +104,25 @@
 
         /* ── Close Button ── */
         .btn-close {
-            width: 22px; height: 22px; border-radius: 50%;
+            width: 28px; height: 28px; border-radius: 50%;
             background: var(--surface2); color: var(--text2);
-            font-size: 12px; display: flex; align-items: center; justify-content: center;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
             -webkit-app-region: no-drag; transition: background 0.15s;
         }
+        .btn-close .icon { width: 14px; height: 14px; display: block; }
         .btn-close:hover { background: var(--hover); color: var(--text); }
 
         /* ── Pop-out Button ── */
         .btn-popout {
-            width: 22px; height: 22px; border-radius: 50%;
+            width: 28px; height: 28px; border-radius: 50%;
             background: var(--surface2); color: var(--text2);
-            font-size: 12px; display: flex; align-items: center; justify-content: center;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
             -webkit-app-region: no-drag; transition: background 0.15s;
         }
         .btn-popout:hover { background: var(--hover); color: var(--text); }
-        .btn-popout .icon { width: 14px; height: 14px; }
+        .btn-popout .icon { width: 14px; height: 14px; display: block; }
 
         /* ── Macro Button ── */
         .btn-macro {
@@ -181,13 +185,13 @@
         /* ── Step (watcher) ── */
         .step {
             display: flex; align-items: flex-start; gap: 6px;
-            padding: 3px 12px 3px 36px; font-size: 11px; opacity: 0.45;
+            padding: 4px 12px 4px 36px; font-size: 12px; opacity: 0.7;
             border-bottom: 1px solid var(--border-faint);
         }
-        .step:hover { opacity: 0.7; }
+        .step:hover { opacity: 0.85; }
         .step.selected { background: var(--hover); outline: 1px solid var(--accent-glow); }
         .step.selected:hover { background: var(--accent-glow-faint); }
-        .tool-msg { color: var(--text2); word-break: break-word; flex: 1; }
+        .tool-msg { color: var(--text); word-break: break-word; flex: 1; }
 
         /* ── Pill ── */
         .pill {
@@ -296,9 +300,14 @@
 
         #coord-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
         #pos-display { font: 12px var(--font-mono); color: var(--text2); flex: 1; }
-        #coord-select { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); border-radius: var(--radius-s); padding: 2px 6px; font-size: 11px; outline: none; cursor: pointer; -webkit-appearance: none; flex-shrink: 0; }
-        #coord-select:hover { border-color: var(--accent); color: var(--text); }
-        #coord-select option { background: var(--surface2); color: var(--text); }
+        .coord-dropdown { position: relative; flex-shrink: 0; }
+        .coord-dd-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); border-radius: var(--radius-s); padding: 2px 8px; font-size: 11px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+        .coord-dd-btn:hover { border-color: var(--accent); color: var(--text); }
+        .coord-dd-menu { display: none; position: absolute; top: calc(100% + 3px); right: 0; min-width: 140px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); z-index: 100; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+        .coord-dropdown.open .coord-dd-menu { display: block; }
+        .coord-dd-item { padding: 5px 10px; font-size: 11px; color: var(--text2); cursor: pointer; transition: background 0.12s, color 0.12s; }
+        .coord-dd-item:hover { background: var(--hover); color: var(--text); }
+        .coord-dd-item.active { color: var(--accent); }
 
         .section-divider { height: 1px; background: var(--border); flex-shrink: 0; }
 
@@ -333,9 +342,8 @@
         #status-dot.off { background: var(--danger); box-shadow: 0 0 4px var(--danger-glow); }
 
         #quick-row { display: flex; gap: 6px; padding: 7px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        .reload-dropdown { position: relative; flex: 1; }
-        .reload-dd-btn { width: 100%; }
-        .reload-dd-menu { display: none; position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); z-index: 100; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+        .reload-dropdown { position: relative; display: flex; }
+        .reload-dd-menu { display: none; position: absolute; top: calc(100% + 3px); right: 0; min-width: 180px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); z-index: 100; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
         .reload-dropdown.open .reload-dd-menu { display: block; }
         .reload-dd-item { display: block; width: 100%; padding: 6px 12px; font-size: 11px; font-weight: 500; color: var(--text2); text-align: left; transition: background 0.12s, color 0.12s; }
         .reload-dd-item:hover { background: var(--hover); color: var(--text); }
@@ -593,9 +601,14 @@
     <script src="./modules/tool-editor.js"></script>
 </head>
 <body>
+<div id="shell-root">
 
     <!-- ── Left Rail ─────────────────────────────────────────────────────── -->
     <nav id="rail">
+        <button class="rail-item" data-panel="macros"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><g transform="scale(0.7500)">
+<title>target</title>
+<path d="M30 14.75h-2.824c-0.608-5.219-4.707-9.318-9.874-9.921l-0.053-0.005v-2.824c0-0.69-0.56-1.25-1.25-1.25s-1.25 0.56-1.25 1.25v0 2.824c-5.219 0.608-9.318 4.707-9.921 9.874l-0.005 0.053h-2.824c-0.69 0-1.25 0.56-1.25 1.25s0.56 1.25 1.25 1.25v0h2.824c0.608 5.219 4.707 9.318 9.874 9.921l0.053 0.005v2.824c0 0.69 0.56 1.25 1.25 1.25s1.25-0.56 1.25-1.25v0-2.824c5.219-0.608 9.318-4.707 9.921-9.874l0.005-0.053h2.824c0.69 0 1.25-0.56 1.25-1.25s-0.56-1.25-1.25-1.25v0zM16 24.75c-4.832 0-8.75-3.918-8.75-8.75s3.918-8.75 8.75-8.75c4.832 0 8.75 3.918 8.75 8.75v0c-0.006 4.83-3.92 8.744-8.749 8.75h-0.001zM16 10.75c-2.899 0-5.25 2.351-5.25 5.25s2.351 5.25 5.25 5.25c2.899 0 5.25-2.351 5.25-5.25v0c-0.004-2.898-2.352-5.246-5.25-5.25h-0zM16 18.75c-1.519 0-2.75-1.231-2.75-2.75s1.231-2.75 2.75-2.75c1.519 0 2.75 1.231 2.75 2.75v0c-0.002 1.518-1.232 2.748-2.75 2.75h-0z"></path>
+</g></svg></span> Macros</button>
         <button class="rail-item active" data-panel="console"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 7C2 4.23858 4.23858 2 7 2H17C19.7614 2 22 4.23858 22 7V17C22 19.7614 19.7614 22 17 22H7C4.23858 22 2 19.7614 2 17V7ZM7 4C5.34315 4 4 5.34315 4 7V17C4 18.6569 5.34315 20 7 20H17C18.6569 20 20 18.6569 20 17V7C20 5.34315 18.6569 4 17 4H7ZM7 17C7 16.4477 7.44772 16 8 16H16C16.5523 16 17 16.4477 17 17C17 17.5523 16.5523 18 16 18H8C7.44772 18 7 17.5523 7 17ZM8.70709 7.29288C8.31656 6.90236 7.6834 6.90238 7.29288 7.29291C6.90236 7.68344 6.90238 8.3166 7.29291 8.70712L9.58588 11L7.29291 13.2929C6.90238 13.6834 6.90236 14.3166 7.29288 14.7071C7.6834 15.0976 8.31656 15.0976 8.70709 14.7071L11.7072 11.7071C11.8948 11.5196 12.0001 11.2652 12.0001 11C12.0001 10.7348 11.8948 10.4804 11.7072 10.2929L8.70709 7.29288Z" fill="currentColor"/></svg></span> Console</button>
         <button class="rail-item" data-panel="watcher"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M10 22C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 18.7712 2 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
 <path d="M22 15C22 18.7712 22 19.6569 20.8284 20.8284C19.6569 22 17.7712 22 14 22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -609,12 +622,9 @@
 <path d="M8 8.01L8.01 7.99889" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M10 8.01L10.01 7.99889" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Window</button>
         <button class="rail-item" data-panel="settings"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
-<path d="M13.7654 2.15224C13.3978 2 12.9319 2 12 2C11.0681 2 10.6022 2 10.2346 2.15224C9.74457 2.35523 9.35522 2.74458 9.15223 3.23463C9.05957 3.45834 9.0233 3.7185 9.00911 4.09799C8.98826 4.65568 8.70226 5.17189 8.21894 5.45093C7.73564 5.72996 7.14559 5.71954 6.65219 5.45876C6.31645 5.2813 6.07301 5.18262 5.83294 5.15102C5.30704 5.08178 4.77518 5.22429 4.35436 5.5472C4.03874 5.78938 3.80577 6.1929 3.33983 6.99993C2.87389 7.80697 2.64092 8.21048 2.58899 8.60491C2.51976 9.1308 2.66227 9.66266 2.98518 10.0835C3.13256 10.2756 3.3397 10.437 3.66119 10.639C4.1338 10.936 4.43789 11.4419 4.43786 12C4.43783 12.5581 4.13375 13.0639 3.66118 13.3608C3.33965 13.5629 3.13248 13.7244 2.98508 13.9165C2.66217 14.3373 2.51966 14.8691 2.5889 15.395C2.64082 15.7894 2.87379 16.193 3.33973 17C3.80568 17.807 4.03865 18.2106 4.35426 18.4527C4.77508 18.7756 5.30694 18.9181 5.83284 18.8489C6.07289 18.8173 6.31632 18.7186 6.65204 18.5412C7.14547 18.2804 7.73556 18.27 8.2189 18.549C8.70224 18.8281 8.98826 19.3443 9.00911 19.9021C9.02331 20.2815 9.05957 20.5417 9.15223 20.7654C9.35522 21.2554 9.74457 21.6448 10.2346 21.8478C10.6022 22 11.0681 22 12 22C12.9319 22 13.3978 22 13.7654 21.8478C14.2554 21.6448 14.6448 21.2554 14.8477 20.7654C14.9404 20.5417 14.9767 20.2815 14.9909 19.902C15.0117 19.3443 15.2977 18.8281 15.781 18.549C16.2643 18.2699 16.8544 18.2804 17.3479 18.5412C17.6836 18.7186 17.927 18.8172 18.167 18.8488C18.6929 18.9181 19.2248 18.7756 19.6456 18.4527C19.9612 18.2105 20.1942 17.807 20.6601 16.9999C21.1261 16.1929 21.3591 15.7894 21.411 15.395C21.4802 14.8691 21.3377 14.3372 21.0148 13.9164C20.8674 13.7243 20.6602 13.5628 20.3387 13.3608C19.8662 13.0639 19.5621 12.558 19.5621 11.9999C19.5621 11.4418 19.8662 10.9361 20.3387 10.6392C20.6603 10.4371 20.8675 10.2757 21.0149 10.0835C21.3378 9.66273 21.4803 9.13087 21.4111 8.60497C21.3592 8.21055 21.1262 7.80703 20.6602 7C20.1943 6.19297 19.9613 5.78945 19.6457 5.54727C19.2249 5.22436 18.693 5.08185 18.1671 5.15109C17.9271 5.18269 17.6837 5.28136 17.3479 5.4588C16.8545 5.71959 16.2644 5.73002 15.7811 5.45096C15.2977 5.17191 15.0117 4.65566 14.9909 4.09794C14.9767 3.71848 14.9404 3.45833 14.8477 3.23463C14.6448 2.74458 14.2554 2.35523 13.7654 2.15224Z" stroke="currentColor" stroke-width="1.5"/></svg></span> Settings</button>
-        <button class="rail-item" data-panel="macros"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><g transform="scale(0.7500)">
-<title>target</title>
-<path d="M30 14.75h-2.824c-0.608-5.219-4.707-9.318-9.874-9.921l-0.053-0.005v-2.824c0-0.69-0.56-1.25-1.25-1.25s-1.25 0.56-1.25 1.25v0 2.824c-5.219 0.608-9.318 4.707-9.921 9.874l-0.005 0.053h-2.824c-0.69 0-1.25 0.56-1.25 1.25s0.56 1.25 1.25 1.25v0h2.824c0.608 5.219 4.707 9.318 9.874 9.921l0.053 0.005v2.824c0 0.69 0.56 1.25 1.25 1.25s1.25-0.56 1.25-1.25v0-2.824c5.219-0.608 9.318-4.707 9.921-9.874l0.005-0.053h2.824c0.69 0 1.25-0.56 1.25-1.25s-0.56-1.25-1.25-1.25v0zM16 24.75c-4.832 0-8.75-3.918-8.75-8.75s3.918-8.75 8.75-8.75c4.832 0 8.75 3.918 8.75 8.75v0c-0.006 4.83-3.92 8.744-8.749 8.75h-0.001zM16 10.75c-2.899 0-5.25 2.351-5.25 5.25s2.351 5.25 5.25 5.25c2.899 0 5.25-2.351 5.25-5.25v0c-0.004-2.898-2.352-5.246-5.25-5.25h-0zM16 18.75c-1.519 0-2.75-1.231-2.75-2.75s1.231-2.75 2.75-2.75c1.519 0 2.75 1.231 2.75 2.75v0c-0.002 1.518-1.232 2.748-2.75 2.75h-0z"></path>
-</g></svg></span> Macros</button>
+<path d="M13.7654 2.15224C13.3978 2 12.9319 2 12 2C11.0681 2 10.6022 2 10.2346 2.15224C9.74457 2.35523 9.35522 2.74458 9.15223 3.23463C9.05957 3.45834 9.0233 3.7185 9.00911 4.09799C8.98826 4.65568 8.70226 5.17189 8.21894 5.45093C7.73564 5.72996 7.14559 5.71954 6.65219 5.45876C6.31645 5.2813 6.07301 5.18262 5.83294 5.15102C5.30704 5.08178 4.77518 5.22429 4.35436 5.5472C4.03874 5.78938 3.80577 6.1929 3.33983 6.99993C2.87389 7.80697 2.64092 8.21048 2.58899 8.60491C2.51976 9.1308 2.66227 9.66266 2.98518 10.0835C3.13256 10.2756 3.3397 10.437 3.66119 10.639C4.1338 10.936 4.43789 11.4419 4.43786 12C4.43783 12.5581 4.13375 13.0639 3.66118 13.3608C3.33965 13.5629 3.13248 13.7244 2.98508 13.9165C2.66217 14.3373 2.51966 14.8691 2.5889 15.395C2.64082 15.7894 2.87379 16.193 3.33973 17C3.80568 17.807 4.03865 18.2106 4.35426 18.4527C4.77508 18.7756 5.30694 18.9181 5.83284 18.8489C6.07289 18.8173 6.31632 18.7186 6.65204 18.5412C7.14547 18.2804 7.73556 18.27 8.2189 18.549C8.70224 18.8281 8.98826 19.3443 9.00911 19.9021C9.02331 20.2815 9.05957 20.5417 9.15223 20.7654C9.35522 21.2554 9.74457 21.6448 10.2346 21.8478C10.6022 22 11.0681 22 12 22C12.9319 22 13.3978 22 13.7654 21.8478C14.2554 21.6448 14.6448 21.2554 14.8477 20.7654C14.9404 20.5417 14.9767 20.2815 14.9909 19.902C15.0117 19.3443 15.2977 18.8281 15.781 18.549C16.2643 18.2699 16.8544 18.2804 17.3479 18.5412C17.6836 18.7186 17.927 18.8172 18.167 18.8488C18.6929 18.9181 19.2248 18.7756 19.6456 18.4527C19.9612 18.2105 20.1942 17.807 20.6601 16.9999C21.1261 16.1929 21.3591 15.7894 21.411 15.395C21.4802 14.8691 21.3377 14.3372 21.0148 13.9164C20.8674 13.7243 20.6602 13.5628 20.3387 13.3608C19.8662 13.0639 19.5621 12.558 19.5621 11.9999C19.5621 11.4418 19.8662 10.9361 20.3387 10.6392C20.6603 10.4371 20.8675 10.2757 21.0149 10.0835C21.3378 9.66273 21.4803 9.13087 21.4111 8.60497C21.3592 8.21055 21.1262 7.80703 20.6602 7C20.1943 6.19297 19.9613 5.78945 19.6457 5.54727C19.2249 5.22436 18.693 5.08185 18.1671 5.15109C17.9271 5.18269 17.6837 5.28137 17.3479 5.45883C16.8544 5.72993 16.2643 5.71957 15.781 5.45093C15.2977 5.17189 15.0117 4.65568 14.9909 4.09799C14.9767 3.7185 14.9404 3.45834 14.8477 3.23463C14.6448 2.74458 14.2554 2.35523 13.7654 2.15224Z" stroke="currentColor" stroke-width="1.5"/></svg></span> Settings</button>
         <div class="rail-spacer"></div>
+        <span id="rail-version" style="padding: 6px 12px; font-size: 10px; color: var(--text3); opacity: 0.5;"></span>
     </nav>
 
     <!-- ── Content Area ──────────────────────────────────────────────────── -->
@@ -664,7 +674,7 @@
                         playSlot('back');
                         shellDispatch('_shell', 'close');
                     "
-                >✕</button>
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
 
@@ -753,7 +763,7 @@
                         playSlot('back');
                         shellDispatch('_shell', 'close');
                     "
-                >✕</button>
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
 
@@ -810,7 +820,7 @@
                         playSlot('back');
                         shellDispatch('_shell', 'close');
                     "
-                >✕</button>
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
 
@@ -866,19 +876,19 @@
                         x:&nbsp;<span id="mx-display">—</span
                         >&nbsp;&nbsp;y:&nbsp;<span id="my-display">—</span>
                     </div>
-                    <select
-                        id="coord-select"
-                        onchange="onCoordModeChange(this.value)"
-                    >
-                        <option value="screen">Screen</option>
-                        <option value="window">Window TL</option>
-                        <option value="windowTR">Window TR</option>
-                        <option value="windowBL">Window BL</option>
-                        <option value="windowBR">Window BR</option>
-                        <option value="windowCenter">Window Center</option>
-                        <option value="ref">REF 1680×1044</option>
-                        <option value="screenCenter">Screen center</option>
-                    </select>
+                    <div class="coord-dropdown" id="coordDropdown">
+                        <button class="coord-dd-btn" id="coord-dd-btn" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); document.getElementById('coordDropdown').classList.toggle('open');">Screen ▾</button>
+                        <div class="coord-dd-menu" id="coord-dd-menu">
+                            <div class="coord-dd-item active" data-value="screen" onclick="playSlot('interact'); onCoordModeChange('screen'); document.getElementById('coordDropdown').classList.remove('open');">Screen</div>
+                            <div class="coord-dd-item" data-value="window" onclick="playSlot('interact'); onCoordModeChange('window'); document.getElementById('coordDropdown').classList.remove('open');">Window TL</div>
+                            <div class="coord-dd-item" data-value="windowTR" onclick="playSlot('interact'); onCoordModeChange('windowTR'); document.getElementById('coordDropdown').classList.remove('open');">Window TR</div>
+                            <div class="coord-dd-item" data-value="windowBL" onclick="playSlot('interact'); onCoordModeChange('windowBL'); document.getElementById('coordDropdown').classList.remove('open');">Window BL</div>
+                            <div class="coord-dd-item" data-value="windowBR" onclick="playSlot('interact'); onCoordModeChange('windowBR'); document.getElementById('coordDropdown').classList.remove('open');">Window BR</div>
+                            <div class="coord-dd-item" data-value="windowCenter" onclick="playSlot('interact'); onCoordModeChange('windowCenter'); document.getElementById('coordDropdown').classList.remove('open');">Window Center</div>
+                            <div class="coord-dd-item" data-value="ref" onclick="playSlot('interact'); onCoordModeChange('ref'); document.getElementById('coordDropdown').classList.remove('open');">REF 1680×1044</div>
+                            <div class="coord-dd-item" data-value="screenCenter" onclick="playSlot('interact'); onCoordModeChange('screenCenter'); document.getElementById('coordDropdown').classList.remove('open');">Screen center</div>
+                        </div>
+                    </div>
                 </div>
                 <div id="mouse-pills"></div>
             </div>
@@ -935,7 +945,7 @@
                         playSlot('back');
                         shellDispatch('_shell', 'close');
                     "
-                >✕</button>
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
 
@@ -1040,7 +1050,7 @@
                             playSlot('back');
                             shellDispatch('_shell', 'close');
                         "
-                    >✕</button>
+                    ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 </div>
             </div>
 
@@ -1101,7 +1111,7 @@
                         playSlot('back');
                         shellDispatch('_shell', 'close');
                     "
-                >✕</button>
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
         <div id="slot-macros"></div></div>
@@ -1779,6 +1789,24 @@ function createLogPanel(config) {
     };
 
     window.shellReceive = function(panel, action, body) {
+        // Global popout state management
+        if (action === 'poppedOut') {
+            window._poppedOutPanels[panel] = true;
+            var railItem = document.querySelector('.rail-item[data-panel="' + panel + '"]');
+            if (railItem) railItem.classList.add('popped-out');
+            // If we're currently viewing this panel, switch to macros
+            if (currentPanel === panel) showPanel('macros');
+            return;
+        }
+        if (action === 'poppedIn') {
+            delete window._poppedOutPanels[panel];
+            var railItem = document.querySelector('.rail-item[data-panel="' + panel + '"]');
+            if (railItem) railItem.classList.remove('popped-out');
+            // Notify any per-panel listeners
+            var fn = window._panelPoppedInFns[panel];
+            if (fn) { try { fn(); } catch(e) {} }
+            return;
+        }
         var handler = _panelHandlers[panel];
         if (handler) {
             try { handler(action, body); } catch(e) {
@@ -1788,6 +1816,14 @@ function createLogPanel(config) {
     };
 
     window.currentPanel = 'console';
+
+    // Popped-out panel tracking
+    window._poppedOutPanels = {};
+    window._panelPoppedInFns = {};
+
+    window.popOutPanel = function(id) {
+        shellDispatch('_shell', 'popOut', { panel: id });
+    };
 
     // Per-panel pause registry — each panel registers its togglePause
     window._panelPauseFns = {};
@@ -1804,6 +1840,11 @@ function createLogPanel(config) {
     };
 
     window.showPanel = function(id) {
+        // If panel is popped out, focus the popout window instead
+        if (window._poppedOutPanels[id]) {
+            shellDispatch('_shell', 'focusPopOut', { panel: id });
+            return;
+        }
         document.querySelectorAll('[class^="panel-"]').forEach(function(el) {
             el.style.display = 'none';
         });
@@ -1814,10 +1855,6 @@ function createLogPanel(config) {
         });
         currentPanel = id;
         shellDispatch('_shell', 'navigate', { panel: id });
-    };
-
-    window.popOutPanel = function(id) {
-        shellDispatch('_shell', 'popOut', { panel: id });
     };
 
     window._shellApplyTheme = function(theme) {
@@ -2552,6 +2589,14 @@ function createLogPanel(config) {
 
             function onCoordModeChange(mode) {
                 lp.sendToHost({ action: "setCoordMode", mode: mode });
+                // Update custom dropdown active state
+                var items = document.querySelectorAll('.coord-dd-item');
+                var labels = { screen: 'Screen', window: 'Window TL', windowTR: 'Window TR', windowBL: 'Window BL', windowBR: 'Window BR', windowCenter: 'Window Center', ref: 'REF 1680×1044', screenCenter: 'Screen center' };
+                items.forEach(function(el) {
+                    el.classList.toggle('active', el.dataset.value === mode);
+                });
+                var btn = document.getElementById('coord-dd-btn');
+                if (btn) btn.textContent = (labels[mode] || mode) + ' ▾';
             }
 
             // ── Expose for Lua evaluateJavaScript ───────────────────────────
@@ -4534,38 +4579,11 @@ function createLogPanel(config) {
             function buildDeveloper(body) {
                 body.appendChild(
                     btnRow(
-                        actionBtn("Window Monitor", S.windowOpen ? "accent" : "", () =>
-                            sendToHost({ action: "openWindowMonitor" }),
-                        ),
                         actionBtn("Edit Macros", "", () =>
                             sendToHost({ action: "editMacros" }),
                         ),
-                    ),
-                );
-                body.appendChild(
-                    btnRow(
-                        actionBtn("Console", S.consoleOpen ? "accent" : "", () =>
-                            sendToHost({ action: "openConsole" }),
-                        ),
                         actionBtn("Edit Theme", "", () =>
                             sendToHost({ action: "editTheme" }),
-                        ),
-                    ),
-                );
-                body.appendChild(
-                    btnRow(
-                        actionBtn("Macro Monitor", S.watcherOpen ? "accent" : "", () =>
-                            sendToHost({ action: "openWatcher" }),
-                        ),
-                        actionBtn("Input Monitor", S.keysOpen ? "accent" : "", () =>
-                            sendToHost({ action: "openKeys" }),
-                        ),
-                    ),
-                );
-                body.appendChild(
-                    btnRow(
-                        actionBtn("Open Dev Logs", "", () =>
-                            sendToHost({ action: "openDevLogs" }),
                         ),
                     ),
                 );
@@ -5050,6 +5068,8 @@ function createLogPanel(config) {
                     btn.dataset.on = enabled ? "1" : "0";
                     btn.style.color = enabled ? "var(--success)" : "var(--danger)";
                 }
+                const verEl = document.getElementById("rail-version");
+                if (verEl && S.msVersion) verEl.textContent = "v" + S.msVersion;
                 syncQRChecks(S.qrOptions);
                 render();
             }
@@ -7025,5 +7045,6 @@ function createLogPanel(config) {
     })();
     </script>
 
+</div><!-- /shell-root -->
 </body>
 </html>

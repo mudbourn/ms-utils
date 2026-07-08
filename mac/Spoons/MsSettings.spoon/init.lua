@@ -908,6 +908,9 @@
             if type(data.radius) == "number" then
                 ms._theme.radius = math.max(0, math.min(40, math.floor(data.radius)))
             end
+            if type(data.windowRadius) == "number" then
+                ms._theme.windowRadius = math.max(0, math.min(40, math.floor(data.windowRadius)))
+            end
             if type(data.fadeMs) == "number" then
                 ms._theme.fadeMs = math.max(0, math.min(500, math.floor(data.fadeMs)))
             end

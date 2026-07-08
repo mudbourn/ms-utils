@@ -524,8 +524,8 @@
                     danger   = "#d8d8d8",
                     warning  = "#aaaaaa",
                     text     = "#d8d8d8",
-                    radius       = 2,
-                    windowRadius = 3,
+                    radius       = 4,
+                    windowRadius = 4,
                     font         = "Arial",
                     fadeMs       = 100,
                 }
@@ -1080,12 +1080,6 @@
                     ScreenBR=true,   ScreenCenter=true,
                 }
                 if ms.dev then spoon.MsDevTools:flushAll() end
-                if ms.dev._watcherPanel then
-                    spoon.MsDevTools:watcherStep("Mouse " .. tostring(operation) .. " " .. tostring(button))
-                end
-                if ms.dev then
-                    spoon.MsDevTools:macroLog("Mouse " .. tostring(operation) .. " " .. tostring(button))
-                end
                 assert(OPS[operation],     "ms.Mouse: unknown operation '"  .. tostring(operation)  .. "'")
                 assert(BTNS[button] ~= nil, "ms.Mouse: unknown button '"      .. tostring(button)     .. "'")
                 assert(REFS[reference],    "ms.Mouse: unknown reference '"   .. tostring(reference)  .. "'")
@@ -1098,6 +1092,20 @@
                 else
                     unscaled                   = false
                     x1, y1, x2, y2, hidinject = _a, _b, _c, _d, _e
+                end
+
+                -- Log with all available params
+                do
+                    local parts = { "Mouse ", tostring(operation), " ", tostring(button), " ", tostring(reference) }
+                    if x1 then parts[#parts + 1] = " " .. tostring(x1) .. "," .. tostring(y1) end
+                    if x2 then parts[#parts + 1] = " → " .. tostring(x2) .. "," .. tostring(y2) end
+                    local msg = table.concat(parts)
+                    if ms.dev and ms.dev._watcherPanel then
+                        spoon.MsDevTools:watcherStep(msg)
+                    end
+                    if ms.dev then
+                        spoon.MsDevTools:macroLog(msg)
+                    end
                 end
 
                 local btn  = BTNS[button]
@@ -1503,14 +1511,14 @@
 
             ms._appWatcher = hs.application.watcher.new(function(appName, eventType, app)
                 if eventType == hs.application.watcher.activated then
-                    if appName == "Roblox" then
+                    if appName == (ms._targetApp or "Roblox") then
                         local fromDialog = ms._inputOpen
                         ms._inputOpen = false
                         ms._robloxActive = true
-                        ms.dev.log({ type = "system", event = "roblox_focus", fromDialog = fromDialog or false })
-                        -- Update camera anchor when Roblox gains focus
+                        ms.dev.log({ type = "system", event = "target_focus", fromDialog = fromDialog or false })
+                        -- Update camera anchor when target gains focus
                         if ms._updateCamAnchor then ms._updateCamAnchor() end
-                        -- Reset cam activation so next ms.cam re-registers with Roblox
+                        -- Reset cam activation so next ms.cam re-registers with target
                         if ms._resetCamActivated then ms._resetCamActivated() end
                         -- ms.legacycam._setupWatcher()  -- opt-in
                         if not ms._loadComplete then return end
@@ -1524,7 +1532,7 @@
                         if ms.ui._open and appName == "Hammerspoon" then return end
                         ms._inputOpen    = (appName == "Hammerspoon") and ms._robloxActive
                         ms._robloxActive = false
-                        ms.dev.log({ type = "system", event = "roblox_blur", to = appName })
+                        ms.dev.log({ type = "system", event = "target_blur", to = appName })
                         -- Reset camera activation state when Roblox loses focus
                         if ms._camActivated ~= nil then ms._camActivated = false end
                         if BindValidity == 1 then
@@ -3066,6 +3074,7 @@
                 local _shellChannel  = nil
                 local _shellReady    = false
                 local _shellEvalQ    = {}
+                local _shellFadeTimer = nil
 
                 ms.shell = {}
 
@@ -3169,6 +3178,30 @@
                             end
                             return
                         end
+                        -- PopOut: extract panel into standalone webview
+                        if action == "popOut" and body and body.panel then
+                            local pid = body.panel
+                            local ok = ms.shell.popOut(pid)
+                            if ok then
+                                -- Tell shell to hide the inline panel
+                                ms.shell.eval("shellReceive('" .. pid .. "', 'poppedOut')")
+                            end
+                            return
+                        end
+                        -- PopIn: return panel to shell (from standalone close)
+                        if action == "popIn" and body and body.panel then
+                            ms.shell.popIn(body.panel)
+                            return
+                        end
+                        -- FocusPopOut: bring a popped-out panel's window to front
+                        if action == "focusPopOut" and body and body.panel then
+                            local pop = _popouts[body.panel]
+                            if pop and pop.view then
+                                pcall(function() pop.view:show() end)
+                                pcall(function() pop.view:bringToFront(true) end)
+                            end
+                            return
+                        end
                         -- Bus routing
                         if ms.bus then
                             local topic = "ui:" .. panel .. ":" .. action
@@ -3177,7 +3210,11 @@
                     end)
 
                     local sf = hs.screen.mainScreen():frame()
-                    local w, h = 900, 600
+                    -- Cap to 85% of screen so it fits on low-res displays
+                    local maxW = math.floor(sf.w * 0.85)
+                    local maxH = math.floor(sf.h * 0.85)
+                    local w = math.min(900, maxW)
+                    local h = math.min(600, maxH)
                     local x = sf.x + math.floor((sf.w - w) / 2)
                     local y = sf.y + math.floor((sf.h - h) / 2)
                     local st = ms._shellState
@@ -3188,7 +3225,8 @@
                     end
 
                     _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
-                    pcall(function() _shellView:windowStyle(2 + 4 + 8) end) -- no native title bar (flag 1 = titled)
+                    pcall(function() _shellView:windowStyle(0) end)
+                    pcall(function() _shellView:transparent(true) end)
                     pcall(function() _shellView:allowResizing(true) end)
                     -- Note: minimumSize is unreliable on borderless webviews.
                     -- JS-side enforcement handles the actual clamping.
@@ -3203,6 +3241,14 @@
                     local f = io.open(htmlPath, "r")
                     if f then
                         local html = f:read("*all"); f:close()
+                        -- Inject window radius CSS variable + transparent html into <head>
+                        local r = (ms._theme and ms._theme.windowRadius)
+                            or (ms._themeDefaults and ms._themeDefaults.windowRadius) or 0
+                        local inject = string.format(
+                            '<style>html{background:transparent!important;--ms-window-radius:%dpx;}</style>',
+                            r
+                        )
+                        html = html:gsub("</head>", inject .. "</head>", 1)
                         _shellView:html(html, baseURL)
                     end
 
@@ -3210,12 +3256,23 @@
                     if ms.theme and ms.theme.applyWindowRadius then
                         ms.theme.applyWindowRadius(_shellView)
                     end
+                    -- Re-apply shadow after applyWindowRadius (it disables shadow for rounded windows)
+                    pcall(function() _shellView:shadow(true) end)
 
                     hs.timer.doAfter(0.05, function()
                         if not _shellView then return end
                         local themeJson = hs.json.encode(ms._theme or {})
                         _shellView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
                     end)
+
+                    -- When a popout closes, tell the shell to restore the inline panel
+                    if ms.bus then
+                        ms.bus.on("panel:poppedIn", function(data)
+                            if data and data.id then
+                                ms.shell.eval("shellReceive('" .. data.id .. "', 'poppedIn')")
+                            end
+                        end)
+                    end
                 end
 
                 ms.shell.saveState = function()
@@ -3250,9 +3307,22 @@
 
                 ms.shell.show = function()
                     if not _shellView then ms.shell.init() end
+                    if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
                     ms.shell._restoreFrame()
+                    pcall(function() ms.playSlot("settingsOpen") end)
+                    _shellView:alpha(0)
                     _shellView:show()
-                    _shellView:alpha(1)
+                    pcall(function() _shellView:bringToFront(true) end)
+                    local view = _shellView
+                    local step, steps = 0, 6
+                    local fadeMs = (ms._theme and ms._theme.fadeMs) or 150
+                    _shellFadeTimer = hs.timer.doEvery(fadeMs / 1000 / steps, function()
+                        step = step + 1
+                        pcall(function() view:alpha(step / steps) end)
+                        if step >= steps then
+                            if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
+                        end
+                    end)
                     ms._shellState = ms._shellState or {}
                     ms._shellState.visible = true
                     if ms.bus then ms.bus.emit("macroLab:toggled", { visible = true }) end
@@ -3260,11 +3330,26 @@
 
                 ms.shell.hide = function()
                     if _shellView then
+                        if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
+                        if ms._shellState and ms._shellState.visible then
+                            pcall(function() ms.playSlot("settingsClose") end)
+                        end
                         ms.shell.saveState()
-                        _shellView:hide()
-                        _shellView:alpha(0)
                         ms._shellState = ms._shellState or {}
                         ms._shellState.visible = false
+                        local view = _shellView
+                        local startAlpha = 1
+                        pcall(function() startAlpha = view:alpha() or 1 end)
+                        local step, steps = 0, 6
+                        local fadeMs = (ms._theme and ms._theme.fadeMs) or 150
+                        _shellFadeTimer = hs.timer.doEvery(fadeMs / 1000 / steps, function()
+                            step = step + 1
+                            pcall(function() view:alpha(startAlpha * (1 - (step / steps))) end)
+                            if step >= steps then
+                                if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
+                                pcall(function() view:hide() end)
+                            end
+                        end)
                         if ms.bus then ms.bus.emit("macroLab:toggled", { visible = false }) end
                     end
                 end
@@ -3278,6 +3363,7 @@
                 end
 
                 ms.shell.destroy = function()
+                    if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
                     if _shellView then
                         pcall(function() _shellView:delete() end)
                         _shellView = nil
@@ -3352,10 +3438,15 @@
                     local newChannel  = 'channel: "msShell"'
                     if html:find(origChannel, 1, true) then
                         html = html:gsub(origChannel, newChannel, 1)
-                        print("[popOut] channel swapped for " .. panelId)
-                    else
-                        print("[popOut] WARNING: channel pattern not found in " .. fileName)
                     end
+                    -- Inject transparent bg + window radius for borderless popout
+                    local r = (ms._theme and ms._theme.windowRadius)
+                        or (ms._themeDefaults and ms._themeDefaults.windowRadius) or 0
+                    local inject = string.format(
+                        '<style>html,body{background:transparent!important;overflow:hidden;}body{background:var(--bg)!important;border-radius:%dpx;}</style>',
+                        r
+                    )
+                    html = html:gsub("</head>", inject .. "</head>", 1)
 
                     local sf = hs.screen.mainScreen():frame()
                     local w, h = 800, 500
@@ -3367,8 +3458,9 @@
                         print("[popOut] hs.webview.new returned nil")
                         return false
                     end
-                    pcall(function() popView:windowStyle(1 + 2 + 4) end)
-                    pcall(function() popView:level(hs.canvas.windowLevels.normal or 4) end)
+                    pcall(function() popView:windowStyle(0) end)
+                    pcall(function() popView:transparent(true) end)
+                    pcall(function() popView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
                     pcall(function() popView:allowTextEntry(true) end)
                     pcall(function() popView:shadow(true) end)
                     pcall(function() popView:minimumSize({ w = 400, h = 300 }) end)
@@ -3376,7 +3468,13 @@
                     local baseURL = "file://" .. hs.configdir .. "/ui/"
                     popView:html(html, baseURL)
                     popView:show()
-                    print("[popOut] showing " .. panelId .. " popout")
+
+                    -- Apply theme to popout after it loads
+                    hs.timer.doAfter(0.05, function()
+                        if not popView then return end
+                        local themeJson = hs.json.encode(ms._theme or {})
+                        pcall(function() popView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)
+                    end)
 
                     _popouts[panelId] = { view = popView, channel = popChannel }
                     if ms.bus then ms.bus.emit("panel:poppedOut", { id = panelId }) end
@@ -4500,6 +4598,7 @@
 
                 _lWebView = hs.webview.new({ x=lx, y=ly, w=lw, h=lh }, {}, _ucLoad)
                 pcall(function() _lWebView:windowStyle(0) end)
+                pcall(function() _lWebView:transparent(true) end)
                 pcall(function() _lWebView:level(hs.canvas.windowLevels.popUpMenu or 25) end)
                 pcall(function() _lWebView:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
                 pcall(function() _lWebView:allowTextEntry(false) end)
@@ -4539,6 +4638,12 @@
                     if ms.macroMeta and ms.macroMeta.name then
                         _lWebView:evaluateJavaScript("setMacroName(" ..
                             '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
+                    end
+                    -- Set profile name
+                    local profileName = (ms.macroMeta and ms.macroMeta.name) or ""
+                    if profileName ~= "" then
+                        _lWebView:evaluateJavaScript("setProfileName(" ..
+                            '"' .. profileName:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
                     end
                     pcall(function() ms.sound(SoundDefaultsDir .. "d_Reset.wav") end)
                     local step, steps = 0, 6

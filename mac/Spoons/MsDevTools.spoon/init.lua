@@ -679,7 +679,11 @@
         if (_consolePanel or _shellActive()) and t ~= "mousemove" and t ~= "step" then
             local send = false
 
-            if t == "key" or t == "mouse" or t == "sound" then
+            -- Filter status events from console (kept in watcher)
+            local _consoleSkip = { roblox_focus=1, roblox_blur=1, target_focus=1, target_blur=1, macros_enabled=1, macros_disabled=1 }
+            if t == "system" and entry.event and _consoleSkip[entry.event] then
+                send = false
+            elseif t == "key" or t == "mouse" or t == "sound" then
                 if _devLastConsoleType ~= t then
                     _devLastConsoleType = t
                     send = true

@@ -81,7 +81,7 @@
   ],
   "devArchiveLimit" : 15,
   "cacheCleanerEnabled" : false,
-  "windowRadius" : 3,
+  "windowRadius" : 4,
   "macroLabEnabled" : true,
   "shell" : {
     "x" : null,
