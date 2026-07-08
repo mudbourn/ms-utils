@@ -243,6 +243,7 @@
                         end
                     else
                         -- Not yet defined — store for later apply at define-time
+                        ms._pendingUserSettings = ms._pendingUserSettings or {}
                         ms._pendingUserSettings[key] = value
                     end
                 end
@@ -603,8 +604,19 @@
 
         ms.quickReload = function()
             ms.dev.log({ type = "system", event = "quick_reload_start" })
+
+            -- Panic: cancel all active macros, release held keys/buttons, stop timers
+            pcall(function() ms.setMacros(0, true) end)
+
             ms._quickReloaded = 1
             ms._quickReloading = true   -- suppress per-module toasts
+
+            -- Ensure user settings tables exist before any reload path touches them
+            ms._pendingUserSettings = ms._pendingUserSettings or {}
+            ms._userSettingDefs     = ms._userSettingDefs     or {}
+            ms._userSettingIndex    = ms._userSettingIndex    or {}
+            ms._userSettingVals     = ms._userSettingVals     or {}
+
             ms.saveSettings()
 
             local qr = ms._qrOptions or {
@@ -614,21 +626,28 @@
                 ui       = true,
             }
 
-            -- 1. Reload macros (handles its own Roblox refocus)
+            -- 1. Reload macros (teardown + load + compile + run + loadSettings + rebind + socd)
+            --    This is the heavy lift — skip redundant reloadSettings/reloadUI below.
             if qr.macros then ms.ui._actions.reloadMacros() end
 
             -- 2. Reload theme (just the theme data, no UI)
-            if qr.theme then ms.loadTheme() end
+            if qr.theme then
+                ms.loadTheme()
+                pcall(function() ms.alert:recolor() end)
+                pcall(function() ms.dev:recolor() end)
+            end
 
-            -- 3. Reload settings (rebind, no UI)
-            if qr.settings then ms.reloadSettings() end
+            -- 3. Reload settings only if macros weren't already reloaded (avoid duplicate rebind)
+            if qr.settings and not qr.macros then ms.reloadSettings() end
 
-            -- 4. Reload UI (full rebuild, closes all UI)
-            if qr.ui then ms.reloadUI() end
-
-            -- 5. UI side effects (after all reloads complete)
+            -- 4. UI side effects
             if qr.ui then
-                -- UI: everything already closed by reloadUI, nothing to reopen
+                -- Full UI rebuild: close all panels (ms.ui.hide refocuses Roblox)
+                ms.ui.hide()
+                pcall(function() ms.dev.console.hide() end)
+                pcall(function() ms.dev.watcher.hide() end)
+                pcall(function() ms.dev.keys.hide() end)
+                pcall(function() ms.dev.window.hide() end)
 
             elseif qr.theme then
                 -- Theme: close and reopen only what was open
@@ -663,28 +682,23 @@
 
             ms._quickReloading = false
 
-            -- Roblox refocus (after UI operations have settled)
-            if qr.macros then
-                hs.timer.doAfter(0.5, function()
-                    pcall(function()
-                        local app = ms._targetApp and hs.application.get(ms._targetApp)
-                        if app then
-                            app:hide()
-                            hs.timer.doAfter(0.15, function()
-                                pcall(function() app:activate() end)
-                            end)
-                        end
-                    end)
-                end)
-            end
-
             if ms._quickReloaded == 1 then
                 ms._quickReloaded = 0
                 ms.saveSettings()
             end
 
+            -- Roblox refocus (only if UI close didn't already handle it)
+            if qr.macros and not qr.ui then
+                hs.timer.doAfter(0.15, function()
+                    pcall(function()
+                        local app = ms._targetApp and hs.application.get(ms._targetApp)
+                        if app then app:activate() end
+                    end)
+                end)
+            end
+
             local anySelected = qr.macros or qr.theme or qr.settings or qr.ui
-            hs.timer.doAfter(1.0, function()
+            hs.timer.doAfter(0.3, function()
                 if anySelected then
                     ms.playSlot("update")
                     ms.alert("Quick Reload complete.", 5, true, { priority = "low" })
@@ -1631,9 +1645,16 @@
                     end
                 end
             end
-            -- Bundle macro sounds (preserving subdirectory structure)
+            -- Bundle macro sounds (only those referenced in soundAssign)
             local macroCopied = 0
-            for _, soundPath in pairs(ms.macroSounds or {}) do
+            -- Build set of sound names that map to macro/ paths
+            local usedMacroSounds = {}
+            for _, soundName in pairs(ms.soundAssign or {}) do
+                if type(soundName) == "string" and ms.macroSounds and ms.macroSounds[soundName] then
+                    usedMacroSounds[soundName] = ms.macroSounds[soundName]
+                end
+            end
+            for _, soundPath in pairs(usedMacroSounds) do
                 if hs.fs.attributes(soundPath) then
                     local filename = soundPath:match("([^/\\]+)$")
                     local relPath = "macro/" .. filename

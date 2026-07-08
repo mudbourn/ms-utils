@@ -56,9 +56,8 @@
 
     local _devBusy            = false
     local _devLastConsoleType = nil
-    local _consoleMacroActive = false
     local _lastReadLine       = nil
-    local _readRepeatCount    = 0
+    local _lastReadType       = nil
     local _lastReadCategory   = nil
 
     local function _flushReadLine()
@@ -74,19 +73,14 @@
                 local f = io.open(catPath, "a")
 
                 if f then
-                    if _readRepeatCount > 1 then
-                        f:write(_lastReadLine .. " \195\151" .. _readRepeatCount .. "\n")
-                    else
-                        f:write(_lastReadLine .. "\n")
-                    end
-
+                    f:write(_lastReadLine .. "\n")
                     f:close()
                 end
             end)
         end
 
         _lastReadLine     = nil
-        _readRepeatCount  = 0
+        _lastReadType     = nil
         _lastReadCategory = nil
     end
 
@@ -99,6 +93,9 @@
     local _pushMouseState
 
     local _camMoveAccum  = 0
+    local _camLastDx     = nil
+    local _camLastDy     = nil
+    local _camLabel      = nil
     local _waitAccum     = 0
     local _waitDuration  = 0
     local _waitRounded   = 0
@@ -534,6 +531,8 @@
 -- Core Logging --
     function MsDevTools:_devWrite(entry)
         if _devBusy then return end
+        -- Step entries belong in the watcher panel only, not the log file
+        if entry.type == "step" then return end
 
         _devBusy = true
 
@@ -659,20 +658,15 @@
                         end
                     end
 
-                    -- Consecutive suppression: collapse repeated identical lines.
-                    if line == _lastReadLine then
-                        _readRepeatCount = _readRepeatCount + 1
+                    -- Refuse to send: skip consecutive same-type entries entirely
+                    if _lastReadType == entry.type then
+                        -- Refused — same badge type as last entry
                     else
                         if _lastReadLine then
-                            if _readRepeatCount > 1 then
-                                f:write(_lastReadLine .. " \195\151" .. _readRepeatCount .. "\n")
-                            else
-                                f:write(_lastReadLine .. "\n")
-                            end
+                            f:write(_lastReadLine .. "\n")
                         end
-
                         _lastReadLine     = line
-                        _readRepeatCount  = 1
+                        _lastReadType     = entry.type
                         _lastReadCategory = entry.category
                     end
                     f:close()
@@ -685,21 +679,13 @@
         if (_consolePanel or _shellActive()) and t ~= "mousemove" and t ~= "step" then
             local send = false
 
-            if t == "macro" then
-                _devLastConsoleType = t
-                _consoleMacroActive = true
-                send = true
-            elseif _consoleMacroActive and (t == "key" or t == "mouse" or t == "sound") then
-                -- Suppress input/sound noise while macro is active
-                send = false
-            elseif t == "key" or t == "mouse" or t == "sound" then
+            if t == "key" or t == "mouse" or t == "sound" then
                 if _devLastConsoleType ~= t then
                     _devLastConsoleType = t
                     send = true
                 end
             else
                 _devLastConsoleType = nil
-                _consoleMacroActive = false
                 send = true
             end
 
@@ -859,16 +845,34 @@
         })
     end
 
+    function MsDevTools:accCamMove(dx, dy)
+        if _traceSuppress then return end
+        if _camMoveAccum > 0 and (dx ~= _camLastDx or dy ~= _camLastDy) then
+            self:flushCam()
+        end
+        _camMoveAccum = _camMoveAccum + 1
+        _camLastDx = dx
+        _camLastDy = dy
+    end
+
     function MsDevTools:flushCam(label)
-        if _camMoveAccum > 1 then
+        if _camMoveAccum > 0 then
+            local effectiveLabel = label or _camLabel
+            local dx = _camLastDx or 0
+            local dy = _camLastDy or 0
+            local msg = "cam(" .. dx .. ", " .. dy .. ")"
+            if _camMoveAccum > 1 then msg = msg .. " ×" .. _camMoveAccum end
+
             if _watcherPanel then
-                self:watcherStep("cam.move ×" .. _camMoveAccum, label)
+                self:watcherStep(msg, effectiveLabel)
             end
 
-            self:macroLog("cam.move ×" .. _camMoveAccum, label)
+            self:macroLog(msg, effectiveLabel)
+            _camMoveAccum = 0
+            _camLastDx = nil
+            _camLastDy = nil
+            _camLabel = nil
         end
-
-        _camMoveAccum = 0
     end
 
     function MsDevTools:flushWait(label)
@@ -893,10 +897,6 @@
     function MsDevTools:flushAll(label)
         self:flushCam(label)
         self:flushWait(label)
-    end
-
-    function MsDevTools:accCamMove()
-        _camMoveAccum = _camMoveAccum + 1
     end
 
     function MsDevTools:accWait(duration, label)

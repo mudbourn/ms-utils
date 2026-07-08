@@ -1563,16 +1563,22 @@ function createLogPanel(config) {
     })();
 
     // ── Default appendEntry / loadHistory (single #log) ────────────────
-    const _lastByLabel = {};
+    let _lastEntry = null;
     const _pendingHolds = {}; // label+key → { row, ts }
 
-    function _entryKey(entry) {
-        let msg = entry.msg || '';
-        // Strip leading [label] prefix (already tracked by _entryLabel)
-        msg = msg.replace(/^\[[^\]]+\]\s+/, '');
-        // Strip key direction indicators for collapsing: "↓ W" / "↑ W" → "key W"
-        msg = msg.replace(/^[↓↑]\s+/, 'key ');
-        return (entry.type || '') + '|' + msg + '|' + (entry.event || '');
+    function _entryBadge(entry) {
+        if (entry.type === 'step') {
+            const msg = entry.msg || '';
+            if (/\] wait /.test(msg)) return 'wait';
+            if (/\] sound /.test(msg)) return 'sound';
+            if (/\] cam\.move/.test(msg)) return 'cam';
+            if (/\] [↓↑] |\] type /.test(msg)) return 'keys';
+            if (/\] Mouse /.test(msg)) return 'mouse';
+            if (/\] scroll /.test(msg)) return 'scroll';
+            if (/\] copy/.test(msg)) return 'copy';
+            return 'other';
+        }
+        return entry.type || 'unknown';
     }
 
     function _entryLabel(entry) {
@@ -1610,9 +1616,8 @@ function createLogPanel(config) {
                 row.dataset.holdId = holdId;
                 _pendingHolds[holdId] = { row, ts: entry.ts };
                 log.appendChild(row);
-                // Update _lastByLabel so this doesn't also get consecutive-collapsed
-                const key = _entryKey(entry);
-                _lastByLabel[label] = { key, row, count: 1 };
+                // Update _lastEntry so this doesn't also get consecutive-collapsed
+                _lastEntry = { cat: _entryBadge(entry), row, count: 1 };
                 _trimLog(log, maxEntries);
                 if (atBottom) log.scrollTop = log.scrollHeight;
                 return;
@@ -1640,8 +1645,8 @@ function createLogPanel(config) {
                     holdRow.onclick = lp._handleEntryClick;
                     pending.row.replaceWith(holdRow);
                     delete _pendingHolds[holdId];
-                    // Clear lastByLabel so next entry for this label starts fresh
-                    delete _lastByLabel[label];
+                    // Clear dedup state so next entry starts fresh
+                    _lastEntry = null;
                     _trimLog(log, maxEntries);
                     if (atBottom) log.scrollTop = log.scrollHeight;
                     return;
@@ -1649,25 +1654,8 @@ function createLogPanel(config) {
             }
         }
 
-        // Consecutive suppression per label
-        const key = _entryKey(entry);
-        const prev = _lastByLabel[label];
-
-        if (prev && prev.key === key && prev.row && prev.row.parentNode) {
-            prev.count++;
-            let badge = prev.row.querySelector('.repeat-badge');
-            if (!badge) {
-                badge = document.createElement('span');
-                badge.className = 'repeat-badge';
-                badge.style.cssText = 'font-size:10px;color:var(--text3);margin-left:4px;flex-shrink:0;';
-                prev.row.appendChild(badge);
-            }
-            badge.textContent = '×' + prev.count;
-        } else {
-            const row = buildRow(entry);
-            _lastByLabel[label] = { key, row, count: 1 };
-            log.appendChild(row);
-        }
+        const row = buildRow(entry);
+        log.appendChild(row);
 
         _trimLog(log, maxEntries);
         if (atBottom) log.scrollTop = log.scrollHeight;
@@ -1677,7 +1665,7 @@ function createLogPanel(config) {
         const log = _byId("log");
         if (!log) return;
         log.innerHTML = "";
-        for (const k in _lastByLabel) delete _lastByLabel[k];
+        _lastEntry = null;
         for (const k in _pendingHolds) delete _pendingHolds[k];
         const capped =
             entries && entries.length > maxEntries
@@ -1935,6 +1923,7 @@ function createLogPanel(config) {
                 input: "input",
                 key: "key",
                 mouse: "mouse",
+                sound: "sound",
             };
 
             // ── Console buildRow ────────────────────────────────────────────
@@ -3328,13 +3317,14 @@ function createLogPanel(config) {
             // ── Sections ───────────────────────────────────────────────────────
 
             function buildMacros(body) {
-                const main = (S.macros || []).filter((m) => m.group === "main");
-                const optional = (S.macros || []).filter(
-                    (m) => m.group === "optional",
-                );
-                const system = (S.macros || []).filter(
-                    (m) => m.group === "system",
-                );
+                // Dynamic grouping: collect macros by group, preserve order of first appearance
+                const groupOrder = [];
+                const groups = {};
+                (S.macros || []).forEach((m) => {
+                    const g = m.group || "ungrouped";
+                    if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
+                    groups[g].push(m);
+                });
 
                 function subRow(sub) {
                     const r = h("div", {
@@ -3558,18 +3548,16 @@ function createLogPanel(config) {
                     );
                 }
 
-                if (main.length) {
-                    body.appendChild(groupLabel("Main"));
-                    main.forEach(appendMacro);
-                }
-                if (optional.length) {
-                    body.appendChild(groupLabel("Optional"));
-                    optional.forEach(appendMacro);
-                }
-                if (system.length) {
-                    body.appendChild(groupLabel("System"));
-                    system.forEach(appendMacro);
-                }
+                groupOrder.forEach((g) => {
+                    if (groups[g].length) {
+                        body.appendChild(
+                            groupLabel(
+                                g.charAt(0).toUpperCase() + g.slice(1),
+                            ),
+                        );
+                        groups[g].forEach(appendMacro);
+                    }
+                });
             }
 
             // ── Reusable slider row builder ────────────────────────────────────────

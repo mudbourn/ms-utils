@@ -79,7 +79,7 @@
 
             for _, id in ipairs(ms.registry._defList or {}) do
                 local def = ms.registry._defs[id]
-                if def and not def.sub and (def.group == "main" or def.group == "optional" or def.group == "system") then
+                if def and not def.sub then
                     local enabled = ms.binds[id]
                     if enabled == nil then enabled = def.enabled end
                     local subs = {}

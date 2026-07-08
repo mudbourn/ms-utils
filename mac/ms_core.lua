@@ -337,6 +337,61 @@
             -- END MsUI (webview settings panel) --
         -- END 0. Bootstrap & Spoons --
 
+        -- 0b. Startup Sanity Checks --
+        -- After hs.reload(), OS-level key/button state from a previous session
+        -- persists because the old Lua state never sent release events.
+        -- Clean up before initializing fresh state. Uses raw keycodes to
+        -- avoid string-lookup failures.
+        do
+            -- Modifier keycodes (left variants)
+            local modKeys = { 55, 58, 59, 56, 63 }  -- cmd, alt, ctrl, shift, fn
+            for _, kc in ipairs(modKeys) do
+                pcall(function()
+                    local ev = hs.eventtap.event.newKeyEvent({}, kc, false)
+                    if ev then ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999); ev:post() end
+                end)
+            end
+
+            -- Common macro-held keycodes
+            local commonKeys = { 13, 0, 1, 2, 12, 14, 15, 3, 49 }  -- w, a, s, d, q, e, r, f, space
+            for _, kc in ipairs(commonKeys) do
+                pcall(function()
+                    local ev = hs.eventtap.event.newKeyEvent({}, kc, false)
+                    if ev then ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999); ev:post() end
+                end)
+            end
+
+            -- Mouse button release (0=left, 1=right, 2+=other)
+            for btn = 0, 5 do
+                pcall(function()
+                    local pos = {0, 0}
+                    local ev
+                    if btn == 0 then
+                        ev = hs.eventtap.event.newMouseEvent(2, pos)   -- leftMouseUp
+                    elseif btn == 1 then
+                        ev = hs.eventtap.event.newMouseEvent(4, pos)   -- rightMouseUp
+                    else
+                        ev = hs.eventtap.event.newMouseEvent(26, pos)  -- otherMouseUp
+                        ev:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btn)
+                    end
+                    if ev then
+                        ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                        ev:post()
+                    end
+                end)
+            end
+
+            -- Clear any stale global timers from a previous generation
+            if _G._loadTimers then
+                for _, t in pairs(_G._loadTimers) do pcall(function() t:stop() end) end
+            end
+            _G._loadTimers = {}
+
+            -- Stop previous app watcher if still lingering
+            if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
+        end
+        -- END 0b. Startup Sanity Checks --
+
         -- 1. State & Config --
             ms.vars = {}
             ms.keytrack = {}
@@ -638,7 +693,6 @@
                                 if modsMatch then
                                     if BindValidity == 1 or binding.system then
                                         if binding.pressFn then
-                                            print("ms.key dispatch: firing " .. (binding.system and "SYSTEM" or "normal") .. " bind, BindValidity=" .. BindValidity)
                                             local co = coroutine.create(binding.pressFn)
                                             local ok, err = coroutine.resume(co)
                                             if not ok then print("ms.key error: " .. tostring(err)) end
@@ -684,10 +738,9 @@
                 return false
             end):start()
 
-            -- Key press/release/type accumulator (mirrors cam pattern)
+            -- Key press/release/type accumulator (value-change flushing, like wait/cam)
             local _keyAccum      = 0
             local _keyMsg        = nil
-            local _keyFlushTimer = nil
             local _keyFlushLabel = nil
             local _keyFlush = function()
                 if _keyAccum > 0 then
@@ -703,12 +756,11 @@
                     _keyMsg        = nil
                     _keyFlushLabel = nil
                 end
-                _keyFlushTimer = nil
             end
             -- END Key accumulator --
 
                 ms.press = function(key, mods, hidinject)
-                    if ms.dev then spoon.MsDevTools:flushAll() end
+                    if ms.dev then spoon.MsDevTools:flushAll(); _keyFlush() end
                     local keyCode = getCode(key)
                     if not keyCode then
                         print("Error: Could not find keyCode for " .. tostring(key))
@@ -730,8 +782,6 @@
                                 _keyMsg   = msg
                             end
                             if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
-                            if _keyFlushTimer then _keyFlushTimer:stop() end
-                            _keyFlushTimer = hs.timer.doAfter(0.02, _keyFlush)
                         end
                     end
                     ms._macroHeldKeys[keyCode] = { mods = mods or {}, hidinject = hidinject }
@@ -745,7 +795,7 @@
                 end
 
                 ms.release = function(key, mods, hidinject)
-                    if ms.dev then spoon.MsDevTools:flushAll() end
+                    if ms.dev then spoon.MsDevTools:flushAll(); _keyFlush() end
                     local keyCode = getCode(key)
                     if not keyCode then return end
                     -- Calculate hold duration
@@ -772,8 +822,6 @@
                             _keyMsg   = msg
                         end
                         if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
-                        if _keyFlushTimer then _keyFlushTimer:stop() end
-                        _keyFlushTimer = hs.timer.doAfter(0.02, _keyFlush)
                     end
                     ms._macroHeldKeys[keyCode] = nil
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, false)
@@ -786,7 +834,7 @@
                 end
 
                 ms.type = function(key, mods, hidinject, holdMs)
-                    if ms.dev then spoon.MsDevTools:flushAll() end
+                    if ms.dev then spoon.MsDevTools:flushAll(); _keyFlush() end
                     local _hold = holdMs or 15
                     if ms.dev then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
@@ -799,8 +847,6 @@
                             _keyMsg   = msg
                         end
                         if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
-                        if _keyFlushTimer then _keyFlushTimer:stop() end
-                        _keyFlushTimer = hs.timer.doAfter(0.02, _keyFlush)
                     end
                     local _saved = spoon.MsDevTools:getTraceSuppress()
                     spoon.MsDevTools:setTraceSuppress(true)
@@ -846,6 +892,7 @@
             ms.scroll = function(direction, clicks)
                 if ms.dev._watcherPanel then
                     spoon.MsDevTools:flushCam()
+                    _keyFlush()
                     spoon.MsDevTools:watcherStep("scroll " .. tostring(direction)
                         .. (clicks and clicks > 1 and " \xc3\x97" .. clicks or ""))
                 end
@@ -1213,30 +1260,18 @@
             end)
             -- Suppress wait logging inside ms.cam calls (cam loops are noisy)
             local _origCamCall = getmetatable(ms.cam).__call
-            local _camAccum = 0
-            local _camFlushTimer = nil
-            local _camFlushLabel = nil
-            local _camFlush = function()
-                if _camAccum > 0 then
-                    if ms.dev and spoon.MsDevTools then
-                        spoon.MsDevTools:macroLog("cam.move ×" .. _camAccum, _camFlushLabel)
-                    end
-                    _camAccum = 0
-                    _camFlushLabel = nil
-                end
-                _camFlushTimer = nil
-            end
             getmetatable(ms.cam).__call = function(self, dx, dy)
+                dx = math.floor(dx + 0.5)
+                dy = math.floor(dy + 0.5)
                 -- Suppress internal wait logging
                 local saved = ms.dev and spoon.MsDevTools and spoon.MsDevTools:getTraceSuppress()
                 if saved ~= nil then spoon.MsDevTools:setTraceSuppress(true) end
                 _origCamCall(self, dx, dy)
                 if saved ~= nil then spoon.MsDevTools:setTraceSuppress(saved) end
-                -- Accumulate and schedule flush
-                _camAccum = _camAccum + 1
-                if not _camFlushLabel then _camFlushLabel = ms._getCallChain() end
-                if _camFlushTimer then _camFlushTimer:stop() end
-                _camFlushTimer = hs.timer.doAfter(0.02, _camFlush)
+                -- Accumulate (flushes on value change or before scroll/wait)
+                if ms.dev and spoon.MsDevTools then
+                    spoon.MsDevTools:accCamMove(dx, dy)
+                end
             end
 
             ms.cam.rebalance = function(granularity)
@@ -1245,10 +1280,11 @@
                 end
                 if _camTotalX == 0 and _camTotalY == 0 then return end
                 _camRebalancing = true
-                div = 1/granularity
-                for i = 1, granularity do
-                    ms.cam(-_camTotalX * div, -_camTotalY * div)
-                    ms.wait(.5)
+                div1 = 1/granularity
+                div2 = div1/2
+                for i = 1, granularity * 2 do
+                    ms.cam(-_camTotalX * div2, -_camTotalY * div2)
+                    ms.wait(2)
                 end
                 _camTotalX = 0
                 _camTotalY = 0
@@ -1290,7 +1326,7 @@
                 local co = coroutine.running()
                 if co then
                     local ctx = ms._coroContext[co]
-                    if ms.dev then spoon.MsDevTools:flushCam() end
+                    if ms.dev then spoon.MsDevTools:flushCam(); _keyFlush() end
 
                     if ms.dev then
                         spoon.MsDevTools:accWait(tonumber(ms_time) or 0, ms._getCallChain())
@@ -1515,7 +1551,13 @@
 
             hs.hotkey.bind({"alt"}, "[", function()
                 if not ms._loadComplete then return end
-                ms.quickReload()
+                if not ms._robloxActive and not ms._isSafeZone() then return end
+                if ms._qrCooldown then return end
+                ms._qrCooldown = true
+                local ok, err = pcall(ms.quickReload)
+                ms._quickReloading = false  -- force reset even on error
+                hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
+                if not ok then print("quickReload error: " .. tostring(err)) end
             end)
 
             hs.hotkey.bind({"alt"}, "]", function()
@@ -3093,6 +3135,35 @@
                                     })
                                 end
                             end)
+                            return
+                        end
+                        -- Reload actions: handled directly, not through bus
+                        if action == "quickReload" then
+                            pcall(ms.quickReload)
+                            return
+                        end
+                        if action == "reloadMacros" then
+                            if ms.ui and ms.ui._actions and ms.ui._actions.reloadMacros then
+                                pcall(ms.ui._actions.reloadMacros)
+                            end
+                            return
+                        end
+                        if action == "reloadTheme" then
+                            if ms.ui and ms.ui._actions and ms.ui._actions.reloadTheme then
+                                pcall(ms.ui._actions.reloadTheme)
+                            end
+                            return
+                        end
+                        if action == "reloadSettings" then
+                            if ms.ui and ms.ui._actions and ms.ui._actions.reloadSettings then
+                                pcall(ms.ui._actions.reloadSettings)
+                            end
+                            return
+                        end
+                        if action == "reloadUI" then
+                            if ms.ui and ms.ui._actions and ms.ui._actions.reloadUI then
+                                pcall(ms.ui._actions.reloadUI)
+                            end
                             return
                         end
                         -- Bus routing
