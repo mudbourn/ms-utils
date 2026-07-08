@@ -1238,6 +1238,16 @@
                     -- Activate camera on first use
                     if not _camActivated then _activateCam() end
 
+                    -- Scale by sensitivity ratio so macros calibrated at refSens
+                    -- produce the same rotation regardless of in-game sensitivity
+                    local refSens = ms.settings and ms.settings.get("refSensitivity") or 1.5
+                    local curSens = CUR_CAM_SENS or 1.5
+                    if refSens > 0 and curSens > 0 and refSens ~= curSens then
+                        local scale = refSens / curSens
+                        dx = dx * scale
+                        dy = dy * scale
+                    end
+
                     dx = math.floor(dx + 0.5)
                     dy = math.floor(dy + 0.5)
 
@@ -3200,6 +3210,11 @@
                                 pcall(function() pop.view:show() end)
                                 pcall(function() pop.view:bringToFront(true) end)
                             end
+                            return
+                        end
+                        -- PlaySlot: route sound requests back to ms.playSlot
+                        if action == "playSlot" and body and body.slot then
+                            pcall(function() ms.playSlot(body.slot) end)
                             return
                         end
                         -- Bus routing

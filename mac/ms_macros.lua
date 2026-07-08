@@ -28,6 +28,34 @@
         })
     -- END Camera Sensitivity --
 
+    -- Ref Sensitivity --
+        ms.settings.define({
+            type    = "slider",
+            key     = "refSensitivity",
+            label   = "Ref Sensitivity",
+            hint    = "Sensitivity the macros were calibrated for — adjust if your in-game sens differs",
+            min     = 0.1,
+            max     = 4,
+            step    = 0.1,
+            default = 1.5,
+            save    = true,
+            section = "calibration",
+        })
+
+        ms.settings.define({
+            type    = "slider",
+            key     = "deltaTestDeltas",
+            label   = "Test Deltas",
+            hint    = "Number of camera deltas for the Delta Test macro",
+            min     = 1,
+            max     = 50,
+            step    = 1,
+            default = 5,
+            save    = true,
+            section = "calibration",
+        })
+    -- END Ref Sensitivity --
+
     -- Click Level --
         ms.settings.define({
             key     = "clickLevel",
@@ -643,5 +671,21 @@
                 mod   = "alt",
             })
         -- END Load Second Account --
+
+        -- Delta Test --
+            local DeltaTestFunction = ms.fn(function()
+                local deltas = ms.settings.get("deltaTestDeltas") or 5
+                ms.cam.reset()
+                ms.cam(deltas, 0)
+                ms.wait(50)
+                ms.cam.rebalance()
+            end)
+
+            ms.bind.define("deltaTest", DeltaTestFunction, {
+                group   = "optional",
+                label   = "Delta Test",
+                default = false,
+            })
+        -- END Delta Test --
     -- END Macro Functions --
 -- END Combat Warriors Macros --
