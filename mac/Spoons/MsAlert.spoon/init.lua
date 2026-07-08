@@ -352,7 +352,7 @@
             if self:updateById(id, msg, duration) then return end
         end
 
-        if ms.dev and ms.dev.log then
+        if ms.dev and ms.dev.log and id ~= "_state" then
             local isError = msg and (
                 msg:find("[Ff]ailed") or msg:find("[Ee]rror")
                 or msg:find("[Cc]ould not") or msg:find("[Cc]annot")

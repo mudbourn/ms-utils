@@ -1326,7 +1326,10 @@
                 local co = coroutine.running()
                 if co then
                     local ctx = ms._coroContext[co]
-                    if ms.dev then spoon.MsDevTools:flushCam(); _keyFlush() end
+                    if ms.dev and not spoon.MsDevTools:getTraceSuppress() then
+                        spoon.MsDevTools:flushCam()
+                        _keyFlush()
+                    end
 
                     if ms.dev then
                         spoon.MsDevTools:accWait(tonumber(ms_time) or 0, ms._getCallChain())

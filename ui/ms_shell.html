@@ -30,7 +30,7 @@
 
         /* Layer 2: Reset ──────────────────────────────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-        html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; min-width: 800px; min-height: 500px; }
         body { display: flex; flex-direction: row; border-radius: var(--ms-window-radius, 0px); }
         button { cursor: pointer; border: none; background: none; color: inherit; font: inherit; }
         input, select { font: inherit; color: inherit; background: none; border: none; outline: none; }
@@ -988,29 +988,51 @@
         <div id="panel">
             <!-- Header -->
             <div id="header">
-                <div id="status-dot"></div>
-                <span id="status-text">Macros</span>
+                <span id="panel-title">mudscript — settings</span>
                 <div class="header-btns">
                     <button
-                        class="btn-macro btn-enable"
+                        id="btn-toggle-macros"
+                        class="btn-ghost"
                         onmouseenter="playSlot('hover')"
                         onclick="
                             playSlot('interact');
-                            sendToHost({ action: 'setMacros', value: 1 });
+                            var s = document.getElementById('btn-toggle-macros');
+                            var on = s.dataset.on === '1';
+                            sendToHost({ action: 'setMacros', value: on ? 0 : 1 });
                         "
-                    >
-                        Enable
-                    </button>
-                    <button
-                        class="btn-macro btn-disable"
-                        onmouseenter="playSlot('hover')"
-                        onclick="
-                            playSlot('interact');
-                            sendToHost({ action: 'setMacros', value: 0 });
-                        "
-                    >
-                        Disable
-                    </button>
+                    >Macros: ON</button>
+                    <div class="reload-dropdown" id="reloadDropdown">
+                        <button
+                            class="btn-ghost reload-dd-btn"
+                            onmouseenter="playSlot('hover')"
+                            onclick="
+                                playSlot('interact');
+                                document.getElementById('reloadDropdown').classList.toggle('open');
+                            "
+                        >
+                            Reload ▾
+                        </button>
+                        <div class="reload-dd-menu" id="reloadMenu">
+                            <div class="reload-dd-row">
+                                <span class="qr-check checked" data-qr="macros" onclick="event.stopPropagation(); toggleQR(this);"></span>
+                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
+                            </div>
+                            <div class="reload-dd-row">
+                                <span class="qr-check checked" data-qr="theme" onclick="event.stopPropagation(); toggleQR(this);"></span>
+                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
+                            </div>
+                            <div class="reload-dd-row">
+                                <span class="qr-check checked" data-qr="settings" onclick="event.stopPropagation(); toggleQR(this);"></span>
+                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
+                            </div>
+                            <div class="reload-dd-row">
+                                <span class="qr-check checked" data-qr="ui" onclick="event.stopPropagation(); toggleQR(this);"></span>
+                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
+                            </div>
+                            <div class="reload-dd-sep"></div>
+                            <button class="reload-dd-item reload-dd-full" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadAll' }); document.getElementById('reloadDropdown').classList.remove('open');">All (hs.reload)</button>
+                        </div>
+                    </div>
                     <button
                         class="btn-close"
                         onmouseenter="playSlot('hover')"
@@ -1020,52 +1042,6 @@
                         "
                     >✕</button>
                 </div>
-            </div>
-
-            <!-- Quick row -->
-            <div id="quick-row">
-                <div class="reload-dropdown" id="reloadDropdown">
-                    <button
-                        class="btn-ghost reload-dd-btn"
-                        onmouseenter="playSlot('hover')"
-                        onclick="
-                            playSlot('interact');
-                            document.getElementById('reloadDropdown').classList.toggle('open');
-                        "
-                    >
-                        Reload Options ▾
-                    </button>
-                    <div class="reload-dd-menu" id="reloadMenu">
-                        <div class="reload-dd-row">
-                            <span class="qr-check checked" data-qr="macros" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                            <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
-                        </div>
-                        <div class="reload-dd-row">
-                            <span class="qr-check checked" data-qr="theme" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                            <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
-                        </div>
-                        <div class="reload-dd-row">
-                            <span class="qr-check checked" data-qr="settings" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                            <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
-                        </div>
-                        <div class="reload-dd-row">
-                            <span class="qr-check checked" data-qr="ui" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                            <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
-                        </div>
-                        <div class="reload-dd-sep"></div>
-                        <button class="reload-dd-item reload-dd-full" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadAll' }); document.getElementById('reloadDropdown').classList.remove('open');">All (hs.reload)</button>
-                    </div>
-                </div>
-                <button
-                    class="btn-ghost"
-                    onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('interact');
-                        sendToHost({ action: 'quickReload' });
-                    "
-                >
-                    Quick Reload
-                </button>
             </div>
 
             <!-- Scrollable content -->
@@ -1558,7 +1534,7 @@ function createLogPanel(config) {
         }
         window.addEventListener("resize", function() {
             clearTimeout(_resizeTimer);
-            _resizeTimer = setTimeout(checkSize, 150);
+            _resizeTimer = setTimeout(checkSize, 50);
         });
     })();
 
@@ -5067,12 +5043,13 @@ function createLogPanel(config) {
             function receiveState(state) {
                 S = state;
                 applyTheme(S.theme);
-                const dot = document.getElementById("status-dot");
-                const text = document.getElementById("status-text");
+                const btn = document.getElementById("btn-toggle-macros");
                 const enabled = S.macrosEnabled ?? false;
-                dot.className = enabled ? "" : "off";
-                text.textContent =
-                    "Macros: " + (enabled ? "ENABLED" : "DISABLED");
+                if (btn) {
+                    btn.textContent = enabled ? "Macros: ON" : "Macros: OFF";
+                    btn.dataset.on = enabled ? "1" : "0";
+                    btn.style.color = enabled ? "var(--success)" : "var(--danger)";
+                }
                 syncQRChecks(S.qrOptions);
                 render();
             }
@@ -5087,6 +5064,37 @@ function createLogPanel(config) {
                         p.style.clipPath = "none";
                     }
                 }
+                // Header drag (settings panel is outside log-panel.js scope)
+                (function() {
+                    let _drag = null;
+                    const panel = document.querySelector(".panel-settings");
+                    if (!panel) return;
+                    const header = panel.querySelector("#header");
+                    if (!header) return;
+                    header.style.cursor = "-webkit-grab";
+                    header.addEventListener("mousedown", (e) => {
+                        if (e.button !== 0) return;
+                        if (e.target.closest(".header-btns")) return;
+                        _drag = { ox: e.screenX, oy: e.screenY };
+                        const onMove = (ev) => {
+                            if (!_drag) return;
+                            sendToHost({
+                                action: "move",
+                                dx: ev.screenX - _drag.ox,
+                                dy: ev.screenY - _drag.oy,
+                            });
+                            _drag.ox = ev.screenX;
+                            _drag.oy = ev.screenY;
+                        };
+                        const onUp = () => {
+                            _drag = null;
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                    });
+                })();
                 sendToHost({ action: "ready" });
             });
 
@@ -6977,6 +6985,39 @@ function createLogPanel(config) {
     /* ── Initial state ───────────────────────────────────────────── */
     updateSaveBtnState();
     refreshMacroList();
+
+    /* ── Header drag ──────────────────────────────────────────── */
+    (function() {
+        let _drag = null;
+        const panel = document.querySelector(".panel-macros");
+        if (!panel) return;
+        const header = panel.querySelector("#header");
+        if (!header) return;
+        header.style.cursor = "-webkit-grab";
+        header.addEventListener("mousedown", (e) => {
+            if (e.button !== 0) return;
+            if (e.target.closest(".header-btns")) return;
+            _drag = { ox: e.screenX, oy: e.screenY };
+            const onMove = (ev) => {
+                if (!_drag) return;
+                if (window.shellPost) {
+                    shellPost("macros", "move", {
+                        dx: ev.screenX - _drag.ox,
+                        dy: ev.screenY - _drag.oy,
+                    });
+                }
+                _drag.ox = ev.screenX;
+                _drag.oy = ev.screenY;
+            };
+            const onUp = () => {
+                _drag = null;
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+            };
+            window.addEventListener("mousemove", onMove);
+            window.addEventListener("mouseup", onUp);
+        });
+    })();
 
     })();
 
