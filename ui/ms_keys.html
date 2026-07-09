@@ -47,8 +47,7 @@
                 --radius: 2px;
                 --radius-s: 1px;
                 /* panel extras */
-                --mouse: #aaaaaa;
-                --scroll: #888888;
+                /* --mouse and --scroll fall back to --warning via var() */
             }
 
             /* ── Reset ──────────────────────────────────────────────────────── */
@@ -68,7 +67,7 @@
                 background: transparent;
             }
             body {
-                font-family: Arial, "Almendra", Palatino, Georgia, serif;
+                font-family: var(--font), "Almendra", Palatino, Georgia, serif;
                 font-size: 13px;
                 color: var(--text);
                 -webkit-font-smoothing: antialiased;
@@ -102,7 +101,6 @@
                 box-shadow: 0 1px 12px
                     color-mix(in srgb, var(--accent) 12%, transparent);
                 flex-shrink: 0;
-                -webkit-app-region: drag;
             }
             #panel-title {
                 flex: 1;
@@ -267,9 +265,9 @@
                 white-space: nowrap;
             }
             .pill-key {
-                background: var(--surface2);
-                border: 1px solid var(--border);
-                color: var(--text2);
+                background: color-mix(in srgb, var(--accent) 15%, transparent);
+                border: 1px solid var(--accent);
+                color: var(--accent);
             }
             .pill-mouse {
                 background: color-mix(in srgb, var(--warning) 15%, transparent);
@@ -394,12 +392,12 @@
                 color: var(--accent);
             }
             .badge-mouse {
-                background: color-mix(in srgb, var(--mouse) 20%, transparent);
-                color: var(--mouse);
+                background: color-mix(in srgb, var(--mouse, var(--warning)) 20%, transparent);
+                color: var(--mouse, var(--warning));
             }
             .badge-scroll {
-                background: color-mix(in srgb, var(--scroll) 20%, transparent);
-                color: var(--scroll);
+                background: color-mix(in srgb, var(--scroll, var(--warning)) 20%, transparent);
+                color: var(--scroll, var(--warning));
             }
 
             /* ── Arrows ─────────────────────────────────────────────────────── */
@@ -413,10 +411,16 @@
                 color: var(--text2);
             }
             .arrow-mouse {
-                color: var(--mouse);
+                color: var(--text);
+            }
+            .arrow-key {
+                color: var(--text);
+            }
+            .arrow-key-up {
+                color: var(--text2);
             }
             .arrow-scroll {
-                color: var(--scroll);
+                color: var(--scroll, var(--warning));
             }
             .arrow-move {
                 color: var(--text3);
@@ -428,11 +432,11 @@
                 word-break: break-word;
             }
             .mouse-name {
-                color: var(--mouse);
+                color: var(--text);
                 word-break: break-word;
             }
             .scroll-name {
-                color: var(--scroll);
+                color: var(--scroll, var(--warning));
                 word-break: break-word;
             }
             .move-name {
@@ -516,7 +520,7 @@
                         closePanel();
                     "
                 >
-                    ✕
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/></svg>
                 </button>
             </div>
         </div>
@@ -671,7 +675,8 @@
                     row.append(
                         mkSpan("badge badge-key", "key"),
                         mkSpan(
-                            "arrow " + (entry.down ? "arrow-down" : "arrow-up"),
+                            "arrow " +
+                                (entry.down ? "arrow-key" : "arrow-key-up"),
                             entry.down ? "↓" : "↑",
                         ),
                         mkSpan("key-name", entry.key || ""),

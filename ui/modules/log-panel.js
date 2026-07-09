@@ -94,6 +94,7 @@ function applyTheme(t) {
     if (t.accentGlowFaint) r.setProperty("--accent-glow-faint", t.accentGlowFaint);
     if (t.dangerGlow) r.setProperty("--danger-glow", t.dangerGlow);
     if (t.dangerBorder) r.setProperty("--danger-border", t.dangerBorder);
+    if (t.key) r.setProperty("--key", t.key);
     if (t.mouse) r.setProperty("--mouse", t.mouse);
     if (t.scroll) r.setProperty("--scroll", t.scroll);
     if (t.radius !== undefined) {

@@ -2047,7 +2047,7 @@
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
-                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" then return false end
+                if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" and slotId ~= "settingsOpen" and slotId ~= "settingsClose" then return false end
                 ms._slotHandles = ms._slotHandles or {}
                 -- If this slot is already playing, skip to avoid clipping/restart
                 if ms._slotHandles[slotId] then
@@ -3126,6 +3126,19 @@
                             hs.timer.doAfter(0.1, function()
                                 if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
                             end)
+                            -- Start fade-in if shell.show() was called before page loaded
+                            if ms._shellState and ms._shellState.visible and _shellView then
+                                local view = _shellView
+                                local step, steps = 0, 6
+                                local fadeMs = (ms._theme and ms._theme.fadeMs) or 150
+                                _shellFadeTimer = hs.timer.doEvery(fadeMs / 1000 / steps, function()
+                                    step = step + 1
+                                    pcall(function() view:alpha(step / steps) end)
+                                    if step >= steps then
+                                        if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
+                                    end
+                                end)
+                            end
                         end
                         -- Close: hide the shell when any panel sends {action:"close"}
                         if action == "close" then
@@ -3205,10 +3218,15 @@
                         end
                         -- FocusPopOut: bring a popped-out panel's window to front
                         if action == "focusPopOut" and body and body.panel then
-                            local pop = _popouts[body.panel]
-                            if pop and pop.view then
-                                pcall(function() pop.view:show() end)
-                                pcall(function() pop.view:bringToFront(true) end)
+                            if ms.shell and ms.shell.getPopOutView then
+                                local popView = ms.shell.getPopOutView(body.panel)
+                                if popView then
+                                    pcall(function() popView:show() end)
+                                    pcall(function() popView:bringToFront(true) end)
+                                    hs.timer.doAfter(0.15, function()
+                                        pcall(function() popView:bringToFront(true) end)
+                                    end)
+                                end
                             end
                             return
                         end
@@ -3281,10 +3299,17 @@
                     end)
 
                     -- When a popout closes, tell the shell to restore the inline panel
+                    -- and trigger a history reload so the inline panel has data.
                     if ms.bus then
                         ms.bus.on("panel:poppedIn", function(data)
                             if data and data.id then
                                 ms.shell.eval("shellReceive('" .. data.id .. "', 'poppedIn')")
+                                -- Trigger history reload for the inline panel
+                                hs.timer.doAfter(0.1, function()
+                                    pcall(function()
+                                        ms.bus.emit("ui:" .. data.id .. ":ready", { action = "ready" })
+                                    end)
+                                end)
                             end
                         end)
                     end
@@ -3328,6 +3353,11 @@
                     _shellView:alpha(0)
                     _shellView:show()
                     pcall(function() _shellView:bringToFront(true) end)
+                    ms._shellState = ms._shellState or {}
+                    ms._shellState.visible = true
+                    if ms.bus then ms.bus.emit("macroLab:toggled", { visible = true }) end
+                    -- If page hasn't loaded yet, the "ready" callback will start the fade
+                    if not _shellReady then return end
                     local view = _shellView
                     local step, steps = 0, 6
                     local fadeMs = (ms._theme and ms._theme.fadeMs) or 150
@@ -3338,9 +3368,6 @@
                             if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
                         end
                     end)
-                    ms._shellState = ms._shellState or {}
-                    ms._shellState.visible = true
-                    if ms.bus then ms.bus.emit("macroLab:toggled", { visible = true }) end
                 end
 
                 ms.shell.hide = function()
@@ -3415,11 +3442,10 @@
                         bg = "--bg", surface = "--surface", surface2 = "--surface2",
                         hover = "--hover", accent = "--accent", accentHi = "--accent-hi",
                         success = "--success", dangerBg = "--danger-bg", danger = "--danger",
-                        warning = "--warning", text = "--text", text2 = "--text2",
-                        text3 = "--text3", border = "--border", borderDim = "--border-dim",
+                        warning = "--warning", text = "--text",
                         accentGlow = "--accent-glow", accentGlowFaint = "--accent-glow-faint",
                         dangerGlow = "--danger-glow", dangerBorder = "--danger-border",
-                        mouse = "--mouse", scroll = "--scroll",
+                        mouse = "--mouse", scroll = "--scroll", key = "--key",
                         recording = "--recording", recordingText = "--recording-text",
                         recordingBg = "--recording-bg", running = "--running",
                         runningText = "--running-text", runningBg = "--running-bg",
@@ -3427,6 +3453,51 @@
                     for k, cssVar in pairs(map) do
                         local val = v(k)
                         if val then parts[#parts + 1] = cssVar .. ":" .. val end
+                    end
+                    -- Hex-to-rgb helper for derived vars
+                    local function hexRgb(hex)
+                        if not hex or type(hex) ~= "string" then return nil end
+                        hex = hex:gsub("#", "")
+                        if #hex ~= 6 then return nil end
+                        local r = tonumber(hex:sub(1,2), 16)
+                        local g = tonumber(hex:sub(3,4), 16)
+                        local b = tonumber(hex:sub(5,6), 16)
+                        if not r or not g or not b then return nil end
+                        return r, g, b
+                    end
+                    -- Derived text2/text3 (from text color with reduced alpha)
+                    local tr, tg, tb = hexRgb(v("text"))
+                    if tr then
+                        if not t.text2 then parts[#parts + 1] = ("--text2:rgba(%d,%d,%d,0.85)"):format(tr, tg, tb) end
+                        if not t.text3 then parts[#parts + 1] = ("--text3:rgba(%d,%d,%d,0.55)"):format(tr, tg, tb) end
+                    end
+                    -- Derived accent-glow / accent-glow-faint (from accent)
+                    if not t.accentGlow then
+                        local ar2, ag2, ab2 = hexRgb(v("accent"))
+                        if ar2 then parts[#parts + 1] = ("--accent-glow:rgba(%d,%d,%d,0.4)"):format(ar2, ag2, ab2) end
+                    end
+                    if not t.accentGlowFaint then
+                        local ar3, ag3, ab3 = hexRgb(v("accent"))
+                        if ar3 then parts[#parts + 1] = ("--accent-glow-faint:rgba(%d,%d,%d,0.12)"):format(ar3, ag3, ab3) end
+                    end
+                    -- Derived danger-glow / danger-border (from danger)
+                    if not t.dangerGlow then
+                        local dr2, dg2, db2 = hexRgb(v("danger"))
+                        if dr2 then parts[#parts + 1] = ("--danger-glow:rgba(%d,%d,%d,0.6)"):format(dr2, dg2, db2) end
+                    end
+                    if not t.dangerBorder then
+                        local dr3, dg3, db3 = hexRgb(v("danger"))
+                        if dr3 then parts[#parts + 1] = ("--danger-border:rgba(%d,%d,%d,0.3)"):format(dr3, dg3, db3) end
+                    end
+                    -- Derived border/border-dim (blend of accent + hover)
+                    if not t.border then
+                        local ar, ag, ab = hexRgb(v("accent"))
+                        local hr, hg, hb = hexRgb(v("hover"))
+                        if ar and hr then
+                            local mr, mg, mb = math.floor((ar+hr)/2), math.floor((ag+hg)/2), math.floor((ab+hb)/2)
+                            parts[#parts + 1] = ("--border:rgba(%d,%d,%d,0.55)"):format(mr, mg, mb)
+                            parts[#parts + 1] = ("--border-dim:rgba(%d,%d,%d,0.18)"):format(mr, mg, mb)
+                        end
                     end
                     -- Radius
                     local radius = v("radius") or 4
@@ -3440,6 +3511,53 @@
                     return ":root{" .. table.concat(parts, ";") .. "}"
                 end
 
+                --- Pre-bake popout HTML files with current theme injected.
+                --- Called at init and when theme changes.
+                ms.shell.bakePopOuts = function()
+                    local themeCSS = _buildThemeCSS()
+                    local r = (ms._theme and ms._theme.windowRadius)
+                        or (ms._themeDefaults and ms._themeDefaults.windowRadius) or 0
+                    for pid, fileName in pairs(_panelFiles) do
+                        local srcPath = hs.configdir .. "/ui/" .. fileName
+                        local f = io.open(srcPath, "r")
+                        if f then
+                            local html = f:read("*all"); f:close()
+                            -- Inject CSS: html/body transparent, #popout-root has bg + radius
+                            -- (mirrors #shell-root pattern in ms_shell.html)
+                            local inject = string.format(
+                                '<style>html,body{background:transparent!important;overflow:hidden;}'
+                                .. '#popout-root{display:flex;flex-direction:column;'
+                                .. 'width:100%%;height:100%%;'
+                                .. 'background:var(--bg);border-radius:%dpx;overflow:hidden;}'
+                                .. ':root{--ms-window-radius:%dpx;}'
+                                .. '%s</style>',
+                                r, r, themeCSS
+                            )
+                            html = html:gsub("</head>", inject:gsub("%%", "%%%%") .. "</head>", 1)
+                            -- Wrap body content in #popout-root (like #shell-root)
+                            html = html:gsub("(<body[^>]*>)", "%1<div id='popout-root'>")
+                            html = html:gsub("(</body>)", "</div>%1")
+                            local tmpName = hs.configdir .. "/ui/_popout_" .. pid .. ".html"
+                            local wf = io.open(tmpName, "w")
+                            if wf then
+                                wf:write(html); wf:close()
+                            end
+                        end
+                    end
+                end
+
+                -- Bake on init
+                ms.shell.bakePopOuts()
+
+                -- Rebake whenever theme changes
+                if ms.loadTheme then
+                    local _origLoadTheme = ms.loadTheme
+                    ms.loadTheme = function()
+                        _origLoadTheme()
+                        pcall(ms.shell.bakePopOuts)
+                    end
+                end
+
                 --- Push JS to a popout webview (used by _pushToPanel fallback).
                 ms.shell.getPopOutView = function(panelId)
                     local pop = _popouts[panelId]
@@ -3450,49 +3568,74 @@
                     if _popouts[panelId] then
                         pcall(function() _popouts[panelId].view:show() end)
                         pcall(function() _popouts[panelId].view:bringToFront(true) end)
+                        hs.timer.doAfter(0.1, function()
+                            pcall(function() _popouts[panelId].view:bringToFront(true) end)
+                        end)
                         return true
                     end
-                    local fileName = _panelFiles[panelId]
-                    if not fileName then
-                        print("[popOut] no file mapping for panel: " .. tostring(panelId))
-                        return false
+                    local tmpName = hs.configdir .. "/ui/_popout_" .. panelId .. ".html"
+                    local f = io.open(tmpName, "r")
+                    if not f then
+                        ms.shell.bakePopOuts()
+                        f = io.open(tmpName, "r")
+                        if not f then
+                            print("[popOut] no baked file for panel: " .. tostring(panelId))
+                            return false
+                        end
                     end
+                    f:close()
 
                     require("hs.webview")
                     require("hs.webview.usercontent")
 
+                    local sf = hs.screen.mainScreen():frame()
+                    local w, h = 650, 450
+                    local x = sf.x + math.floor((sf.w - w) / 2) + 40
+                    local y = sf.y + math.floor((sf.h - h) / 2) + 40
+
                     -- Use the panel's own channel name so no HTML surgery is needed.
                     -- The standalone HTML sends to webkit.messageHandlers[panelId].
                     local popChannel = hs.webview.usercontent.new(panelId)
+                    local popView  -- declare before callback so closure captures it
                     popChannel:setCallback(function(message)
-                        local ok, data = pcall(hs.json.decode, message.body)
+                        local ok, data = pcall(hs.json.decode, message.body or "")
                         if not ok or type(data) ~= "table" then return end
                         local panel  = data.panel  or panelId
                         local action = data.action or "unknown"
-                        -- Standalone panels send {action:…} directly (no body wrapper);
-                        -- shell-embedded panels send {panel, action, body}.  Normalise.
                         local body   = data.body or data
                         -- Route playSlot back through ms.playSlot
                         if action == "playSlot" and body and body.slot then
                             pcall(function() ms.playSlot(body.slot) end)
                             return
                         end
-                        -- Close: destroy the popout window
+                        -- Close: hide instantly, restore to shell, then delete
                         if action == "close" then
-                            pcall(function() popView:delete() end)
+                            pcall(function() popView:hide() end)
                             _popouts[panelId] = nil
-                            if ms.bus then ms.bus.emit("panel:poppedIn", { id = panelId }) end
+                            -- Tell shell directly (don't rely on bus)
+                            if ms.shell and ms.shell.eval then
+                                ms.shell.eval("shellReceive('" .. panelId .. "', 'poppedIn')")
+                                -- Trigger history reload for the inline panel
+                                hs.timer.doAfter(0.1, function()
+                                    pcall(function()
+                                        ms.bus.emit("ui:" .. panelId .. ":ready", { action = "ready" })
+                                    end)
+                                end)
+                            end
+                            hs.timer.doAfter(0.3, function()
+                                pcall(function() popView:delete() end)
+                            end)
                             return
                         end
                         -- Move: drag the popout window (JS sends dx/dy deltas)
                         if action == "move" and body and body.dx and body.dy then
                             pcall(function()
-                                local f = popView:frame()
+                                local f2 = popView:frame()
                                 popView:frame({
-                                    x = f.x + body.dx,
-                                    y = f.y + body.dy,
-                                    w = f.w,
-                                    h = f.h,
+                                    x = f2.x + body.dx,
+                                    y = f2.y + body.dy,
+                                    w = f2.w,
+                                    h = f2.h,
                                 })
                             end)
                             return
@@ -3502,32 +3645,7 @@
                         end
                     end)
 
-                    -- Read standalone HTML and inject theme + radius
-                    local htmlPath = hs.configdir .. "/ui/" .. fileName
-                    local f = io.open(htmlPath, "r")
-                    if not f then
-                        print("[popOut] could not open: " .. htmlPath)
-                        return false
-                    end
-                    local html = f:read("*all"); f:close()
-
-                    -- Inject: theme CSS vars + transparent bg + window radius
-                    local r = (ms._theme and ms._theme.windowRadius)
-                        or (ms._themeDefaults and ms._themeDefaults.windowRadius) or 0
-                    local inject = string.format(
-                        '<style>html,body{background:transparent!important;overflow:hidden;}'
-                        .. 'body{background:var(--bg)!important;border-radius:%dpx;}'
-                        .. '%s</style>',
-                        r, _buildThemeCSS()
-                    )
-                    html = html:gsub("</head>", inject .. "</head>", 1)
-
-                    local sf = hs.screen.mainScreen():frame()
-                    local w, h = 800, 500
-                    local x = sf.x + math.floor((sf.w - w) / 2) + 40
-                    local y = sf.y + math.floor((sf.h - h) / 2) + 40
-
-                    local popView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, popChannel)
+                    popView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, popChannel)
                     if not popView then
                         print("[popOut] hs.webview.new returned nil")
                         return false
@@ -3538,13 +3656,22 @@
                     pcall(function() popView:allowTextEntry(true) end)
                     pcall(function() popView:shadow(true) end)
                     pcall(function() popView:minimumSize({ w = 400, h = 300 }) end)
+                    pcall(function() popView:allowResizing(true) end)
 
-                    local baseURL = "file://" .. hs.configdir .. "/ui/"
-                    popView:html(html, baseURL)
+                    -- Load via url() — document gets a real file URL
+                    popView:url("file://" .. tmpName)
                     popView:show()
+                    -- Bring popout above the shell after window system settles
+                    hs.timer.doAfter(0.15, function()
+                        pcall(function() popView:bringToFront(true) end)
+                    end)
 
-                    -- Backup: re-apply theme via JS once modules have loaded
-                    hs.timer.doAfter(0.3, function()
+                    -- Apply theme after page loads (url() is async)
+                    -- NOTE: do NOT call applyWindowRadius on popouts — it sets
+                    -- body background to transparent, but popouts have no inner
+                    -- wrapper like #shell-root to fill the gap (invisible bg bug).
+                    -- The bake CSS already handles body background + border-radius.
+                    hs.timer.doAfter(0.5, function()
                         if not popView then return end
                         local themeJson = hs.json.encode(ms._theme or {})
                         pcall(function() popView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)
@@ -3558,9 +3685,21 @@
                 ms.shell.popIn = function(panelId)
                     local pop = _popouts[panelId]
                     if not pop then return false end
-                    pcall(function() pop.view:delete() end)
+                    pcall(function() pop.view:hide() end)
                     _popouts[panelId] = nil
-                    if ms.bus then ms.bus.emit("panel:poppedIn", { id = panelId }) end
+                    -- Tell shell directly (don't rely on bus)
+                    if ms.shell and ms.shell.eval then
+                        ms.shell.eval("shellReceive('" .. panelId .. "', 'poppedIn')")
+                        -- Trigger history reload for the inline panel
+                        hs.timer.doAfter(0.1, function()
+                            pcall(function()
+                                ms.bus.emit("ui:" .. panelId .. ":ready", { action = "ready" })
+                            end)
+                        end)
+                    end
+                    hs.timer.doAfter(0.3, function()
+                        pcall(function() pop.view:delete() end)
+                    end)
                     return true
                 end
 
@@ -3570,32 +3709,8 @@
             end
         -- END 12. Shell Infrastructure (ms.shell) --
 
-        -- 12a. Macro Lab Setting (ms.settings.define) --
+        -- 12a. Shell Bus Listeners --
             do
-                if ms.settings and type(ms.settings.define) == "function" then
-                    pcall(ms.settings.define, {
-                        type     = "toggle",
-                        key      = "macroLabEnabled",
-                        label    = "Enable v2 UI",
-                        desc     = "Use the new Macro Lab shell instead of legacy standalone panels",
-                        default  = true,
-                        onChange = function(val)
-                            ms._macroLabEnabled = (val == true)
-                            if not ms._macroLabEnabled then
-                                pcall(function() ms.shell.hide() end)
-                            elseif ms._settingsLoaded then
-                                -- Only auto-show when user toggles at runtime,
-                                -- not during boot (shell should stay hidden until
-                                -- the user explicitly opens it via Alt+P or menubar).
-                                pcall(function() ms.ui.hide() end)
-                                pcall(function() ms.shell.show() end)
-                            end
-                            -- Save only if saveSettings is fully initialized
-                            -- (skip during boot — value is already in the file)
-                            if ms._settingsLoaded and ms.saveSettings then pcall(ms.saveSettings) end
-                        end,
-                    })
-                end
                 if ms.bus then
                     ms.bus.on("ui:_shell:navigate", function(data)
                         if data and data.panel then

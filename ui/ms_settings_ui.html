@@ -684,13 +684,22 @@
                 border-radius: var(--radius-s);
                 box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
                 z-index: 150;
-                overflow: hidden;
+                /* Scroll internally when taller than the space showCtxMenu() gives us,
+                   instead of overflowing the webview window and getting clipped. */
+                overflow-x: hidden;
+                overflow-y: auto;
+                overscroll-behavior: contain;
                 display: none;
             }
             #ctx-menu.open {
                 display: block;
             }
             .ctx-header {
+                /* Stays pinned while a long menu scrolls under it. */
+                position: sticky;
+                top: 0;
+                z-index: 1;
+                background: var(--surface2);
                 padding: 5px 10px 4px;
                 font-size: 10px;
                 font-weight: 600;
@@ -1114,14 +1123,37 @@
                     el.appendChild(row);
                 }
 
-                // Position: try to stay within viewport
+                // Position so the menu is always fully visible inside the webview:
+                // clamp horizontally, flip upward when there's more room above, and
+                // cap the height to the available space so a tall menu scrolls itself
+                // rather than spilling past the window border.
                 el.classList.add("open");
-                const mw = el.offsetWidth || 160;
-                const mh = el.offsetHeight || 80;
+                el.style.maxHeight = "";               // reset before measuring natural height
+                const MARGIN = 6;
                 const vw = window.innerWidth;
                 const vh = window.innerHeight;
-                el.style.left = Math.min(x, vw - mw - 4) + "px";
-                el.style.top = Math.min(y, vh - mh - 4) + "px";
+                const mw = el.offsetWidth || 160;
+                const naturalH = el.scrollHeight;
+
+                const left = Math.max(MARGIN, Math.min(x, vw - mw - MARGIN));
+
+                const spaceBelow = vh - y - MARGIN;
+                const spaceAbove = y - MARGIN;
+                let top, maxH;
+                if (naturalH <= spaceBelow) {
+                    top = y;               maxH = spaceBelow;   // fits below the cursor
+                } else if (naturalH <= spaceAbove) {
+                    top = y - naturalH;    maxH = spaceAbove;   // fits above the cursor
+                } else if (spaceBelow >= spaceAbove) {
+                    top = y;               maxH = spaceBelow;   // taller than either side: scroll, open down
+                } else {
+                    top = MARGIN;          maxH = spaceAbove;   // scroll, open up
+                }
+                top = Math.max(MARGIN, top);
+
+                el.style.left = left + "px";
+                el.style.top = top + "px";
+                el.style.maxHeight = maxH + "px";
             }
 
             // Close ctx menu and reload dropdown on any left-click or Escape.

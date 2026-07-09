@@ -68,6 +68,7 @@
     local _devBusy            = false
     local _devLastConsoleType = nil
     local _lastReadLine       = nil
+    local _consoleSkip = { roblox_focus=1, roblox_blur=1, target_focus=1, target_blur=1, macros_enabled=1, macros_disabled=1 }
     local _lastReadType       = nil
     local _lastReadCategory   = nil
 
@@ -263,7 +264,7 @@
 
         -- History loader (must be before bus handlers)
         local _HIST_MAX = 500
-        local function _loadDevHistory(panel, categories, shellPanelId)
+        local function _loadDevHistory(panel, categories, shellPanelId, skipEvents)
             local entries = {}
             for _, cat in ipairs(categories) do
                 local path = _catPaths[cat]
@@ -273,7 +274,10 @@
                         for line in f:lines() do
                             local ok, entry = pcall(hs.json.decode, line)
                             if ok and entry then
-                                entries[#entries + 1] = entry
+                                -- Filter out skipped events (e.g. _consoleSkip for console)
+                                if not skipEvents or not (entry.event and skipEvents[entry.event]) then
+                                    entries[#entries + 1] = entry
+                                end
                             end
                         end
                         f:close()
@@ -322,7 +326,7 @@
                         end
                     end
                 elseif action == "clear" then
-                    for _, cat in ipairs({"macro", "console", "error", "system", "input"}) do
+                    for _, cat in ipairs({"console", "error", "system"}) do
                         local p = _catPaths[cat]
                         if p then local f = io.open(p, "w"); if f then f:close() end end
                         local r = _readablePaths[cat]
@@ -331,7 +335,7 @@
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
                 elseif action == "ready" then
-                    _loadDevHistory(nil, {"macro", "console", "error", "system", "input"}, "console")
+                    _loadDevHistory(nil, {"console", "error", "system"}, "console", _consoleSkip)
                 end
             end)
 
@@ -340,7 +344,7 @@
                 if not body or type(body) ~= "table" then return end
                 local action = body.action
                 if action == "clear" then
-                    for _, cat in ipairs({"macro", "error", "system"}) do
+                    for _, cat in ipairs({"macro", "error"}) do
                         local p = _catPaths[cat]
                         if p then local f = io.open(p, "w"); if f then f:close() end end
                         local r = _readablePaths[cat]
@@ -349,7 +353,7 @@
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
                 elseif action == "ready" then
-                    _loadDevHistory(nil, {"macro", "error", "system"}, "watcher")
+                    _loadDevHistory(nil, {"macro", "error"}, "watcher")
                 end
             end)
 
@@ -396,12 +400,12 @@
                 if p == "console" then
                     _consoleOpen = true
                     hs.timer.doAfter(0.1, function()
-                        _loadDevHistory(nil, {"macro", "console", "error", "system", "input"}, "console")
+                        _loadDevHistory(nil, {"console", "error", "system"}, "console", _consoleSkip)
                     end)
                 elseif p == "watcher" then
                     _watcherOpen = true
                     hs.timer.doAfter(0.1, function()
-                        _loadDevHistory(nil, {"macro", "error", "system"}, "watcher")
+                        _loadDevHistory(nil, {"macro", "error"}, "watcher")
                     end)
                 elseif p == "keys" then
                     if not _keysReady then _keysReady = true end
@@ -691,14 +695,12 @@
             local send = false
 
             -- Filter status events from console (kept in watcher)
-            local _consoleSkip = { roblox_focus=1, roblox_blur=1, target_focus=1, target_blur=1, macros_enabled=1, macros_disabled=1 }
+            -- Key/mouse/sound/macro belong in their dedicated monitors, not console
+            local _consoleDedicated = { key=1, mouse=1, sound=1, macro=1 }
             if t == "system" and entry.event and _consoleSkip[entry.event] then
                 send = false
-            elseif t == "key" or t == "mouse" or t == "sound" then
-                if _devLastConsoleType ~= t then
-                    _devLastConsoleType = t
-                    send = true
-                end
+            elseif _consoleDedicated[t] then
+                send = false
             else
                 _devLastConsoleType = nil
                 send = true
@@ -711,7 +713,7 @@
             end
         end
 
-        if (_watcherPanel or _shellActive()) and (t == "macro" or t == "print" or t == "error" or t == "system" or t == "sound") then
+        if (_watcherPanel or _shellActive()) and (t == "macro" or t == "error" or t == "sound") then
             pcall(function()
                 _pushToPanel(_watcherPanel, "watcher", "appendEntry(" .. json .. ")")
             end)
@@ -1013,7 +1015,7 @@
         for _, k in ipairs({"bg","surface","surface2","hover","accent","accentHi",
             "success","dangerBg","danger","warning","text","text2","text3",
             "border","borderDim","accentGlow","accentGlowFaint","dangerGlow",
-            "dangerBorder","radius","font"}) do
+            "dangerBorder","mouse","scroll","key","radius","font"}) do
             if t[k] ~= nil then safe[k] = t[k] end
         end
 
@@ -1228,7 +1230,7 @@
                 end
 
             elseif data.action == "clear" then
-                for _, cat in ipairs({"macro", "console", "error", "system", "input"}) do
+                for _, cat in ipairs({"console", "error", "system"}) do
                     local p = _catPaths[cat]
                     if p then local f = io.open(p, "w"); if f then f:close() end end
 
@@ -1276,7 +1278,7 @@
             ms.shell.show()
             ms.shell.eval("showPanel('console')")
             hs.timer.doAfter(0.15, function()
-                _loadDevHistory(nil, {"macro", "console", "error", "system", "input"}, "console")
+                _loadDevHistory(nil, {"console", "error", "system"}, "console", _consoleSkip)
             end)
             return
         end
@@ -1304,7 +1306,7 @@
             _devFadeTimers["_histConsole"] = nil
             if not _consolePanel or not _consoleOpen then return end
 
-            _loadDevHistory(_consolePanel, {"macro", "console", "error", "system", "input"})
+            _loadDevHistory(_consolePanel, {"console", "error", "system"}, nil, _consoleSkip)
         end)
     end
 
@@ -1344,7 +1346,7 @@
             if not ok or type(data) ~= "table" then return end
 
             if data.action == "clear" then
-                for _, cat in ipairs({"macro", "error", "system"}) do
+                for _, cat in ipairs({"macro", "error"}) do
                     local p = _catPaths[cat]
                     if p then local f = io.open(p, "w"); if f then f:close() end end
 
@@ -1385,7 +1387,7 @@
             ms.shell.show()
             ms.shell.eval("showPanel('watcher')")
             hs.timer.doAfter(0.15, function()
-                _loadDevHistory(nil, {"macro", "error", "system"}, "watcher")
+                _loadDevHistory(nil, {"macro", "error"}, "watcher")
             end)
             return
         end
@@ -1413,7 +1415,7 @@
             _devFadeTimers["_histWatcher"] = nil
             if not _watcherPanel or not _watcherOpen then return end
 
-            _loadDevHistory(_watcherPanel, {"macro", "error", "system"})
+            _loadDevHistory(_watcherPanel, {"macro", "error"})
         end)
     end
 

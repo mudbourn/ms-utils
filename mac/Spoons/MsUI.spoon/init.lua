@@ -1081,7 +1081,7 @@
             end,
 
             editTheme = function()
-                os.execute("open " .. themePath)
+                os.execute("open " .. os.getenv("HOME") .. "/.hammerspoon/ms_theme.json")
             end,
 
             openDevLogs = function()

@@ -16,7 +16,7 @@
             --border-faint: rgba(100,100,100,0.08);
             --accent-glow: rgba(196,26,26,0.4); --accent-glow-faint: rgba(196,26,26,0.12);
             --danger-glow: rgba(212,32,32,0.6); --danger-border: rgba(212,32,32,0.3);
-            --mouse: #aaaaaa; --scroll: #888888;
+            /* --mouse and --scroll fall back to --warning via var() */
             --recording: #dc3232; --recording-text: #ff6b6b; --recording-bg: rgba(220,50,50,0.2);
             --running: #64a0ff; --running-text: #88bbff; --running-bg: rgba(100,160,255,0.15);
             --success-state: #3cb44b; --success-text: #6bdc7b; --success-bg: rgba(60,180,75,0.15);
@@ -159,7 +159,7 @@
         .badge-result { background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
         .badge-error { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
         .badge-macro { background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
-        .badge-key { background: var(--surface2); color: var(--text); border-color: var(--text3); }
+        .badge-key { background: color-mix(in srgb, var(--key, var(--accent)) 20%, transparent); color: var(--key, var(--accent)); border-color: color-mix(in srgb, var(--key, var(--accent)) 45%, transparent); }
         .badge-mouse { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
         .badge-input { background: transparent; color: var(--text2); font-style: italic; border-color: transparent; }
         .badge-sound { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
@@ -225,13 +225,13 @@
         #run-btn:hover { opacity: 0.85; }
 
         /* ── Context Menu ── */
-        #ctx-menu {
+        #ctx-menu, #ctx-menu-settings {
             position: fixed; min-width: 140px; background: var(--surface2);
             border: 1px solid var(--border); border-radius: var(--radius-s);
             box-shadow: 0 8px 24px rgba(0,0,0,0.55); z-index: 150;
             overflow: hidden; display: none;
         }
-        #ctx-menu.open { display: block; }
+        #ctx-menu.open, #ctx-menu-settings.open { display: block; }
         .ctx-header {
             padding: 5px 10px 4px; font-size: 10px; font-weight: 600;
             color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px;
@@ -300,7 +300,7 @@
         .section-label { font: 700 9px var(--font-mono); letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; margin-bottom: 5px; }
         #keys-pills, #mouse-pills { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
         .panel-keys .pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-family: inherit; white-space: nowrap; }
-        .pill-key { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
+        .pill-key { background: color-mix(in srgb, var(--key, var(--accent)) 15%, transparent); border: 1px solid var(--key, var(--accent)); color: var(--key, var(--accent)); }
         .pill-mouse { background: color-mix(in srgb, var(--warning) 15%, transparent); border: 1px solid var(--warning); color: var(--warning); }
         .pill-empty { opacity: 0.4; }
 
@@ -320,13 +320,15 @@
         .arrow { flex-shrink: 0; }
         .arrow-down { color: var(--accent); }
         .arrow-up { color: var(--text2); }
-        .arrow-mouse { color: var(--mouse); }
-        .arrow-scroll { color: var(--scroll); }
+        .arrow-mouse { color: var(--text); }
+        .arrow-key { color: var(--text); }
+        .arrow-key-up { color: var(--text2); }
+        .arrow-scroll { color: var(--scroll, var(--warning)); }
         .arrow-move { color: var(--text3); }
 
         .key-name { color: var(--text); word-break: break-word; }
-        .mouse-name { color: var(--mouse); word-break: break-word; }
-        .scroll-name { color: var(--scroll); word-break: break-word; }
+        .mouse-name { color: var(--text); word-break: break-word; }
+        .scroll-name { color: var(--scroll, var(--warning)); word-break: break-word; }
         .move-name { color: var(--text3); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
         .dim { color: var(--text3); font: 10px var(--font-mono); }
 
@@ -966,7 +968,7 @@
         </div>
 <div class="panel-theme" style="display:none">
         <div id="header">
-            <span id="panel-title">mudscript — theme</span>
+            <span id="panel-title">mudscript — theme & sound</span>
             <div class="header-btns">
                 <button
                     class="btn-close"
@@ -978,7 +980,7 @@
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
-        <div style="display:flex;align-items:center;justify-content:center;flex:1;color:var(--text3);font-size:13px;">Coming soon</div>
+        <div id="theme-scroll" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0 20px;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;"></div>
 </div>
 <div class="panel-plugins" style="display:none">
         <div id="header">
@@ -1012,6 +1014,51 @@
         </div>
         <div id="profiles-scroll" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0 20px;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;"></div>
 </div>
+<div class="panel-popped" style="display:none">
+    <div id="header">
+        <span id="panel-title">mudscript</span>
+        <div class="header-btns">
+            <button
+                class="btn-close"
+                onmouseenter="playSlot('hover')"
+                onclick="
+                    playSlot('back');
+                    shellDispatch('_shell', 'close');
+                "
+            ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;text-align:center;">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;opacity:0.4"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+        <div id="popped-label" style="font-size:13px;font-weight:600;color:var(--text);"></div>
+        <div style="font-size:12px;color:var(--text3);max-width:260px;line-height:1.5;">This panel has been separated into its own window. Interact with it there.</div>
+    </div>
+</div>
+<script>
+(function() {
+    var _drag = null;
+    var header = document.querySelector('.panel-popped #header');
+    if (!header) return;
+    header.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return;
+        if (e.target.closest('.header-btns')) return;
+        _drag = { ox: e.screenX, oy: e.screenY };
+        function onMove(ev) {
+            if (!_drag) return;
+            shellDispatch('_shell', 'move', { dx: ev.screenX - _drag.ox, dy: ev.screenY - _drag.oy });
+            _drag.ox = ev.screenX;
+            _drag.oy = ev.screenY;
+        }
+        function onUp() {
+            _drag = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        }
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    });
+})();
+</script>
 <div class="panel-settings" style="display:none">
 
         <!-- Blade-tip clip shape. objectBoundingBox units (0–1) scale with
@@ -1141,7 +1188,7 @@
         </div>
 
         <!-- Context menu -->
-        <div id="ctx-menu"></div>
+        <div id="ctx-menu-settings"></div>
 
         
     
@@ -1267,6 +1314,7 @@ function applyTheme(t) {
     if (t.accentGlowFaint) r.setProperty("--accent-glow-faint", t.accentGlowFaint);
     if (t.dangerGlow) r.setProperty("--danger-glow", t.dangerGlow);
     if (t.dangerBorder) r.setProperty("--danger-border", t.dangerBorder);
+    if (t.key) r.setProperty("--key", t.key);
     if (t.mouse) r.setProperty("--mouse", t.mouse);
     if (t.scroll) r.setProperty("--scroll", t.scroll);
     if (t.radius !== undefined) {
@@ -1550,10 +1598,9 @@ function createLogPanel(config) {
     // ── Header drag ────────────────────────────────────────────────────
     (function () {
         let _drag = null;
-        const header = _byId("header");
-        if (!header) return;
-        header.addEventListener("mousedown", (e) => {
+        document.addEventListener("mousedown", (e) => {
             if (e.button !== 0) return;
+            if (!e.target.closest("#header")) return;
             if (e.target.closest(".header-btns")) return;
             _drag = { ox: e.screenX, oy: e.screenY };
             const onMove = (ev) => {
@@ -1840,9 +1887,25 @@ function createLogPanel(config) {
         if (action === 'poppedOut') {
             window._poppedOutPanels[panel] = true;
             var railItem = document.querySelector('.rail-item[data-panel="' + panel + '"]');
-            if (railItem) railItem.classList.add('popped-out');
-            // If we're currently viewing this panel, switch to macros
-            if (currentPanel === panel) showPanel('macros');
+            if (railItem) {
+                railItem.classList.add('popped-out');
+                railItem.classList.remove('active');
+            }
+            // Hide the inline panel to avoid duplicate windows
+            var inlinePanel = document.querySelector('.panel-' + panel);
+            if (inlinePanel) inlinePanel.style.display = 'none';
+            // If this was the active panel, show the popped placeholder
+            if (currentPanel === panel) {
+                var names = { console: 'Console', watcher: 'Macro Monitor', keys: 'Input Monitor', window: 'Window Monitor' };
+                var label = document.getElementById('popped-label');
+                if (label) label.textContent = (names[panel] || panel) + ' is popped out';
+                document.querySelectorAll('[class^="panel-"]').forEach(function(el) { el.style.display = 'none'; });
+                var popped = document.querySelector('.panel-popped');
+                if (popped) popped.style.display = 'flex';
+                document.querySelectorAll('.rail-item').forEach(function(btn) { btn.classList.remove('active'); });
+                currentPanel = '_popped';
+                shellDispatch('_shell', 'navigate', { panel: '_popped' });
+            }
             return;
         }
         if (action === 'poppedIn') {
@@ -1852,6 +1915,8 @@ function createLogPanel(config) {
             // Notify any per-panel listeners
             var fn = window._panelPoppedInFns[panel];
             if (fn) { try { fn(); } catch(e) {} }
+            // Auto-show the panel in the shell when popout is closed
+            showPanel(panel);
             return;
         }
         var handler = _panelHandlers[panel];
@@ -1887,8 +1952,19 @@ function createLogPanel(config) {
     };
 
     window.showPanel = function(id) {
-        // If panel is popped out, focus the popout window instead
+        // If panel is popped out, show the placeholder and focus the popout
         if (window._poppedOutPanels[id]) {
+            var names = { console: 'Console', watcher: 'Macro Monitor', keys: 'Input Monitor', window: 'Window Monitor' };
+            var label = document.getElementById('popped-label');
+            if (label) label.textContent = (names[id] || id) + ' is popped out';
+            document.querySelectorAll('[class^="panel-"]').forEach(function(el) { el.style.display = 'none'; });
+            var popped = document.querySelector('.panel-popped');
+            if (popped) popped.style.display = 'flex';
+            document.querySelectorAll('.rail-item').forEach(function(btn) { btn.classList.remove('active'); });
+            var railItem = document.querySelector('.rail-item[data-panel="' + id + '"]');
+            if (railItem) railItem.classList.add('active');
+            currentPanel = '_popped';
+            shellDispatch('_shell', 'navigate', { panel: '_popped' });
             shellDispatch('_shell', 'focusPopOut', { panel: id });
             return;
         }
@@ -1926,6 +2002,7 @@ function createLogPanel(config) {
         if (theme.accentGlowFaint) r.setProperty('--accent-glow-faint', theme.accentGlowFaint);
         if (theme.dangerGlow) r.setProperty('--danger-glow', theme.dangerGlow);
         if (theme.dangerBorder) r.setProperty('--danger-border', theme.dangerBorder);
+        if (theme.key) r.setProperty('--key', theme.key);
         if (theme.mouse) r.setProperty('--mouse', theme.mouse);
         if (theme.scroll) r.setProperty('--scroll', theme.scroll);
         if (theme.radius !== undefined) {
@@ -2007,8 +2084,15 @@ function createLogPanel(config) {
                 const msgEl = document.createElement("span");
                 msgEl.className = "msg";
 
-                if (type === "key" || type === "mouse" || type === "sound" || type === "macro") {
-                    msgEl.textContent = "";
+                if (type === "key") {
+                    const arrow = entry.down ? "↓" : "↑";
+                    msgEl.textContent = arrow + " " + (entry.key || entry.msg || "") + " (" + (entry.keyCode ?? "") + ")";
+                } else if (type === "mouse") {
+                    const arrow = entry.down ? "↓" : "↑";
+                    const pos = (entry.x != null && entry.y != null) ? "  " + entry.x + "," + entry.y : "";
+                    msgEl.textContent = arrow + " mouse:" + (entry.button ?? "") + pos;
+                } else if (type === "sound" || type === "macro") {
+                    msgEl.textContent = String(entry.msg ?? "");
                 } else if (type === "input") {
                     msgEl.textContent = "> " + String(entry.msg ?? "");
                 } else {
@@ -2429,7 +2513,8 @@ function createLogPanel(config) {
                     row.append(
                         mkSpan("badge badge-key", "key"),
                         mkSpan(
-                            "arrow " + (entry.down ? "arrow-down" : "arrow-up"),
+                            "arrow " +
+                                (entry.down ? "arrow-key" : "arrow-key-up"),
                             entry.down ? "↓" : "↑",
                         ),
                         mkSpan("key-name", entry.key || ""),
@@ -2821,13 +2906,14 @@ function createLogPanel(config) {
 
             // ── Context menu ───────────────────────────────────────────────────
             function closeCtxMenu() {
-                const el = document.getElementById("ctx-menu");
-                el.classList.remove("open");
+                const el = document.getElementById("ctx-menu-settings");
+                if (el) el.classList.remove("open");
                 _ctxTarget = null;
             }
 
             function showCtxMenu(x, y, items, title) {
-                const el = document.getElementById("ctx-menu");
+                const el = document.getElementById("ctx-menu-settings");
+                if (!el) return;
                 el.innerHTML = "";
                 if (title) {
                     const hdr = document.createElement("div");
@@ -2883,15 +2969,15 @@ function createLogPanel(config) {
                 closeCtxMenu();
                 if (!e.target.closest(".reload-dropdown")) closeReloadDropdown();
             });
-            const _macrosPanel = document.querySelector('.panel-macros');
+            const _settingsPanel = document.querySelector('.panel-settings');
             document.addEventListener("contextmenu", (e) => {
-                if (_macrosPanel && getComputedStyle(_macrosPanel).display === "none") return;
+                if (!_settingsPanel || getComputedStyle(_settingsPanel).display === "none") return;
                 e.preventDefault();
                 closeCtxMenu();
                 closeReloadDropdown();
             });
             document.addEventListener("keydown", (e) => {
-                if (_macrosPanel && getComputedStyle(_macrosPanel).display === "none") return;
+                if (!_settingsPanel || getComputedStyle(_settingsPanel).display === "none") return;
                 if (e.key === "Escape") { closeCtxMenu(); closeReloadDropdown(); }
             });
 
@@ -3215,7 +3301,7 @@ function createLogPanel(config) {
                 if (control) r.appendChild(control);
                 r.addEventListener("contextmenu", (e) => {
                     e.preventDefault();
-                    e.stopPropagation();
+                    e.stopImmediatePropagation();
                     if (ctxItems && ctxItems.length > 0) {
                         playSlot("interact");
                         showCtxMenu(e.clientX, e.clientY, ctxItems, label);
@@ -3434,7 +3520,7 @@ function createLogPanel(config) {
                             chip.style.cursor = "context-menu";
                             chip.addEventListener("contextmenu", (e) => {
                                 e.preventDefault();
-                                e.stopPropagation();
+                                e.stopImmediatePropagation();
                                 playSlot("interact");
                                 const items = [
                                     {
@@ -3496,7 +3582,7 @@ function createLogPanel(config) {
                     }
                     r.addEventListener("contextmenu", (e) => {
                         e.preventDefault();
-                        e.stopPropagation();
+                        e.stopImmediatePropagation();
                         playSlot("interact");
                         const items = [
                             {
@@ -3574,7 +3660,7 @@ function createLogPanel(config) {
                     if (!(m.group === "system" && !m.systemBind)) {
                         r.addEventListener("contextmenu", (e) => {
                             e.preventDefault();
-                            e.stopPropagation();
+                            e.stopImmediatePropagation();
                             playSlot("interact");
                             const items = [
                                 {
@@ -3650,7 +3736,7 @@ function createLogPanel(config) {
                 if (ctxItems && ctxItems.length) {
                     wrap.addEventListener("contextmenu", (e) => {
                         e.preventDefault();
-                        e.stopPropagation();
+                        e.stopImmediatePropagation();
                         playSlot("interact");
                         showCtxMenu(e.clientX, e.clientY, ctxItems, label);
                     });
@@ -4008,32 +4094,6 @@ function createLogPanel(config) {
                     ),
                 );
 
-                // Enable v2 UI toggle
-                const v2On = S.macroLabEnabled !== false;
-                body.appendChild(
-                    row(
-                        "Enable v2 UI",
-                        "Use the new Macro Lab shell instead of legacy standalone panels",
-                        h(
-                            "button",
-                            {
-                                cls:
-                                    "btn-macro " +
-                                    (v2On ? "btn-enable" : "btn-disable"),
-                                onmouseenter: () => playSlot("hover"),
-                                onclick: () => {
-                                    playSlot("interact");
-                                    sendToHost({
-                                        action: "setMacroLabEnabled",
-                                        value: !v2On,
-                                    });
-                                },
-                            },
-                            v2On ? "ON" : "OFF",
-                        ),
-                    ),
-                );
-
                 // User-defined settings targeting the Settings section
                 const items = S.userSettings || [];
                 const hasSystem =
@@ -4133,7 +4193,7 @@ function createLogPanel(config) {
                 });
                 volWrap.addEventListener("contextmenu", (e) => {
                     e.preventDefault();
-                    e.stopPropagation();
+                    e.stopImmediatePropagation();
                     playSlot("interact");
                     showCtxMenu(
                         e.clientX,
@@ -4507,7 +4567,7 @@ function createLogPanel(config) {
                         });
                     r.addEventListener("contextmenu", (e) => {
                         e.preventDefault();
-                        e.stopPropagation();
+                        e.stopImmediatePropagation();
                         if (isCurrent) return;
                         playSlot("interact");
                         showCtxMenu(
@@ -4966,7 +5026,6 @@ function createLogPanel(config) {
                         ),
                     );
                 }
-                scroll.appendChild(section("sound", "Sound", buildSound));
                 scroll.appendChild(
                     section("developer", "Developer", buildDeveloper),
                 );
@@ -4981,8 +5040,40 @@ function createLogPanel(config) {
                 if (!el) return;
                 el.innerHTML = "";
                 buildProfiles(el);
+                // Coming soon note
+                const note = h("div", {
+                    style: "padding:16px 14px 8px;font-size:11px;color:var(--text3);opacity:0.6;font-style:italic;",
+                }, "More profile features coming soon.");
+                el.appendChild(note);
             }
             window.renderProfilesPanel = renderProfilesPanel;
+
+            // ── Theme & Sound panel (rendered into #theme-scroll) ───────────
+            function renderThemePanel() {
+                const el = document.getElementById("theme-scroll");
+                if (!el) return;
+                el.innerHTML = "";
+
+                // Edit Theme button
+                const btnWrap = h("div", { cls: "btn-row" });
+                btnWrap.appendChild(
+                    actionBtn("Edit Theme File", "", () =>
+                        sendToHost({ action: "editTheme" }),
+                    ),
+                );
+                el.appendChild(btnWrap);
+                el.appendChild(divider());
+
+                // Sound settings
+                buildSound(el);
+
+                // Coming soon note
+                const note = h("div", {
+                    style: "padding:16px 14px 8px;font-size:11px;color:var(--text3);opacity:0.6;font-style:italic;",
+                }, "More theme features coming soon.");
+                el.appendChild(note);
+            }
+            window.renderThemePanel = renderThemePanel;
 
             // ── Theme application ──────────────────────────────────────────────
 
@@ -5126,6 +5217,7 @@ function createLogPanel(config) {
                 syncQRChecks(S.qrOptions);
                 render();
                 renderProfilesPanel();
+                renderThemePanel();
             }
 
             // ── Init ───────────────────────────────────────────────────────────
@@ -5140,34 +5232,7 @@ function createLogPanel(config) {
                 }
                 // Header drag (settings panel is outside log-panel.js scope)
                 (function() {
-                    let _drag = null;
-                    const panel = document.querySelector(".panel-settings");
-                    if (!panel) return;
-                    const header = panel.querySelector("#header");
-                    if (!header) return;
-                    header.style.cursor = "-webkit-grab";
-                    header.addEventListener("mousedown", (e) => {
-                        if (e.button !== 0) return;
-                        if (e.target.closest(".header-btns")) return;
-                        _drag = { ox: e.screenX, oy: e.screenY };
-                        const onMove = (ev) => {
-                            if (!_drag) return;
-                            sendToHost({
-                                action: "move",
-                                dx: ev.screenX - _drag.ox,
-                                dy: ev.screenY - _drag.oy,
-                            });
-                            _drag.ox = ev.screenX;
-                            _drag.oy = ev.screenY;
-                        };
-                        const onUp = () => {
-                            _drag = null;
-                            window.removeEventListener("mousemove", onMove);
-                            window.removeEventListener("mouseup", onUp);
-                        };
-                        window.addEventListener("mousemove", onMove);
-                        window.addEventListener("mouseup", onUp);
-                    });
+                    // Drag is handled by the main header drag handler (event delegation)
                 })();
                 sendToHost({ action: "ready" });
             });

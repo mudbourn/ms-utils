@@ -924,6 +924,7 @@
                 "text2","text3","border",
                 "accentGlow","accentGlowFaint",
                 "dangerGlow","dangerBorder",
+                "mouse","scroll","key",
             }
             for _, k in ipairs(overrideKeys) do
                 if type(data[k]) == "string" and #data[k] > 0 then

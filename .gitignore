@@ -8,6 +8,7 @@ backups/
 # Development artifacts / agent notes
 ignore/
 .hermes/
+.hermes-skills
 
 # macOS
 .DS_Store
@@ -27,3 +28,4 @@ ui/_build_shell_v2.py
 mac/Spoons/MsGuardian.spoon/init.lua.129.bak
 ui/_build_shell.py
 mac/ms_core_pre_pivot.lua.bak
+.claude/

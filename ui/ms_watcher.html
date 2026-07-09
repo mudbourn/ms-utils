@@ -71,7 +71,7 @@
                 background: transparent;
             }
             body {
-                font-family: Arial, "Almendra", Palatino, Georgia, serif;
+                font-family: var(--font), "Almendra", Palatino, Georgia, serif;
                 font-size: 13px;
                 color: var(--text);
                 -webkit-font-smoothing: antialiased;
@@ -101,7 +101,6 @@
                 box-shadow: 0 1px 12px
                     color-mix(in srgb, var(--accent) 12%, transparent);
                 flex-shrink: 0;
-                -webkit-app-region: drag;
             }
             #panel-title {
                 flex: 1;
@@ -444,7 +443,7 @@
                         closePanel();
                     "
                 >
-                    ✕
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/></svg>
                 </button>
             </div>
         </div>
