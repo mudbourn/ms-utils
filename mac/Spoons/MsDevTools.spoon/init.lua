@@ -9,12 +9,22 @@
     MsDevTools.branchTrace  = true
 
     -- Panel push helper: route through shellReceive when panel is in shell,
-    -- fall back to direct evaluateJavaScript for standalone webviews.
+    -- fall back to direct evaluateJavaScript for standalone / popout webviews.
     local function _pushToPanel(panelView, panelId, js)
-        -- Try shell path first (panel inline in shell)
         local ms = _G.ms
+
+        -- Popout: panel lives in its own borderless webview
+        if ms and ms.shell and ms.shell.getPopOutView then
+            local popView = ms.shell.getPopOutView(panelId)
+            if popView then
+                pcall(function() popView:evaluateJavaScript(js) end)
+                return
+            end
+        end
+
+        -- Shell path: panel inline in the main shell webview
         if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
-            -- Extract function call: "appendEntry({...})" → fn="appendEntry", args="{...}"
+            -- Extract function call: "appendEntry({...})" → fn="appendEntry", args="{}"
             local fnName, argStr = js:match("^(%w+)%((.+)%)$")
             if fnName and argStr then
                 -- shellReceive routes to the registered JS panel handler
@@ -24,6 +34,7 @@
                 return
             end
         end
+
         -- Fallback: direct webview push (standalone panel)
         if panelView then
             pcall(function() panelView:evaluateJavaScript(js) end)

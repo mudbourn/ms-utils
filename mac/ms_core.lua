@@ -3403,9 +3403,53 @@
                     keys    = "ms_keys.html",
                     window  = "ms_window.html",
                 }
+
+                --- Build a :root CSS block from ms._theme tokens so popouts
+                --- render with the correct palette immediately (no JS race).
+                local function _buildThemeCSS()
+                    local t = ms._theme or {}
+                    local d = ms._themeDefaults or {}
+                    local function v(k) return t[k] or d[k] end
+                    local parts = {}
+                    local map = {
+                        bg = "--bg", surface = "--surface", surface2 = "--surface2",
+                        hover = "--hover", accent = "--accent", accentHi = "--accent-hi",
+                        success = "--success", dangerBg = "--danger-bg", danger = "--danger",
+                        warning = "--warning", text = "--text", text2 = "--text2",
+                        text3 = "--text3", border = "--border", borderDim = "--border-dim",
+                        accentGlow = "--accent-glow", accentGlowFaint = "--accent-glow-faint",
+                        dangerGlow = "--danger-glow", dangerBorder = "--danger-border",
+                        mouse = "--mouse", scroll = "--scroll",
+                        recording = "--recording", recordingText = "--recording-text",
+                        recordingBg = "--recording-bg", running = "--running",
+                        runningText = "--running-text", runningBg = "--running-bg",
+                    }
+                    for k, cssVar in pairs(map) do
+                        local val = v(k)
+                        if val then parts[#parts + 1] = cssVar .. ":" .. val end
+                    end
+                    -- Radius
+                    local radius = v("radius") or 4
+                    parts[#parts + 1] = "--radius:" .. radius .. "px"
+                    parts[#parts + 1] = "--radius-s:" .. math.max(0, radius - 1) .. "px"
+                    -- Font
+                    local font = v("font")
+                    if font then
+                        parts[#parts + 1] = "--font:\"" .. font .. "\",Almendra,Palatino,Georgia,serif"
+                    end
+                    return ":root{" .. table.concat(parts, ";") .. "}"
+                end
+
+                --- Push JS to a popout webview (used by _pushToPanel fallback).
+                ms.shell.getPopOutView = function(panelId)
+                    local pop = _popouts[panelId]
+                    return pop and pop.view or nil
+                end
+
                 ms.shell.popOut = function(panelId)
                     if _popouts[panelId] then
                         pcall(function() _popouts[panelId].view:show() end)
+                        pcall(function() _popouts[panelId].view:bringToFront(true) end)
                         return true
                     end
                     local fileName = _panelFiles[panelId]
@@ -3417,13 +3461,17 @@
                     require("hs.webview")
                     require("hs.webview.usercontent")
 
-                    local popChannel = hs.webview.usercontent.new("msShell")
+                    -- Use the panel's own channel name so no HTML surgery is needed.
+                    -- The standalone HTML sends to webkit.messageHandlers[panelId].
+                    local popChannel = hs.webview.usercontent.new(panelId)
                     popChannel:setCallback(function(message)
                         local ok, data = pcall(hs.json.decode, message.body)
                         if not ok or type(data) ~= "table" then return end
                         local panel  = data.panel  or panelId
                         local action = data.action or "unknown"
-                        local body   = data.body
+                        -- Standalone panels send {action:…} directly (no body wrapper);
+                        -- shell-embedded panels send {panel, action, body}.  Normalise.
+                        local body   = data.body or data
                         -- Route playSlot back through ms.playSlot
                         if action == "playSlot" and body and body.slot then
                             pcall(function() ms.playSlot(body.slot) end)
@@ -3436,12 +3484,25 @@
                             if ms.bus then ms.bus.emit("panel:poppedIn", { id = panelId }) end
                             return
                         end
+                        -- Move: drag the popout window (JS sends dx/dy deltas)
+                        if action == "move" and body and body.dx and body.dy then
+                            pcall(function()
+                                local f = popView:frame()
+                                popView:frame({
+                                    x = f.x + body.dx,
+                                    y = f.y + body.dy,
+                                    w = f.w,
+                                    h = f.h,
+                                })
+                            end)
+                            return
+                        end
                         if ms.bus then
                             ms.bus.emit("ui:" .. panel .. ":" .. action, body)
                         end
                     end)
 
-                    -- Read standalone HTML and swap channel to msShell
+                    -- Read standalone HTML and inject theme + radius
                     local htmlPath = hs.configdir .. "/ui/" .. fileName
                     local f = io.open(htmlPath, "r")
                     if not f then
@@ -3449,17 +3510,15 @@
                         return false
                     end
                     local html = f:read("*all"); f:close()
-                    local origChannel = 'channel: "' .. panelId .. '"'
-                    local newChannel  = 'channel: "msShell"'
-                    if html:find(origChannel, 1, true) then
-                        html = html:gsub(origChannel, newChannel, 1)
-                    end
-                    -- Inject transparent bg + window radius for borderless popout
+
+                    -- Inject: theme CSS vars + transparent bg + window radius
                     local r = (ms._theme and ms._theme.windowRadius)
                         or (ms._themeDefaults and ms._themeDefaults.windowRadius) or 0
                     local inject = string.format(
-                        '<style>html,body{background:transparent!important;overflow:hidden;}body{background:var(--bg)!important;border-radius:%dpx;}</style>',
-                        r
+                        '<style>html,body{background:transparent!important;overflow:hidden;}'
+                        .. 'body{background:var(--bg)!important;border-radius:%dpx;}'
+                        .. '%s</style>',
+                        r, _buildThemeCSS()
                     )
                     html = html:gsub("</head>", inject .. "</head>", 1)
 
@@ -3484,8 +3543,8 @@
                     popView:html(html, baseURL)
                     popView:show()
 
-                    -- Apply theme to popout after it loads
-                    hs.timer.doAfter(0.05, function()
+                    -- Backup: re-apply theme via JS once modules have loaded
+                    hs.timer.doAfter(0.3, function()
                         if not popView then return end
                         local themeJson = hs.json.encode(ms._theme or {})
                         pcall(function() popView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)

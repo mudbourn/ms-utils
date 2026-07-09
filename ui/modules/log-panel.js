@@ -161,7 +161,7 @@ function _trimLog(logEl, max) {
  * @param {number} [config.scrollThresh=48]
  * @returns {Object} controller with methods to expose as globals
  */
-export function createLogPanel(config) {
+window.createLogPanel = function createLogPanel(config) {
     const {
         channel,
         buildRow,
