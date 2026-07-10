@@ -259,6 +259,7 @@
                     ms.reloadSettings  = function() end
                     ms.reloadUI        = function() end
                     ms.quickReload     = function() end
+                    ms.reload          = function() end
                     ms.loadTheme       = function() end
                     ms.has             = function() return false end
                     ms.parseBind       = function() return nil end
@@ -437,10 +438,10 @@
             ms._activeContexts   = {}
             ms.registry              = { _defs = {}, _defList = {} }
             ms.bind                  = { _wires = {}, _autoCount = 0 }
-            roblox = hs.application.get("Roblox")
 
             ms._targetApp     = "Roblox"
             ms._targetHandle  = hs.application.get(ms._targetApp)
+            roblox = ms._targetHandle
             ms._robloxActive  = false
             ms._qrOptions = { macros = true, theme = true, settings = true, ui = true }
             ms.getTargetWin = function()
@@ -574,15 +575,15 @@
                 require("hs.application")
 
                 hs.timer.doAfter(0.3, function()
-                    local roblox = hs.application.get("Roblox")
-                    if roblox then
+                    local targetApp = hs.application.get(ms._targetApp)
+                    if targetApp then
                         ms._robloxActive = true
 
                         local hs_app = hs.application.get("Hammerspoon")
                         if hs_app then hs_app:activate() end
 
                         hs.timer.doAfter(0.25, function()
-                            local app = hs.application.get("Roblox") or roblox
+                            local app = hs.application.get(ms._targetApp) or targetApp
                             local ok, win = pcall(function() return app:mainWindow() end)
                             if ok and win then pcall(function() win:focus() end) end
                             pcall(function() app:activate() end)
@@ -1438,7 +1439,7 @@
             end
 
             ms.debugRoblox = function()
-                local win = ms.getRobloxWin() or hs.window.find("Roblox")
+                local win = ms.getRobloxWin() or hs.window.find(ms._targetApp)
                 if win then
                     local f = win:frame()
                     local screen = win:screen():frame()
@@ -1564,37 +1565,137 @@
                 end
             end)
 
-            hs.hotkey.bind({ "alt" }, "F10", function()
-                if not ms._loadComplete then return end
-                if not ms._robloxActive and not ms._isSafeZone() then return end
-                ms.setMacros(0)
-            end)
+            -- System hotkey bindings (configurable via shell)
+            ms._hotkeys = {
+                panic       = { mods = {"alt"}, key = "F10" },
+                quickReload = { mods = {"alt"}, key = "[" },
+                fullReload  = { mods = {"alt"}, key = "]" },
+                openMenu    = { mods = {"alt"}, key = "p" },
+            }
+            ms._hotkeyHandles = {}
 
-            hs.hotkey.bind({"alt"}, "[", function()
-                if not ms._loadComplete then return end
-                if not ms._robloxActive and not ms._isSafeZone() then return end
-                if ms._qrCooldown then return end
-                ms._qrCooldown = true
-                local ok, err = pcall(ms.quickReload)
-                ms._quickReloading = false  -- force reset even on error
-                hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
-                if not ok then print("quickReload error: " .. tostring(err)) end
-            end)
+            -- Keystate watcher: fires on key down, waits for key up + cooldown
+            -- Does NOT swallow key inputs
+            local _hotkeyCooldowns = {}
+            local _hotkeyDown = {}
 
-            hs.hotkey.bind({"alt"}, "]", function()
-                if not ms._loadComplete then return end
-                hs.reload()
-            end)
+            ms._makeKeyWatcher = function(mods, key, onDown)
+                local keyCode = hs.keycodes.map[key]
+                if not keyCode then return nil end
 
-            hs.hotkey.bind({ "alt" }, "p", function()
-                if not ms._loadComplete then return end
-                if not ms._robloxActive and not ms._isSafeZone() then return end
-                if ms._macroLabEnabled then
-                    ms.shell.toggle()
-                else
-                    ms.ui.toggle()
+                local modSet = {}
+                for _, m in ipairs(mods or {}) do modSet[m] = true end
+
+                local function modsMatch(flags)
+                    for m, _ in pairs(modSet) do
+                        if not flags[m] then return false end
+                    end
+                    -- Check no extra mods are held
+                    local count = 0
+                    for _ in pairs(flags) do count = count + 1 end
+                    return count == #mods
                 end
-            end)
+
+                local id = table.concat(mods or {}, ",") .. ":" .. key
+
+                local tap = hs.eventtap.new({
+                    hs.eventtap.event.types.keyDown,
+                    hs.eventtap.event.types.keyUp,
+                    hs.eventtap.event.types.flagsChanged,
+                }, function(e)
+                    local type = e:getType()
+                    local flags = e:getFlags()
+                    local kc = e:getKeyCode()
+
+                    if type == hs.eventtap.event.types.flagsChanged then
+                        -- Modifier released: reset state
+                        if not modsMatch(flags) then
+                            _hotkeyDown[id] = false
+                            _hotkeyCooldowns[id] = false
+                        end
+                        return false
+                    end
+
+                    if type == hs.eventtap.event.types.keyDown then
+                        if kc == keyCode and modsMatch(flags) and not _hotkeyDown[id] and not _hotkeyCooldowns[id] then
+                            _hotkeyDown[id] = true
+                            onDown()
+                        end
+                        return false  -- never swallow
+                    end
+
+                    if type == hs.eventtap.event.types.keyUp then
+                        if kc == keyCode then
+                            _hotkeyDown[id] = false
+                            -- Cooldown: wait 0.15s after key up before allowing re-fire
+                            _hotkeyCooldowns[id] = true
+                            hs.timer.doAfter(0.15, function()
+                                _hotkeyCooldowns[id] = false
+                            end)
+                        end
+                        return false
+                    end
+
+                    return false
+                end)
+
+                return tap
+            end
+
+            ms._bindHotkeys = function()
+                -- Clear old taps
+                for _, h in pairs(ms._hotkeyHandles) do
+                    if h and h.stop then h:stop() end
+                end
+                ms._hotkeyHandles = {}
+                _hotkeyCooldowns = {}
+                _hotkeyDown = {}
+
+                -- Panic
+                local hk = ms._hotkeys.panic
+                local tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
+                    if not ms._loadComplete then return end
+                    if not ms._robloxActive and not ms._isSafeZone() then return end
+                    ms.setMacros(0)
+                end)
+                if tap then ms._hotkeyHandles.panic = tap; tap:start() end
+
+                -- Quick Reload
+                hk = ms._hotkeys.quickReload
+                tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
+                    if not ms._loadComplete then return end
+                    if not ms._robloxActive and not ms._isSafeZone() then return end
+                    if ms._qrCooldown then return end
+                    ms._qrCooldown = true
+                    hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
+                    pcall(ms.reload)
+                end)
+                if tap then ms._hotkeyHandles.quickReload = tap; tap:start() end
+
+                -- Full Reload
+                hk = ms._hotkeys.fullReload
+                tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
+                    if not ms._loadComplete then return end
+                    hs.reload()
+                end)
+                if tap then ms._hotkeyHandles.fullReload = tap; tap:start() end
+
+                -- Open Menu
+                hk = ms._hotkeys.openMenu
+                tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
+                    if not ms._loadComplete then return end
+                    if not ms._robloxActive and not ms._isSafeZone() then return end
+                    if ms._macroLabEnabled and ms.shell and ms.shell.toggle then
+                        ms.shell.toggle()
+                    elseif ms.ui and ms.ui.toggle then
+                        ms.ui.toggle()
+                    end
+                end)
+                if tap then ms._hotkeyHandles.openMenu = tap; tap:start() end
+            end
+
+            ms._bindHotkeys()
+
         -- END 7. Macro Bind Controller --
 
         -- 8. Utilities --
@@ -1643,7 +1744,7 @@
             end
 
             -- ms.fn: wraps a function in a coroutine with error handling and logging
-            ms.fn = function(fn, labelOrAsync)
+            local _msFnWrap = function(fn, labelOrAsync)
                 assert(type(fn) == "function", "ms.fn: fn must be a function")
                 if labelOrAsync == false then return fn end
 
@@ -1711,6 +1812,43 @@
                     end
                 end
             end
+
+            -- ms.fn: callable table with registry
+            ms.fn = setmetatable({
+                registry = { _defs = {}, _defList = {} },
+
+                define = function(id, fn, opts)
+                    assert(type(id) == "string", "ms.fn.define: id must be a string")
+                    local fnType = type(fn)
+                    assert(fnType == "function" or (fnType == "table" and getmetatable(fn) and getmetatable(fn).__call),
+                        "ms.fn.define: fn must be a function or callable table")
+                    assert(not ms.fn.registry._defs[id],
+                        "ms.fn.define: '" .. id .. "' is already registered")
+                    opts = opts or {}
+                    ms.fn.registry._defs[id] = {
+                        fn      = fn,
+                        label   = opts.label or id,
+                        group   = opts.group or "user",
+                        info    = opts.info,
+                        params  = opts.params,      -- e.g. { {name="delay", type="number", default=100} }
+                        icon    = opts.icon,
+                        cleared = opts.cleared ~= false,  -- "clear for use" flag, defaults true
+                    }
+                    table.insert(ms.fn.registry._defList, id)
+                end,
+
+                lookup = function(id)
+                    return ms.fn.registry._defs[id]
+                end,
+
+                list = function()
+                    return ms.fn.registry._defList
+                end,
+            }, {
+                __call = function(_, fn, labelOrAsync)
+                    return _msFnWrap(fn, labelOrAsync)
+                end,
+            })
 
             -- Call stack helpers
             ms._capturedStack = nil
@@ -2047,12 +2185,14 @@
             }
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
+                -- Suppress all sounds during reload to avoid jarring duplicate close/open sounds
+                if ms._quickReloading then return false end
                 if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" and slotId ~= "settingsOpen" and slotId ~= "settingsClose" then return false end
                 ms._slotHandles = ms._slotHandles or {}
-                -- If this slot is already playing, skip to avoid clipping/restart
+                -- If this slot is already playing, stop it and play fresh
+                -- (allows rapid hover/interact sounds without gaps)
                 if ms._slotHandles[slotId] then
-                    local ok, playing = pcall(function() return ms._slotHandles[slotId]:playing() end)
-                    if ok and playing then return ms._slotHandles[slotId] end
+                    pcall(function() ms._slotHandles[slotId]:stop() end)
                     ms._slotHandles[slotId] = nil
                 end
                 local assigned = ms.soundAssign and ms.soundAssign[slotId]
@@ -2536,6 +2676,26 @@
                     system     = true,
                     default    = { type = "key", mods = {"alt"}, key = "p" },
                 })
+                -- Wire up system bind actions
+                ms.bind._wires["__panicButton"] = function()
+                    ms.setMacros(0)
+                end
+                ms.bind._wires["__quickReload"] = function()
+                    if ms._qrCooldown then return end
+                    ms._qrCooldown = true
+                    hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
+                    if ms.reload then ms.reload() end
+                end
+                ms.bind._wires["__fullReload"] = function()
+                    hs.reload()
+                end
+                ms.bind._wires["__openMenu"] = function()
+                    if ms._macroLabEnabled and ms.shell and ms.shell.toggle then
+                        ms.shell.toggle()
+                    elseif ms.ui and ms.ui.toggle then
+                        ms.ui.toggle()
+                    end
+                end
             end
 
             ms.systemBinds._defs = {
@@ -2579,12 +2739,13 @@
                     local c = ms.systemBinds.effective(id)
                     if not c then goto sysBindContinue end
                     if c.type == "key" then
-                        ms.systemBinds._handles[id] = ms.key(c.mods, c.key, false, function()
+                        local tap = ms._makeKeyWatcher(c.mods, c.key, function()
                             if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
-                        end, nil, true)
+                        end)
+                        if tap then ms.systemBinds._handles[id] = tap; tap:start() end
                     elseif c.type == "mouse" then
                         ms.systemBinds._handles[id] = ms.mouse(c.button, false, function()
                             if not ms._robloxActive and not ms._isSafeZone() then return end
@@ -2635,6 +2796,287 @@
                     ms.running[group] = nil
                 end
             end
+
+            -- Register built-in utility functions for macro lab auto-detection
+            -- Input
+            ms.fn.define("ms.press", ms.press, {
+                label  = "Press Key",
+                group  = "input",
+                info   = "Press and release a key",
+                params = { {name = "key", type = "string"}, {name = "mods", type = "table"} },
+                icon   = "inputs",
+            })
+            ms.fn.define("ms.release", ms.release, {
+                label  = "Release Key",
+                group  = "input",
+                info   = "Release a held key",
+                params = { {name = "key", type = "string"}, {name = "mods", type = "table"} },
+                icon   = "inputs",
+            })
+            ms.fn.define("ms.type", ms.type, {
+                label  = "Type Key",
+                group  = "input",
+                info   = "Type a key with modifiers and optional hold duration",
+                params = { {name = "key", type = "string"}, {name = "mods", type = "table"}, {name = "holdMs", type = "number"} },
+                icon   = "inputs",
+            })
+            ms.fn.define("ms.toggle", ms.toggle, {
+                label  = "Toggle Key",
+                group  = "input",
+                info   = "Toggle a key on/off",
+                params = { {name = "key", type = "string"}, {name = "mods", type = "table"} },
+                icon   = "inputs",
+            })
+            ms.fn.define("ms.multiPress", ms.multiPress, {
+                label  = "Multi Press",
+                group  = "input",
+                info   = "Press multiple keys in sequence",
+                params = { {name = "keys", type = "table"}, {name = "delayMs", type = "number"}, {name = "mods", type = "table"} },
+                icon   = "inputs",
+            })
+            ms.fn.define("ms.Mouse", ms.Mouse, {
+                label  = "Mouse",
+                group  = "mouse",
+                info   = "Full mouse control (Click, Drag, Move, etc.)",
+                params = { {name = "operation", type = "string"}, {name = "button", type = "string"}, {name = "reference", type = "string"}, {name = "x", type = "number"}, {name = "y", type = "number"} },
+                icon   = "move",
+            })
+            ms.fn.define("ms.scroll", ms.scroll, {
+                label  = "Scroll",
+                group  = "mouse",
+                info   = "Scroll the mouse wheel",
+                params = { {name = "direction", type = "string"}, {name = "clicks", type = "number"} },
+                icon   = "scroll",
+            })
+            ms.fn.define("ms.moveMouse", ms.moveMouse, {
+                label  = "Move Mouse",
+                group  = "mouse",
+                info   = "Move mouse to position with optional duration",
+                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"}, {name = "durationMs", type = "number"} },
+                icon   = "move",
+            })
+            ms.fn.define("ms.dragPath", ms.dragPath, {
+                label  = "Drag Path",
+                group  = "mouse",
+                info   = "Drag mouse through a series of points",
+                params = { {name = "points", type = "table"}, {name = "button", type = "string"}, {name = "ref", type = "string"}, {name = "delayMs", type = "number"} },
+                icon   = "move",
+            })
+            ms.fn.define("ms.cam", ms.cam, {
+                label  = "Camera",
+                group  = "mouse",
+                info   = "Move camera by delta",
+                params = { {name = "dx", type = "number"}, {name = "dy", type = "number"} },
+                icon   = "move",
+            })
+
+            -- Timing
+            ms.fn.define("ms.wait", ms.wait, {
+                label  = "Wait",
+                group  = "timing",
+                info   = "Wait for a duration in milliseconds",
+                params = { {name = "ms", type = "number", default = 100} },
+                icon   = "pause",
+            })
+            ms.fn.define("ms.randWait", ms.randWait, {
+                label  = "Random Wait",
+                group  = "timing",
+                info   = "Wait for a random duration between min and max",
+                params = { {name = "min", type = "number"}, {name = "max", type = "number"} },
+                icon   = "pause",
+            })
+            ms.fn.define("ms.jitter", ms.jitter, {
+                label  = "Jitter",
+                group  = "timing",
+                info   = "Wait with random jitter around a base duration",
+                params = { {name = "base", type = "number"}, {name = "jitterMs", type = "number"} },
+                icon   = "pause",
+            })
+
+            -- Sensing
+            ms.fn.define("ms.pixelColor", ms.pixelColor, {
+                label  = "Pixel Color",
+                group  = "sensing",
+                info   = "Get the RGB color of a pixel",
+                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"} },
+                icon   = "pixelscan",
+            })
+            ms.fn.define("ms.pixelMatch", ms.pixelMatch, {
+                label  = "Pixel Match",
+                group  = "sensing",
+                info   = "Check if a pixel matches a color",
+                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"}, {name = "r", type = "number"}, {name = "g", type = "number"}, {name = "b", type = "number"}, {name = "tol", type = "number"} },
+                icon   = "pixelscan",
+            })
+            ms.fn.define("ms.waitPixel", ms.waitPixel, {
+                label  = "Wait for Pixel",
+                group  = "sensing",
+                info   = "Wait until a pixel matches a color",
+                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"}, {name = "r", type = "number"}, {name = "g", type = "number"}, {name = "b", type = "number"}, {name = "tol", type = "number"}, {name = "timeout", type = "number"} },
+                icon   = "pixelscan",
+            })
+            ms.fn.define("ms.waitNotPixel", ms.waitNotPixel, {
+                label  = "Wait for Pixel Change",
+                group  = "sensing",
+                info   = "Wait until a pixel no longer matches a color",
+                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"}, {name = "r", type = "number"}, {name = "g", type = "number"}, {name = "b", type = "number"}, {name = "tol", type = "number"}, {name = "timeout", type = "number"} },
+                icon   = "pixelscan",
+            })
+            ms.fn.define("ms.mousePos", ms.mousePos, {
+                label  = "Mouse Position",
+                group  = "sensing",
+                info   = "Get current mouse position",
+                params = {},
+                icon   = "move",
+            })
+            ms.fn.define("ms.keystate", ms.keystate, {
+                label  = "Key State",
+                group  = "sensing",
+                info   = "Check if a key is currently held",
+                params = { {name = "key", type = "string"} },
+                icon   = "inputs",
+            })
+
+            -- Clipboard
+            ms.fn.define("ms.copy", ms.copy, {
+                label  = "Copy",
+                group  = "clipboard",
+                info   = "Copy text to clipboard",
+                params = { {name = "text", type = "string"} },
+                icon   = "save",
+            })
+
+            -- Window/App
+            ms.fn.define("ms.appRunning", ms.appRunning, {
+                label  = "App Running",
+                group  = "app",
+                info   = "Check if an app is running",
+                params = { {name = "appName", type = "string"} },
+                icon   = "window",
+            })
+            ms.fn.define("ms.appIsFront", ms.appIsFront, {
+                label  = "App in Front",
+                group  = "app",
+                info   = "Check if an app is the frontmost",
+                params = { {name = "appName", type = "string"} },
+                icon   = "window",
+            })
+            ms.fn.define("ms.focus", ms.focus, {
+                label  = "Focus App",
+                group  = "app",
+                info   = "Bring an app to the front",
+                params = { {name = "appName", type = "string"} },
+                icon   = "window",
+            })
+            ms.fn.define("ms.windowPos", ms.windowPos, {
+                label  = "Window Position",
+                group  = "app",
+                info   = "Get the position of an app's window",
+                params = { {name = "appName", type = "string"} },
+                icon   = "window",
+            })
+
+            -- System
+            ms.fn.define("ms.sound", ms.sound, {
+                label  = "Play Sound",
+                group  = "system",
+                info   = "Play a sound file",
+                params = { {name = "path", type = "string"} },
+                icon   = "play",
+            })
+            ms.fn.define("ms.alert", ms.alert, {
+                label  = "Alert",
+                group  = "system",
+                info   = "Show a toast notification",
+                params = { {name = "msg", type = "string"}, {name = "duration", type = "number"} },
+                icon   = "alert",
+            })
+            ms.fn.define("ms.notify", ms.notify, {
+                label  = "Notify",
+                group  = "system",
+                info   = "Show a system notification",
+                params = { {name = "title", type = "string"}, {name = "subTitle", type = "string"}, {name = "infoText", type = "string"} },
+                icon   = "alert",
+            })
+            ms.fn.define("ms.screenshot", ms.screenshot, {
+                label  = "Screenshot",
+                group  = "system",
+                info   = "Take a screenshot",
+                params = { {name = "path", type = "string"} },
+                icon   = "record",
+            })
+            ms.fn.define("ms.setVolume", ms.setVolume, {
+                label  = "Set Volume",
+                group  = "system",
+                info   = "Set system volume (0-100)",
+                params = { {name = "level", type = "number"} },
+                icon   = "play",
+            })
+            ms.fn.define("ms.mute", ms.mute, {
+                label  = "Mute",
+                group  = "system",
+                info   = "Mute system audio",
+                params = {},
+                icon   = "stop",
+            })
+            ms.fn.define("ms.unmute", ms.unmute, {
+                label  = "Unmute",
+                group  = "system",
+                info   = "Unmute system audio",
+                params = {},
+                icon   = "play",
+            })
+            ms.fn.define("ms.clipChanged", ms.clipChanged, {
+                label  = "Clipboard Changed",
+                group  = "system",
+                info   = "Register a callback for clipboard changes",
+                params = { {name = "callback", type = "function"} },
+                icon   = "watcher",
+            })
+            ms.fn.define("ms.saveCursor", ms.saveCursor, {
+                label  = "Save Cursor",
+                group  = "system",
+                info   = "Save current cursor position",
+                params = {},
+                icon   = "save",
+            })
+            ms.fn.define("ms.restoreCursor", ms.restoreCursor, {
+                label  = "Restore Cursor",
+                group  = "system",
+                info   = "Restore saved cursor position",
+                params = {},
+                icon   = "upload",
+            })
+
+            -- Macro Control
+            ms.fn.define("ms.cancelMacros", ms.cancelMacros, {
+                label  = "Cancel Macros",
+                group  = "control",
+                info   = "Cancel all running macros",
+                params = {},
+                icon   = "stop",
+            })
+            ms.fn.define("ms.pause", ms.pause, {
+                label  = "Pause",
+                group  = "control",
+                info   = "Pause current macro",
+                params = {},
+                icon   = "pause",
+            })
+            ms.fn.define("ms.resume", ms.resume, {
+                label  = "Resume",
+                group  = "control",
+                info   = "Resume paused macro",
+                params = {},
+                icon   = "play",
+            })
+            ms.fn.define("ms.done", ms.done, {
+                label  = "Done",
+                group  = "control",
+                info   = "Signal macro completion",
+                params = {},
+                icon   = "stop",
+            })
 
             ms.bind.teardown = function()
                 for id, handle in pairs(ms.bindHandles) do
@@ -2828,12 +3270,13 @@
                     if not fn then goto sysContinue end
                     print("rebindSystem: registering " .. id .. " as system bind")
                     if c.type == "key" then
-                        ms._systemBindHandles[id] = ms.key(c.mods, c.key, false, function()
+                        local tap = ms._makeKeyWatcher(c.mods, c.key, function()
                             if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
-                        end, nil, true)
+                        end)
+                        if tap then ms._systemBindHandles[id] = tap; tap:start() end
                     elseif c.type == "mouse" then
                         ms._systemBindHandles[id] = ms.mouse(c.button, false, function()
                             if not ms._robloxActive and not ms._isSafeZone() then return end
@@ -3267,7 +3710,7 @@
                         end
                         -- Reload actions: handled directly, not through bus
                         if action == "quickReload" then
-                            pcall(ms.quickReload)
+                            pcall(ms.reload)
                             return
                         end
                         if action == "reloadMacros" then
@@ -3339,8 +3782,8 @@
                     -- Cap to 85% of screen so it fits on low-res displays
                     local maxW = math.floor(sf.w * 0.85)
                     local maxH = math.floor(sf.h * 0.85)
-                    local w = math.min(900, maxW)
-                    local h = math.min(600, maxH)
+                    local w = math.min(820, maxW)
+                    local h = math.min(520, maxH)
                     local x = sf.x + math.floor((sf.w - w) / 2)
                     local y = sf.y + math.floor((sf.h - h) / 2)
                     local st = ms._shellState
@@ -3426,8 +3869,8 @@
                     local st = ms._shellState
                     if not st or not st.x or not st.y then return end
                     pcall(function()
-                        local w = st.w or 900
-                        local h = st.h or 600
+                        local w = st.w or 820
+                        local h = st.h or 520
                         -- Pick the screen the saved position sits on; fall back to
                         -- the main screen so a frame left over from a now-disconnected
                         -- display (or dragged off-screen) still lands somewhere visible.
@@ -3751,6 +4194,20 @@
                                     w = f2.w,
                                     h = f2.h,
                                 })
+                            end)
+                            return
+                        end
+                        -- ClampSize: enforce minimum popout dimensions
+                        if action == "clampSize" and body and body.w and body.h then
+                            pcall(function()
+                                local f2 = popView:frame()
+                                if f2.w < body.w or f2.h < body.h then
+                                    popView:frame({
+                                        x = f2.x, y = f2.y,
+                                        w = math.max(f2.w, body.w),
+                                        h = math.max(f2.h, body.h),
+                                    })
+                                end
                             end)
                             return
                         end
@@ -4601,6 +5058,24 @@
                                         end
                                     end
                                     return ms.bind[bk]
+                                end,
+                            })
+                        elseif k == "fn" then
+                            -- Wrap ms.fn: expose define with user-group guardrail
+                            local origFn = ms.fn
+                            return setmetatable({}, {
+                                __call = function(_, fn, label)
+                                    return origFn(fn, label)
+                                end,
+                                __index = function(_, bk)
+                                    if bk == "define" then
+                                        return function(id, fn, opts)
+                                            opts = opts or {}
+                                            opts.group = "user"  -- force user group in sandbox
+                                            return ms.fn.define(id, fn, opts)
+                                        end
+                                    end
+                                    return ms.fn[bk]
                                 end,
                             })
                         end

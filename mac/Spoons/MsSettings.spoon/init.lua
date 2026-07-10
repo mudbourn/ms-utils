@@ -602,14 +602,13 @@
             end
         end
 
-        ms.quickReload = function()
-            ms.dev.log({ type = "system", event = "quick_reload_start" })
+        ms.reload = function(opts)
+            ms.dev.log({ type = "system", event = "reload_start" })
 
             -- Panic: cancel all active macros, release held keys/buttons, stop timers
             pcall(function() ms.setMacros(0, true) end)
 
-            ms._quickReloaded = 1
-            ms._quickReloading = true   -- suppress per-module toasts
+            ms._quickReloading = true   -- suppress ALL sounds + per-module toasts
 
             -- Ensure user settings tables exist before any reload path touches them
             ms._pendingUserSettings = ms._pendingUserSettings or {}
@@ -619,94 +618,80 @@
 
             ms.saveSettings()
 
-            local qr = ms._qrOptions or {
+            local qr = opts or ms._qrOptions or {
                 macros   = true,
                 theme    = true,
                 settings = true,
                 ui       = true,
             }
 
-            -- 1. Reload macros (teardown + load + compile + run + loadSettings + rebind + socd)
-            --    This is the heavy lift — skip redundant reloadSettings/reloadUI below.
-            if qr.macros then ms.ui._actions.reloadMacros() end
+            local reloadOk = true
 
-            -- 2. Reload theme (just the theme data, no UI)
+            -- 1. Reload macros (teardown + load + compile + run + loadSettings + rebind + socd)
+            if qr.macros then
+                local ok, err = pcall(ms.ui._actions.reloadMacros)
+                if not ok then
+                    reloadOk = false
+                    ms.dev.log({ type = "error", event = "reload_error", msg = tostring(err) })
+                    -- Error recovery: re-register system binds so the user isn't stuck
+                    pcall(function()
+                        ms.bind._registerSystemBinds()
+                        ms.bind.rebindSystem()
+                    end)
+                end
+            end
+
+            -- 2. Reload theme
             if qr.theme then
-                ms.loadTheme()
-                pcall(function() ms.alert:recolor() end)
-                pcall(function() ms.dev:recolor() end)
+                pcall(function()
+                    ms.loadTheme()
+                    ms.alert:recolor()
+                    ms.dev:recolor()
+                end)
             end
 
             -- 3. Reload settings only if macros weren't already reloaded (avoid duplicate rebind)
-            if qr.settings and not qr.macros then ms.reloadSettings() end
-
-            -- 4. UI side effects
-            if qr.ui then
-                -- Full UI rebuild: close all panels (ms.ui.hide refocuses Roblox)
-                ms.ui.hide()
-                pcall(function() ms.dev.console.hide() end)
-                pcall(function() ms.dev.watcher.hide() end)
-                pcall(function() ms.dev.keys.hide() end)
-                pcall(function() ms.dev.window.hide() end)
-
-            elseif qr.theme then
-                -- Theme: close and reopen only what was open
-                local wasOpen = {
-                    ui       = ms.ui._open,
-                    console  = ms.dev._consoleOpen,
-                    watcher  = ms.dev._watcherOpen,
-                    keys     = ms.dev._keysOpen,
-                    window   = ms.dev._windowOpen,
-                }
-                ms.ui.hide()
-                pcall(function() ms.dev.console.hide() end)
-                pcall(function() ms.dev.watcher.hide() end)
-                pcall(function() ms.dev.keys.hide() end)
-                pcall(function() ms.dev.window.hide() end)
-                hs.timer.doAfter(0.15, function()
-                    if wasOpen.ui then ms.ui.show() end
-                    if wasOpen.console then pcall(function() ms.dev.console.show() end) end
-                    if wasOpen.watcher then pcall(function() ms.dev.watcher.show() end) end
-                    if wasOpen.keys then pcall(function() ms.dev.keys.show() end) end
-                    if wasOpen.window then pcall(function() ms.dev.window.show() end) end
-                end)
-
-            elseif qr.settings then
-                -- Settings: close and reopen settings panel only (if it was open)
-                local wasOpen = ms.ui._open
-                ms.ui.hide()
-                if wasOpen then
-                    hs.timer.doAfter(0.15, function() ms.ui.show() end)
-                end
+            if qr.settings and not qr.macros then
+                pcall(function() ms.reloadSettings() end)
             end
 
+            -- 4. Close all panels silently (sounds suppressed by _quickReloading)
+            pcall(function() ms.ui.hide() end)
+            pcall(function() ms.dev.console.hide() end)
+            pcall(function() ms.dev.watcher.hide() end)
+            pcall(function() ms.dev.keys.hide() end)
+            pcall(function() ms.dev.window.hide() end)
+
+            -- Done — re-enable sounds
             ms._quickReloading = false
 
-            if ms._quickReloaded == 1 then
-                ms._quickReloaded = 0
-                ms.saveSettings()
-            end
+            -- Persist the reload flag
+            ms._quickReloaded = 0
+            ms.saveSettings()
 
-            -- Roblox refocus (only if UI close didn't already handle it)
-            if qr.macros and not qr.ui then
-                hs.timer.doAfter(0.15, function()
-                    pcall(function()
-                        local app = ms._targetApp and hs.application.get(ms._targetApp)
-                        if app then app:activate() end
-                    end)
+            -- Refocus target app
+            hs.timer.doAfter(0.15, function()
+                pcall(function()
+                    local app = ms._targetApp and hs.application.get(ms._targetApp)
+                    if app then
+                        app:activate()
+                    end
                 end)
-            end
+            end)
 
-            local anySelected = qr.macros or qr.theme or qr.settings or qr.ui
+            -- Single closing sound + toast
             hs.timer.doAfter(0.3, function()
-                if anySelected then
+                if reloadOk then
                     ms.playSlot("update")
-                    ms.alert("Quick Reload complete.", 5, true, { priority = "low" })
+                    ms.alert("Reload complete.", 4, true, { priority = "low" })
                 else
-                    ms.alert("Quick Reload: no options selected.", 5, true, { priority = "low" })
+                    ms.alert("Reload failed — see console.", 6, false, { priority = "low" })
                 end
             end)
         end
+
+        -- Backward compat alias
+        ms.quickReload = function() ms.reload() end
     -- END User Settings — validation helpers --
 
     -- User Settings & Menu API --

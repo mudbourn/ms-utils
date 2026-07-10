@@ -75,6 +75,8 @@
             /* ── State section ──────────────────────────────────────────────── */
             .state-section { padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
             .section-label { font: 700 9px "SF Mono", Menlo, monospace; letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; margin-bottom: 6px; }
+            .section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+            .section-header .section-label { margin-bottom: 0; }
 
             /* ── Key/Value grid (structured window + element data) ──────────── */
             .kv-grid { display: grid; grid-template-columns: max-content 1fr; column-gap: 12px; row-gap: 3px; align-items: baseline; }
@@ -83,7 +85,7 @@
             .kv-val.empty { color: var(--text3); opacity: 0.5; }
 
             /* ── Flag pills (window boolean flags) ──────────────────────────── */
-            .flags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+            .flags-row { display: flex; flex-wrap: wrap; gap: 4px; }
             .flag-chip {
                 display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 3px;
                 font: 11px "SF Mono", Menlo, monospace; background: var(--surface2);
@@ -93,7 +95,7 @@
             .flag-chip.on { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: var(--accent); color: var(--accent); }
             .flag-chip.on::before { content: "\25CF"; }
 
-            /* ── Accessibility banner (Element tab permission state) ────────── */
+            /* ── Accessibility banner (permission state) ────────────────────── */
             .ax-banner {
                 display: none; margin: 8px 12px; padding: 8px 10px; border-radius: var(--radius);
                 background: color-mix(in srgb, var(--warning) 12%, transparent);
@@ -104,6 +106,12 @@
 
             /* ── Section divider ────────────────────────────────────────────── */
             .section-divider { height: 1px; background: var(--border); flex-shrink: 0; }
+
+            /* ── Data scroll container ──────────────────────────────────────── */
+            .data-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+            .data-scroll::-webkit-scrollbar { width: 4px; }
+            .data-scroll::-webkit-scrollbar-track { background: transparent; }
+            .data-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
             /* ── Event log ──────────────────────────────────────────────────── */
             .log { flex: 1; overflow-y: auto; padding: 4px 0; min-height: 0; }
@@ -144,7 +152,7 @@
             <div class="header-btns">
                 <button id="pause-btn" class="btn-ghost" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); togglePause();">Pause</button>
                 <button class="btn-ghost" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); clearLog();">Clear</button>
-                <button class="btn-close" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); closePanel();">
+                <button class="btn-close" onmouseenter="playSlot('hover')" onclick="playSlot('back'); closePanel();">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/></svg>
                 </button>
             </div>
@@ -161,60 +169,67 @@
 
         <!-- Tab bar -->
         <div id="tabs">
-            <button id="tab-window" class="tab active" onmouseenter="playSlot('hover')" onclick="switchTab('window')">Window</button>
-            <button id="tab-element" class="tab" onmouseenter="playSlot('hover')" onclick="switchTab('element')">Element</button>
+            <button id="tab-window" class="tab active" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchTab('window')">Data</button>
+            <button id="tab-element" class="tab" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchTab('element')">Logs</button>
         </div>
 
-        <!-- ── Window tab ────────────────────────────────────────────────── -->
+        <!-- ── Window tab (all live data) ──────────────────────────────── -->
         <div id="window-section" class="tab-section active">
-            <div class="state-section">
-                <div class="section-label">Focused Window</div>
-                <div class="kv-grid">
-                    <div class="kv-key">App</div>      <div class="kv-val empty" id="w-app">&mdash;</div>
-                    <div class="kv-key">PID</div>      <div class="kv-val empty" id="w-pid">&mdash;</div>
-                    <div class="kv-key">Bundle</div>   <div class="kv-val empty" id="w-bundle">&mdash;</div>
-                    <div class="kv-key">Title</div>    <div class="kv-val empty" id="w-title">&mdash;</div>
-                    <div class="kv-key">Role</div>     <div class="kv-val empty" id="w-role">&mdash;</div>
-                    <div class="kv-key">Frame</div>    <div class="kv-val empty" id="w-frame">&mdash;</div>
-                    <div class="kv-key">Screen</div>   <div class="kv-val empty" id="w-screen">&mdash;</div>
-                    <div class="kv-key">Win ID</div>   <div class="kv-val empty" id="w-id">&mdash;</div>
+            <div class="data-scroll">
+                <!-- Focused Window -->
+                <div class="state-section">
+                    <div class="section-header">
+                        <div class="section-label">Focused Window</div>
+                        <div class="flags-row">
+                            <span class="flag-chip" id="w-standard">Standard</span>
+                            <span class="flag-chip" id="w-minimized">Minimized</span>
+                            <span class="flag-chip" id="w-fullscreen">Fullscreen</span>
+                            <span class="flag-chip" id="w-visible">Visible</span>
+                        </div>
+                    </div>
+                    <div class="kv-grid">
+                        <div class="kv-key">App</div>      <div class="kv-val empty" id="w-app">&mdash;</div>
+                        <div class="kv-key">PID</div>      <div class="kv-val empty" id="w-pid">&mdash;</div>
+                        <div class="kv-key">Bundle</div>   <div class="kv-val empty" id="w-bundle">&mdash;</div>
+                        <div class="kv-key">Title</div>    <div class="kv-val empty" id="w-title">&mdash;</div>
+                        <div class="kv-key">Role</div>     <div class="kv-val empty" id="w-role">&mdash;</div>
+                        <div class="kv-key">Frame</div>    <div class="kv-val empty" id="w-frame">&mdash;</div>
+                        <div class="kv-key">Screen</div>   <div class="kv-val empty" id="w-screen">&mdash;</div>
+                        <div class="kv-key">Win ID</div>   <div class="kv-val empty" id="w-id">&mdash;</div>
+                    </div>
                 </div>
-                <div class="flags-row">
-                    <span class="flag-chip" id="w-standard">Standard</span>
-                    <span class="flag-chip" id="w-minimized">Minimized</span>
-                    <span class="flag-chip" id="w-fullscreen">Fullscreen</span>
-                    <span class="flag-chip" id="w-visible">Visible</span>
+                <div class="section-divider"></div>
+                <!-- Element Under Cursor -->
+                <div class="ax-banner" id="ax-banner">
+                    <b>Accessibility permission required.</b><br />
+                    Grant Hammerspoon access in System Settings &rarr; Privacy &amp; Security &rarr; Accessibility, then hover over any control.
+                </div>
+                <div class="state-section">
+                    <div class="section-label">Element Under Cursor</div>
+                    <div class="kv-grid">
+                        <div class="kv-key">Role</div>    <div class="kv-val empty" id="e-role">&mdash;</div>
+                        <div class="kv-key">Desc</div>    <div class="kv-val empty" id="e-desc">&mdash;</div>
+                        <div class="kv-key">Title</div>   <div class="kv-val empty" id="e-title">&mdash;</div>
+                        <div class="kv-key">Value</div>   <div class="kv-val empty" id="e-value">&mdash;</div>
+                        <div class="kv-key">Ident</div>   <div class="kv-val empty" id="e-ident">&mdash;</div>
+                        <div class="kv-key">Frame</div>   <div class="kv-val empty" id="e-frame">&mdash;</div>
+                    </div>
+                </div>
+                <div class="section-divider"></div>
+                <!-- Cursor -->
+                <div class="state-section" style="border-bottom: none;">
+                    <div class="section-label">Cursor</div>
+                    <div class="kv-grid">
+                        <div class="kv-key">Screen</div>  <div class="kv-val empty" id="e-mouse-screen">&mdash;</div>
+                        <div class="kv-key">Window</div>  <div class="kv-val empty" id="e-mouse-win">&mdash;</div>
+                    </div>
                 </div>
             </div>
-            <div class="section-divider"></div>
-            <div id="window-log" class="log"><div class="log-empty">No window events yet</div></div>
         </div>
 
-        <!-- ── Element tab (live-only AX inspector) ──────────────────────── -->
+        <!-- ── Log tab (event log only) ────────────────────────────────── -->
         <div id="element-section" class="tab-section">
-            <div class="ax-banner" id="ax-banner">
-                <b>Accessibility permission required.</b><br />
-                Grant Hammerspoon access in System Settings &rarr; Privacy &amp; Security &rarr; Accessibility, then hover over any control.
-            </div>
-            <div class="state-section">
-                <div class="section-label">Element Under Cursor</div>
-                <div class="kv-grid">
-                    <div class="kv-key">Role</div>    <div class="kv-val empty" id="e-role">&mdash;</div>
-                    <div class="kv-key">Desc</div>    <div class="kv-val empty" id="e-desc">&mdash;</div>
-                    <div class="kv-key">Title</div>   <div class="kv-val empty" id="e-title">&mdash;</div>
-                    <div class="kv-key">Value</div>   <div class="kv-val empty" id="e-value">&mdash;</div>
-                    <div class="kv-key">Ident</div>   <div class="kv-val empty" id="e-ident">&mdash;</div>
-                    <div class="kv-key">Frame</div>   <div class="kv-val empty" id="e-frame">&mdash;</div>
-                </div>
-            </div>
-            <div class="section-divider"></div>
-            <div class="state-section" style="border-bottom: none;">
-                <div class="section-label">Cursor</div>
-                <div class="kv-grid">
-                    <div class="kv-key">Screen</div>  <div class="kv-val empty" id="e-mouse-screen">&mdash;</div>
-                    <div class="kv-key">Window</div>  <div class="kv-val empty" id="e-mouse-win">&mdash;</div>
-                </div>
-            </div>
+            <div id="window-log" class="log"><div class="log-empty">No window events yet</div></div>
         </div>
 
         <div id="ctx-menu"></div>
@@ -260,7 +275,7 @@
             // ── Event log row builder ───────────────────────────────────────
             const BADGE = { focus: "badge-focus", move: "badge-move", resize: "badge-resize",
                 minimize: "badge-state", unminimize: "badge-state", fullscreen: "badge-state" };
-            const LABEL = { focus: "focus", move: "moved", resize: "resized",
+            const LABEL = { focus: "focused", move: "moved", resize: "resized",
                 minimize: "minimized", unminimize: "restored", fullscreen: "fullscreen" };
 
             function buildRow(entry) {
@@ -377,8 +392,8 @@
             function switchTab(tab) {
                 document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + tab));
                 document.querySelectorAll(".tab-section").forEach((s) => s.classList.toggle("active", s.id === tab + "-section"));
-                const log = document.getElementById(tab + "-log");
-                if (log) log.scrollTop = log.scrollHeight;
+                const log = document.getElementById("window-log");
+                if (log && tab === "element") log.scrollTop = log.scrollHeight;
             }
 
             function clearLog() {

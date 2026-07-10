@@ -399,6 +399,26 @@ window.createLogPanel = function createLogPanel(config) {
         sendToHost({ action: "close" });
     }
 
+    // ── Resize guard (popout boundary protection) ─────────────────────
+    // Borderless popout windows don't get native resize handles, but yabai
+    // or other window managers can still resize them.  Enforce minimum
+    // dimensions by sending a clampSize action to the host when the window
+    // shrinks below threshold.
+    (function () {
+        let _clampTimer = null;
+        const MIN_W = 400, MIN_H = 300;
+        window.addEventListener("resize", function () {
+            if (_clampTimer) clearTimeout(_clampTimer);
+            _clampTimer = setTimeout(function () {
+                _clampTimer = null;
+                const w = window.innerWidth, h = window.innerHeight;
+                if (w < MIN_W || h < MIN_H) {
+                    sendToHost({ action: "clampSize", w: Math.max(w, MIN_W), h: Math.max(h, MIN_H) });
+                }
+            }, 50);
+        });
+    })();
+
     // ── Controller ─────────────────────────────────────────────────────
     return {
         sendToHost,

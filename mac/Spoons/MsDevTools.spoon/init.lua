@@ -111,10 +111,11 @@
     -- the Inputs coordinate readout follows the cursor (the click-only eventtap
     -- was the sole coord source in the shell; there is no standalone keys panel).
     local _activePanel, _shellMousePoller
-    -- Window Spy: is the Element sub-tab showing? The element-under-cursor AX read
-    -- (systemElementAtPosition) is the heaviest/riskiest call and only feeds the
-    -- Element tab, so we skip it entirely while the Window tab is up.
-    local _winElementTab = false
+    -- Window Spy: is the Window tab showing?  The element-under-cursor AX read
+    -- (systemElementAtPosition) is the heaviest/riskiest call and feeds the
+    -- element data card, which now lives in the Window tab alongside the focused
+    -- window card.  We skip it while the Log tab is up.
+    local _winElementTab = true
     -- Pending minimize/hide transition (name + label) to log on the next tick, and
     -- the name of the app the scoped watcher is currently following.
     local _winPendingEvent, _winWatchedAppName
@@ -413,13 +414,20 @@
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
                 elseif action == "tab" then
-                    -- Gate the heavy element-under-cursor AX poll on the Element
-                    -- tab being visible. Force a recompute on entry so it fills
-                    -- immediately rather than waiting for the next mouse move.
-                    _winElementTab = (body.tab == "element")
+                    -- Gate the heavy element-under-cursor AX poll on the Window
+                    -- tab being visible (element data lives there now).  Force a
+                    -- recompute on entry so it fills immediately.
+                    _winElementTab = (body.tab == "window")
                     if _winElementTab then _winLastMouse = nil end
                 elseif action == "ready" then
-                    -- History + current window loaded in showWindow() shell path
+                    -- Panel handler is now registered — push current state so
+                    -- the card fills immediately without requiring a tab-out.
+                    hs.timer.doAfter(0.05, function()
+                        if _windowOpen then
+                            local st = _winRead(hs.window.focusedWindow())
+                            if st then _winPush("updateCurrentWindow", st) end
+                        end
+                    end)
                 end
             end)
 
@@ -1739,6 +1747,7 @@
     function MsDevTools:_winEngineStart()
         self:_winEngineStop()
         _winDirty, _winMoveN, _winResizeN, _winLastMouse = false, 0, 0, nil
+        _winElementTab = true  -- engine starts with element tab active
 
         local function pushState(win)
             local st = _winRead(win or hs.window.focusedWindow())
@@ -1840,30 +1849,9 @@
                 -- is up — that is the default view, so this is the common case.
                 if not _winElementTab then return end
                 local p = hs.mouse.absolutePosition()
-                if _winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y then return end
-                _winLastMouse = p
-                local el = _winG(function() return hs.axuielement.systemElementAtPosition(p.x, p.y) end)
-                if el then
-                    local function ga(a) return _axStr(_winG(function() return el:attributeValue(a) end)) end
-                    local fr = _winG(function() return el:attributeValue("AXFrame") end)
-                    local frame
-                    if type(fr) == "table" and fr.x then
-                        frame = { x = math.floor(fr.x), y = math.floor(fr.y), w = math.floor(fr.w), h = math.floor(fr.h) }
-                    end
-                    _winPush("updateElement", {
-                        axPermission    = true,
-                        role            = ga("AXRole"),
-                        roleDescription = ga("AXRoleDescription"),
-                        title           = ga("AXTitle"),
-                        value           = ga("AXValue"),
-                        identifier      = ga("AXIdentifier"),
-                        frame           = frame,
-                    })
-                end
-                -- Pixel colour under the cursor (AHK Window Spy parity). This is a
-                -- CoreGraphics screen read, not AX, and needs Screen Recording
-                -- permission; snapshotting a 1×1 region keeps it cheap. Fully
-                -- guarded — any failure (no permission, old HS) just yields nil.
+                -- Pixel colour refreshes every tick regardless of cursor
+                -- movement — the scene under a stationary cursor can still
+                -- change (game rendering, video, animations, shiftlock).
                 local pixel = _winG(function()
                     local scr = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
                     if not scr then return nil end
@@ -1884,6 +1872,27 @@
                     wy = wf and math.floor(p.y - wf.y) or nil,
                     pixel = pixel,
                 })
+                -- AX element read is expensive — skip when cursor hasn't moved.
+                if _winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y then return end
+                _winLastMouse = p
+                local el = _winG(function() return hs.axuielement.systemElementAtPosition(p.x, p.y) end)
+                if el then
+                    local function ga(a) return _axStr(_winG(function() return el:attributeValue(a) end)) end
+                    local fr = _winG(function() return el:attributeValue("AXFrame") end)
+                    local frame
+                    if type(fr) == "table" and fr.x then
+                        frame = { x = math.floor(fr.x), y = math.floor(fr.y), w = math.floor(fr.w), h = math.floor(fr.h) }
+                    end
+                    _winPush("updateElement", {
+                        axPermission    = true,
+                        role            = ga("AXRole"),
+                        roleDescription = ga("AXRoleDescription"),
+                        title           = ga("AXTitle"),
+                        value           = ga("AXValue"),
+                        identifier      = ga("AXIdentifier"),
+                        frame           = frame,
+                    })
+                end
             end)
         else
             _winPush("updateElement", { axPermission = false })

@@ -516,7 +516,7 @@
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
                     onclick="
-                        playSlot('interact');
+                        playSlot('back');
                         closePanel();
                     "
                 >
@@ -544,7 +544,7 @@
                 id="tab-keys"
                 class="tab active"
                 onmouseenter="playSlot('hover')"
-                onclick="switchTab('keys')"
+                onclick="playSlot('interact'); switchTab('keys')"
             >
                 Keyboard
             </button>
@@ -552,7 +552,7 @@
                 id="tab-mouse"
                 class="tab"
                 onmouseenter="playSlot('hover')"
-                onclick="switchTab('mouse')"
+                onclick="playSlot('interact'); switchTab('mouse')"
             >
                 Mouse
             </button>

@@ -588,7 +588,7 @@
             reloadAll = function() hs.reload() end,
 
             quickReload = function()
-                ms.quickReload()
+                ms.reload()
             end,
 
             setQROption = function(data)
@@ -1878,12 +1878,12 @@
                 end)
             end
             ms._inputOpen = true
-            local roblox = hs.application.get("Roblox")
-            if roblox then
+            local targetApp = hs.application.get(ms._targetApp)
+            if targetApp then
                 hs.timer.doAfter(0.05, function()
-                    local ok, win = pcall(function() return roblox:mainWindow() end)
+                    local ok, win = pcall(function() return targetApp:mainWindow() end)
                     if ok and win then pcall(function() win:focus() end) end
-                    pcall(function() roblox:activate() end)
+                    pcall(function() targetApp:activate() end)
                 end)
             end
         end

@@ -378,7 +378,7 @@
         .panel-window .kv-key { font: 700 10px var(--font-mono); letter-spacing: 0.04em; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
         .panel-window .kv-val { font: 12px var(--font-mono); color: var(--text); word-break: break-word; min-width: 0; }
         .panel-window .kv-val.empty { color: var(--text3); opacity: 0.5; }
-        .panel-window .flags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .panel-window .flags-row { display: flex; flex-wrap: wrap; gap: 4px; }
         .panel-window .flag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 3px; font: 11px var(--font-mono); background: var(--surface2); border: 1px solid var(--border); color: var(--text3); transition: all 0.15s; }
         .panel-window .flag-chip::before { content: "\25CB"; font-size: 9px; }
         .panel-window .flag-chip.on { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: var(--accent); color: var(--accent); }
@@ -394,6 +394,12 @@
         .panel-window .ename { color: var(--text); word-break: break-word; }
         .panel-window .edetail { color: var(--text3); font: 11px var(--font-mono); font-variant-numeric: tabular-nums; }
         .panel-window .ecount { color: var(--text3); font: 10px var(--font-mono); }
+        .panel-window .data-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+        .panel-window .data-scroll::-webkit-scrollbar { width: 4px; }
+        .panel-window .data-scroll::-webkit-scrollbar-track { background: transparent; }
+        .panel-window .data-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .panel-window .section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+        .panel-window .section-header .section-label { margin-bottom: 0; }
 
         /* ═══ SETTINGS-SPECIFIC ════════════════════════════════════════════════ */
         #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex-shrink: 0; transition: background 0.2s; }
@@ -1012,62 +1018,69 @@
 
         <!-- Tabs -->
         <div class="wtabs">
-            <button class="wtab active" data-wtab="window" onmouseenter="playSlot('hover')" onclick="switchWindowTab('window')">Window</button>
-            <button class="wtab" data-wtab="element" onmouseenter="playSlot('hover')" onclick="switchWindowTab('element')">Element</button>
+            <button class="wtab active" data-wtab="window" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchWindowTab('window')">Data</button>
+            <button class="wtab" data-wtab="element" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchWindowTab('element')">Logs</button>
         </div>
 
-        <!-- Window tab -->
+        <!-- Window tab (all live data) -->
         <div class="wtab-section active" data-wsection="window">
-            <div class="state-section">
-                <div class="section-label">Focused Window</div>
-                <div class="kv-grid">
-                    <div class="kv-key">App</div>    <div class="kv-val empty" data-k="app">&mdash;</div>
-                    <div class="kv-key">PID</div>    <div class="kv-val empty" data-k="pid">&mdash;</div>
-                    <div class="kv-key">Bundle</div> <div class="kv-val empty" data-k="bundle">&mdash;</div>
-                    <div class="kv-key">Title</div>  <div class="kv-val empty" data-k="title">&mdash;</div>
-                    <div class="kv-key">Role</div>   <div class="kv-val empty" data-k="role">&mdash;</div>
-                    <div class="kv-key">Frame</div>  <div class="kv-val empty" data-k="frame">&mdash;</div>
-                    <div class="kv-key">Screen</div> <div class="kv-val empty" data-k="screen">&mdash;</div>
-                    <div class="kv-key">Win ID</div> <div class="kv-val empty" data-k="id">&mdash;</div>
+            <div class="data-scroll">
+                <!-- Focused Window -->
+                <div class="state-section">
+                    <div class="section-header">
+                        <div class="section-label">Focused Window</div>
+                        <div class="flags-row">
+                            <span class="flag-chip" data-flag="standard">Standard</span>
+                            <span class="flag-chip" data-flag="minimized">Minimized</span>
+                            <span class="flag-chip" data-flag="fullscreen">Fullscreen</span>
+                            <span class="flag-chip" data-flag="visible">Visible</span>
+                        </div>
+                    </div>
+                    <div class="kv-grid">
+                        <div class="kv-key">App</div>    <div class="kv-val empty" data-k="app">&mdash;</div>
+                        <div class="kv-key">PID</div>    <div class="kv-val empty" data-k="pid">&mdash;</div>
+                        <div class="kv-key">Bundle</div> <div class="kv-val empty" data-k="bundle">&mdash;</div>
+                        <div class="kv-key">Title</div>  <div class="kv-val empty" data-k="title">&mdash;</div>
+                        <div class="kv-key">Role</div>   <div class="kv-val empty" data-k="role">&mdash;</div>
+                        <div class="kv-key">Frame</div>  <div class="kv-val empty" data-k="frame">&mdash;</div>
+                        <div class="kv-key">Screen</div> <div class="kv-val empty" data-k="screen">&mdash;</div>
+                        <div class="kv-key">Win ID</div> <div class="kv-val empty" data-k="id">&mdash;</div>
+                    </div>
                 </div>
-                <div class="flags-row">
-                    <span class="flag-chip" data-flag="standard">Standard</span>
-                    <span class="flag-chip" data-flag="minimized">Minimized</span>
-                    <span class="flag-chip" data-flag="fullscreen">Fullscreen</span>
-                    <span class="flag-chip" data-flag="visible">Visible</span>
+                <div class="section-divider"></div>
+                <!-- Element Under Cursor -->
+                <div class="ax-banner"><b>Accessibility permission required.</b><br />Grant Hammerspoon access in System Settings &rarr; Privacy &amp; Security &rarr; Accessibility, then hover over any control.</div>
+                <div class="state-section">
+                    <div class="section-label">Element Under Cursor</div>
+                    <div class="kv-grid">
+                        <div class="kv-key">Role</div>  <div class="kv-val empty" data-e="role">&mdash;</div>
+                        <div class="kv-key">Desc</div>  <div class="kv-val empty" data-e="desc">&mdash;</div>
+                        <div class="kv-key">Title</div> <div class="kv-val empty" data-e="title">&mdash;</div>
+                        <div class="kv-key">Value</div> <div class="kv-val empty" data-e="value">&mdash;</div>
+                        <div class="kv-key">Ident</div> <div class="kv-val empty" data-e="ident">&mdash;</div>
+                        <div class="kv-key">Frame</div> <div class="kv-val empty" data-e="frame">&mdash;</div>
+                    </div>
                 </div>
-            </div>
-            <div class="section-divider"></div>
-            <div class="log"><div class="log-empty">No window events yet</div></div>
-        </div>
-
-        <!-- Element tab -->
-        <div class="wtab-section" data-wsection="element">
-            <div class="ax-banner"><b>Accessibility permission required.</b><br />Grant Hammerspoon access in System Settings &rarr; Privacy &amp; Security &rarr; Accessibility, then hover over any control.</div>
-            <div class="state-section">
-                <div class="section-label">Element Under Cursor</div>
-                <div class="kv-grid">
-                    <div class="kv-key">Role</div>  <div class="kv-val empty" data-e="role">&mdash;</div>
-                    <div class="kv-key">Desc</div>  <div class="kv-val empty" data-e="desc">&mdash;</div>
-                    <div class="kv-key">Title</div> <div class="kv-val empty" data-e="title">&mdash;</div>
-                    <div class="kv-key">Value</div> <div class="kv-val empty" data-e="value">&mdash;</div>
-                    <div class="kv-key">Ident</div> <div class="kv-val empty" data-e="ident">&mdash;</div>
-                    <div class="kv-key">Frame</div> <div class="kv-val empty" data-e="frame">&mdash;</div>
-                </div>
-            </div>
-            <div class="section-divider"></div>
-            <div class="state-section" style="border-bottom:none">
-                <div class="section-label">Cursor</div>
-                <div class="kv-grid">
-                    <div class="kv-key">Screen</div> <div class="kv-val empty" data-cursor="screen">&mdash;</div>
-                    <div class="kv-key">Window</div> <div class="kv-val empty" data-cursor="win">&mdash;</div>
-                    <div class="kv-key">Pixel</div>
-                    <div class="kv-val empty" data-cursor="pixel" style="display:flex;align-items:center;gap:7px;">
-                        <span class="pixel-swatch" style="width:12px;height:12px;border-radius:2px;border:1px solid var(--border);flex-shrink:0;display:none;"></span>
-                        <span class="pixel-hex">&mdash;</span>
+                <div class="section-divider"></div>
+                <!-- Cursor -->
+                <div class="state-section" style="border-bottom:none">
+                    <div class="section-label">Cursor</div>
+                    <div class="kv-grid">
+                        <div class="kv-key">Screen</div> <div class="kv-val empty" data-cursor="screen">&mdash;</div>
+                        <div class="kv-key">Window</div> <div class="kv-val empty" data-cursor="win">&mdash;</div>
+                        <div class="kv-key">Pixel</div>
+                        <div class="kv-val empty" data-cursor="pixel" style="display:flex;align-items:center;gap:7px;">
+                            <span class="pixel-swatch" style="width:12px;height:12px;border-radius:2px;border:1px solid var(--border);flex-shrink:0;display:none;"></span>
+                            <span class="pixel-hex">&mdash;</span>
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Log tab (event log only) -->
+        <div class="wtab-section" data-wsection="element">
+            <div class="log"><div class="log-empty">No window events yet</div></div>
         </div>
 
         <div id="ctx-menu"></div>
@@ -2879,7 +2892,7 @@ function createLogPanel(config) {
 // ── Window buildRow ─────────────────────────────────────────────
             const BADGE = { focus:"badge-focus", move:"badge-move", resize:"badge-resize",
                 minimize:"badge-state", unminimize:"badge-state", fullscreen:"badge-state" };
-            const LABEL = { focus:"focus", move:"moved", resize:"resized",
+            const LABEL = { focus:"focused", move:"moved", resize:"resized",
                 minimize:"minimized", unminimize:"restored", fullscreen:"fullscreen",
                 hide:"hidden", show:"shown" };
 
