@@ -58,6 +58,20 @@
             background: var(--surface); border-right: 1px solid var(--border-dim);
             display: flex; flex-direction: column; padding: 8px 0; gap: 2px; overflow-y: auto;
         }
+        /* Dedicated window-drag strip at the top of the rail — always present
+           regardless of which panel is shown, so the window can always be grabbed. */
+        #rail-drag {
+            flex-shrink: 0; height: 22px; margin: -4px 0 4px; cursor: grab;
+            display: flex; align-items: center; justify-content: center;
+            -webkit-user-select: none; user-select: none;
+        }
+        #rail-drag:active { cursor: grabbing; }
+        #rail-drag .grip { display: flex; gap: 3px; opacity: 0.3; transition: opacity 0.15s; }
+        #rail-drag:hover .grip { opacity: 0.55; }
+        #rail-drag .grip span { width: 3px; height: 3px; border-radius: 50%; background: var(--text3); }
+        /* While dragging the window, freeze hover: the window slides under the
+           cursor and would otherwise leave a trail of half-highlighted rail items. */
+        body.dragging #rail, body.dragging #content { pointer-events: none; }
         .rail-item {
             display: flex; align-items: center; gap: 8px; padding: 7px 14px;
             border-radius: var(--radius); color: var(--text2); font-size: 12px;
@@ -229,10 +243,15 @@
             position: fixed; min-width: 140px; background: var(--surface2);
             border: 1px solid var(--border); border-radius: var(--radius-s);
             box-shadow: 0 8px 24px rgba(0,0,0,0.55); z-index: 150;
-            overflow: hidden; display: none;
+            /* Scroll internally when taller than the space showCtxMenu() allots,
+               instead of overflowing the window and getting clipped by its border. */
+            overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+            display: none;
         }
         #ctx-menu.open, #ctx-menu-settings.open { display: block; }
         .ctx-header {
+            /* Stays pinned while a long menu scrolls beneath it. */
+            position: sticky; top: 0; z-index: 1; background: var(--surface2);
             padding: 5px 10px 4px; font-size: 10px; font-weight: 600;
             color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px;
             border-bottom: 1px solid var(--border);
@@ -344,6 +363,37 @@
         .entry-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
         .dim-pill { font: 10px var(--font-mono); padding: 1px 5px; border-radius: var(--radius-s); background: var(--surface2); border: 1px solid var(--border); color: var(--text2); flex-shrink: 0; }
         .move-entry { opacity: 0.5; }
+        /* Window Spy (rebuilt) */
+        .panel-window .win-flag-row { display: flex; align-items: center; padding: 7px 12px; gap: 8px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .panel-window .win-flag-pill { min-width: 0; }
+        .panel-window .win-flag-name { font: 12px var(--font-mono); flex-shrink: 0; }
+        .panel-window .win-flag-detail { font-size: 11px; color: var(--text3); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .panel-window .wtabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .panel-window .wtab { flex: 1; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text2); text-align: center; cursor: pointer; border: none; border-bottom: 2px solid transparent; background: none; transition: color 0.15s, border-color 0.15s; }
+        .panel-window .wtab:hover { color: var(--text); }
+        .panel-window .wtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .panel-window .wtab-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        .panel-window .wtab-section.active { display: flex; }
+        .panel-window .kv-grid { display: grid; grid-template-columns: max-content 1fr; column-gap: 12px; row-gap: 3px; align-items: baseline; }
+        .panel-window .kv-key { font: 700 10px var(--font-mono); letter-spacing: 0.04em; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
+        .panel-window .kv-val { font: 12px var(--font-mono); color: var(--text); word-break: break-word; min-width: 0; }
+        .panel-window .kv-val.empty { color: var(--text3); opacity: 0.5; }
+        .panel-window .flags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .panel-window .flag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 3px; font: 11px var(--font-mono); background: var(--surface2); border: 1px solid var(--border); color: var(--text3); transition: all 0.15s; }
+        .panel-window .flag-chip::before { content: "\25CB"; font-size: 9px; }
+        .panel-window .flag-chip.on { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: var(--accent); color: var(--accent); }
+        .panel-window .flag-chip.on::before { content: "\25CF"; }
+        .panel-window .ax-banner { display: none; margin: 8px 12px; padding: 8px 10px; border-radius: var(--radius); background: color-mix(in srgb, var(--warning) 12%, transparent); border: 1px solid var(--warning); color: var(--text2); font-size: 11px; line-height: 1.5; }
+        .panel-window .ax-banner.show { display: block; }
+        .panel-window .ax-banner b { color: var(--text); }
+        .panel-window .log-empty { padding: 14px; text-align: center; color: var(--text3); font-size: 11px; font-style: italic; }
+        .panel-window .badge-focus { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-hi, var(--accent)); }
+        .panel-window .badge-move { background: color-mix(in srgb, var(--text3) 30%, transparent); color: var(--text2); }
+        .panel-window .badge-resize { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--warning); }
+        .panel-window .badge-state { background: color-mix(in srgb, var(--success) 26%, transparent); color: var(--accent); }
+        .panel-window .ename { color: var(--text); word-break: break-word; }
+        .panel-window .edetail { color: var(--text3); font: 11px var(--font-mono); font-variant-numeric: tabular-nums; }
+        .panel-window .ecount { color: var(--text3); font: 10px var(--font-mono); }
 
         /* ═══ SETTINGS-SPECIFIC ════════════════════════════════════════════════ */
         #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex-shrink: 0; transition: background 0.2s; }
@@ -613,6 +663,7 @@
 
     <!-- ── Left Rail ─────────────────────────────────────────────────────── -->
     <nav id="rail">
+        <div id="rail-drag" title="Drag to move window"><span class="grip"><span></span><span></span><span></span></span></div>
         <button class="rail-item" data-panel="macros"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></span> Macros</button>
         <button class="rail-item" data-panel="theme"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg></span> Theme</button>
         <button class="rail-item active" data-panel="console"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 7C2 4.23858 4.23858 2 7 2H17C19.7614 2 22 4.23858 22 7V17C22 19.7614 19.7614 22 17 22H7C4.23858 22 2 19.7614 2 17V7ZM7 4C5.34315 4 4 5.34315 4 7V17C4 18.6569 5.34315 20 7 20H17C18.6569 20 20 18.6569 20 17V7C20 5.34315 18.6569 4 17 4H7ZM7 17C7 16.4477 7.44772 16 8 16H16C16.5523 16 17 16.4477 17 17C17 17.5523 16.5523 18 16 18H8C7.44772 18 7 17.5523 7 17ZM8.70709 7.29288C8.31656 6.90236 7.6834 6.90238 7.29288 7.29291C6.90236 7.68344 6.90238 8.3166 7.29291 8.70712L9.58588 11L7.29291 13.2929C6.90238 13.6834 6.90236 14.3166 7.29288 14.7071C7.6834 15.0976 8.31656 15.0976 8.70709 14.7071L11.7072 11.7071C11.8948 11.5196 12.0001 11.2652 12.0001 11C12.0001 10.7348 11.8948 10.4804 11.7072 10.2929L8.70709 7.29288Z" fill="currentColor"/></svg></span> Console</button>
@@ -950,21 +1001,76 @@
             </div>
         </div>
 
-        <!-- Current window -->
-        <div id="current">
-            <span id="current-empty">No focused window</span>
-            <span id="current-app"></span>
-            <span id="current-title"></span>
-            <span id="current-dim"></span>
+        <!-- Flag row: last event -->
+        <div class="win-flag-row">
+            <div class="flag-pill win-flag-pill">
+                <span class="flag-label">Event</span>
+                <span class="win-flag-name">&mdash;</span>
+                <span class="win-flag-detail"></span>
+            </div>
         </div>
 
-        <!-- Log -->
-        <div id="log"></div>
+        <!-- Tabs -->
+        <div class="wtabs">
+            <button class="wtab active" data-wtab="window" onmouseenter="playSlot('hover')" onclick="switchWindowTab('window')">Window</button>
+            <button class="wtab" data-wtab="element" onmouseenter="playSlot('hover')" onclick="switchWindowTab('element')">Element</button>
+        </div>
+
+        <!-- Window tab -->
+        <div class="wtab-section active" data-wsection="window">
+            <div class="state-section">
+                <div class="section-label">Focused Window</div>
+                <div class="kv-grid">
+                    <div class="kv-key">App</div>    <div class="kv-val empty" data-k="app">&mdash;</div>
+                    <div class="kv-key">PID</div>    <div class="kv-val empty" data-k="pid">&mdash;</div>
+                    <div class="kv-key">Bundle</div> <div class="kv-val empty" data-k="bundle">&mdash;</div>
+                    <div class="kv-key">Title</div>  <div class="kv-val empty" data-k="title">&mdash;</div>
+                    <div class="kv-key">Role</div>   <div class="kv-val empty" data-k="role">&mdash;</div>
+                    <div class="kv-key">Frame</div>  <div class="kv-val empty" data-k="frame">&mdash;</div>
+                    <div class="kv-key">Screen</div> <div class="kv-val empty" data-k="screen">&mdash;</div>
+                    <div class="kv-key">Win ID</div> <div class="kv-val empty" data-k="id">&mdash;</div>
+                </div>
+                <div class="flags-row">
+                    <span class="flag-chip" data-flag="standard">Standard</span>
+                    <span class="flag-chip" data-flag="minimized">Minimized</span>
+                    <span class="flag-chip" data-flag="fullscreen">Fullscreen</span>
+                    <span class="flag-chip" data-flag="visible">Visible</span>
+                </div>
+            </div>
+            <div class="section-divider"></div>
+            <div class="log"><div class="log-empty">No window events yet</div></div>
+        </div>
+
+        <!-- Element tab -->
+        <div class="wtab-section" data-wsection="element">
+            <div class="ax-banner"><b>Accessibility permission required.</b><br />Grant Hammerspoon access in System Settings &rarr; Privacy &amp; Security &rarr; Accessibility, then hover over any control.</div>
+            <div class="state-section">
+                <div class="section-label">Element Under Cursor</div>
+                <div class="kv-grid">
+                    <div class="kv-key">Role</div>  <div class="kv-val empty" data-e="role">&mdash;</div>
+                    <div class="kv-key">Desc</div>  <div class="kv-val empty" data-e="desc">&mdash;</div>
+                    <div class="kv-key">Title</div> <div class="kv-val empty" data-e="title">&mdash;</div>
+                    <div class="kv-key">Value</div> <div class="kv-val empty" data-e="value">&mdash;</div>
+                    <div class="kv-key">Ident</div> <div class="kv-val empty" data-e="ident">&mdash;</div>
+                    <div class="kv-key">Frame</div> <div class="kv-val empty" data-e="frame">&mdash;</div>
+                </div>
+            </div>
+            <div class="section-divider"></div>
+            <div class="state-section" style="border-bottom:none">
+                <div class="section-label">Cursor</div>
+                <div class="kv-grid">
+                    <div class="kv-key">Screen</div> <div class="kv-val empty" data-cursor="screen">&mdash;</div>
+                    <div class="kv-key">Window</div> <div class="kv-val empty" data-cursor="win">&mdash;</div>
+                    <div class="kv-key">Pixel</div>
+                    <div class="kv-val empty" data-cursor="pixel" style="display:flex;align-items:center;gap:7px;">
+                        <span class="pixel-swatch" style="width:12px;height:12px;border-radius:2px;border:1px solid var(--border);flex-shrink:0;display:none;"></span>
+                        <span class="pixel-hex">&mdash;</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div id="ctx-menu"></div>
-
-        
-    
         </div>
 <div class="panel-theme" style="display:none">
         <div id="header">
@@ -1540,13 +1646,26 @@ function createLogPanel(config) {
             });
             el.appendChild(row);
         }
+        // Keep the menu fully visible: clamp horizontally, flip up when there's
+        // more room above, and cap the height so a tall menu scrolls internally
+        // rather than spilling past the window border and getting clipped.
         el.classList.add("open");
+        el.style.maxHeight = "";
+        const MARGIN = 6;
+        const vw = window.innerWidth, vh = window.innerHeight;
         const mw = el.offsetWidth || 140;
-        const mh = el.offsetHeight || 80;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        el.style.left = Math.min(x, vw - mw - 4) + "px";
-        el.style.top = Math.min(y, vh - mh - 4) + "px";
+        const naturalH = el.scrollHeight;
+        const left = Math.max(MARGIN, Math.min(x, vw - mw - MARGIN));
+        const spaceBelow = vh - y - MARGIN, spaceAbove = y - MARGIN;
+        let top, maxH;
+        if (naturalH <= spaceBelow)      { top = y;            maxH = spaceBelow; }
+        else if (naturalH <= spaceAbove) { top = y - naturalH; maxH = spaceAbove; }
+        else if (spaceBelow >= spaceAbove) { top = y;          maxH = spaceBelow; }
+        else                             { top = MARGIN;        maxH = spaceAbove; }
+        top = Math.max(MARGIN, top);
+        el.style.left = left + "px";
+        el.style.top = top + "px";
+        el.style.maxHeight = maxH + "px";
     }
 
     // Suppress native context menu, show custom menu
@@ -1595,30 +1714,26 @@ function createLogPanel(config) {
         }
     });
 
-    // ── Header drag ────────────────────────────────────────────────────
+    // ── Window drag (title header + rail top strip) ────────────────────
+    // A webview reports pointer coords relative to its own (moving) window, so any
+    // JS-side delta feeds back and flings the panel off-screen. We only tell Lua
+    // when the drag starts/ends; it tracks the real OS mouse position itself.
     (function () {
-        let _drag = null;
         document.addEventListener("mousedown", (e) => {
             if (e.button !== 0) return;
-            if (!e.target.closest("#header")) return;
+            if (!e.target.closest("#header, #rail-drag")) return;
             if (e.target.closest(".header-btns")) return;
-            _drag = { ox: e.screenX, oy: e.screenY };
-            const onMove = (ev) => {
-                if (!_drag) return;
-                sendToHost({
-                    action: "move",
-                    dx: ev.screenX - _drag.ox,
-                    dy: ev.screenY - _drag.oy,
-                });
-                _drag.ox = ev.screenX;
-                _drag.oy = ev.screenY;
-            };
+            sendToHost({ action: "dragStart" });
+            // While dragging, the window slides under a near-stationary cursor, which
+            // would otherwise sweep hover across every rail item (their transitions
+            // leave a trail of half-highlighted rows). Suppress pointer interaction
+            // for the duration so nothing spuriously highlights.
+            document.body.classList.add("dragging");
             const onUp = () => {
-                _drag = null;
-                window.removeEventListener("mousemove", onMove);
+                document.body.classList.remove("dragging");
+                sendToHost({ action: "moveEnd" });
                 window.removeEventListener("mouseup", onUp);
             };
-            window.addEventListener("mousemove", onMove);
             window.addEventListener("mouseup", onUp);
         });
     })();
@@ -2762,46 +2877,125 @@ function createLogPanel(config) {
     (function() {
     "use strict";
 // ── Window buildRow ─────────────────────────────────────────────
+            const BADGE = { focus:"badge-focus", move:"badge-move", resize:"badge-resize",
+                minimize:"badge-state", unminimize:"badge-state", fullscreen:"badge-state" };
+            const LABEL = { focus:"focus", move:"moved", resize:"resized",
+                minimize:"minimized", unminimize:"restored", fullscreen:"fullscreen",
+                hide:"hidden", show:"shown" };
+
+            function mkSpan(cls, txt) { const s = document.createElement("span"); s.className = cls; s.textContent = txt; return s; }
+
             function buildRow(entry) {
                 const row = document.createElement("div");
-                row.className = "entry";
-
-                const ts = document.createElement("span");
-                ts.className = "ts";
-                ts.textContent = entry.ts || "";
-                row.appendChild(ts);
-
-                const dot = document.createElement("span");
-                dot.className = "entry-dot";
-                dot.innerHTML = ICONS.dot;
-                row.appendChild(dot);
-
-                const app = document.createElement("span");
-                app.className = "entry-app";
-                app.textContent = entry.app || "";
-                row.appendChild(app);
-
-                const sep = document.createElement("span");
-                sep.className = "entry-sep";
-                sep.innerHTML = ICONS["chevron-right"];
-                row.appendChild(sep);
-
-                const title = document.createElement("span");
-                title.className = "entry-title";
-                title.textContent = entry.title || "";
-                row.appendChild(title);
-
-                if (entry.w != null && entry.h != null) {
-                    const pill = document.createElement("span");
-                    pill.className = "dim-pill";
-                    pill.textContent = entry.w + "\u00d7" + entry.h;
-                    row.appendChild(pill);
+                const t = entry.type;
+                row.className = "entry" + (t === "move" || t === "resize" ? " move-entry" : "");
+                row.appendChild(mkSpan("ts", "[" + (entry.ts || "") + "]"));
+                row.appendChild(mkSpan("badge " + (BADGE[t] || "badge-state"), LABEL[t] || t));
+                if (t === "focus") {
+                    row.appendChild(mkSpan("ename", entry.app || "?"));
+                    if (entry.title) row.appendChild(mkSpan("edetail", "\u00b7 " + entry.title));
+                } else if (t === "move") {
+                    row.appendChild(mkSpan("edetail", (entry.x ?? "?") + ", " + (entry.y ?? "?")));
+                    if (entry.count > 1) row.appendChild(mkSpan("ecount", "\u00d7" + entry.count));
+                } else if (t === "resize") {
+                    row.appendChild(mkSpan("edetail", (entry.w ?? "?") + " \u00d7 " + (entry.h ?? "?")));
+                    if (entry.count > 1) row.appendChild(mkSpan("ecount", "\u00d7" + entry.count));
+                } else if (t === "fullscreen") {
+                    row.appendChild(mkSpan("ename", entry.on ? "entered" : "exited"));
+                    if (entry.app) row.appendChild(mkSpan("edetail", "\u00b7 " + entry.app));
+                } else {
+                    if (entry.app) row.appendChild(mkSpan("ename", entry.app));
+                    if (entry.title) row.appendChild(mkSpan("edetail", "\u00b7 " + entry.title));
                 }
-
                 row.onmouseenter = function() { lp.playSlot("hover"); };
                 row.onclick = lp._handleEntryClick;
                 return row;
             }
+
+            // \u2500\u2500 Live state helpers (scoped to this panel) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+            function _q(sel) { return _panel ? _panel.querySelector(sel) : document.querySelector(".panel-window " + sel); }
+            function setVal(sel, text) {
+                const el = _q(sel); if (!el) return;
+                const has = text != null && text !== "";
+                el.textContent = has ? text : "\u2014";
+                el.classList.toggle("empty", !has);
+            }
+            function setFlag(name, on) { const el = _q('[data-flag="' + name + '"]'); if (el) el.classList.toggle("on", !!on); }
+            function frameStr(f) { return f ? (f.x + ", " + f.y + "  \u00b7  " + f.w + " \u00d7 " + f.h) : ""; }
+
+            function updateCurrentWindow(s) {
+                if (!s) return;
+                setVal('[data-k="app"]', s.app);
+                setVal('[data-k="pid"]', s.pid != null ? String(s.pid) : "");
+                setVal('[data-k="bundle"]', s.bundleID);
+                setVal('[data-k="title"]', s.title);
+                setVal('[data-k="role"]', [s.role, s.subrole].filter(Boolean).join(" / "));
+                setVal('[data-k="frame"]', frameStr(s.frame));
+                setVal('[data-k="screen"]', s.screen);
+                setVal('[data-k="id"]', s.id != null ? String(s.id) : "");
+                setFlag("standard", s.standard); setFlag("minimized", s.minimized);
+                setFlag("fullscreen", s.fullscreen); setFlag("visible", s.visible);
+            }
+
+            function updateElement(e) {
+                if (!e) return;
+                const banner = _q(".ax-banner");
+                if (e.axPermission === false) {
+                    if (banner) banner.classList.add("show");
+                    ["role","desc","title","value","ident","frame"].forEach((k) => setVal('[data-e="' + k + '"]', ""));
+                    return;
+                }
+                if (banner) banner.classList.remove("show");
+                setVal('[data-e="role"]', e.role);
+                setVal('[data-e="desc"]', e.roleDescription);
+                setVal('[data-e="title"]', e.title);
+                setVal('[data-e="value"]', e.value);
+                setVal('[data-e="ident"]', e.identifier);
+                setVal('[data-e="frame"]', frameStr(e.frame));
+            }
+
+            function updateMousePos(p) {
+                if (!p) return;
+                if (p.sx != null) setVal('[data-cursor="screen"]', p.sx + ", " + p.sy);
+                if (p.wx != null) setVal('[data-cursor="win"]', p.wx + ", " + p.wy);
+                const cell = _q('[data-cursor="pixel"]');
+                if (cell) {
+                    const sw = cell.querySelector(".pixel-swatch");
+                    const hx = cell.querySelector(".pixel-hex");
+                    if (p.pixel && p.pixel.hex) {
+                        if (sw) { sw.style.background = p.pixel.hex; sw.style.display = ""; }
+                        if (hx) hx.textContent = p.pixel.hex + "  ·  " + p.pixel.r + ", " + p.pixel.g + ", " + p.pixel.b;
+                        cell.classList.remove("empty");
+                    } else {
+                        if (sw) sw.style.display = "none";
+                        if (hx) hx.textContent = "—";
+                        cell.classList.add("empty");
+                    }
+                }
+            }
+
+            function flagEvent(entry) {
+                if (!entry) return;
+                const nm = _q(".win-flag-name"), dt = _q(".win-flag-detail"), pill = _q(".win-flag-pill");
+                if (nm) nm.textContent = LABEL[entry.type] || entry.type;
+                let detail = "";
+                if (entry.type === "focus") detail = entry.app || "";
+                else if (entry.type === "move") detail = (entry.x ?? "") + ", " + (entry.y ?? "");
+                else if (entry.type === "resize") detail = (entry.w ?? "") + " \u00d7 " + (entry.h ?? "");
+                else detail = entry.app || "";
+                if (dt) dt.textContent = detail;
+                if (pill) pill.classList.add("flag-recent");
+            }
+
+            function switchWindowTab(tab) {
+                if (!_panel) return;
+                _panel.querySelectorAll(".wtab").forEach((t) => t.classList.toggle("active", t.dataset.wtab === tab));
+                _panel.querySelectorAll(".wtab-section").forEach((s) => s.classList.toggle("active", s.dataset.wsection === tab));
+                // Tell Lua which tab is up so it only runs the heavy element-under-
+                // cursor AX poll while the Element tab is actually visible.
+                lp.sendToHost({ action: "tab", tab: tab });
+            }
+            window.switchWindowTab = switchWindowTab;
 
             // ── Create LogPanel ─────────────────────────────────────────────
             const _panel = document.querySelector('.panel-window');
@@ -2830,54 +3024,48 @@ function createLogPanel(config) {
             window.closePanel  = lp.closePanel;
             window.windowApplyTheme = lp.applyTheme;
 
-            // ── Current window display ──────────────────────────────────────
-            function updateCurrentWindow(entry) {
-                const empty = _panel ? _panel.querySelector("#current-empty") : document.getElementById("current-empty");
-                const appEl = _panel ? _panel.querySelector("#current-app") : document.getElementById("current-app");
-                const titleEl = _panel ? _panel.querySelector("#current-title") : document.getElementById("current-title");
-                const dimEl = _panel ? _panel.querySelector("#current-dim") : document.getElementById("current-dim");
-
-                if (!empty || !appEl || !titleEl || !dimEl) return;
-
-                if (!entry || (!entry.app && !entry.title)) {
-                    empty.style.display = "";
-                    appEl.style.display = "none";
-                    titleEl.style.display = "none";
-                    dimEl.style.display = "none";
-                    return;
-                }
-
-                empty.style.display = "none";
-                appEl.style.display = "";
-                titleEl.style.display = "";
-                dimEl.style.display = "";
-
-                appEl.textContent = entry.app || "";
-                titleEl.textContent = entry.title || "";
-                dimEl.textContent =
-                    entry.w != null && entry.h != null
-                        ? entry.w + "\u00d7" + entry.h + " px"
-                        : "";
+            // ── Event log ───────────────────────────────────────────────────
+            // lp.appendEntry/loadHistory target document.getElementById("log");
+            // this panel's log is `.log` scoped under .panel-window (no #log), so
+            // we build rows into it directly via the shared primitives. Delegating
+            // to lp silently dropped every window event.
+            function appendEntry(entry) {
+                if (lp.isPaused()) return;
+                const log = _q(".log");
+                if (!log) return;
+                const empty = log.querySelector(".log-empty");
+                if (empty) empty.remove();
+                flagEvent(entry);
+                const atBottom = lp.isNearBottom(log);
+                log.appendChild(buildRow(entry));
+                lp.trimLog(log);
+                if (atBottom) log.scrollTop = log.scrollHeight;
             }
-
-            // ── Override loadHistory to also update current ─────────────────
-            const _baseLoad = lp.loadHistory;
 
             function loadHistory(entries) {
-                _baseLoad(entries);
-                if (entries && entries.length > 0) {
-                    updateCurrentWindow(entries[entries.length - 1]);
+                const log = _q(".log");
+                if (!log) return;
+                if (!entries || entries.length === 0) {
+                    log.innerHTML = '<div class="log-empty">No window events yet</div>';
+                    return;
                 }
+                log.innerHTML = "";
+                const capped = entries.length > lp.maxEntries ? entries.slice(-lp.maxEntries) : entries;
+                const frag = document.createDocumentFragment();
+                capped.forEach((e) => frag.appendChild(buildRow(e)));
+                log.appendChild(frag);
+                log.scrollTop = log.scrollHeight;
+                flagEvent(capped[capped.length - 1]);
             }
-
-            window.updateCurrentWindow = updateCurrentWindow;
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("window", function(action, body) {
-                        if (action === "appendEntry" && body) lp.appendEntry(body);
+                        if (action === "appendEntry" && body) appendEntry(body);
                         else if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
+                        else if (action === "updateElement" && body) updateElement(body);
+                        else if (action === "updateMousePos" && body) updateMousePos(body);
                         else if (action === "loadHistory" && body) loadHistory(body);
                     });
                 }
@@ -2949,14 +3137,26 @@ function createLogPanel(config) {
                     el.appendChild(row);
                 }
 
-                // Position: try to stay within viewport
+                // Keep the menu fully visible: clamp horizontally, flip up when
+                // there's more room above, and cap the height so a tall menu scrolls
+                // internally rather than spilling past the window border.
                 el.classList.add("open");
+                el.style.maxHeight = "";
+                const MARGIN = 6;
+                const vw = window.innerWidth, vh = window.innerHeight;
                 const mw = el.offsetWidth || 160;
-                const mh = el.offsetHeight || 80;
-                const vw = window.innerWidth;
-                const vh = window.innerHeight;
-                el.style.left = Math.min(x, vw - mw - 4) + "px";
-                el.style.top = Math.min(y, vh - mh - 4) + "px";
+                const naturalH = el.scrollHeight;
+                const left = Math.max(MARGIN, Math.min(x, vw - mw - MARGIN));
+                const spaceBelow = vh - y - MARGIN, spaceAbove = y - MARGIN;
+                let top, maxH;
+                if (naturalH <= spaceBelow)      { top = y;            maxH = spaceBelow; }
+                else if (naturalH <= spaceAbove) { top = y - naturalH; maxH = spaceAbove; }
+                else if (spaceBelow >= spaceAbove) { top = y;          maxH = spaceBelow; }
+                else                             { top = MARGIN;        maxH = spaceAbove; }
+                top = Math.max(MARGIN, top);
+                el.style.left = left + "px";
+                el.style.top = top + "px";
+                el.style.maxHeight = maxH + "px";
             }
 
             // Close ctx menu and reload dropdown on any left-click or Escape.
@@ -3430,10 +3630,25 @@ function createLogPanel(config) {
                         // Position after toggling open so offsetWidth is valid
                         const positionList = () => {
                             const rect = btn.getBoundingClientRect();
+                            const MARGIN = 6;
+                            const vw = window.innerWidth, vh = window.innerHeight;
                             const w = list.offsetWidth || 140;
-                            list.style.top = rect.bottom + 4 + "px";
+                            const spaceBelow = vh - rect.bottom - MARGIN;
+                            const spaceAbove = rect.top - MARGIN;
+                            // Cap height to the roomier side (never past the CSS 200 default)
+                            // so the list scrolls internally instead of spilling off-window.
+                            list.style.maxHeight =
+                                Math.min(200, Math.max(spaceBelow, spaceAbove)) + "px";
+                            const menuH = list.offsetHeight;
+                            let top;
+                            if (menuH <= spaceBelow)        top = rect.bottom + 4;      // room below
+                            else if (menuH <= spaceAbove)   top = rect.top - menuH - 4; // flip up
+                            else if (spaceBelow >= spaceAbove) top = rect.bottom + 4;   // scroll, down
+                            else                            top = rect.top - menuH - 4; // scroll, up
+                            top = Math.max(MARGIN, Math.min(top, vh - menuH - MARGIN));
+                            list.style.top = top + "px";
                             list.style.left =
-                                Math.max(4, rect.right - w) + "px";
+                                Math.max(MARGIN, Math.min(rect.right - w, vw - w - MARGIN)) + "px";
                         };
                         positionList();
                         // Reposition while the scroll container scrolls

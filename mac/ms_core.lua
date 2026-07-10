@@ -3145,16 +3145,109 @@
                             pcall(function() ms.shell.hide() end)
                             return
                         end
-                        -- Move: drag the shell window (JS sends dx/dy deltas)
-                        if action == "move" and body and body.dx and body.dy then
+                        -- Drag: JS only signals start; we track the real OS mouse
+                        -- position (hs.mouse.absolutePosition) so the window's own
+                        -- motion can never feed back into the pointer coordinates.
+                        -- The webview reports those window-relative, which is what
+                        -- made the panel accelerate off-screen away from the cursor.
+                        if action == "dragStart" then
                             pcall(function()
+                                if ms._shellDragTap then ms._shellDragTap:stop() end
+                                -- Signal the Window Spy engine (and anything else on the
+                                -- shared thread) to idle while we drag our own window, so
+                                -- its watchers don't contend with the drag eventtap.
+                                ms._shellDragging = true
+                                -- Move by the delta of the OS mouse from where the drag
+                                -- began, relative to where the window began. Using deltas
+                                -- (not mouse - windowOrigin) means any constant offset
+                                -- between the mouse and webview coordinate spaces cancels
+                                -- out, and the global mouse position can't feed back from
+                                -- the window's own motion.
+                                local startFrame = _shellView:frame()
+                                local startMouse = hs.mouse.absolutePosition()
+                                local w, h = startFrame.w, startFrame.h
+                                -- Usable top of the screen the drag began on. The window
+                                -- top is never allowed above this: every drag handle lives
+                                -- at the top of the window, so letting it go above the
+                                -- screen would leave nothing to grab. Down/left/right are
+                                -- safe because the grabbed point stays under the cursor.
+                                local topLimit = (hs.mouse.getCurrentScreen() or hs.screen.mainScreen()):frame().y
+                                -- Drop the shadow for the drag: recompositing a soft shadow
+                                -- on a transparent, rounded window every reposition is the
+                                -- main thing that makes it lag behind the cursor.
+                                pcall(function() _shellView:shadow(false) end)
+                                local et = hs.eventtap.event.types
+                                ms._shellDragTap = hs.eventtap.new(
+                                    { et.leftMouseDragged, et.leftMouseUp },
+                                    function(ev)
+                                        if not _shellView then return false end
+                                        if ev:getType() == et.leftMouseUp then
+                                            if ms._shellDragTap then ms._shellDragTap:stop(); ms._shellDragTap = nil end
+                                            ms._shellDragging = false
+                                            pcall(function() _shellView:shadow(true) end)
+                                            pcall(ms.shell.saveState)
+                                            return false
+                                        end
+                                        local mp = hs.mouse.absolutePosition()
+                                        pcall(function()
+                                            _shellView:frame({
+                                                x = startFrame.x + (mp.x - startMouse.x),
+                                                y = math.max(startFrame.y + (mp.y - startMouse.y), topLimit),
+                                                w = w, h = h,
+                                            })
+                                        end)
+                                        return false
+                                    end)
+                                ms._shellDragTap:start()
+                            end)
+                            return
+                        end
+                        -- MoveEnd: stop the tracker, then rubber-band back if the
+                        -- window ended up more than half off-screen.
+                        if action == "moveEnd" then
+                            pcall(function()
+                                if ms._shellDragTap then ms._shellDragTap:stop(); ms._shellDragTap = nil end
+                                ms._shellDragging = false
+                                pcall(function() _shellView:shadow(true) end)
                                 local f = _shellView:frame()
-                                _shellView:frame({
-                                    x = f.x + body.dx,
-                                    y = f.y + body.dy,
-                                    w = f.w,
-                                    h = f.h,
-                                })
+                                local sf = hs.screen.mainScreen():frame()
+                                -- How much of the window is visible
+                                local visW = math.max(0, math.min(f.x + f.w, sf.x + sf.w) - math.max(f.x, sf.x))
+                                local visH = math.max(0, math.min(f.y + f.h, sf.y + sf.h) - math.max(f.y, sf.y))
+                                if visW < f.w * 0.5 or visH < f.h * 0.5 then
+                                    -- Clamp so at least half is visible. Horizontally we
+                                    -- allow some overhang; vertically the top is floored at
+                                    -- the screen top so the drag handles are never hidden.
+                                    local nx = math.max(sf.x - f.w * 0.4, math.min(f.x, sf.x + sf.w - f.w * 0.4))
+                                    local ny = math.max(sf.y, math.min(f.y, sf.y + sf.h - f.h * 0.4))
+                                    -- Animate with a quick timer
+                                    local sx, sy = f.x, f.y
+                                    local step, steps = 0, 5
+                                    local view = _shellView
+                                    _shellView:alpha(0.85)
+                                    hs.timer.doEvery(0.016, function()
+                                        step = step + 1
+                                        local t = step / steps
+                                        -- Ease-out curve
+                                        t = 1 - (1 - t) * (1 - t)
+                                        pcall(function()
+                                            view:frame({
+                                                x = sx + (nx - sx) * t,
+                                                y = sy + (ny - sy) * t,
+                                                w = f.w, h = f.h,
+                                            })
+                                        end)
+                                        if step >= steps then
+                                            pcall(function() view:frame({ x = nx, y = ny, w = f.w, h = f.h }) end)
+                                            pcall(function() view:alpha(1) end)
+                                            ms.shell.saveState()
+                                            return false
+                                        end
+                                    end)
+                                else
+                                    -- On-screen: just persist where it landed.
+                                    pcall(ms.shell.saveState)
+                                end
                             end)
                             return
                         end
@@ -3333,7 +3426,28 @@
                     local st = ms._shellState
                     if not st or not st.x or not st.y then return end
                     pcall(function()
-                        _shellView:frame({ x = st.x, y = st.y, w = st.w or 900, h = st.h or 600 })
+                        local w = st.w or 900
+                        local h = st.h or 600
+                        -- Pick the screen the saved position sits on; fall back to
+                        -- the main screen so a frame left over from a now-disconnected
+                        -- display (or dragged off-screen) still lands somewhere visible.
+                        local screenObj = hs.screen.mainScreen()
+                        local cx, cy = st.x + w / 2, st.y + h / 2
+                        for _, s in ipairs(hs.screen.allScreens()) do
+                            local sf = s:frame()
+                            if cx >= sf.x and cx < sf.x + sf.w and cy >= sf.y and cy < sf.y + sf.h then
+                                screenObj = s
+                                break
+                            end
+                        end
+                        local sf = screenObj:frame()
+                        w = math.min(w, sf.w)
+                        h = math.min(h, sf.h)
+                        -- Clamp fully on-screen so a persisted off-screen frame self-heals
+                        -- on reload instead of reopening where it can't be grabbed.
+                        local x = math.max(sf.x, math.min(st.x, sf.x + sf.w - w))
+                        local y = math.max(sf.y, math.min(st.y, sf.y + sf.h - h))
+                        _shellView:frame({ x = x, y = y, w = w, h = h })
                     end)
                 end
 

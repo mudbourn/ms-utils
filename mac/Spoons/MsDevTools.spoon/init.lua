@@ -103,6 +103,21 @@
     local _mousePos, _mousePoller, _windowPoller
     local _windowHistory, _windowLast, _windowMaxHistory
     local _pushMouseState
+    -- Window Spy engine (event-driven, hang-safe; replaces the 0.4s poller)
+    local _winAppWatcher, _winUiWatcher, _winTick, _winAxPoll
+    local _winDirty, _winMoveN, _winResizeN, _winLastMouse
+    local _axTimeoutSet = false
+    -- Shell state: which inline panel is showing + a move-driven mouse poller so
+    -- the Inputs coordinate readout follows the cursor (the click-only eventtap
+    -- was the sole coord source in the shell; there is no standalone keys panel).
+    local _activePanel, _shellMousePoller
+    -- Window Spy: is the Element sub-tab showing? The element-under-cursor AX read
+    -- (systemElementAtPosition) is the heaviest/riskiest call and only feeds the
+    -- Element tab, so we skip it entirely while the Window tab is up.
+    local _winElementTab = false
+    -- Pending minimize/hide transition (name + label) to log on the next tick, and
+    -- the name of the app the scoped watcher is currently following.
+    local _winPendingEvent, _winWatchedAppName
 
     local _camMoveAccum  = 0
     local _camLastDx     = nil
@@ -169,6 +184,15 @@
     function MsDevTools:start()
         if not ms then return end
         if ms.checkGuardian and not ms.checkGuardian("MsDevTools") then return end
+
+        -- Global Accessibility messaging timeout: the seatbelt that makes every
+        -- AX call (window reads, element-under-cursor) fail fast instead of
+        -- freezing the single Lua thread if a target app is slow/mid-launch.
+        if not _axTimeoutSet then
+            _axTimeoutSet = pcall(function()
+                hs.axuielement.systemWideElement():setTimeout(0.15)
+            end)
+        end
 
         _cacheDevHTML()
 
@@ -388,15 +412,36 @@
                     _windowHistory = {}
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
+                elseif action == "tab" then
+                    -- Gate the heavy element-under-cursor AX poll on the Element
+                    -- tab being visible. Force a recompute on entry so it fills
+                    -- immediately rather than waiting for the next mouse move.
+                    _winElementTab = (body.tab == "element")
+                    if _winElementTab then _winLastMouse = nil end
                 elseif action == "ready" then
                     -- History + current window loaded in showWindow() shell path
                 end
             end)
 
             -- Rail navigation: load history + start pollers when panel changes
-            ms.bus.on("ui:_shell:navigate", function(data)
+            -- Bus handlers are invoked as fn(topic, payload); the panel name is on
+            -- the payload. Taking only one arg bound `data` to the topic STRING, so
+            -- data.panel was always nil and this whole handler returned early —
+            -- which is why the Window monitor never populated and the shell mouse
+            -- poller never started (the rail opens panels via navigate, not showX).
+            ms.bus.on("ui:_shell:navigate", function(_, data)
                 if not data or not data.panel then return end
                 local p = data.panel
+                _activePanel = p
+                -- Leaving the Window monitor: tear the AX engine down NOW, not on
+                -- the next 0.15s tick. On the Element tab a heavy element poll may
+                -- be in flight/queued, and letting it keep firing is what made
+                -- switching AWAY from that tab lag. Synchronous stop = no more
+                -- element reads contending with the destination panel.
+                if p ~= "window" then
+                    _winElementTab = false
+                    self:_winEngineStop()
+                end
                 if p == "console" then
                     _consoleOpen = true
                     hs.timer.doAfter(0.1, function()
@@ -412,6 +457,29 @@
                     hs.timer.doAfter(0.1, function()
                         _loadDevHistory(nil, {"input"}, "keys")
                     end)
+                    -- Move-driven coordinate tracking. In the shell there is no
+                    -- standalone keys panel and thus no _mousePoller, so the only
+                    -- coord source was the click-only mouse eventtap — the readout
+                    -- froze between clicks. Poll the pointer so it follows drags,
+                    -- matching AHK Window Spy. Idle while another panel is shown;
+                    -- self-stops when the shell goes away.
+                    if _shellMousePoller then _shellMousePoller:stop() end
+                    _shellMousePoller = hs.timer.doEvery(0.08, function()
+                        if not _shellActive() then
+                            if _shellMousePoller then _shellMousePoller:stop(); _shellMousePoller = nil end
+                            return
+                        end
+                        if _activePanel ~= "keys" then return end
+                        local _sst = _G.ms and _G.ms._shellState
+                        if _sst and _sst.visible == false then return end
+                        local _p = hs.mouse.absolutePosition()
+                        local _x, _y = math.floor(_p.x), math.floor(_p.y)
+                        local prev = _mousePos
+                        if not prev or _x ~= prev.x or _y ~= prev.y then
+                            _mousePos = { x = _x, y = _y }
+                            pcall(function() _pushMouseState(_x, _y) end)
+                        end
+                    end)
                 elseif p == "window" then
                     _windowOpen = true
                     hs.timer.doAfter(0.15, function()
@@ -419,42 +487,23 @@
                             local ok, j = pcall(hs.json.encode, _windowHistory)
                             if ok then pcall(function() ms.shell.eval("shellReceive('window','loadHistory'," .. j .. ")") end) end
                         end
-                        local win = hs.window.focusedWindow()
-                        if win then
-                            local app   = (win:application() and win:application():name()) or "?"
-                            local title = win:title() or ""
-                            local wf    = win:frame()
-                            local ok2, j2 = pcall(hs.json.encode, {
-                                type = "focus", ts = os.date("%H:%M:%S"),
-                                app = app, title = title,
-                                w = math.floor(wf.w), h = math.floor(wf.h),
-                                x = math.floor(wf.x), y = math.floor(wf.y),
-                            })
-                            if ok2 then pcall(function() ms.shell.eval("shellReceive('window','updateCurrentWindow'," .. j2 .. ")") end) end
-                        end
                     end)
-                    -- Start window focus poller
-                    if _windowPoller then _windowPoller:stop() end
-                    _windowPoller = hs.timer.doEvery(0.4, function()
-                        if not _windowOpen or not _shellActive() then
-                            if _windowPoller then _windowPoller:stop(); _windowPoller = nil end
-                            return
-                        end
-                        local win = hs.window.focusedWindow()
-                        if not win then return end
-                        local winId = win:id()
-                        if winId == _windowLast then return end
-                        _windowLast = winId
-                        local app   = (win:application() and win:application():name()) or "?"
-                        local title = win:title() or ""
-                        local f     = win:frame()
-                        self:_pushWindowEvent({
-                            type = "focus", ts = os.time(),
-                            app = app, title = title,
-                            w = math.floor(f.w), h = math.floor(f.h),
-                            x = math.floor(f.x), y = math.floor(f.y),
-                        })
-                    end)
+                    -- Start the event-driven Window Spy engine (idempotent). The
+                    -- engine primes the rich live-state card itself (sync + a
+                    -- delayed re-prime that beats the panel-ready race), so we no
+                    -- longer push a focus-shaped payload here: it carried no frame,
+                    -- pid, role, screen or flags and clobbered the rich state,
+                    -- leaving the card showing only App/Title.
+                    self:_winEngineStart()
+                end
+            end)
+
+            -- The Window Spy engine self-stops whenever the shell hides (so it
+            -- isn't polling AX in the background). Restart it when the shell is
+            -- shown again while the Window panel is the active one.
+            ms.bus.on("macroLab:toggled", function(_, body)
+                if body and body.visible and _activePanel == "window" and _windowOpen then
+                    self:_winEngineStart()
                 end
             end)
         end
@@ -1621,6 +1670,242 @@
 -- END Inputs Panel --
 
 -- Window Panel --
+    -- ── Window Spy engine ─────────────────────────────────────────────
+    -- Hang-safe, event-driven replacement for the old 0.4s focus poller.
+    -- Every AX read is pcall-guarded and globally timeout-bounded (see start).
+    -- Focus is followed with hs.application.watcher (no window enumeration);
+    -- per-app move/resize come from an app-scoped uielement watcher whose
+    -- callback is trivial (tally + set a dirty flag); a throttled tick does the
+    -- real reads/pushes; and all of it idles while the shell window is dragged.
+    local function _winG(fn) local ok, v = pcall(fn); if ok then return v end end
+
+    local function _winRead(win)
+        if not win then return nil end
+        local appObj = _winG(function() return win:application() end)
+        local f = _winG(function() return win:frame() end)
+        return {
+            app        = appObj and _winG(function() return appObj:name() end) or nil,
+            pid        = appObj and _winG(function() return appObj:pid() end) or nil,
+            bundleID   = appObj and _winG(function() return appObj:bundleID() end) or nil,
+            title      = _winG(function() return win:title() end),
+            role       = _winG(function() return win:role() end),
+            subrole    = _winG(function() return win:subrole() end),
+            frame      = f and { x = math.floor(f.x), y = math.floor(f.y), w = math.floor(f.w), h = math.floor(f.h) } or nil,
+            screen     = _winG(function() local s = win:screen(); return s and s:name() end),
+            id         = _winG(function() return win:id() end),
+            standard   = _winG(function() return win:isStandard() end),
+            minimized  = _winG(function() return win:isMinimized() end),
+            fullscreen = _winG(function() return win:isFullscreen() end),
+            visible    = _winG(function() return win:isVisible() end),
+        }
+    end
+
+    local function _winPush(fn, payload)
+        local ok, j = pcall(hs.json.encode, payload)
+        if ok then pcall(function() _pushToPanel(_windowPanel, "window", fn .. "(" .. j .. ")") end) end
+    end
+
+    -- Coerce an AX attribute to a short JSON-safe string (drop tables/userdata).
+    local function _axStr(v)
+        local t = type(v)
+        if t == "string" then return #v > 120 and (v:sub(1, 120) .. "\u{2026}") or v end
+        if t == "number" or t == "boolean" then return tostring(v) end
+        return nil
+    end
+
+    -- The engine must idle the moment the Window monitor is not the thing on
+    -- screen — otherwise its AX polling keeps hammering the shared Lua thread in
+    -- the background (shell hidden, or a different panel showing), which is pure
+    -- overhead and can steal frames from whatever is running (e.g. Roblox).
+    -- `_shellActive()` only means the webview loaded; it never goes false, so it
+    -- is NOT a sufficient liveness test on its own.
+    local function _winStillOpen()
+        if _windowPanel ~= nil then return _windowOpen end  -- standalone webview
+        -- Shell-inline: only run while the Window panel is the active, visible one.
+        if not (_windowOpen and _shellActive() and _activePanel == "window") then
+            return false
+        end
+        local st = _G.ms and _G.ms._shellState
+        return not (st and st.visible == false)
+    end
+
+    function MsDevTools:_winEngineStop()
+        if _winAppWatcher then pcall(function() _winAppWatcher:stop() end); _winAppWatcher = nil end
+        if _winUiWatcher  then pcall(function() _winUiWatcher:stop()  end); _winUiWatcher  = nil end
+        if _winTick   then _winTick:stop();   _winTick   = nil end
+        if _winAxPoll then _winAxPoll:stop(); _winAxPoll = nil end
+    end
+
+    function MsDevTools:_winEngineStart()
+        self:_winEngineStop()
+        _winDirty, _winMoveN, _winResizeN, _winLastMouse = false, 0, 0, nil
+
+        local function pushState(win)
+            local st = _winRead(win or hs.window.focusedWindow())
+            if st then _winPush("updateCurrentWindow", st) end
+            return st
+        end
+
+        local function watchApp(app)
+            if _winUiWatcher then pcall(function() _winUiWatcher:stop() end); _winUiWatcher = nil end
+            if not app then _winWatchedAppName = nil; return end
+            -- Remember whose window we're following: after a minimize, focus has
+            -- already left, so focusedWindow() no longer names this app.
+            _winWatchedAppName = _winG(function() return app:name() end)
+            _winUiWatcher = _winG(function()
+                local w = app:newWatcher(function(_, ev)
+                    -- Trivial callback (fires hundreds of times per drag): no AX,
+                    -- no JSON, no push here — just tally and flag; tick does the work.
+                    if _G.ms and _G.ms._shellDragging then return end
+                    if ev == hs.uielement.watcher.windowMinimized then
+                        _winPendingEvent = { type = "minimize", app = _winWatchedAppName }
+                    elseif ev == hs.uielement.watcher.windowUnminimized then
+                        _winPendingEvent = { type = "unminimize", app = _winWatchedAppName }
+                    elseif ev == hs.uielement.watcher.windowResized then
+                        _winResizeN = _winResizeN + 1
+                    else
+                        _winMoveN = _winMoveN + 1
+                    end
+                    _winDirty = true
+                end)
+                w:start({
+                    hs.uielement.watcher.windowMoved,
+                    hs.uielement.watcher.windowResized,
+                    hs.uielement.watcher.windowCreated,
+                    hs.uielement.watcher.mainWindowChanged,
+                    hs.uielement.watcher.windowMinimized,
+                    hs.uielement.watcher.windowUnminimized,
+                })
+                return w
+            end)
+        end
+
+        -- Focus follows the active app (no window enumeration). We also log app
+        -- hide/unhide (Cmd+H) — a whole-app visibility change that the per-window
+        -- minimize watcher above does not cover.
+        _winAppWatcher = hs.application.watcher.new(function(_, ev, app)
+            if not _winStillOpen() then self:_winEngineStop(); return end
+            if ev == hs.application.watcher.activated then
+                local st = pushState()
+                if st then
+                    self:_pushWindowEvent({ type = "focus", ts = os.date("%H:%M:%S"), app = st.app, title = st.title })
+                end
+                watchApp(app)
+            elseif ev == hs.application.watcher.hidden or ev == hs.application.watcher.unhidden then
+                local nm = _winG(function() return app:name() end)
+                self:_pushWindowEvent({
+                    type = ev == hs.application.watcher.hidden and "hide" or "show",
+                    ts = os.date("%H:%M:%S"), app = nm,
+                })
+                pushState()
+            end
+        end)
+        pcall(function() _winAppWatcher:start() end)
+
+        -- Throttled tick: collapse accumulated move/resize + refresh live state.
+        _winTick = hs.timer.doEvery(0.15, function()
+            if not _winStillOpen() then self:_winEngineStop(); return end
+            if _G.ms and _G.ms._shellDragging then return end
+            if not _winDirty then return end
+            _winDirty = false
+            local st = pushState()
+            local f = st and st.frame
+            if _winPendingEvent then
+                self:_pushWindowEvent({ type = _winPendingEvent.type, ts = os.date("%H:%M:%S"),
+                    app = _winPendingEvent.app })
+                _winPendingEvent = nil
+            end
+            if _winMoveN > 0 then
+                self:_pushWindowEvent({ type = "move", ts = os.date("%H:%M:%S"), count = _winMoveN,
+                    x = f and f.x or nil, y = f and f.y or nil })
+                _winMoveN = 0
+            end
+            if _winResizeN > 0 then
+                self:_pushWindowEvent({ type = "resize", ts = os.date("%H:%M:%S"), count = _winResizeN,
+                    w = f and f.w or nil, h = f and f.h or nil })
+                _winResizeN = 0
+            end
+        end)
+
+        -- Element under cursor — the AHK "control under mouse" parity. The single
+        -- riskiest call (elementAtPosition on whatever is under the cursor), so
+        -- it is throttled, only recomputes when the cursor moves, and is fully
+        -- bounded by the global AX timeout.
+        if hs.accessibilityState() then
+            _winAxPoll = hs.timer.doEvery(0.12, function()
+                if not _winStillOpen() then self:_winEngineStop(); return end
+                if _G.ms and _G.ms._shellDragging then return end
+                -- Element + cursor live only on the Element tab. Skip the whole
+                -- read (esp. the heavy systemElementAtPosition) while Window tab
+                -- is up — that is the default view, so this is the common case.
+                if not _winElementTab then return end
+                local p = hs.mouse.absolutePosition()
+                if _winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y then return end
+                _winLastMouse = p
+                local el = _winG(function() return hs.axuielement.systemElementAtPosition(p.x, p.y) end)
+                if el then
+                    local function ga(a) return _axStr(_winG(function() return el:attributeValue(a) end)) end
+                    local fr = _winG(function() return el:attributeValue("AXFrame") end)
+                    local frame
+                    if type(fr) == "table" and fr.x then
+                        frame = { x = math.floor(fr.x), y = math.floor(fr.y), w = math.floor(fr.w), h = math.floor(fr.h) }
+                    end
+                    _winPush("updateElement", {
+                        axPermission    = true,
+                        role            = ga("AXRole"),
+                        roleDescription = ga("AXRoleDescription"),
+                        title           = ga("AXTitle"),
+                        value           = ga("AXValue"),
+                        identifier      = ga("AXIdentifier"),
+                        frame           = frame,
+                    })
+                end
+                -- Pixel colour under the cursor (AHK Window Spy parity). This is a
+                -- CoreGraphics screen read, not AX, and needs Screen Recording
+                -- permission; snapshotting a 1×1 region keeps it cheap. Fully
+                -- guarded — any failure (no permission, old HS) just yields nil.
+                local pixel = _winG(function()
+                    local scr = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
+                    if not scr then return nil end
+                    local snap = scr:snapshot(hs.geometry.rect(p.x, p.y, 1, 1))
+                    if not snap then return nil end
+                    local c = snap:colorAt({ x = 0, y = 0 })
+                    if not c or c.red == nil then return nil end
+                    local r = math.floor((c.red or 0) * 255 + 0.5)
+                    local g = math.floor((c.green or 0) * 255 + 0.5)
+                    local b = math.floor((c.blue or 0) * 255 + 0.5)
+                    return { r = r, g = g, b = b, hex = string.format("#%02X%02X%02X", r, g, b) }
+                end)
+                local win = hs.window.focusedWindow()
+                local wf = win and _winG(function() return win:frame() end)
+                _winPush("updateMousePos", {
+                    sx = math.floor(p.x), sy = math.floor(p.y),
+                    wx = wf and math.floor(p.x - wf.x) or nil,
+                    wy = wf and math.floor(p.y - wf.y) or nil,
+                    pixel = pixel,
+                })
+            end)
+        else
+            _winPush("updateElement", { axPermission = false })
+        end
+
+        -- Prime off the current runloop tick. Reading window AX + creating the
+        -- app watcher is synchronous work on the shared thread; doing it inline
+        -- with the panel switch is what makes the switch visibly hitch. Deferring
+        -- lets the navigation/render settle first, then fills the card. A second
+        -- delayed re-prime also covers the race where the first push lands before
+        -- the inline window panel has registered its handler.
+        hs.timer.doAfter(0.02, function()
+            if not _winStillOpen() then return end
+            local win = hs.window.focusedWindow()
+            pushState(win)
+            if win then watchApp(_winG(function() return win:application() end)) end
+        end)
+        hs.timer.doAfter(0.2, function()
+            if _winStillOpen() then pushState() end
+        end)
+    end
+
     function MsDevTools:_pushWindowEvent(entry)
         table.insert(_windowHistory, entry)
 
@@ -1632,11 +1917,11 @@
             local ok, j = pcall(hs.json.encode, entry)
 
             if ok then
+                -- Log only. The live state card is fed separately by the engine's
+                -- updateCurrentWindow pushes (rich payload), so a sparse log entry
+                -- must not overwrite it here.
                 pcall(function()
                     _pushToPanel(_windowPanel, "window", "appendEntry(" .. j .. ")")
-                end)
-                pcall(function()
-                    _pushToPanel(_windowPanel, "window", "updateCurrentWindow(" .. j .. ")")
                 end)
             end
         end
@@ -1690,21 +1975,9 @@
                 end
             end
 
-            local win = hs.window.focusedWindow()
-            if win then
-                local app   = (win:application() and win:application():name()) or "?"
-                local title = win:title() or ""
-                local wf    = win:frame()
-                local ok2, j2 = pcall(hs.json.encode, {
-                    type  = "focus",
-                    ts    = os.date("%H:%M:%S"),
-                    app   = app,
-                    title = title,
-                    w     = math.floor(wf.w),
-                    h     = math.floor(wf.h),
-                    x     = math.floor(wf.x),
-                    y     = math.floor(wf.y),
-                })
+            local st = _winRead(hs.window.focusedWindow())
+            if st then
+                local ok2, j2 = pcall(hs.json.encode, st)
                 if ok2 then
                     pcall(function() panel:evaluateJavaScript("updateCurrentWindow(" .. j2 .. ")") end)
                 end
@@ -1728,52 +2001,12 @@
                         pcall(function() ms.shell.eval("shellReceive('window','loadHistory'," .. j .. ")") end)
                     end
                 end
-                local win = hs.window.focusedWindow()
-                if win then
-                    local app   = (win:application() and win:application():name()) or "?"
-                    local title = win:title() or ""
-                    local wf    = win:frame()
-                    local ok2, j2 = pcall(hs.json.encode, {
-                        type  = "focus",
-                        ts    = os.date("%H:%M:%S"),
-                        app   = app,
-                        title = title,
-                        w     = math.floor(wf.w),
-                        h     = math.floor(wf.h),
-                        x     = math.floor(wf.x),
-                        y     = math.floor(wf.y),
-                    })
-                    if ok2 then
-                        pcall(function() ms.shell.eval("shellReceive('window','updateCurrentWindow'," .. j2 .. ")") end)
-                    end
-                end
+                -- Re-push the rich state now the panel is ready (the engine's
+                -- immediate prime below may have raced the shell panel load).
+                _winPush("updateCurrentWindow", _winRead(hs.window.focusedWindow()))
             end)
-            -- Start window focus poller for shell mode
-            if _windowPoller then _windowPoller:stop() end
-            _windowPoller = hs.timer.doEvery(0.4, function()
-                if not _windowOpen or (not _windowPanel and not _shellActive()) then
-                    if _windowPoller then _windowPoller:stop(); _windowPoller = nil end
-                    return
-                end
-                local win = hs.window.focusedWindow()
-                if not win then return end
-                local winId = win:id()
-                if winId == _windowLast then return end
-                _windowLast = winId
-                local app   = (win:application() and win:application():name()) or "?"
-                local title = win:title() or ""
-                local f     = win:frame()
-                self:_pushWindowEvent({
-                    type  = "focus",
-                    ts    = os.time(),
-                    app   = app,
-                    title = title,
-                    w     = math.floor(f.w),
-                    h     = math.floor(f.h),
-                    x     = math.floor(f.x),
-                    y     = math.floor(f.y),
-                })
-            end)
+            -- Start the event-driven Window Spy engine (idempotent).
+            self:_winEngineStart()
             return
         end
 
@@ -1796,64 +2029,12 @@
 
         _devFadeIn(_windowPanel, "window")
 
-        -- Push current window immediately (don't wait for poller)
-        local win = hs.window.focusedWindow()
-        if win then
-            local app   = (win:application() and win:application():name()) or "?"
-            local title = win:title() or ""
-            local f     = win:frame()
-            self:_pushWindowEvent({
-                type  = "focus",
-                ts    = os.time(),
-                app   = app,
-                title = title,
-                w     = math.floor(f.w),
-                h     = math.floor(f.h),
-                x     = math.floor(f.x),
-                y     = math.floor(f.y),
-            })
-        end
-
-        if _windowPoller then _windowPoller:stop() end
-
-        _windowPoller = hs.timer.doEvery(0.4, function()
-            if not _windowOpen or (not _windowPanel and not _shellActive()) then
-                if _windowPoller then
-                    _windowPoller:stop()
-                    _windowPoller = nil
-                end
-
-                return
-            end
-
-            local win = hs.window.focusedWindow()
-
-            if not win then return end
-
-            local winId = win:id()
-
-            if winId == _windowLast then return end
-
-            _windowLast = winId
-
-            local app   = (win:application() and win:application():name()) or "?"
-            local title = win:title() or ""
-            local f     = win:frame()
-
-            self:_pushWindowEvent({
-                type  = "focus",
-                ts    = os.time(),
-                app   = app,
-                title = title,
-                w     = math.floor(f.w),
-                h     = math.floor(f.h),
-                x     = math.floor(f.x),
-                y     = math.floor(f.y),
-            })
-        end)
+        -- Start the event-driven Window Spy engine (primes state + follows focus).
+        self:_winEngineStart()
     end
 
     function MsDevTools:hideWindow()
+        self:_winEngineStop()
         if _windowPoller then
             _windowPoller:stop()
             _windowPoller = nil

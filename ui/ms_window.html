@@ -3,368 +3,219 @@
     <head>
         <meta charset="UTF-8" />
         <style>
-            /* ── Fonts ─────────────────────────────────────────────────────────── */
-            @font-face {
-                font-family: "Almendra";
-                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
-                font-weight: 400;
-                font-style: normal;
-            }
-            @font-face {
-                font-family: "Almendra";
-                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
-                font-weight: 700;
-                font-style: normal;
-            }
-            @font-face {
-                font-family: "Almendra";
-                src: url("./fonts/Almendra-Italic.ttf") format("truetype");
-                font-weight: 400;
-                font-style: italic;
-            }
-            @font-face {
-                font-family: "Almendra";
-                src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype");
-                font-weight: 700;
-                font-style: italic;
-            }
+            /* ── Fonts ──────────────────────────────────────────────────────── */
+            @font-face { font-family: "Almendra"; src: url("./fonts/Almendra-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; }
+            @font-face { font-family: "Almendra"; src: url("./fonts/Almendra-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; }
+            @font-face { font-family: "Almendra"; src: url("./fonts/Almendra-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; }
+            @font-face { font-family: "Almendra"; src: url("./fonts/Almendra-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; }
 
-            /* ── Tokens ─────────────────────────────────────────────────────────── */
+            /* ── Tokens ─────────────────────────────────────────────────────── */
             :root {
-                --bg: #0e0e0e;
-                --surface: #1a1a1a;
-                --surface2: #252525;
-                --hover: #333333;
-                --accent: #cccccc;
-                --accent-hi: #e8e8e8;
-                --success: #888888;
-                --danger-bg: #1a1616;
-                --danger: #d8d8d8;
-                --warning: #aaaaaa;
-                --text: #d8d8d8;
-                --text2: rgba(200, 200, 200, 0.85);
-                --text3: rgba(160, 160, 160, 0.55);
-                --border: rgba(100, 100, 100, 0.55);
-                --border-dim: rgba(100, 100, 100, 0.18);
-                --radius: 2px;
-                --radius-s: 1px;
+                --bg: #0e0e0e; --surface: #1a1a1a; --surface2: #252525; --hover: #333333;
+                --accent: #cccccc; --accent-hi: #e8e8e8; --success: #888888; --danger: #d8d8d8;
+                --warning: #aaaaaa; --text: #d8d8d8; --text2: rgba(200,200,200,0.85);
+                --text3: rgba(160,160,160,0.55); --border: rgba(100,100,100,0.55);
+                --radius: 2px; --radius-s: 1px;
             }
 
-            /* ── Reset ──────────────────────────────────────────────────────────── */
-            *,
-            *::before,
-            *::after {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-                user-select: none;
-                -webkit-user-select: none;
-            }
-
-            html,
+            /* ── Reset ──────────────────────────────────────────────────────── */
+            *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+            html, body { height: 100%; overflow: hidden; background: transparent; }
             body {
-                width: 100%;
-                height: 100%;
-                overflow: hidden;
-                background: transparent;
-                color: var(--text);
                 font-family: var(--font), "Almendra", Palatino, Georgia, serif;
-                font-size: 13px;
-                line-height: 1.5;
-                -webkit-font-smoothing: antialiased;
+                font-size: 13px; color: var(--text); -webkit-font-smoothing: antialiased;
+                display: flex; flex-direction: column; position: relative;
+                background: var(--bg); border-radius: var(--ms-window-radius, 3px); overflow: hidden;
             }
+            button { cursor: pointer; border: none; background: none; color: inherit; font: inherit; }
 
-            body {
-                display: flex;
-                flex-direction: column;
-                background: var(--bg);
-                border-radius: var(--ms-window-radius, 3px);
-                overflow: hidden;
-            }
-
-            button {
-                cursor: pointer;
-                border: none;
-                background: none;
-                color: inherit;
-                font: inherit;
-            }
-
-            /* ── Header ─────────────────────────────────────────────────────────── */
+            /* ── Header ─────────────────────────────────────────────────────── */
             #header {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                height: 40px; padding: 0 12px;
-                background: var(--surface);
-                border-bottom: 1px solid var(--border);
-                box-shadow: 0 1px 12px
-                    color-mix(in srgb, var(--accent) 12%, transparent);
-                flex-shrink: 0;
+                display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px;
+                background: var(--surface); border-bottom: 1px solid var(--border);
+                box-shadow: 0 1px 12px color-mix(in srgb, var(--accent) 12%, transparent); flex-shrink: 0;
             }
-
-            #panel-title {
-                flex: 1;
-                font-weight: 600;
-                font-size: 13px;
-            }
-
-            .header-btns {
-                display: flex;
-                gap: 4px;
-                -webkit-app-region: no-drag;
-            }
-
-            /* ── Ghost button ────────────────────────────────────────────────────── */
-            .btn-ghost {
-                flex: 1;
-                padding: 5px 8px;
-                border-radius: var(--radius-s);
-                background: var(--surface2);
-                color: var(--text2);
-                font-size: 11px;
-                font-weight: 500;
-                transition: opacity 0.15s;
-            }
-            .btn-ghost:hover {
-                opacity: 0.8;
-            }
-
-            /* In the header bar, ghost buttons should not stretch */
-            .header-btns .btn-ghost {
-                flex: 0 0 auto;
-            }
-
-            /* ── Close button ────────────────────────────────────────────────────── */
-            .btn-close {
-                width: 28px; height: 28px; border-radius: 50%;
-                background: var(--surface2); color: var(--text2);
-                display: flex; align-items: center; justify-content: center;
-                flex-shrink: 0;
-                transition: background 0.15s;
-            }
-            
+            #panel-title { flex: 1; font-weight: 600; font-size: 13px; }
+            .header-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+            .btn-ghost { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text2); transition: opacity 0.15s; }
+            .btn-ghost:hover { opacity: 0.8; }
+            .btn-close { width: 28px; height: 28px; border-radius: 50%; background: var(--surface2); color: var(--text2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
             .btn-close .icon { width: 14px; height: 14px; display: block; }
-            .btn-close:hover {
-                background: var(--hover);
-                color: var(--text);
-            }
+            .btn-close:hover { background: var(--hover); color: var(--text); }
 
-            /* ── Current window section ──────────────────────────────────────────── */
-            #current {
-                padding: 10px 12px;
-                background: var(--surface);
-                border-bottom: 1px solid var(--border);
-                flex-shrink: 0;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                gap: 3px;
+            /* ── Flag row (last event) ──────────────────────────────────────── */
+            #flag-row {
+                display: flex; align-items: center; padding: 7px 12px; gap: 8px;
+                background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
             }
+            .flag-pill {
+                display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 20px;
+                background: var(--surface2); border: 1px solid var(--border); font-size: 11px;
+                color: var(--text2); transition: border-color 0.2s, color 0.2s; flex: 1; min-width: 0;
+            }
+            .flag-pill.flag-recent { border-color: var(--accent); color: var(--text); }
+            .flag-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
+            #flag-event-name { font: 12px "SF Mono", Menlo, monospace; flex-shrink: 0; }
+            #flag-event-detail { font-size: 11px; color: var(--text3); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-            #current-empty {
-                color: var(--text3);
-                font-style: italic;
-                font-size: 12px;
+            /* ── Tabs ───────────────────────────────────────────────────────── */
+            #tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+            .tab {
+                flex: 1; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text2);
+                text-align: center; cursor: pointer; border-bottom: 2px solid transparent; background: none;
+                transition: color 0.15s, border-color 0.15s; -webkit-app-region: no-drag;
             }
+            .tab:hover { color: var(--text); }
+            .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-            #current-app {
-                color: var(--accent);
-                font-weight: 700;
-                font-size: 14px;
-                display: none;
-            }
+            /* ── Tab sections ───────────────────────────────────────────────── */
+            .tab-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+            .tab-section.active { display: flex; }
 
-            #current-title {
-                color: var(--text);
-                font-size: 12px;
-                display: none;
-                word-break: break-word;
-                white-space: pre-wrap;
-            }
+            /* ── State section ──────────────────────────────────────────────── */
+            .state-section { padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+            .section-label { font: 700 9px "SF Mono", Menlo, monospace; letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; margin-bottom: 6px; }
 
-            #current-dim {
-                color: var(--text2);
-                font:
-                    11px "SF Mono",
-                    Menlo,
-                    monospace;
-                display: none;
-            }
+            /* ── Key/Value grid (structured window + element data) ──────────── */
+            .kv-grid { display: grid; grid-template-columns: max-content 1fr; column-gap: 12px; row-gap: 3px; align-items: baseline; }
+            .kv-key { font: 700 10px "SF Mono", Menlo, monospace; letter-spacing: 0.04em; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
+            .kv-val { font: 12px "SF Mono", Menlo, monospace; color: var(--text); word-break: break-word; min-width: 0; }
+            .kv-val.empty { color: var(--text3); opacity: 0.5; }
 
-            /* ── Log area ────────────────────────────────────────────────────────── */
-            #log {
-                flex: 1;
-                overflow-y: auto;
-                overflow-x: hidden;
-                padding: 4px 0;
-                min-height: 0;
-                scrollbar-width: thin;
-                scrollbar-color: var(--border) transparent;
+            /* ── Flag pills (window boolean flags) ──────────────────────────── */
+            .flags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+            .flag-chip {
+                display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 3px;
+                font: 11px "SF Mono", Menlo, monospace; background: var(--surface2);
+                border: 1px solid var(--border); color: var(--text3); transition: all 0.15s;
             }
-            #log::-webkit-scrollbar {
-                width: 5px;
-            }
-            #log::-webkit-scrollbar-track {
-                background: transparent;
-            }
-            #log::-webkit-scrollbar-thumb {
-                background: var(--border);
-                border-radius: var(--radius);
-            }
+            .flag-chip::before { content: "\25CB"; font-size: 9px; }
+            .flag-chip.on { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: var(--accent); color: var(--accent); }
+            .flag-chip.on::before { content: "\25CF"; }
 
-            /* ── Entry rows ──────────────────────────────────────────────────────── */
-            .entry {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                padding: 5px 12px;
-                font-size: 12px;
-                border-bottom: 1px solid var(--border-dim);
+            /* ── Accessibility banner (Element tab permission state) ────────── */
+            .ax-banner {
+                display: none; margin: 8px 12px; padding: 8px 10px; border-radius: var(--radius);
+                background: color-mix(in srgb, var(--warning) 12%, transparent);
+                border: 1px solid var(--warning); color: var(--text2); font-size: 11px; line-height: 1.5;
             }
-            .entry:hover {
-                background: var(--surface);
-            }
-            .entry.selected {
-                background: var(--hover);
-                outline: 1px solid var(--accent-glow);
-            }
-            .entry.selected:hover {
-                background: var(--accent-glow-faint);
-            }
+            .ax-banner.show { display: block; }
+            .ax-banner b { color: var(--text); }
 
-            .ts {
-                color: var(--text3);
-                font:
-                    10px "SF Mono",
-                    Menlo,
-                    monospace;
-                flex-shrink: 0;
-                min-width: 52px;
-            }
+            /* ── Section divider ────────────────────────────────────────────── */
+            .section-divider { height: 1px; background: var(--border); flex-shrink: 0; }
 
-            .entry-dot {
-                color: var(--accent);
-                flex-shrink: 0;
-            }
+            /* ── Event log ──────────────────────────────────────────────────── */
+            .log { flex: 1; overflow-y: auto; padding: 4px 0; min-height: 0; }
+            .log::-webkit-scrollbar { width: 4px; }
+            .log::-webkit-scrollbar-track { background: transparent; }
+            .log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+            .log-empty { padding: 14px; text-align: center; color: var(--text3); font-size: 11px; font-style: italic; }
 
-            .entry-app {
-                color: var(--accent);
-                font-weight: 600;
-                flex-shrink: 0;
-            }
+            /* ── Entry rows ─────────────────────────────────────────────────── */
+            .entry { display: flex; align-items: baseline; gap: 6px; padding: 2px 14px; font-size: 13px; line-height: 1.6; }
+            .entry:hover { background: var(--surface); }
+            .entry.selected { background: var(--hover); outline: 1px solid var(--accent-glow); }
+            .entry.dim-entry { opacity: 0.55; }
+            .ts { color: var(--text3); font: 10px "SF Mono", Menlo, monospace; flex-shrink: 0; padding-top: 1px; min-width: 52px; }
 
-            .entry-sep {
-                color: var(--text3);
-                flex-shrink: 0;
-                padding: 0 2px;
-            }
+            /* ── Badges (event type) ────────────────────────────────────────── */
+            .badge { font: 700 10px "SF Mono", Menlo, monospace; letter-spacing: 0.05em; text-transform: uppercase; padding: 1px 5px; border-radius: var(--radius-s); flex-shrink: 0; }
+            .badge-focus  { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-hi); }
+            .badge-move   { background: color-mix(in srgb, var(--text3) 30%, transparent); color: var(--text2); }
+            .badge-resize { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--warning); }
+            .badge-state  { background: color-mix(in srgb, var(--success) 26%, transparent); color: var(--accent); }
 
-            .entry-title {
-                flex: 1;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                min-width: 0;
-            }
+            .ename { color: var(--text); word-break: break-word; }
+            .edetail { color: var(--text3); font: 11px "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+            .ecount { color: var(--text3); font: 10px "SF Mono", Menlo, monospace; }
 
-            .dim-pill {
-                font:
-                    10px "SF Mono",
-                    Menlo,
-                    monospace;
-                padding: 1px 5px;
-                border-radius: var(--radius-s);
-                background: var(--surface2);
-                border: 1px solid var(--border);
-                color: var(--text2);
-                flex-shrink: 0;
-            }
-
-            /* ── Context menu ─────────────────────────────────────────────── */
-            #ctx-menu {
-                position: fixed;
-                min-width: 140px;
-                background: var(--surface2);
-                border: 1px solid var(--border);
-                border-radius: var(--radius-s);
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-                z-index: 150;
-                overflow: hidden;
-                display: none;
-            }
+            /* ── Context menu ───────────────────────────────────────────────── */
+            #ctx-menu { position: fixed; min-width: 140px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); box-shadow: 0 8px 24px rgba(0,0,0,0.55); z-index: 150; overflow: hidden; display: none; }
             #ctx-menu.open { display: block; }
-            .ctx-item {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 7px 10px;
-                font-size: 12px;
-                color: var(--text2);
-                cursor: pointer;
-                transition: background 0.1s, color 0.1s;
-                user-select: none;
-            }
-            .ctx-item:hover {
-                background: var(--hover);
-                color: var(--text);
-            }
-            .ctx-divider {
-                height: 1px;
-                background: var(--border);
-                margin: 2px 0;
-            }
+            .ctx-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12px; color: var(--text2); cursor: pointer; transition: background 0.1s, color 0.1s; }
+            .ctx-item:hover { background: var(--hover); color: var(--text); }
+            .ctx-divider { height: 1px; background: var(--border); margin: 2px 0; }
         </style>
     </head>
     <body>
-        <!-- Header -->
         <div id="header">
-            <span id="panel-title">mudscript — window monitor</span>
+            <span id="panel-title">mudscript — window spy</span>
             <div class="header-btns">
-                <button
-                    id="pause-btn"
-                    class="btn-ghost"
-                    onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('interact');
-                        togglePause();
-                    "
-                >
-                    Pause
-                </button>
-                <button
-                    class="btn-ghost"
-                    onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('interact');
-                        clearLog();
-                    "
-                >
-                    Clear
-                </button>
-                <button
-                    class="btn-close"
-                    onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        closePanel();
-                    "
-                >
+                <button id="pause-btn" class="btn-ghost" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); togglePause();">Pause</button>
+                <button class="btn-ghost" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); clearLog();">Clear</button>
+                <button class="btn-close" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); closePanel();">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/></svg>
                 </button>
             </div>
         </div>
 
-        <!-- Current window -->
-        <div id="current">
-            <span id="current-empty">No focused window</span>
-            <span id="current-app"></span>
-            <span id="current-title"></span>
-            <span id="current-dim"></span>
+        <!-- Flag row: most-recent window event -->
+        <div id="flag-row">
+            <div class="flag-pill" id="flag-event-pill">
+                <span class="flag-label">Event</span>
+                <span id="flag-event-name">&mdash;</span>
+                <span id="flag-event-detail"></span>
+            </div>
         </div>
 
-        <!-- Log -->
-        <div id="log"></div>
+        <!-- Tab bar -->
+        <div id="tabs">
+            <button id="tab-window" class="tab active" onmouseenter="playSlot('hover')" onclick="switchTab('window')">Window</button>
+            <button id="tab-element" class="tab" onmouseenter="playSlot('hover')" onclick="switchTab('element')">Element</button>
+        </div>
+
+        <!-- ── Window tab ────────────────────────────────────────────────── -->
+        <div id="window-section" class="tab-section active">
+            <div class="state-section">
+                <div class="section-label">Focused Window</div>
+                <div class="kv-grid">
+                    <div class="kv-key">App</div>      <div class="kv-val empty" id="w-app">&mdash;</div>
+                    <div class="kv-key">PID</div>      <div class="kv-val empty" id="w-pid">&mdash;</div>
+                    <div class="kv-key">Bundle</div>   <div class="kv-val empty" id="w-bundle">&mdash;</div>
+                    <div class="kv-key">Title</div>    <div class="kv-val empty" id="w-title">&mdash;</div>
+                    <div class="kv-key">Role</div>     <div class="kv-val empty" id="w-role">&mdash;</div>
+                    <div class="kv-key">Frame</div>    <div class="kv-val empty" id="w-frame">&mdash;</div>
+                    <div class="kv-key">Screen</div>   <div class="kv-val empty" id="w-screen">&mdash;</div>
+                    <div class="kv-key">Win ID</div>   <div class="kv-val empty" id="w-id">&mdash;</div>
+                </div>
+                <div class="flags-row">
+                    <span class="flag-chip" id="w-standard">Standard</span>
+                    <span class="flag-chip" id="w-minimized">Minimized</span>
+                    <span class="flag-chip" id="w-fullscreen">Fullscreen</span>
+                    <span class="flag-chip" id="w-visible">Visible</span>
+                </div>
+            </div>
+            <div class="section-divider"></div>
+            <div id="window-log" class="log"><div class="log-empty">No window events yet</div></div>
+        </div>
+
+        <!-- ── Element tab (live-only AX inspector) ──────────────────────── -->
+        <div id="element-section" class="tab-section">
+            <div class="ax-banner" id="ax-banner">
+                <b>Accessibility permission required.</b><br />
+                Grant Hammerspoon access in System Settings &rarr; Privacy &amp; Security &rarr; Accessibility, then hover over any control.
+            </div>
+            <div class="state-section">
+                <div class="section-label">Element Under Cursor</div>
+                <div class="kv-grid">
+                    <div class="kv-key">Role</div>    <div class="kv-val empty" id="e-role">&mdash;</div>
+                    <div class="kv-key">Desc</div>    <div class="kv-val empty" id="e-desc">&mdash;</div>
+                    <div class="kv-key">Title</div>   <div class="kv-val empty" id="e-title">&mdash;</div>
+                    <div class="kv-key">Value</div>   <div class="kv-val empty" id="e-value">&mdash;</div>
+                    <div class="kv-key">Ident</div>   <div class="kv-val empty" id="e-ident">&mdash;</div>
+                    <div class="kv-key">Frame</div>   <div class="kv-val empty" id="e-frame">&mdash;</div>
+                </div>
+            </div>
+            <div class="section-divider"></div>
+            <div class="state-section" style="border-bottom: none;">
+                <div class="section-label">Cursor</div>
+                <div class="kv-grid">
+                    <div class="kv-key">Screen</div>  <div class="kv-val empty" id="e-mouse-screen">&mdash;</div>
+                    <div class="kv-key">Window</div>  <div class="kv-val empty" id="e-mouse-win">&mdash;</div>
+                </div>
+            </div>
+        </div>
 
         <div id="ctx-menu"></div>
 
@@ -372,121 +223,185 @@
         <script>
             "use strict";
 
-            // ── Window buildRow ─────────────────────────────────────────────
-            function buildRow(entry) {
-                const row = document.createElement("div");
-                row.className = "entry";
-
-                const ts = document.createElement("span");
-                ts.className = "ts";
-                ts.textContent = entry.ts || "";
-                row.appendChild(ts);
-
-                const dot = document.createElement("span");
-                dot.className = "entry-dot";
-                dot.textContent = "●";
-                row.appendChild(dot);
-
-                const app = document.createElement("span");
-                app.className = "entry-app";
-                app.textContent = entry.app || "";
-                row.appendChild(app);
-
-                const sep = document.createElement("span");
-                sep.className = "entry-sep";
-                sep.textContent = "›";
-                row.appendChild(sep);
-
-                const title = document.createElement("span");
-                title.className = "entry-title";
-                title.textContent = entry.title || "";
-                row.appendChild(title);
-
-                if (entry.w != null && entry.h != null) {
-                    const pill = document.createElement("span");
-                    pill.className = "dim-pill";
-                    pill.textContent = entry.w + "\u00d7" + entry.h;
-                    row.appendChild(pill);
-                }
-
-                row.onmouseenter = function() { lp.playSlot("hover"); };
-                row.onclick = lp._handleEntryClick;
-                return row;
-            }
-
-            // ── Create LogPanel ─────────────────────────────────────────────
             const lp = createLogPanel({
                 channel: "window",
                 buildRow,
+                entrySelector: ".log .entry",
                 maxEntries: 300,
                 scrollThresh: 48,
                 extractCopyText(el) {
                     const ts = el.querySelector(".ts")?.textContent || "";
-                    const app = el.querySelector(".entry-app")?.textContent || "";
-                    const title = el.querySelector(".entry-title")?.textContent || "";
-                    const dim = el.querySelector(".dim-pill")?.textContent || "";
-                    const parts = [ts, app];
-                    if (title) parts.push(title);
-                    if (dim) parts.push(dim);
-                    return parts.join(" ");
+                    const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
+                    const name = el.querySelector(".ename")?.textContent || "";
+                    const detail = el.querySelector(".edetail")?.textContent || "";
+                    return [ts, `[${badge}]`, name, detail].filter(Boolean).join(" ");
                 },
             });
 
-            // ── Expose globals for inline handlers ──────────────────────────
             window.togglePause = lp.togglePause;
             window.playSlot    = lp.playSlot;
-            window.clearLog    = lp.clearLog;
+            window.clearLog    = clearLog;
             window.closePanel  = lp.closePanel;
+            window.switchTab   = switchTab;
             window.applyTheme  = lp.applyTheme;
 
-            // ── Current window display ──────────────────────────────────────
-            function updateCurrentWindow(entry) {
-                const empty = document.getElementById("current-empty");
-                const appEl = document.getElementById("current-app");
-                const titleEl = document.getElementById("current-title");
-                const dimEl = document.getElementById("current-dim");
+            // ── Helpers ─────────────────────────────────────────────────────
+            function mkSpan(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
+            function setVal(id, text) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const has = text != null && text !== "";
+                el.textContent = has ? text : "—";
+                el.classList.toggle("empty", !has);
+            }
+            function setFlag(id, on) { const el = document.getElementById(id); if (el) el.classList.toggle("on", !!on); }
+            function frameStr(f) { return f ? `${f.x}, ${f.y}  ·  ${f.w} × ${f.h}` : ""; }
 
-                if (!entry || (!entry.app && !entry.title)) {
-                    empty.style.display = "";
-                    appEl.style.display = "none";
-                    titleEl.style.display = "none";
-                    dimEl.style.display = "none";
+            // ── Event log row builder ───────────────────────────────────────
+            const BADGE = { focus: "badge-focus", move: "badge-move", resize: "badge-resize",
+                minimize: "badge-state", unminimize: "badge-state", fullscreen: "badge-state" };
+            const LABEL = { focus: "focus", move: "moved", resize: "resized",
+                minimize: "minimized", unminimize: "restored", fullscreen: "fullscreen" };
+
+            function buildRow(entry) {
+                const row = document.createElement("div");
+                const t = entry.type;
+                row.className = "entry" + (t === "move" || t === "resize" ? " dim-entry" : "");
+                row.appendChild(mkSpan("ts", "[" + (entry.ts || "") + "]"));
+                row.appendChild(mkSpan("badge " + (BADGE[t] || "badge-state"), LABEL[t] || t));
+
+                if (t === "focus") {
+                    row.appendChild(mkSpan("ename", entry.app || "?"));
+                    if (entry.title) row.appendChild(mkSpan("edetail", "· " + entry.title));
+                } else if (t === "move") {
+                    row.appendChild(mkSpan("edetail", (entry.x ?? "?") + ", " + (entry.y ?? "?")));
+                    if (entry.count > 1) row.appendChild(mkSpan("ecount", "×" + entry.count));
+                } else if (t === "resize") {
+                    row.appendChild(mkSpan("edetail", (entry.w ?? "?") + " × " + (entry.h ?? "?")));
+                    if (entry.count > 1) row.appendChild(mkSpan("ecount", "×" + entry.count));
+                } else if (t === "fullscreen") {
+                    row.appendChild(mkSpan("ename", entry.on ? "entered" : "exited"));
+                    if (entry.app) row.appendChild(mkSpan("edetail", "· " + entry.app));
+                } else {
+                    if (entry.app) row.appendChild(mkSpan("ename", entry.app));
+                    if (entry.title) row.appendChild(mkSpan("edetail", "· " + entry.title));
+                }
+                row.onmouseenter = function () { lp.playSlot("hover"); };
+                row.onclick = lp._handleEntryClick;
+                return row;
+            }
+
+            // ── Append / history ────────────────────────────────────────────
+            function appendEntry(entry) {
+                if (lp.isPaused()) return;
+                flagEvent(entry);
+                const log = document.getElementById("window-log");
+                const empty = log.querySelector(".log-empty");
+                if (empty) empty.remove();
+                const atBottom = lp.isNearBottom(log);
+                log.appendChild(buildRow(entry));
+                lp.trimLog(log);
+                if (atBottom) log.scrollTop = log.scrollHeight;
+            }
+            function loadHistory(entries) {
+                const log = document.getElementById("window-log");
+                log.innerHTML = "";
+                const capped = entries && entries.length > lp.maxEntries ? entries.slice(-lp.maxEntries) : entries || [];
+                if (capped.length === 0) { log.innerHTML = '<div class="log-empty">No window events yet</div>'; }
+                else {
+                    const frag = document.createDocumentFragment();
+                    capped.forEach((e) => frag.appendChild(buildRow(e)));
+                    log.appendChild(frag);
+                    log.scrollTop = log.scrollHeight;
+                    flagEvent(capped[capped.length - 1]);
+                }
+            }
+
+            // ── Live state card (focused window) ────────────────────────────
+            function updateCurrentWindow(s) {
+                if (!s) return;
+                setVal("w-app", s.app);
+                setVal("w-pid", s.pid != null ? String(s.pid) : "");
+                setVal("w-bundle", s.bundleID);
+                setVal("w-title", s.title);
+                setVal("w-role", [s.role, s.subrole].filter(Boolean).join(" / "));
+                setVal("w-frame", frameStr(s.frame));
+                setVal("w-screen", s.screen);
+                setVal("w-id", s.id != null ? String(s.id) : "");
+                setFlag("w-standard", s.standard);
+                setFlag("w-minimized", s.minimized);
+                setFlag("w-fullscreen", s.fullscreen);
+                setFlag("w-visible", s.visible);
+            }
+
+            // ── Live element card (AX under cursor) ─────────────────────────
+            function updateElement(e) {
+                if (!e) return;
+                const banner = document.getElementById("ax-banner");
+                if (e.axPermission === false) {
+                    banner.classList.add("show");
+                    ["e-role","e-desc","e-title","e-value","e-ident","e-frame"].forEach((id) => setVal(id, ""));
                     return;
                 }
-
-                empty.style.display = "none";
-                appEl.style.display = "";
-                titleEl.style.display = "";
-                dimEl.style.display = "";
-
-                appEl.textContent = entry.app || "";
-                titleEl.textContent = entry.title || "";
-                dimEl.textContent =
-                    entry.w != null && entry.h != null
-                        ? entry.w + "\u00d7" + entry.h + " px"
-                        : "";
+                banner.classList.remove("show");
+                setVal("e-role", e.role);
+                setVal("e-desc", e.roleDescription);
+                setVal("e-title", e.title);
+                setVal("e-value", e.value);
+                setVal("e-ident", e.identifier);
+                setVal("e-frame", frameStr(e.frame));
             }
 
-            // ── Override loadHistory to also update current ─────────────────
-            const _baseLoad = lp.loadHistory;
-
-            function loadHistory(entries) {
-                _baseLoad(entries);
-                if (entries && entries.length > 0) {
-                    updateCurrentWindow(entries[entries.length - 1]);
-                }
+            function updateMousePos(p) {
+                if (!p) return;
+                if (p.sx != null) setVal("e-mouse-screen", p.sx + ", " + p.sy);
+                if (p.wx != null) setVal("e-mouse-win", p.wx + ", " + p.wy);
+                else if (p.wx === null) setVal("e-mouse-win", "");
             }
 
-            window.appendEntry      = lp.appendEntry;
-            window.loadHistory      = loadHistory;
+            // ── Flag row (last event) ───────────────────────────────────────
+            function flagEvent(entry) {
+                if (!entry) return;
+                const pill = document.getElementById("flag-event-pill");
+                document.getElementById("flag-event-name").textContent = LABEL[entry.type] || entry.type;
+                let detail = "";
+                if (entry.type === "focus") detail = entry.app || "";
+                else if (entry.type === "move") detail = (entry.x ?? "") + ", " + (entry.y ?? "");
+                else if (entry.type === "resize") detail = (entry.w ?? "") + " × " + (entry.h ?? "");
+                else detail = entry.app || "";
+                document.getElementById("flag-event-detail").textContent = detail;
+                pill.classList.add("flag-recent");
+            }
+
+            // ── Tabs ────────────────────────────────────────────────────────
+            function switchTab(tab) {
+                document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + tab));
+                document.querySelectorAll(".tab-section").forEach((s) => s.classList.toggle("active", s.id === tab + "-section"));
+                const log = document.getElementById(tab + "-log");
+                if (log) log.scrollTop = log.scrollHeight;
+            }
+
+            function clearLog() {
+                document.getElementById("window-log").innerHTML = '<div class="log-empty">No window events yet</div>';
+                lp.sendToHost({ action: "clear" });
+            }
+
+            // ── Expose for Lua evaluateJavaScript ───────────────────────────
+            window.appendEntry         = appendEntry;
+            window.loadHistory         = loadHistory;
             window.updateCurrentWindow = updateCurrentWindow;
+            window.updateElement       = updateElement;
+            window.updateMousePos      = updateMousePos;
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
-                    registerPanel("window", function(action, body) {
-                        if (action === "updateCurrentWindow" && body) window.updateCurrentWindow(body);
-                        else if (action === "loadHistory" && body) window.loadHistory(body);
+                    registerPanel("window", function (action, body) {
+                        if (action === "appendEntry" && body) appendEntry(body);
+                        else if (action === "loadHistory" && body) loadHistory(body);
+                        else if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
+                        else if (action === "updateElement" && body) updateElement(body);
+                        else if (action === "updateMousePos" && body) updateMousePos(body);
                     });
                 }
                 if (window.shellPost) {
