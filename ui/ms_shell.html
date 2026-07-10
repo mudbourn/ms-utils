@@ -4488,6 +4488,8 @@ function createLogPanel(config) {
                     { id: "alert", label: "Alert / Notice" },
                     { id: "enabled", label: "Macros Enabled" },
                     { id: "disabled", label: "Macros Disabled" },
+                    { id: "toggleOn", label: "Toggle On" },
+                    { id: "toggleOff", label: "Toggle Off" },
                     { id: "update", label: "Setting Updated" },
                     { id: "reset", label: "Setting Reset" },
                     { id: "interact", label: "Menu Interact" },
@@ -4515,6 +4517,7 @@ function createLogPanel(config) {
                 const dMap = {
                     themeLoaded: "d_ThemeLoaded", load: "d_LoadEnd", launch: "d_Launch",
                     alert: "d_Alert", enabled: "d_MacrosOn", disabled: "d_MacrosOff",
+                    toggleOn: "d_ToggleOn", toggleOff: "d_ToggleOff",
                     update: "d_Update", updateAvailable: "d_UpdateAvailable",
                     reset: "d_Reset", interact: "d_Interact", hover: "d_Hover",
                     back: "d_Back", settingsOpen: "d_SettingsOpen", settingsClose: "d_SettingsClose",

@@ -6,8 +6,13 @@
 
     MsAlert.maxAlerts    = 4
     MsAlert.bottomY      = 150
-    MsAlert.animDuration = 0.25
-    MsAlert.animSteps    = 20
+    -- Animation settings read from theme at runtime (defaults if theme not loaded)
+    MsAlert.getAnimDuration = function()
+        return (ms._theme and ms._theme.alertAnimMs or 250) / 1000
+    end
+    MsAlert.getAnimSteps = function()
+        return (ms._theme and ms._theme.alertAnimSteps or 20)
+    end
 -- END MsAlert --
 
 -- State --
@@ -133,13 +138,15 @@
 -- Animation --
     local function animateEntry(entry, fromY, toY, fromAlpha, toAlpha, onDone)
         local step = 0
+        local animDuration = MsAlert.getAnimDuration()
+        local animSteps = MsAlert.getAnimSteps()
 
         if entry._animTimer then entry._animTimer:stop() end
 
-        entry._animTimer = hs.timer.doEvery(MsAlert.animDuration / MsAlert.animSteps, function()
+        entry._animTimer = hs.timer.doEvery(animDuration / animSteps, function()
             step = step + 1
 
-            local t    = step / MsAlert.animSteps
+            local t    = step / animSteps
             local ease = 1 - (1 - t) ^ 3
             local y     = fromY     + (toY     - fromY)     * ease
             local alpha = fromAlpha + (toAlpha - fromAlpha) * ease
@@ -151,7 +158,7 @@
                 entry.canvas:alpha(alpha)
             end
 
-            if step >= MsAlert.animSteps then
+            if step >= animSteps then
                 entry._animTimer:stop()
                 entry._animTimer = nil
 

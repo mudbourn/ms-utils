@@ -529,6 +529,8 @@
                     windowRadius = 4,
                     font         = "Arial",
                     fadeMs       = 100,
+                    alertAnimMs   = 250,  -- toast animation duration (ms)
+                    alertAnimSteps = 20,  -- toast animation steps
                 }
                 ms._theme = {}
                 for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
@@ -1483,12 +1485,12 @@
                     _debounceTimer = nil
                     if _stateSound then pcall(function() _stateSound:stop() end); _stateSound = nil end
                     if state == 1 then
-                        _stateSound = ms.playSlot("enabled")
+                        _stateSound = ms.playSlot("toggleOn")
                         if not ms.alert.updateById("_state", "Macros enabled!", 3) then
                             ms.alert("Macros enabled!",  3, true, { id = "_state", source = "system" })
                         end
                     else
-                        _stateSound = ms.playSlot("disabled")
+                        _stateSound = ms.playSlot("toggleOff")
                         if not ms.alert.updateById("_state", "Macros disabled.", 3) then
                             ms.alert("Macros disabled.", 3, true, { id = "_state", source = "system" })
                         end
@@ -5423,7 +5425,7 @@
                         _lWebView:evaluateJavaScript("setProfileName(" ..
                             '"' .. profileName:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
                     end
-                    pcall(function() ms.sound(SoundDefaultsDir .. "d_Reset.wav") end)
+                    pcall(function() ms.sound(SoundDefaultsDir .. "d_Boot.wav") end)
                     local step, steps = 0, 6
                     _G._loadTimers.fadeIn = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
                         step = step + 1

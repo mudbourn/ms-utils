@@ -899,6 +899,12 @@
             if type(data.fadeMs) == "number" then
                 ms._theme.fadeMs = math.max(0, math.min(500, math.floor(data.fadeMs)))
             end
+            if type(data.alertAnimMs) == "number" then
+                ms._theme.alertAnimMs = math.max(50, math.min(1000, math.floor(data.alertAnimMs)))
+            end
+            if type(data.alertAnimSteps) == "number" then
+                ms._theme.alertAnimSteps = math.max(2, math.min(60, math.floor(data.alertAnimSteps)))
+            end
             if type(data.font) == "string" and #data.font > 0 then
                 local clean = data.font:gsub("[;{}()<>\"']", "")
                 if #clean > 0 then ms._theme.font = clean end
