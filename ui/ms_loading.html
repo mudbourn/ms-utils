@@ -41,8 +41,9 @@
                 --accent-hi: #e8e8e8;
                 --warning: #aaaaaa;
                 --text: #d8d8d8;
-                --radius: 2px;
-                --ms-window-radius: 0px;
+                --radius: 8px;
+                --ms-window-radius: 8px;
+                --font: Arial, "Almendra", sans-serif;
             }
 
             /* ── Reset ──────────────────────────────────────────────────────── */
@@ -58,7 +59,7 @@
                 height: 100%;
                 overflow: hidden;
                 background: transparent;
-                font-family: Arial, "Almendra", sans-serif;
+                font-family: var(--font);
                 font-size: 13px;
                 color: var(--text);
                 -webkit-font-smoothing: antialiased;
@@ -66,8 +67,8 @@
 
             /* ── Panel ──────────────────────────────────────────────────────── */
             #panel {
-                width: 300px;
-                height: 104px;
+                width: 360px;
+                height: 140px;
                 position: relative;
                 background: var(--surface2);
                 border: 1px solid var(--hover);
@@ -87,31 +88,105 @@
                 z-index: 2;
             }
 
-            /* ── Title ──────────────────────────────────────────────────────── */
-            #title {
+            /* ── Brand text — always transition-ready ───────────────────────── */
+            #brand {
                 position: absolute;
-                top: 10px;
-                left: 16px;
-                font-size: 17px;
+                /* Default: centered */
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 28px;
                 font-weight: 700;
-                color: var(--text);
+                color: var(--accent-hi);
+                opacity: 0;
+                white-space: nowrap;
+                z-index: 10;
+                /* Always define all transitions so there's never a jump */
+                transition: opacity 0.4s ease,
+                            top 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                            left 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                            transform 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                            font-size 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            #brand.visible {
+                opacity: 1;
+            }
+            #brand.shifted {
+                top: 14px;
+                left: 18px;
+                transform: translate(0, 0);
+                font-size: 18px;
+            }
+
+            /* ── Profile name (top-right, above version) ─────────────────────── */
+            #profile-name {
+                position: absolute;
+                top: 14px;
+                right: 18px;
+                font-size: 12px;
+                color: var(--accent-hi);
+                font-weight: 700;
+                text-align: right;
+                max-width: 55%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+            #profile-name.visible {
+                opacity: 1;
             }
 
             /* ── Version ─────────────────────────────────────────────────────── */
             #version {
                 position: absolute;
-                top: 10px;
-                right: 16px;
+                top: 30px;
+                right: 18px;
                 font-size: 10px;
                 color: var(--warning);
                 font-style: italic;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+            #version.visible {
+                opacity: 1;
             }
 
-            /* ── Macro name (top-right) ──────────────────────────────────────── */
+            /* ── Divider ─────────────────────────────────────────────────────── */
+            #divider {
+                position: absolute;
+                top: 48px;
+                left: 18px;
+                right: 18px;
+                height: 1px;
+                background: var(--hover);
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+            #divider.visible {
+                opacity: 1;
+            }
+
+            /* ── Content ─────────────────────────────────────────────────────── */
+            #content {
+                position: absolute;
+                top: 58px;
+                left: 18px;
+                right: 18px;
+                bottom: 18px;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+            #content.visible {
+                opacity: 1;
+            }
+
+            /* ── Macro name ──────────────────────────────────────────────────── */
             #macro-name {
                 position: absolute;
-                top: 24px;
-                right: 16px;
+                top: 0;
+                right: 0;
                 font-size: 10px;
                 color: var(--warning);
                 text-align: right;
@@ -121,37 +196,27 @@
                 white-space: nowrap;
             }
 
-            /* ── Profile name (below title) ─────────────────────────────────── */
-            #profile-name {
-                position: absolute;
-                top: 38px;
-                left: 16px;
-                font-size: 10px;
-                color: var(--warning);
-                opacity: 0.7;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                max-width: 60%;
-            }
-
-            /* ── Status ─────────────────────────────────────────────────────── */
+            /* ── Status (directly above progress bar) ─────────────────────────── */
             #status {
                 position: absolute;
-                top: 60px;
-                left: 16px;
-                right: 16px;
+                left: 0;
+                right: 0;
+                bottom: 16px;
                 font-size: 11px;
                 font-style: italic;
                 color: var(--warning);
+                line-height: 1;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
             /* ── Progress track ─────────────────────────────────────────────── */
             #track {
                 position: absolute;
-                left: 16px;
-                right: 16px;
-                bottom: 20px;
+                left: 0;
+                right: 0;
+                bottom: 0;
                 height: 3px;
                 border-radius: 1.5px;
                 background: var(--surface);
@@ -160,51 +225,29 @@
             /* ── Progress fill ──────────────────────────────────────────────── */
             #fill {
                 position: absolute;
-                left: 16px;
-                bottom: 20px;
+                left: 0;
+                bottom: 0;
                 width: 0;
-                max-width: calc(100% - 32px);
+                max-width: 100%;
                 height: 3px;
                 border-radius: 1.5px;
                 background: var(--accent);
                 transition: width 0.15s ease;
             }
-
-            /* ── Checkbox row ───────────────────────────────────────────────── */
-            #checkbox-row {
-                position: absolute;
-                left: 16px;
-                right: 16px;
-                bottom: 10px;
-                height: 18px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                gap: 4px;
-                -webkit-user-select: none;
-                user-select: none;
-            }
-            #check-glyph {
-                font-size: 13px;
-                color: var(--warning);
-                line-height: 1;
-            }
-            #check-label {
-                font-size: 11px;
-                font-style: italic;
-                color: var(--warning);
-            }
         </style>
     </head>
     <body>
         <div id="panel">
-            <div id="title">mudscript</div>
-            <div id="version">v1.3.0-pre.16</div>
-            <div id="macro-name"></div>
+            <div id="brand">mudscript</div>
             <div id="profile-name"></div>
-            <div id="status">Starting up…</div>
-            <div id="track"></div>
-            <div id="fill"></div>
+            <div id="version">v1.3.0-pre.16</div>
+            <div id="divider"></div>
+            <div id="content">
+                <div id="macro-name"></div>
+                <div id="status">Starting up…</div>
+                <div id="track"></div>
+                <div id="fill"></div>
+            </div>
         </div>
 
         <script>
@@ -229,11 +272,34 @@
                 if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
                 if (t.warning) r.setProperty("--warning", t.warning);
                 if (t.text) r.setProperty("--text", t.text);
-                if (t.radius) r.setProperty("--radius", t.radius + "px");
+                if (t.radius !== undefined) r.setProperty("--radius", t.radius + "px");
                 if (t.windowRadius !== undefined) r.setProperty("--ms-window-radius", t.windowRadius + "px");
-                if (t.font)
-                    document.body.style.fontFamily =
-                        t.font + ', "Almendra", Arial, sans-serif';
+                if (t.font) r.setProperty("--font", t.font + ', "Almendra", Arial, sans-serif');
+            }
+
+            /* ── Animation controls ──────────────────────────────────────────── */
+            function showBrand() {
+                document.getElementById("brand").classList.add("visible");
+            }
+
+            function shiftBrand() {
+                document.getElementById("brand").classList.add("shifted");
+            }
+
+            function showProfile() {
+                document.getElementById("profile-name").classList.add("visible");
+            }
+
+            function showVersion() {
+                document.getElementById("version").classList.add("visible");
+            }
+
+            function showDivider() {
+                document.getElementById("divider").classList.add("visible");
+            }
+
+            function showContent() {
+                document.getElementById("content").classList.add("visible");
             }
 
             /* ── Progress ────────────────────────────────────────────────────── */
@@ -252,7 +318,7 @@
             /* ── Profile name ────────────────────────────────────────────────── */
             function setProfileName(name) {
                 var el = document.getElementById("profile-name");
-                if (el && name) el.textContent = "profile: " + name;
+                if (el && name) el.textContent = name;
             }
         </script>
     </body>

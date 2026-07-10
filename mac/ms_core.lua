@@ -525,8 +525,8 @@
                     danger   = "#d8d8d8",
                     warning  = "#aaaaaa",
                     text     = "#d8d8d8",
-                    radius       = 4,
-                    windowRadius = 4,
+                    radius       = 8,
+                    windowRadius = 8,
                     font         = "Arial",
                     fadeMs       = 100,
                     alertAnimMs   = 250,  -- toast animation duration (ms)
@@ -1542,7 +1542,9 @@
                             ms.setMacros(1)
                         end
                     else
-                        if ms.ui._open and appName == "Hammerspoon" then return end
+                        -- Don't disable macros if settings panel or shell is open
+                        local shellOpen = ms._shellState and ms._shellState.visible
+                        if (ms.ui._open or shellOpen) and appName == "Hammerspoon" then return end
                         ms._inputOpen    = (appName == "Hammerspoon") and ms._robloxActive
                         ms._robloxActive = false
                         ms.dev.log({ type = "system", event = "target_blur", to = appName })
@@ -5317,7 +5319,7 @@
         end
         ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)
         ms._discoverSounds()
-        ms.loadTheme()
+        -- Theme loading deferred to after loading screen appears (debounce)
 
         -- Sync Roblox cache cleaner LaunchAgent with setting
         do
@@ -5363,9 +5365,9 @@
         -- Loading Screen — Webview Creation --
             do
                 local sf  = hs.screen.mainScreen():frame()
-                local lw, lh = 300, 104
+                local lw, lh = 360, 140
                 local lx  = sf.x + math.floor((sf.w - lw) / 2)
-                local ly  = sf.y + sf.h - 150 - lh
+                local ly  = sf.y + math.floor((sf.h - lh) / 2)
 
                 local _ucLoad = hs.webview.usercontent.new("loadingScreen")
                 _ucLoad:setCallback(function(message)
@@ -5399,45 +5401,61 @@
                     _lWebView:html(html, baseURL)
                 end
 
-                -- Show and initialize after a short delay (let the webview render)
+                -- Boot animation sequence
                 _G._loadTimers = {}
+                local function js(code)
+                    if _lWebView then pcall(function() _lWebView:evaluateJavaScript(code) end) end
+                end
+
+                -- t=0: Bake invisible, load theme
                 _G._loadTimers[1] = hs.timer.doAfter(0.05, function()
                     if not _lWebView then return end
-                    -- Inject theme and state
+                    pcall(function() ms.loadTheme() end)
                     local themeJson = hs.json.encode(ms._theme or {})
-                    _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
+                    js("applyTheme(" .. themeJson .. ")")
+                    -- Set macro/profile names
+                    if ms.macroMeta and ms.macroMeta.name then
+                        js("setMacroName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')")
+                    end
                     -- Replay buffered messages
                     for _, entry in ipairs(_lMsgBuffer) do
                         local encoded = entry.msg and ('"' .. entry.msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
-                        _lWebView:evaluateJavaScript(string.format("setProgress(%d, %s)", entry.pct, encoded))
+                        js(string.format("setProgress(%d, %s)", entry.pct, encoded))
                     end
                     _lMsgBuffer = {}
-                    -- Fade in
+                    -- Show and fade in the panel (no content yet)
                     _lWebView:show()
-                    -- Set macro name (after show, webview is now accepting JS)
-                    if ms.macroMeta and ms.macroMeta.name then
-                        _lWebView:evaluateJavaScript("setMacroName(" ..
-                            '"' .. ms.macroMeta.name:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
-                    end
-                    -- Set profile name
-                    local profileName = (ms.macroMeta and ms.macroMeta.name) or ""
-                    if profileName ~= "" then
-                        _lWebView:evaluateJavaScript("setProfileName(" ..
-                            '"' .. profileName:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"' .. ")")
-                    end
-                    pcall(function() ms.sound(SoundDefaultsDir .. "d_Boot.wav") end)
                     local step, steps = 0, 6
-                    _G._loadTimers.fadeIn = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
+                    _G._loadTimers.fadeIn = hs.timer.doEvery(0.15 / steps, function()
                         step = step + 1
                         if _lWebView then _lWebView:alpha(step / steps) end
-                        if step >= steps and _G._loadTimers.fadeIn then _G._loadTimers.fadeIn:stop(); _G._loadTimers.fadeIn = nil end
+                        if step >= steps then
+                            if _G._loadTimers.fadeIn then _G._loadTimers.fadeIn:stop(); _G._loadTimers.fadeIn = nil end
+                        end
                     end)
+                    -- Play boot sound
+                    pcall(function() ms.sound(SoundDefaultsDir .. "d_Boot.wav") end)
                 end)
+
+                -- t=0.2: Brand text fades in (400ms CSS)
+                _G._loadTimers[2] = hs.timer.doAfter(0.2, function() js("showBrand()") end)
+
+                -- t=1.7: Shift brand to top-left (600ms CSS)
+                _G._loadTimers[3] = hs.timer.doAfter(1.7, function() js("shiftBrand()") end)
+
+                -- t=2.5: Divider + content fade in (300ms CSS)
+                _G._loadTimers[4] = hs.timer.doAfter(2.5, function()
+                    js("showDivider()")
+                    js("showVersion()")
+                    js("showContent()")
+                end)
+
+                -- t=2.9: Loading sequence begins (handled by animGate below)
             end
         -- END Loading Screen — Webview Creation --
 
         -- Loading Screen — Fade, Announce & Timers --
-            _lUpdate(20, "Initializing\u{2026}")
+            -- Initial update deferred to animGate
 
             _lFadeOut = function()
                 if not _lWebView or _lFadingOut then return end
@@ -5500,6 +5518,9 @@
             end
 
             _G._timers = {}
+            -- Delay loading sequence until boot animation completes (~2.9s)
+            _G._timers.animGate = hs.timer.doAfter(2.9, function()
+            _lUpdate(20, "Initializing\u{2026}")
             -- Timing for loading sequence
             local t1 = 0.3
             local t2 = 0.5
@@ -5529,13 +5550,16 @@
             _G._timers[4] = hs.timer.doAfter(t3, function()
                 print("[startup] t=" .. t3 .. ": theme")
                 _lUpdate(48, "Applying theme\u{2026}")
-                pcall(function()
-                    if _lWebView then
-                        local themeJson = hs.json.encode(ms._theme or {})
-                        _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
-                    end
-                end)
+                -- Theme already applied at boot — no need to reapply
                 pcall(function() ms.playSlot("themeLoaded") end)
+                -- Show profile name when theme loads (macros loaded by now)
+                if _lWebView then
+                    local profileName = (ms.macroMeta and ms.macroMeta.name) or ""
+                    if profileName ~= "" then
+                        pcall(function() _lWebView:evaluateJavaScript("setProfileName('" .. profileName:gsub("'", "\\'") .. "')") end)
+                    end
+                    pcall(function() _lWebView:evaluateJavaScript("showProfile()") end)
+                end
             end)
             _G._timers[5] = hs.timer.doAfter(t4, function()
                 print("[startup] t=" .. t4 .. ": integrity seed")
@@ -5649,6 +5673,7 @@
                 end)
                 notice = 1
             end
+            end) -- end animGate
         -- END Startup Loading Indicator --
     -- END Startup Executions --
 -- END Core System --
