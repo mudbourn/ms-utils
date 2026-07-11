@@ -412,7 +412,7 @@
             ms.systemBinds             = { _config = {}, _handles = {} }
             ms.modConfig             = {}
             ms.subBinds              = {}
-            ms.independentBindsEnabled = false
+
             ms.trackpadMode          = false
             ms.trackpadHoldKeys      = { left = "n", right = "j" }
             ms.socdMode              = "lastWins"
@@ -522,18 +522,22 @@
                 ms._userSettingVals  = {}
                 ms._userMenuDefs     = {}
                 ms._hiddenFeatures   = {}
+                -- Default palette mirrors the docs site (docs-ms.mudbourn.info):
+                -- olive/moss green accent on warm near-black, parchment text.
+                -- Supersedes the earlier grayscale default (see
+                -- .hermes/plans/2026-06-30_default-theme-grayscale.md).
                 ms._themeDefaults = {
-                    bg       = "#0e0e0e",
-                    surface  = "#1a1a1a",
-                    surface2 = "#252525",
-                    hover    = "#333333",
-                    accent   = "#cccccc",
-                    accentHi = "#e8e8e8",
-                    success  = "#888888",
-                    dangerBg = "#1a1616",
-                    danger   = "#d8d8d8",
-                    warning  = "#aaaaaa",
-                    text     = "#d8d8d8",
+                    bg       = "#0d0f09",
+                    surface  = "#141810",
+                    surface2 = "#1c2116",
+                    hover    = "#2d3523",
+                    accent   = "#6b8c3a",
+                    accentHi = "#8db84e",
+                    success  = "#7aa63c",
+                    dangerBg = "#1c130f",
+                    danger   = "#c0492e",
+                    warning  = "#c4a030",
+                    text     = "#d4cfb6",
                     radius       = 8,
                     windowRadius = 8,
                     font         = "Arial",
@@ -3237,39 +3241,7 @@
                     local cooldown = ms.cooldowns[id] or def.cooldown or 1000
 
                     if def.sub then
-                        if ms.independentBindsEnabled and ms.subBinds and ms.subBinds[id] then
-                            local c = ms.subBinds[id]
-                            local function firedFn()
-                                if ms.running[group] then return end
-                                ms.running[group] = hs.timer.doAfter(cooldown / 1000, function()
-                                    ms.running[group] = nil
-                                end)
-                                ms._activeSub = id
-                                if ms.dev then
-                                    local _pd = ms.registry._defs[def.sub]
-                                    local _trig = (function()
-                                        if c.type == "mouse" then return "M" .. c.button end
-                                        if c.type == "scroll" then return "S:" .. (c.direction or "?") end
-                                        if c.type == "gamepad" then return "G:" .. (c.button or "?") end
-                                        local _p = {}
-                                        for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
-                                        _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
-                                    end)()
-                                    pcall(ms.dev._onMacroFire, id, def.label, def.sub, _pd and _pd.label, _trig)
-                                end
-                                ms._pendingLabel = def.label
-                                fn()
-                            end
-                            if c.type == "mouse" then
-                                ms.mouse(c.button, false, firedFn)
-                            elseif c.type == "key" then
-                                ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
-                            elseif c.type == "scroll" then
-                                ms.bindHandles[id] = ms.scrollBind(c.direction, firedFn)
-                            elseif c.type == "gamepad" then
-                                ms.bindHandles[id] = ms.gamepadBind(c.button, firedFn)
-                            end
-                        end
+                        -- sub-binds no longer fire independent keybinds
                     else
                         local enabled = ms.binds[id]
                         if enabled == nil then enabled = def.enabled end
@@ -4160,6 +4132,11 @@
                         recording = "--recording", recordingText = "--recording-text",
                         recordingBg = "--recording-bg", running = "--running",
                         runningText = "--running-text", runningBg = "--running-bg",
+                        borderFaint = "--border-faint", surface3 = "--surface3",
+                        successBg = "--success-bg", successState = "--success-state",
+                        successText = "--success-text", errorBg = "--error-bg",
+                        errorState = "--error-state", errorText = "--error-text",
+                        fontMono = "--font-mono",
                     }
                     for k, cssVar in pairs(map) do
                         local val = v(k)
@@ -4200,7 +4177,7 @@
                         local dr3, dg3, db3 = hexRgb(v("danger"))
                         if dr3 then parts[#parts + 1] = ("--danger-border:rgba(%d,%d,%d,0.3)"):format(dr3, dg3, db3) end
                     end
-                    -- Derived border/border-dim (blend of accent + hover)
+                    -- Derived border/border-dim/border-faint (blend of accent + hover)
                     if not t.border then
                         local ar, ag, ab = hexRgb(v("accent"))
                         local hr, hg, hb = hexRgb(v("hover"))
@@ -4208,7 +4185,43 @@
                             local mr, mg, mb = math.floor((ar+hr)/2), math.floor((ag+hg)/2), math.floor((ab+hb)/2)
                             parts[#parts + 1] = ("--border:rgba(%d,%d,%d,0.55)"):format(mr, mg, mb)
                             parts[#parts + 1] = ("--border-dim:rgba(%d,%d,%d,0.18)"):format(mr, mg, mb)
+                            if not t.borderFaint then
+                                parts[#parts + 1] = ("--border-faint:rgba(%d,%d,%d,0.07)"):format(mr, mg, mb)
+                            end
                         end
+                    end
+                    -- Derived surface3 (one tier above surface2, blended toward hover)
+                    if not t.surface3 then
+                        local sr, sg, sb = hexRgb(v("surface2"))
+                        local hr2, hg2, hb2 = hexRgb(v("hover"))
+                        if sr and hr2 then
+                            local mr2 = math.floor((sr + hr2) / 2)
+                            local mg2 = math.floor((sg + hg2) / 2)
+                            local mb2 = math.floor((sb + hb2) / 2)
+                            parts[#parts + 1] = ("--surface3:#%02x%02x%02x"):format(mr2, mg2, mb2)
+                        end
+                    end
+                    -- Derived success-bg/-state/-text (from success)
+                    if not t.successBg then
+                        local sur, sug, sub = hexRgb(v("success"))
+                        if sur then parts[#parts + 1] = ("--success-bg:rgba(%d,%d,%d,0.15)"):format(sur, sug, sub) end
+                    end
+                    if not t.successState then
+                        parts[#parts + 1] = "--success-state:" .. v("success")
+                    end
+                    if not t.successText then
+                        parts[#parts + 1] = "--success-text:" .. v("accentHi")
+                    end
+                    -- Derived error-bg/-state/-text (from danger, distinct slot for error UI)
+                    if not t.errorBg then
+                        local dr4, dg4, db4 = hexRgb(v("danger"))
+                        if dr4 then parts[#parts + 1] = ("--error-bg:rgba(%d,%d,%d,0.15)"):format(dr4, dg4, db4) end
+                    end
+                    if not t.errorState then
+                        parts[#parts + 1] = "--error-state:" .. v("danger")
+                    end
+                    if not t.errorText then
+                        parts[#parts + 1] = "--error-text:" .. v("danger")
                     end
                     -- Radius
                     local radius = v("radius") or 4
@@ -5629,10 +5642,9 @@
 
                     _G._loadTimers = {}
 
-                    -- t=0: Load theme, replay buffers, show panel, fade in, boot sound
+                    -- t=0: Load theme into memory, replay buffers, show panel, fade in, boot sound
                     pcall(function() ms.loadTheme() end)
-                    local themeJson = hs.json.encode(ms._theme or {})
-                    js("applyTheme(" .. themeJson .. ")")
+                    -- Theme application deferred to t3 (synced with themeLoaded sound)
                     -- Set profile name and creator
                     if ms.macroMeta and ms.macroMeta.name then
                         js("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')")
@@ -5659,7 +5671,10 @@
                     -- Play boot sound
                     pcall(function() ms.sound(SoundDefaultsDir .. "d_Boot.wav") end)
 
-                    -- t=0.2: Brand text fades in (400ms CSS)
+                    -- Brand text: show immediately at t=0 so it's part of the
+                    -- first composited frame (avoids the title vanishing when
+                    -- the webview hitches during its initial show).
+                    js("showBrand()")
                     _G._loadTimers[2] = hs.timer.doAfter(0.2, function() js("showBrand()") end)
 
                     -- t=1.7: Shift brand to top-left (600ms CSS)
@@ -5785,7 +5800,11 @@
             _G._timers[4] = hs.timer.doAfter(t3, function()
                 print("[startup] t=" .. t3 .. ": theme")
                 _lUpdate(48, "Applying theme\u{2026}")
-                -- Theme already applied at boot — no need to reapply
+                -- Apply theme in sync with themeLoaded sound
+                if _lWebView then
+                    local themeJson = hs.json.encode(ms._theme or {})
+                    pcall(function() _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)
+                end
                 pcall(function() ms.playSlot("themeLoaded") end)
                 -- Show profile name and creator when theme loads (macros loaded by now)
                 if _lWebView then

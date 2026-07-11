@@ -8,22 +8,22 @@
         /* ═══ UNIFIED DESIGN SYSTEM ═══════════════════════════════════════════ */
         /* Layer 1: Tokens ─────────────────────────────────────────────────────── */
         :root {
-            --bg: #0e0e0e; --surface: #1a1a1a; --surface2: #252525; --hover: #333333;
-            --accent: #cccccc; --accent-hi: #e8e8e8; --success: #888888;
-            --danger-bg: #1a1616; --danger: #d8d8d8; --warning: #aaaaaa;
-            --text: #d8d8d8; --text2: rgba(200,200,200,0.85); --text3: rgba(160,160,160,0.55);
-            --border: rgba(100,100,100,0.55); --border-dim: rgba(100,100,100,0.18);
-            --border-faint: rgba(100,100,100,0.08);
-            --accent-glow: rgba(196,26,26,0.4); --accent-glow-faint: rgba(196,26,26,0.12);
-            --danger-glow: rgba(212,32,32,0.6); --danger-border: rgba(212,32,32,0.3);
+            --bg: #0d0f09; --surface: #141810; --surface2: #1c2116; --surface3: #24291a; --hover: #2d3523;
+            --accent: #6b8c3a; --accent-hi: #8db84e; --success: #7aa63c;
+            --danger-bg: #1c130f; --danger: #c0492e; --warning: #c4a030;
+            --text: #d4cfb6; --text2: rgba(212,207,182,0.85); --text3: rgba(212,207,182,0.55);
+            --border: rgba(141,184,78,0.30); --border-dim: rgba(141,184,78,0.14);
+            --border-faint: rgba(141,184,78,0.07);
+            --accent-glow: rgba(107,140,58,0.4); --accent-glow-faint: rgba(107,140,58,0.12);
+            --danger-glow: rgba(192,73,46,0.6); --danger-border: rgba(192,73,46,0.3);
             /* --mouse and --scroll fall back to --warning via var() */
             --recording: #dc3232; --recording-text: #ff6b6b; --recording-bg: rgba(220,50,50,0.2);
             --running: #64a0ff; --running-text: #88bbff; --running-bg: rgba(100,160,255,0.15);
-            --success-state: #3cb44b; --success-text: #6bdc7b; --success-bg: rgba(60,180,75,0.15);
-            --error-state: #dc3232; --error-text: #ff6b6b; --error-bg: rgba(220,50,50,0.15);
+            --success-state: #7aa63c; --success-text: #8db84e; --success-bg: rgba(122,166,60,0.15);
+            --error-state: #c0492e; --error-text: #c0492e; --error-bg: rgba(192,73,46,0.15);
             --radius: 2px; --radius-s: 1px;
             --font: "Almendra", Arial, sans-serif;
-            --font-mono: "SF Mono", "Menlo", monospace;
+            --font-mono: "JetBrains Mono", "SF Mono", "Menlo", monospace;
             --transition: 120ms ease;
             --rail-w: 140px;
         }
@@ -427,6 +427,10 @@
         .section-head:hover { background: var(--surface2); box-shadow: inset 2px 0 0 var(--accent-glow); }
         .section-chevron { font-size: 9px; color: var(--text3); transition: transform 0.2s; flex-shrink: 0; }
         .section-head.open .section-chevron { transform: rotate(90deg); color: var(--accent); }
+        .section-head.always-open { cursor: default; }
+        .section-head.always-open .section-chevron { opacity: 0; }
+        .section-head.always-open:hover { box-shadow: none; }
+        .section-head.always-open .section-title { color: var(--text3); }
         .section-title { font-weight: 700; font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 1.5px; flex: 1; }
         .section-body { background: var(--surface); border-top: 1px solid var(--border); max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
         .section-body.open { max-height: 2000px; }
@@ -1034,8 +1038,8 @@
 
         <!-- Tabs -->
         <div class="wtabs">
-            <button class="wtab active" data-wtab="window" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchWindowTab('window')">Data</button>
-            <button class="wtab" data-wtab="element" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchWindowTab('element')">Logs</button>
+            <button class="wtab active" data-wtab="window" onmouseenter="playSlot('hover')" onclick="switchWindowTab('window')">Data</button>
+            <button class="wtab" data-wtab="element" onmouseenter="playSlot('hover')" onclick="switchWindowTab('element')">Logs</button>
         </div>
 
         <!-- Window tab (all live data) -->
@@ -2184,9 +2188,15 @@ function createLogPanel(config) {
             shellDispatch('_shell', 'playSlot', { slot: 'hover' });
         });
         btn.addEventListener('click', function() {
-            shellDispatch('_shell', 'playSlot', { slot: 'interact' });
             var panel = btn.getAttribute('data-panel');
-            if (panel) showPanel(panel);
+            if (!panel) return;
+            // Same-destination nav: play 'back' if already on this panel (not popped out)
+            if (currentPanel === panel && !window._poppedOutPanels[panel]) {
+                shellDispatch('_shell', 'playSlot', { slot: 'back' });
+                return;
+            }
+            shellDispatch('_shell', 'playSlot', { slot: 'interact' });
+            showPanel(panel);
         });
     });
 
@@ -2850,6 +2860,13 @@ function createLogPanel(config) {
 
             // ── Tab switching ───────────────────────────────────────────────
             function switchTab(tab) {
+                // Same-destination: play 'back' if already on this tab
+                const activeTab = document.querySelector(".tab.active");
+                if (activeTab && activeTab.id === "tab-" + tab) {
+                    playSlot("back");
+                    return;
+                }
+                playSlot("interact");
                 document
                     .querySelectorAll(".tab")
                     .forEach((t) =>
@@ -3013,6 +3030,7 @@ function createLogPanel(config) {
             }
 
             function updateAll(payload) {
+                if (lp.isPaused()) return;
                 if (payload.window) updateCurrentWindow(payload.window);
                 if (payload.element) updateElement(payload.element);
                 if (payload.mouse) updateMousePos(payload.mouse);
@@ -3034,6 +3052,13 @@ function createLogPanel(config) {
 
             function switchWindowTab(tab) {
                 if (!_panel) return;
+                // Same-destination: play 'back' if already on this tab
+                const activeTab = _panel.querySelector(".wtab.active");
+                if (activeTab && activeTab.dataset.wtab === tab) {
+                    playSlot("back");
+                    return;
+                }
+                playSlot("interact");
                 _panel.querySelectorAll(".wtab").forEach((t) => t.classList.toggle("active", t.dataset.wtab === tab));
                 _panel.querySelectorAll(".wtab-section").forEach((s) => s.classList.toggle("active", s.dataset.wsection === tab));
                 // Tell Lua which tab is up so it only runs the heavy element-under-
@@ -3109,9 +3134,9 @@ function createLogPanel(config) {
                     registerPanel("window", function(action, body) {
                         if (action === "appendEntry" && body) appendEntry(body);
                         else if (action === "updateAll" && body) updateAll(body);
-                        else if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
-                        else if (action === "updateElement" && body) updateElement(body);
-                        else if (action === "updateMousePos" && body) updateMousePos(body);
+                        else if (action === "updateCurrentWindow" && body) { if (!lp.isPaused()) updateCurrentWindow(body); }
+                        else if (action === "updateElement" && body) { if (!lp.isPaused()) updateElement(body); }
+                        else if (action === "updateMousePos" && body) { if (!lp.isPaused()) updateMousePos(body); }
                         else if (action === "loadHistory" && body) loadHistory(body);
                     });
                 }
@@ -3491,11 +3516,11 @@ function createLogPanel(config) {
                 return wrap;
             }
 
-            function section(id, title, buildFn, defaultOpen = false) {
-                const isOpen = _openSections.has(id);
+            function section(id, title, buildFn, defaultOpen = false, collapsible = true) {
+                const isOpen = !collapsible || _openSections.has(id);
                 const head = h(
                     "div",
-                    { cls: "section-head" + (isOpen ? " open" : "") },
+                    { cls: "section-head" + (isOpen ? " open" : "") + (collapsible ? "" : " always-open") },
                     h("span", { cls: "section-chevron" }, "▶"),
                     h("span", { cls: "section-title" }, title),
                 );
@@ -3503,26 +3528,28 @@ function createLogPanel(config) {
                     cls: "section-body" + (isOpen ? " open" : ""),
                 });
                 buildFn(body);
-                head.addEventListener("mouseenter", () => playSlot("hover"));
-                head.addEventListener("click", () => {
-                    playSlot("interact");
-                    const open = !_openSections.has(id);
-                    if (open) _openSections.add(id);
-                    else _openSections.delete(id);
-                    head.classList.toggle("open", open);
-                    body.classList.toggle("open", open);
-                    if (open) {
-                        // Wait for the CSS max-height transition (250ms) then scroll
-                        // the bottom of the newly-expanded section into view.
-                        setTimeout(() => {
-                            const wrap = head.parentElement;
-                            wrap.scrollIntoView({
-                                block: "nearest",
-                                behavior: "smooth",
-                            });
-                        }, 260);
-                    }
-                });
+                if (collapsible) {
+                    head.addEventListener("mouseenter", () => playSlot("hover"));
+                    head.addEventListener("click", () => {
+                        playSlot("interact");
+                        const open = !_openSections.has(id);
+                        if (open) _openSections.add(id);
+                        else _openSections.delete(id);
+                        head.classList.toggle("open", open);
+                        body.classList.toggle("open", open);
+                        if (open) {
+                            // Wait for the CSS max-height transition (250ms) then scroll
+                            // the bottom of the newly-expanded section into view.
+                            setTimeout(() => {
+                                const wrap = head.parentElement;
+                                wrap.scrollIntoView({
+                                    block: "nearest",
+                                    behavior: "smooth",
+                                });
+                            }, 260);
+                        }
+                    });
+                }
                 const wrap = h("div", { cls: "section" });
                 wrap.appendChild(head);
                 wrap.appendChild(body);
@@ -3745,27 +3772,10 @@ function createLogPanel(config) {
                         onmouseenter: () => playSlot("hover"),
                     });
                     r.appendChild(h("div", { cls: "row-label" }, sub.label));
-                    if (S.independentBindsEnabled) {
-                        // In independent bind mode: show the independent bind as primary.
-                        // Show "unbound" warning when no bind is configured.
-                        if (sub.bind) {
-                            r.appendChild(
-                                h("span", { cls: "pill accent" }, sub.bind),
-                            );
-                        } else {
-                            r.appendChild(
-                                h("span", { cls: "pill warning" }, "unbound"),
-                            );
-                        }
-                        // Modifier shown as a small secondary pill.
-                        if (sub.mod)
-                            r.appendChild(h("span", { cls: "pill" }, sub.mod));
-                    } else {
-                        if (sub.mod)
-                            r.appendChild(h("span", { cls: "pill" }, sub.mod));
-                        if (sub.bind)
-                            r.appendChild(h("span", { cls: "pill" }, sub.bind));
-                    }
+                    if (sub.mod)
+                        r.appendChild(h("span", { cls: "pill" }, sub.mod));
+                    if (sub.bind)
+                        r.appendChild(h("span", { cls: "pill" }, sub.bind));
                     // If this sub-item itself has sub-items, show them as nested pills.
                     if (sub.subsubs && sub.subsubs.length) {
                         const nest = h("div", { cls: "row-subsubs" });
@@ -3805,29 +3815,6 @@ function createLogPanel(config) {
                                             }),
                                     });
                                 }
-                                if (S.independentBindsEnabled) {
-                                    items.push("divider");
-                                    items.push({
-                                        icon: "",
-                                        label: "Rebind Independent\u2026",
-                                        action: () =>
-                                            sendToHost({
-                                                action: "startRebind",
-                                                id: ss.id,
-                                            }),
-                                    });
-                                    if (ss.bind)
-                                        items.push({
-                                            icon: "",
-                                            label: "Clear Independent Bind",
-                                            danger: true,
-                                            action: () =>
-                                                sendToHost({
-                                                    action: "resetBind",
-                                                    id: ss.id,
-                                                }),
-                                        });
-                                }
                                 showCtxMenu(
                                     e.clientX,
                                     e.clientY,
@@ -3866,29 +3853,6 @@ function createLogPanel(config) {
                                         id: sub.id,
                                     }),
                             });
-                        }
-                        if (S.independentBindsEnabled) {
-                            items.push("divider");
-                            items.push({
-                                icon: "",
-                                label: "Rebind Independent\u2026",
-                                action: () =>
-                                    sendToHost({
-                                        action: "startRebind",
-                                        id: sub.id,
-                                    }),
-                            });
-                            if (sub.bind)
-                                items.push({
-                                    icon: "",
-                                    label: "Clear Independent Bind",
-                                    danger: true,
-                                    action: () =>
-                                        sendToHost({
-                                            action: "resetBind",
-                                            id: sub.id,
-                                        }),
-                                });
                         }
                         showCtxMenu(e.clientX, e.clientY, items, sub.label);
                     });
@@ -4048,8 +4012,8 @@ function createLogPanel(config) {
                 return wrap;
             }
 
-            // ── buildTools — input and motion settings ─────────────────────────
-            function buildTools(body) {
+            // ── buildAccessibility — input and motion settings ─────────────────────
+            function buildAccessibility(body) {
                 const hidden = S.hiddenFeatures || {};
                 const hasTrackpad = !hidden.trackpad;
                 const hasSocd = !hidden.socd;
@@ -4297,78 +4261,7 @@ function createLogPanel(config) {
 
             // ── buildSettings — system + user-defined settings ─────────────────
             function buildSettings(body) {
-                const hidden = S.hiddenFeatures || {};
-
-                // Independent Binds (moved from Tools)
-                if (!hidden.independentBinds) {
-                    body.appendChild(
-                        row(
-                            "Independent Binds",
-                            null,
-                            toggle(S.independentBindsEnabled ?? false, (e) =>
-                                sendToHost({
-                                    action: "setIndependentBinds",
-                                    value: e.target.checked,
-                                }),
-                            ),
-                            "",
-                            [
-                                {
-                                    icon: "",
-                                    label: "Reset to default",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "resetSetting",
-                                            key: "independentBinds",
-                                        }),
-                                },
-                            ],
-                        ),
-                    );
-                }
-
-                // Custom theme toggle (moved from Developer)
-                if (!hidden.independentBinds) body.appendChild(divider());
-                const customTheme = S.customThemeEnabled !== false;
-                body.appendChild(
-                    row(
-                        "Custom theme",
-                        "Load ms_theme.json colors and font",
-                        toggle(customTheme, (e) => {
-                            sendToHost({
-                                action: "setCustomTheme",
-                                value: e.target.checked,
-                            });
-                        }),
-                    ),
-                );
-
-                // User-defined settings targeting the Settings section
-                const items = S.userSettings || [];
-                const hasSystem =
-                    !hidden.independentBinds;
-                if (items.length > 0) {
-                    if (hasSystem) body.appendChild(divider());
-                    for (const item of items) {
-                        renderUserItem(body, item);
-                    }
-                } else if (!hasSystem) {
-                    body.appendChild(groupLabel("No settings defined."));
-                    const r = h("div", { cls: "row" });
-                    const lbl = h("div", { cls: "row-label" });
-                    lbl.appendChild(
-                        h(
-                            "small",
-                            {},
-                            "Use ms.settings.define() in your macro pack.",
-                        ),
-                    );
-                    r.appendChild(lbl);
-                    body.appendChild(r);
-                }
-
-                // Save / Reset as Default (moved from Tools)
-                body.appendChild(divider());
+                // Save / Reset as Default — always first
                 body.appendChild(
                     btnRow(
                         actionBtn("Save as Default", "", async () => {
@@ -4391,6 +4284,29 @@ function createLogPanel(config) {
                         }),
                     ),
                 );
+
+                // User-defined settings targeting the Settings section
+                const items = S.userSettings || [];
+                if (items.length > 0) {
+                    body.appendChild(divider());
+                    for (const item of items) {
+                        renderUserItem(body, item);
+                    }
+                } else {
+                    body.appendChild(divider());
+                    body.appendChild(groupLabel("No settings defined."));
+                    const r = h("div", { cls: "row" });
+                    const lbl = h("div", { cls: "row-label" });
+                    lbl.appendChild(
+                        h(
+                            "small",
+                            {},
+                            "Use ms.settings.define() in your macro pack.",
+                        ),
+                    );
+                    r.appendChild(lbl);
+                    body.appendChild(r);
+                }
             }
 
             // ── buildCalibration — user-injected calibration settings ──────────
@@ -4591,7 +4507,7 @@ function createLogPanel(config) {
                     cls: "seg-btn" + (activePreset === "default" ? " active" : ""),
                     onmouseenter: () => playSlot("hover"),
                     onclick: () => {
-                        sendToHost({ action: "setSoundPreset", assigns: defaultAssigns });
+                        sendToHost({ action: "setSoundPreset", assigns: defaultAssigns, preset: "default" });
                     },
                 }, "Default");
                 presetWrap.appendChild(defaultBtn);
@@ -4601,7 +4517,7 @@ function createLogPanel(config) {
                         cls: "seg-btn" + (activePreset === String(p.num) ? " active" : ""),
                         onmouseenter: () => playSlot("hover"),
                         onclick: () => {
-                            sendToHost({ action: "setSoundPreset", assigns: p.assigns });
+                            sendToHost({ action: "setSoundPreset", assigns: p.assigns, preset: String(p.num) });
                         },
                     }, String(p.num));
                     presetWrap.appendChild(pBtn);
@@ -5035,7 +4951,6 @@ function createLogPanel(config) {
                                 cls: "btn-macro " + (chan === "testing" ? "btn-enable" : ""),
                                 onmouseenter: () => playSlot("hover"),
                                 onclick: () => {
-                                    playSlot("interact");
                                     const next = chan === "testing" ? "stable" : "testing";
                                     sendToHost({
                                         action: "setUpdateChannel",
@@ -5065,7 +4980,6 @@ function createLogPanel(config) {
                                     cls: "btn-macro " + (src === "artifact" ? "btn-enable" : ""),
                                     onmouseenter: () => playSlot("hover"),
                                     onclick: () => {
-                                        playSlot("interact");
                                         const next = src === "artifact" ? "release" : "artifact";
                                         sendToHost({
                                             action: "setTestingSource",
@@ -5283,7 +5197,7 @@ function createLogPanel(config) {
                         section("calibration", "Calibration", buildCalibration),
                     );
                 }
-                scroll.appendChild(section("tools", "Tools", buildTools));
+                scroll.appendChild(section("accessibility", "Accessibility", buildAccessibility));
                 for (const menu of S.userMenus || []) {
                     const title = menu.icon
                         ? menu.icon + " " + menu.title
@@ -5295,9 +5209,9 @@ function createLogPanel(config) {
                     );
                 }
                 scroll.appendChild(
-                    section("developer", "Developer", buildDeveloper),
+                    section("developer", "Developer", buildDeveloper, false, false),
                 );
-                scroll.appendChild(section("help", "Help", buildHelp));
+                scroll.appendChild(section("help", "Help", buildHelp, false, false));
 
                 scroll.scrollTop = scrollTop;
             }
@@ -5322,7 +5236,23 @@ function createLogPanel(config) {
                 if (!el) return;
                 el.innerHTML = "";
 
+                // Custom theme toggle
+                const customTheme = S.customThemeEnabled !== false;
+                el.appendChild(
+                    row(
+                        "Custom theme",
+                        "Load ms_theme.json colors and font",
+                        toggle(customTheme, (e) => {
+                            sendToHost({
+                                action: "setCustomTheme",
+                                value: e.target.checked,
+                            });
+                        }),
+                    ),
+                );
+
                 // Edit Theme button
+                el.appendChild(divider());
                 const btnWrap = h("div", { cls: "btn-row" });
                 btnWrap.appendChild(
                     actionBtn("Edit Theme File", "", () =>

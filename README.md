@@ -200,7 +200,6 @@ Icons from [Lucide](https://lucide.dev/).
 Sound effects sourced from [The Spriters Resource](https://www.spriters-resource.com/):
 
 - **Custom/macro sounds** — [Devil May Cry 3 (PS2)](https://sounds.spriters-resource.com/playstation_2/dmc3/asset/393835/)
-- **Default theme loaded & launch sounds** — [Tomodachi Life: Living the Dream (Switch)](https://sounds.spriters-resource.com/nintendo_switch/tomodachilifelivingthedream/asset/556777/)
-- **All other default sounds** — [Bluey's Quest for the Gold Pen (Mobile)](https://sounds.spriters-resource.com/mobile/blueysquestforthegoldpen/asset/553088/)
+- **Default sound pack** — [Windows 10 Built-in Applications](https://sounds.spriters-resource.com/pc_computer/windows10builtinapplications/asset/565854/), [PS2 System BIOS](https://sounds.spriters-resource.com/playstation_2/systembios/asset/430102/), [PSP System BIOS](https://sounds.spriters-resource.com/psp/systembios/asset/446911/), [PS4 System BIOS](https://sounds.spriters-resource.com/playstation_4/systembios/asset/520633/), [Xbox 360 System BIOS](https://sounds.spriters-resource.com/xbox_360/systembios/asset/493534/)
 
 Font: [Almendra](https://fonts.google.com/specimen/Almendra) by Ana Sanfelippo, via [Google Fonts](https://fonts.google.com/) (OFL).

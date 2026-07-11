@@ -320,7 +320,7 @@
                 trackpadMode            = ms.trackpadMode or false,
                 socdEnabled             = ms.socdEnabled or false,
                 socdMode                = ms.socdMode or "lastWins",
-                independentBindsEnabled = ms.independentBindsEnabled or false,
+
                 soundEnabled            = ms.soundEnabled,
                 soundVolume             = ms.soundVolume or 100,
                 soundAssign             = ms.soundAssign or {},
@@ -630,15 +630,67 @@
                     for sid, def in pairs(defaultAssigns) do
                         ms.soundAssign[sid] = def
                     end
+                    -- Save + discover + recolor
+                    ms.saveSettings()
+                    ms._soundsDirty = true
+                    ms._discoverSounds()
                 else
                     -- Reload custom theme
                     ms.loadTheme()
+                    -- Re-discover sounds FIRST so preset restore can resolve a_* variants
+                    ms._soundsDirty = true
+                    ms._discoverSounds()
+                    -- Re-apply saved sound preset (restores user's preset after disable/enable cycle)
+                    local savedPreset = ms._soundPreset
+                    if savedPreset and savedPreset ~= "custom" then
+                        local allSounds = ms.sounds or {}
+                        local function findVariant(base, num)
+                            local name = num and (base .. num) or base
+                            return allSounds[name] and name or nil
+                        end
+                        local slotBaseNames = {
+                            { id = "themeLoaded",     d = "d_ThemeLoaded",     a = "a_ThemeLoaded" },
+                            { id = "load",            d = "d_LoadEnd",         a = "a_LoadEnd" },
+                            { id = "launch",          d = "d_Launch",          a = "a_Launch" },
+                            { id = "alert",           d = "d_Alert",           a = "a_Alert" },
+                            { id = "enabled",         d = "d_MacrosOn",        a = "a_MacrosOn" },
+                            { id = "disabled",        d = "d_MacrosOff",       a = "a_MacrosOff" },
+                            { id = "toggleOn",        d = "d_ToggleOn",        a = "a_ToggleOn" },
+                            { id = "toggleOff",       d = "d_ToggleOff",       a = "a_ToggleOff" },
+                            { id = "update",          d = "d_Update",          a = "a_Update" },
+                            { id = "updateAvailable", d = "d_UpdateAvailable", a = "a_UpdateAvailable" },
+                            { id = "reset",           d = "d_Reset",           a = "a_Reset" },
+                            { id = "interact",        d = "d_Interact",        a = "a_Interact" },
+                            { id = "hover",           d = "d_Hover",           a = "a_Hover" },
+                            { id = "back",            d = "d_Back",            a = "a_Back" },
+                            { id = "settingsOpen",    d = "d_SettingsOpen",    a = "a_SettingsOpen" },
+                            { id = "settingsClose",   d = "d_SettingsClose",   a = "a_SettingsClose" },
+                        }
+                        if savedPreset == "default" then
+                            -- Default: all d_* sounds
+                            for _, slot in ipairs(slotBaseNames) do
+                                ms.soundAssign[slot.id] = slot.d
+                            end
+                        elseif type(tonumber(savedPreset)) == "number" then
+                            -- Numbered preset: build assigns from available sounds
+                            local num = tonumber(savedPreset)
+                            for _, slot in ipairs(slotBaseNames) do
+                                local s
+                                if num > 1 then
+                                    s = findVariant(slot.a, tostring(num))
+                                        or findVariant(slot.a, nil)
+                                        or findVariant(slot.d, tostring(num))
+                                        or slot.d
+                                else
+                                    s = findVariant(slot.a, nil) or slot.d
+                                end
+                                ms.soundAssign[slot.id] = s
+                            end
+                        end
+                    end
+                    -- Save after preset restore
+                    ms.saveSettings()
                 end
-                -- Save AFTER applying changes
-                ms.saveSettings()
-                -- Re-discover sounds BEFORE playing so paths resolve correctly
-                ms._soundsDirty = true
-                ms._discoverSounds()
                 -- Recolor existing toasts to match new theme
                 pcall(function() ms.alert:recolor() end)
                 pcall(function() ms.dev:recolor() end)
@@ -796,45 +848,6 @@
                 ms.ui.refresh()
             end,
 
-            setIndependentBinds = function(data)
-                local turningOn = (data.value == true)
-                ms.independentBindsEnabled = turningOn
-                if turningOn then
-                    local function bindKey(c)
-                        if not c then return nil end
-                        if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
-                        if c.type == "scroll" then return "scroll:" .. (c.direction or "up") end
-                        if c.type == "gamepad" then return "gamepad:" .. (c.button or "?") end
-                        local mods = {}
-                        for _, m in ipairs(c.mods or {}) do table.insert(mods, m) end
-                        table.sort(mods)
-                        return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
-                    end
-                    local usedKeys = {}
-                    for _, id in ipairs(ms.registry._defList or {}) do
-                        local def = ms.registry._defs[id]
-                        if def and not def.sub then
-                            local k = bindKey(ms.effectiveBind(id))
-                            if k then usedKeys[k] = id end
-                        end
-                    end
-                    for subId, c in pairs(ms.subBinds or {}) do
-                        local k = bindKey(c)
-                        if k then
-                            if usedKeys[k] then
-                                ms.subBinds[subId] = nil
-                            else
-                                usedKeys[k] = subId
-                            end
-                        end
-                    end
-                end
-                ms.saveSettings()
-                ms.bind.rebind()
-                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
-                ms.ui.refresh()
-            end,
-
             saveDefault = function()
                 ms.saveDefault()
                 ms.ui.refresh()
@@ -883,6 +896,8 @@
                 for slotId, soundName in pairs(data.assigns) do
                     ms.soundAssign[slotId] = soundName
                 end
+                -- Persist preset selection
+                ms._soundPreset = data.preset or "default"
                 ms.saveSettings()
                 ms.playSlot("update")
                 ms.ui.refresh()
@@ -894,6 +909,8 @@
                 for _, slotId in ipairs(data.slots) do
                     ms.soundAssign[slotId] = nil
                 end
+                -- Persist custom selection
+                ms._soundPreset = "custom"
                 ms.saveSettings()
                 ms.playSlot("update")
                 ms.ui.refresh()
@@ -1551,9 +1568,6 @@
                 elseif key == "socdMode" then
                     ms.socdMode = def.socdMode or "lastWins"
                     ms.saveSettings()
-                elseif key == "independentBinds" then
-                    ms.independentBindsEnabled = (def.independentBinds == true)
-                    ms.saveSettings(); ms.bind.rebind()
                 elseif key == "soundEnabled" then
                     ms.soundEnabled = true
                     ms.saveSettings()
@@ -1623,9 +1637,7 @@
                 if not def then return end
                 if def.sub then
                     ms.subBinds[data.id] = nil
-                    if ms.independentBindsEnabled then
-                        ms.binds[data.id] = false
-                    end
+
                 else
                     ms.bindConfig[data.id] = nil
                 end
@@ -1745,6 +1757,7 @@
                 for slotId, soundName in pairs(data.assigns) do
                     ms.soundAssign[slotId] = soundName
                 end
+                ms._soundPreset = data.preset or "default"
                 ms.saveSettings()
                 ms.playSlot("interact")
                 ms.ui.refresh()
@@ -1756,6 +1769,7 @@
                 for _, slotId in ipairs(data.slots) do
                     ms.soundAssign[slotId] = nil
                 end
+                ms._soundPreset = "custom"
                 ms.saveSettings()
                 ms.playSlot("interact")
                 ms.ui.refresh()

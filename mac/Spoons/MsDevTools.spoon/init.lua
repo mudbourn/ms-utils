@@ -106,6 +106,10 @@
     -- Window Spy engine (event-driven, hang-safe; replaces the 0.4s poller)
     local _winAppWatcher, _winUiWatcher, _winMonitor
     local _winDirty, _winMoveN, _winResizeN, _winLastMouse
+    -- Forward-declared so the Window bus handler in :start() (registered far above
+    -- their definitions) captures these upvalues instead of resolving to nil
+    -- globals — the "ready" push fired _winRead/_winPush before they existed.
+    local _winRead, _winPush
     local _axTimeoutSet = false
     -- Shell state: which inline panel is showing + a move-driven mouse poller so
     -- the Inputs coordinate readout follows the cursor (the click-only eventtap
@@ -1812,7 +1816,7 @@
     -- real reads/pushes; and all of it idles while the shell window is dragged.
     local function _winG(fn) local ok, v = pcall(fn); if ok then return v end end
 
-    local function _winRead(win)
+    function _winRead(win)
         if not win then return nil end
         local appObj = _winG(function() return win:application() end)
         local f = _winG(function() return win:frame() end)
@@ -1846,7 +1850,7 @@
         }
     end
 
-    local function _winPush(fn, payload)
+    function _winPush(fn, payload)
         local ok, j = pcall(hs.json.encode, payload)
         if ok then pcall(function() _pushToPanel(_windowPanel, "window", fn .. "(" .. j .. ")") end) end
     end

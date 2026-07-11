@@ -37,14 +37,14 @@
 
             /* ── Tokens ─────────────────────────────────────────────────────── */
             :root {
-                --bg: #0e0e0e;
-                --surface: #1a1a1a;
-                --surface2: #252525;
-                --hover: #333333;
-                --accent: #cccccc;
-                --accent-hi: #e8e8e8;
-                --warning: #aaaaaa;
-                --text: #d8d8d8;
+                --bg: #0d0f09;
+                --surface: #141810;
+                --surface2: #1c2116;
+                --hover: #2d3523;
+                --accent: #6b8c3a;
+                --accent-hi: #8db84e;
+                --warning: #c4a030;
+                --text: #d4cfb6;
                 --radius: 8px;
                 --ms-window-radius: 8px;
                 --font: Arial, "Almendra", sans-serif;
@@ -57,6 +57,8 @@
                 box-sizing: border-box;
                 margin: 0;
                 padding: 0;
+                user-select: none;
+                -webkit-user-select: none;
             }
             html,
             body {
@@ -91,7 +93,7 @@
                 transform: translate(-50%, -50%) scale(1);
                 font-size: 28px;
                 font-weight: 700;
-                color: var(--accent-hi);
+                color: var(--text);
                 opacity: 0;
                 white-space: nowrap;
                 z-index: 10;
@@ -114,7 +116,7 @@
                 top: 14px;
                 right: 18px;
                 font-size: 12px;
-                color: var(--accent-hi);
+                color: var(--text);
                 font-weight: 700;
                 text-align: right;
                 max-width: 55%;

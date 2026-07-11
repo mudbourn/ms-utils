@@ -32,24 +32,24 @@
             }
             /* ── Tokens ──────────────────────────────────────────────────────────────── */
             :root {
-                --bg: #0e0e0e;
-                --surface: #1a1a1a;
-                --surface2: #252525;
-                --hover: #333333;
-                --accent: #cccccc;
-                --accent-hi: #e8e8e8;
-                --success: #888888;
-                --danger-bg: #1a1616;
-                --danger: #d8d8d8;
-                --warning: #aaaaaa;
-                --text: #d8d8d8;
-                --text2: rgba(200, 200, 200, 0.85);
-                --text3: rgba(160, 160, 160, 0.55);
-                --border: rgba(100, 100, 100, 0.55);
-                --accent-glow: rgba(196, 26, 26, 0.4);
-                --accent-glow-faint: rgba(196, 26, 26, 0.12);
-                --danger-glow: rgba(212, 32, 32, 0.6);
-                --danger-border: rgba(212, 32, 32, 0.3);
+                --bg: #0d0f09;
+                --surface: #141810;
+                --surface2: #1c2116;
+                --hover: #2d3523;
+                --accent: #6b8c3a;
+                --accent-hi: #8db84e;
+                --success: #7aa63c;
+                --danger-bg: #1c130f;
+                --danger: #c0492e;
+                --warning: #c4a030;
+                --text: #d4cfb6;
+                --text2: rgba(212, 207, 182, 0.85);
+                --text3: rgba(212, 207, 182, 0.55);
+                --border: rgba(141, 184, 78, 0.30);
+                --accent-glow: rgba(107, 140, 58, 0.4);
+                --accent-glow-faint: rgba(107, 140, 58, 0.12);
+                --danger-glow: rgba(192, 73, 46, 0.6);
+                --danger-border: rgba(192, 73, 46, 0.3);
                 --radius: 2px;
                 --radius-s: 1px;
             }
@@ -344,6 +344,10 @@
                 transform: rotate(90deg);
                 color: var(--accent);
             }
+            .section-head.always-open { cursor: default; }
+            .section-head.always-open .section-chevron { opacity: 0; }
+            .section-head.always-open:hover { box-shadow: none; }
+            .section-head.always-open .section-title { color: var(--text3); }
             .section-title {
                 font-weight: 700;
                 font-size: 11px;
@@ -361,6 +365,11 @@
             }
             .section-body.open {
                 max-height: 2000px;
+            }
+            /* Flat, always-open sections scroll as one page — no collapse clamp. */
+            .section-body.always-open {
+                max-height: none;
+                overflow: visible;
             }
 
             /* ── Rows ────────────────────────────────────────────────────────── */
@@ -1437,38 +1446,40 @@
                 return wrap;
             }
 
-            function section(id, title, buildFn, defaultOpen = false) {
-                const isOpen = _openSections.has(id);
+            function section(id, title, buildFn, defaultOpen = false, collapsible = false) {
+                const isOpen = !collapsible || _openSections.has(id);
                 const head = h(
                     "div",
-                    { cls: "section-head" + (isOpen ? " open" : "") },
+                    { cls: "section-head" + (isOpen ? " open" : "") + (collapsible ? "" : " always-open") },
                     h("span", { cls: "section-chevron" }, "▶"),
                     h("span", { cls: "section-title" }, title),
                 );
                 const body = h("div", {
-                    cls: "section-body" + (isOpen ? " open" : ""),
+                    cls: "section-body" + (isOpen ? " open" : "") + (collapsible ? "" : " always-open"),
                 });
                 buildFn(body);
-                head.addEventListener("mouseenter", () => playSlot("hover"));
-                head.addEventListener("click", () => {
-                    playSlot("interact");
-                    const open = !_openSections.has(id);
-                    if (open) _openSections.add(id);
-                    else _openSections.delete(id);
-                    head.classList.toggle("open", open);
-                    body.classList.toggle("open", open);
-                    if (open) {
-                        // Wait for the CSS max-height transition (250ms) then scroll
-                        // the bottom of the newly-expanded section into view.
-                        setTimeout(() => {
-                            const wrap = head.parentElement;
-                            wrap.scrollIntoView({
-                                block: "nearest",
-                                behavior: "smooth",
-                            });
-                        }, 260);
-                    }
-                });
+                if (collapsible) {
+                    head.addEventListener("mouseenter", () => playSlot("hover"));
+                    head.addEventListener("click", () => {
+                        playSlot("interact");
+                        const open = !_openSections.has(id);
+                        if (open) _openSections.add(id);
+                        else _openSections.delete(id);
+                        head.classList.toggle("open", open);
+                        body.classList.toggle("open", open);
+                        if (open) {
+                            // Wait for the CSS max-height transition (250ms) then scroll
+                            // the bottom of the newly-expanded section into view.
+                            setTimeout(() => {
+                                const wrap = head.parentElement;
+                                wrap.scrollIntoView({
+                                    block: "nearest",
+                                    behavior: "smooth",
+                                });
+                            }, 260);
+                        }
+                    });
+                }
                 const wrap = h("div", { cls: "section" });
                 wrap.appendChild(head);
                 wrap.appendChild(body);

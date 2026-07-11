@@ -82,7 +82,6 @@
         local _HIDEABLE_FEATURES = {
             socd             = true,
             trackpad         = true,
-            independentBinds = true,
             sensitivity      = true,
             gamepad          = true,
         }
@@ -125,7 +124,7 @@
             if data.trackpadMode     ~= nil then ms.trackpadMode           = (data.trackpadMode     == true) end
             if data.gamepadEnabled   ~= nil then ms.gamepadEnabled         = (data.gamepadEnabled   == true) end
             if data.socdEnabled      ~= nil then ms.socdEnabled            = (data.socdEnabled      == true) end
-            if data.independentBinds ~= nil then ms.independentBindsEnabled = (data.independentBinds == true) end
+
             if data.socdMode then
                 if data.socdMode == "lastWins" or data.socdMode == "neutral" or data.socdMode == "firstWins" then
                     ms.socdMode = data.socdMode
@@ -171,6 +170,7 @@
                 if data.qrOptions.ui       ~= nil then qr.ui       = (data.qrOptions.ui       == true) end
             end
             if data.customThemeDisabled ~= nil then ms._customThemeDisabled = (data.customThemeDisabled == true) end
+            if data.soundPreset ~= nil then ms._soundPreset = data.soundPreset end
             if data.devArchiveLimit ~= nil then
                 local n = tonumber(data.devArchiveLimit)
                 if n and n >= 0 and n <= 50 then ms._devArchiveLimit = math.floor(n) end
@@ -281,7 +281,7 @@
                     end
                 elseif key == "trackpadMode"     then data.trackpadMode     = (val == "true")
                 elseif key == "socdEnabled"      then data.socdEnabled      = (val == "true")
-                elseif key == "independentBinds" then data.independentBinds = (val == "true")
+
                 elseif key == "socdMode" then
                     if val == "lastWins" or val == "neutral" or val == "firstWins" then
                         data.socdMode = val
@@ -324,7 +324,7 @@
                 gamepadEnabled   = ms.gamepadEnabled,
                 socdEnabled      = ms.socdEnabled,
                 socdMode         = ms.socdMode or "lastWins",
-                independentBinds = ms.independentBindsEnabled,
+
                 trackpadHoldKeys = {
                     left  = ms.trackpadHoldKeys and ms.trackpadHoldKeys.left  or "n",
                     right = ms.trackpadHoldKeys and ms.trackpadHoldKeys.right or "j",
@@ -332,6 +332,7 @@
                 soundEnabled     = ms.soundEnabled,
                 soundVolume      = ms.soundVolume,
                 soundAssign      = ms.soundAssign,
+                soundPreset      = ms._soundPreset,
                 importedSounds   = ms.importedSounds or {},
                 customThemeDisabled = ms._customThemeDisabled or false,
                 devArchiveLimit  = ms._devArchiveLimit or 15,
@@ -864,7 +865,7 @@
                 if not _HIDEABLE_FEATURES[name] then
                     print("ms.features.hide: '" .. tostring(name)
                         .. "' is not a hideable feature. "
-                        .. "Accepted: sensitivity, socd, trackpad, independentBinds")
+                        .. "Accepted: sensitivity, socd, trackpad")
                     return
                 end
                 ms._hiddenFeatures[name] = true
@@ -988,7 +989,7 @@
                 gamepadEnabled   = false,
                 socdEnabled      = false,
                 socdMode         = "lastWins",
-                independentBinds = false,
+
                 trackpadHoldKeys = { left = "n", right = "j" },
                 soundEnabled     = true,
                 soundVolume      = 100,
@@ -3422,10 +3423,7 @@
 
             local function makeSubBindFn(item, parentLabel)
                 return function()
-                    if not ms.independentBindsEnabled then
-                        ms.alert("Enable Independent Binds first.", 2)
-                        return
-                    end
+
                     local cur = ms.subBinds and ms.subBinds[item.id]
                     local curDisplay = cur and bindStr(cur) or "unset"
                     ms.alert("Rebinding: " .. parentLabel .. " › " .. item.label
@@ -3553,7 +3551,7 @@
                             local item = entry.item
                             local mod  = ms.getMod(item.id)
                             local modDisplay = mod and ("( " .. mod .. " )") or "( unset )"
-                            local subBindCfg = ms.independentBindsEnabled and ms.subBinds and ms.subBinds[item.id]
+                            local subBindCfg = ms.subBinds and ms.subBinds[item.id]
                             local bindDisplay = subBindCfg and bindStr(subBindCfg) or modDisplay
                             table.insert(section, {
                                 title    = indent(entry.depth + 1) .. "↳ " .. item.label .. "  " .. bindDisplay,
@@ -3696,69 +3694,6 @@
             end
         -- END Modifiers submenu --
 
-        -- Independent Binds submenu --
-                            local function buildIndependentBindsSubmenu()
-                                local sub = {}
-                                local ibEnabled = ms.independentBindsEnabled
-
-                                table.insert(sub, { title = "-" })
-
-                local allDefs = {}
-                for _, d in ipairs(mainBindDefs)     do table.insert(allDefs, d) end
-                for _, d in ipairs(optionalBindDefs) do table.insert(allDefs, d) end
-
-                for _, bind in ipairs(allDefs) do
-                    local subs = getSubItems(bind.id)
-                    if #subs > 0 then
-                        for _, entry in ipairs(subs) do
-                            local item    = entry.item
-                            local subCfg  = ms.subBinds and ms.subBinds[item.id]
-                            local display
-                            if ibEnabled then
-                                display = subCfg and bindStr(subCfg) or "( unset )"
-                            else
-                                local parentCfg = ms.effectiveBind(bind.id)
-                                local mod = ms.getMod(item.id)
-                                local modPart = mod and (mod .. "+") or ""
-                                display = "( " .. modPart .. bindStr(parentCfg):gsub("[()]", ""):gsub("^%s+", ""):gsub("%s+$", "") .. " )"
-                            end
-                            table.insert(sub, {
-                                title    = indent(entry.depth) .. bind.label .. " › " .. item.label .. "  " .. display,
-                                disabled = not ibEnabled,
-                                fn       = makeSubBindFn(item, bind.label)
-                            })
-                        end
-                    end
-                end
-
-                table.insert(sub, { title = "-" })
-                table.insert(sub, { title = "Reset All Binds to Default", fn = function()
-                    ms.playSlot("interact")
-                    ms.ui.modal({
-                        title   = "Reset Binds",
-                        msg     = "Reset all binds to their default values?",
-                        confirm = "Reset",
-                        cancel  = "Cancel",
-                    }, function(r)
-                        if r.confirmed then
-                            ms.bindConfig = {}
-                            ms.subBinds   = {}
-                            ms.modConfig  = {}
-                            ms.systemBinds._config = {}
-                            ms.saveSettings()
-                            ms.bind.rebind()
-                            ms.playSlot("reset")
-                            hs.timer.doAfter(0.2, function()
-                                ms.alert("All binds reset to default.", 3, true)
-                                ms.ui.refresh()
-                            end)
-                        end
-                    end)
-                end })
-
-                return sub
-            end
-        -- END Independent Binds submenu --
 
         -- System submenu --
             local function buildSystemSubmenu()
@@ -4257,38 +4192,7 @@
                 { title = "Optional",          menu = buildBindSection(optionalBindDefs) },
                 { title = "System",            menu = buildSystemSubmenu() },
                 { title = "-" },
-                { title = (ms.independentBindsEnabled and "✓" or "✗") .. " Independent Binds", fn = function()
-                    ms.independentBindsEnabled = not ms.independentBindsEnabled
-                    if ms.independentBindsEnabled then
-                        local function _bk(c)
-                            if not c then return nil end
-                            if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
-                            if c.type == "scroll" then return "scroll:" .. (c.direction or "up") end
-                            if c.type == "gamepad" then return "gamepad:" .. (c.button or "?") end
-                            local m = {}; for _, v in ipairs(c.mods or {}) do table.insert(m, v) end
-                            table.sort(m); return "key:" .. table.concat(m, ",") .. ":" .. (c.key or "")
-                        end
-                        local used = {}
-                        for _, rid in ipairs(ms.registry._defList or {}) do
-                            local rd = ms.registry._defs[rid]
-                            if rd and not rd.sub then
-                                local k = _bk(ms.effectiveBind(rid)); if k then used[k] = rid end
-                            end
-                        end
-                        for sid, sc in pairs(ms.subBinds or {}) do
-                            local k = _bk(sc)
-                            if k then
-                                if used[k] then ms.subBinds[sid] = nil
-                                else used[k] = sid end
-                            end
-                        end
-                    end
-                    ms.saveSettings()
-                    ms.bind.rebind()
-                    ms.playSlot("update")
-                    ms.alert("Independent Binds: " .. (ms.independentBindsEnabled and "ON" or "OFF"), 2, true)
-                end },
-                { title = "Independent Binds", menu = buildIndependentBindsSubmenu() },
+
                 { title = "-" },
                 { title = "Modifiers",         menu = buildModifiersSubmenu() },
             }

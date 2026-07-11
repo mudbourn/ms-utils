@@ -25,6 +25,7 @@
     "alert" : "d_Alert",
     "reset" : "d_Reset"
   },
+  "soundPreset" : "default",
   "qrOptions" : {
     "settings" : true,
     "ui" : true,
