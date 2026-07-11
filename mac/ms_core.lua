@@ -3176,12 +3176,13 @@
 
                 local function bindKey(c)
                     if not c then return nil end
-                    if c.type == "mouse" then return "mouse:" .. tostring(c.button) end
-                    if c.type == "scroll" then return "scroll:" .. (c.direction or "up") end
-                    if c.type == "gamepad" then return "gamepad:" .. (c.button or "?") end
                     local mods = {}
-                    for _, m in ipairs(c.mods or {}) do table.insert(mods, m) end
+                    for _, m in ipairs(c.mods or {}) do mods[#mods+1] = m end
                     table.sort(mods)
+                    local modStr = #mods > 0 and (":" .. table.concat(mods, ",")) or ""
+                    if c.type == "mouse"   then return "mouse:"   .. tostring(c.button) .. modStr end
+                    if c.type == "scroll"  then return "scroll:"  .. (c.direction or "up") .. modStr end
+                    if c.type == "gamepad" then return "gamepad:" .. (c.button or "?")  .. modStr end
                     return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
                 end
 
@@ -3210,7 +3211,7 @@
                             local l2 = ms.registry._defs[other].label
                             hs.timer.doAfter(0, function()
                                 ms.alert("Bind conflict: \"" .. l1 .. "\" and \"" .. l2
-                                    .. "\" share the same input.\nBoth disabled — resolve via Settings › Keybinds.", 10)
+                                    .. "\" share the same input.\nBoth disabled — right-click the macro in the Macros panel › Rebind to resolve.", 10)
                             end)
                         else
                             rootUsed[key] = id

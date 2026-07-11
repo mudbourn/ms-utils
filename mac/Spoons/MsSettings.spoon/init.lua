@@ -621,25 +621,35 @@
 
             -- 1. Reload macros (teardown + load + compile + run + loadSettings + rebind + socd)
             if qr.macros then
-                local ok, err = pcall(ms.ui._actions.reloadMacros)
+                local ok, result = pcall(ms.ui._actions.reloadMacros)
                 if not ok then
                     reloadOk = false
-                    ms.dev.log({ type = "error", event = "reload_error", msg = tostring(err) })
+                    ms.dev.log({ type = "error", event = "reload_error", msg = tostring(result) })
                     -- Error recovery: re-register system binds so the user isn't stuck
                     pcall(function()
                         ms.bind._registerSystemBinds()
                         ms.bind.rebindSystem()
                     end)
+                elseif result == false then
+                    -- reloadMacros returned false (early failure after pcall succeeded)
+                    reloadOk = false
                 end
             end
 
-            -- 2. Reload theme
+            -- 2. Reload theme (includes window rebuild — popouts bake theme at creation)
             if qr.theme then
-                pcall(function()
+                local ok, err = pcall(function()
                     ms.loadTheme()
-                    ms.alert:recolor()
-                    ms.dev:recolor()
+                    pcall(function() ms.alert:recolor() end)
+                    pcall(function() ms.dev:recolor() end)
+                    -- Rebuild popout windows (they bake theme CSS at creation)
+                    ms.ui.hide()
+                    hs.timer.doAfter(0.15, function() ms.ui.show() end)
                 end)
+                if not ok then
+                    reloadOk = false
+                    ms.dev.log({ type = "error", event = "reload_theme_error", msg = tostring(err) })
+                end
             end
 
             -- 3. Reload settings only if macros weren't already reloaded (avoid duplicate rebind)
@@ -647,8 +657,16 @@
                 pcall(function() ms.reloadSettings() end)
             end
 
-            -- 4. Close all panels silently (sounds suppressed by _quickReloading)
-            pcall(function() ms.ui.hide() end)
+            -- 4. Rebuild UI if requested
+            if qr.ui then
+                pcall(function() ms.reloadUI() end)
+            end
+
+            -- 5. Close all panels silently (sounds suppressed by _quickReloading)
+            if not qr.theme then
+                -- Theme branch already hides/shows; only hide here if theme didn't
+                pcall(function() ms.ui.hide() end)
+            end
             pcall(function() ms.dev.console.hide() end)
             pcall(function() ms.dev.watcher.hide() end)
             pcall(function() ms.dev.keys.hide() end)
@@ -661,12 +679,15 @@
             ms._quickReloaded = 0
             ms.saveSettings()
 
-            -- Refocus target app
+            -- Refocus target app (hide→activate cycle so the game re-reads bind state)
             hs.timer.doAfter(0.15, function()
                 pcall(function()
                     local app = ms._targetApp and hs.application.get(ms._targetApp)
                     if app then
-                        app:activate()
+                        app:hide()
+                        hs.timer.doAfter(0.15, function()
+                            pcall(function() app:activate() end)
+                        end)
                     end
                 end)
             end)

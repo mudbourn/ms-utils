@@ -441,26 +441,18 @@
             end,
 
             reloadMacros = function()
-                ms.bind.teardown()
-                ms.registry       = { _defs = {}, _defList = {} }
-                ms.bind._wires    = {}
-                ms.bind._autoCount = 0
-                ms.macroMeta       = nil
-                ms._userSettingDefs  = {}
-                ms._userSettingIndex = {}
-                ms._userSettingVals  = {}
-
+                -- Phase 1: Validate source (no destructive ops — bind system untouched)
                 local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
                 local af = io.open(macrosPath, "r")
                 if not af then
                     ms.alert("Reload failed:\nCannot open ms_macros.lua.", 6)
-                    return
+                    return false
                 end
                 local rawSrc = af:read("*all"); af:close()
                 local auditErrs = ms.auditMacros(rawSrc)
                 if #auditErrs > 0 then
                     ms.alert("Reload blocked — audit failed.", 6)
-                    return
+                    return false
                 end
                 local chunk, loadErr = load(
                     rawSrc,
@@ -470,8 +462,19 @@
                 )
                 if not chunk then
                     ms.alert("Reload failed:\n" .. tostring(loadErr), 6)
-                    return
+                    return false
                 end
+
+                -- Phase 2: Teardown + execute (source validated — safe to destroy)
+                ms.bind.teardown()
+                ms.registry       = { _defs = {}, _defList = {} }
+                ms.bind._wires    = {}
+                ms.bind._autoCount = 0
+                ms.macroMeta       = nil
+                ms._userSettingDefs  = {}
+                ms._userSettingIndex = {}
+                ms._userSettingVals  = {}
+
                 local ok, runErr = xpcall(chunk, debug.traceback)
                 if not ok then
                     local tb = tostring(runErr)
@@ -480,11 +483,20 @@
                         ms.dev.log({ type = "error", event = "reload_error", msg = tb })
                     end
                     ms.alert("Reload failed — see console", 6)
-                    return
+                    -- Restore system binds so the user isn't stuck
+                    pcall(function()
+                        ms.bind._registerSystemBinds()
+                        ms.bind.rebindSystem()
+                    end)
+                    return false
                 end
                 if not next(ms.registry._defs) then
                     ms.alert("Reload failed:\nNo ms.bind.define calls found.", 6)
-                    return
+                    pcall(function()
+                        ms.bind._registerSystemBinds()
+                        ms.bind.rebindSystem()
+                    end)
+                    return false
                 end
                 for _, id in ipairs(ms.registry._defList) do
                     local def = ms.registry._defs[id]
@@ -527,6 +539,7 @@
                         end)
                     end)
                 end
+                return true
             end,
 
             reloadSettings = function()
@@ -1087,7 +1100,7 @@
             end,
 
             editTheme = function()
-                os.execute("open " .. os.getenv("HOME") .. "/.hammerspoon/ms_theme.json")
+                os.execute("open '" .. os.getenv("HOME") .. "/.hammerspoon/data/ms_theme.json'")
             end,
 
             openDevLogs = function()
