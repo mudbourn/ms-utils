@@ -230,7 +230,9 @@
                 if s.w ~= nil then ms._shellState.w = tonumber(s.w) end
                 if s.h ~= nil then ms._shellState.h = tonumber(s.h) end
                 if s.lastPanel ~= nil then ms._shellState.lastPanel = tostring(s.lastPanel) end
-                if s.visible ~= nil then ms._shellState.visible = (s.visible == true) end
+                -- Always start hidden — the webview is recreated fresh on reload.
+                -- The persisted `visible` flag is stale after any restart.
+                ms._shellState.visible = false
             end
             if data.user and type(data.user) == "table" then
                 for key, value in pairs(data.user) do

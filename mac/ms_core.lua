@@ -537,7 +537,7 @@
                     radius       = 8,
                     windowRadius = 8,
                     font         = "Arial",
-                    fadeMs       = 100,
+                    fadeMs       = 250,
                     alertAnimMs   = 250,  -- toast animation duration (ms)
                     alertAnimSteps = 20,  -- toast animation steps
                 }
@@ -1650,18 +1650,11 @@
                 local modSet = {}
                 for _, m in ipairs(mods or {}) do modSet[m] = true end
 
-                -- NOTE: modsMatch rejects when incidental flags (capslock, fn, numeric keypad)
-                -- are present — macOS reports these alongside alt/shift/etc. If Bug 8 diagnosis
-                -- confirms this is the issue, fix by only checking that REQUIRED mods are present
-                -- (remove the count == #mods check) rather than requiring EXACTLY those mods.
                 local function modsMatch(flags)
                     for m, _ in pairs(modSet) do
                         if not flags[m] then return false end
                     end
-                    -- Check no extra mods are held
-                    local count = 0
-                    for _ in pairs(flags) do count = count + 1 end
-                    return count == #mods
+                    return true
                 end
 
                 local id = table.concat(mods or {}, ",") .. ":" .. key
@@ -1676,11 +1669,6 @@
                     local kc = e:getKeyCode()
 
                     if type == hs.eventtap.event.types.flagsChanged then
-                        -- DEBUG: Bug 8 instrumentation, remove after diagnosis
-                        local flagStr = ""
-                        local flagCount = 0
-                        for f, v in pairs(flags) do flagStr = flagStr .. f .. "=" .. tostring(v) .. " "; flagCount = flagCount + 1 end
-                        print("[BUG8] flagsChanged id=" .. id .. " flags={ " .. flagStr .. "} flagCount=" .. flagCount .. " modsMatch=" .. tostring(modsMatch(flags)) .. " requiredMods=" .. #mods)
                         -- Modifier released: reset state
                         if not modsMatch(flags) then
                             _hotkeyDown[id] = false
@@ -1690,13 +1678,6 @@
                     end
 
                     if type == hs.eventtap.event.types.keyDown then
-                        -- DEBUG: Bug 8 instrumentation, remove after diagnosis
-                        if kc == keyCode then
-                            local flagStr = ""
-                            local flagCount = 0
-                            for f, v in pairs(flags) do flagStr = flagStr .. f .. "=" .. tostring(v) .. " "; flagCount = flagCount + 1 end
-                            print("[BUG8] keyDown id=" .. id .. " kc=" .. kc .. " flags={ " .. flagStr .. "} flagCount=" .. flagCount .. " modsMatch=" .. tostring(modsMatch(flags)) .. " _hotkeyDown=" .. tostring(_hotkeyDown[id]) .. " _hotkeyCooldowns=" .. tostring(_hotkeyCooldowns[id]))
-                        end
                         if kc == keyCode and modsMatch(flags) and not _hotkeyDown[id] and not _hotkeyCooldowns[id] then
                             _hotkeyDown[id] = true
                             onDown()
@@ -1763,10 +1744,10 @@
                 -- Open Menu
                 hk = ms._hotkeys.openMenu
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    -- DEBUG: Bug 8 instrumentation, remove after diagnosis
-                    print("[BUG8] openMenu onDown fired: _loadComplete=" .. tostring(ms._loadComplete) .. " _robloxActive=" .. tostring(ms._robloxActive) .. " _isSafeZone=" .. tostring(ms._isSafeZone()))
                     if not ms._loadComplete then return end
-                    if not ms._robloxActive and not ms._isSafeZone() then return end
+                    -- No _robloxActive / _isSafeZone guard: the menu is a
+                    -- Hammerspoon UI, not a game action. It should open
+                    -- regardless of target-app focus.
                     if ms._macroLabEnabled and ms.shell and ms.shell.toggle then
                         ms.shell.toggle()
                     elseif ms.ui and ms.ui.toggle then
@@ -2782,13 +2763,8 @@
                 ms.bind._wires["__fullReload"] = function()
                     hs.reload()
                 end
-                ms.bind._wires["__openMenu"] = function()
-                    if ms._macroLabEnabled and ms.shell and ms.shell.toggle then
-                        ms.shell.toggle()
-                    elseif ms.ui and ms.ui.toggle then
-                        ms.ui.toggle()
-                    end
-                end
+                -- __openMenu is handled by _bindHotkeys() via _makeKeyWatcher.
+                -- No wire here — having both would double-fire toggle().
             end
 
             ms.systemBinds._defs = {
@@ -3705,8 +3681,8 @@
                             -- Start fade-in if shell.show() was called before page loaded
                             if ms._shellState and ms._shellState.visible and _shellView then
                                 local view = _shellView
-                                local step, steps = 0, 6
-                                local fadeMs = (ms._theme and ms._theme.fadeMs) or 150
+                                local step, steps = 0, 25
+                                local fadeMs = (ms._theme and ms._theme.fadeMs) or 250
                                 _shellFadeTimer = hs.timer.doEvery(fadeMs / 1000 / steps, function()
                                     step = step + 1
                                     pcall(function() view:alpha(step / steps) end)
@@ -4086,8 +4062,8 @@
                     -- If page hasn't loaded yet, the "ready" callback will start the fade
                     if not _shellReady then return end
                     local view = _shellView
-                    local step, steps = 0, 6
-                    local fadeMs = (ms._theme and ms._theme.fadeMs) or 150
+                    local step, steps = 0, 25
+                    local fadeMs = (ms._theme and ms._theme.fadeMs) or 250
                     _shellFadeTimer = hs.timer.doEvery(fadeMs / 1000 / steps, function()
                         step = step + 1
                         pcall(function() view:alpha(step / steps) end)
@@ -4109,8 +4085,8 @@
                         local view = _shellView
                         local startAlpha = 1
                         pcall(function() startAlpha = view:alpha() or 1 end)
-                        local step, steps = 0, 6
-                        local fadeMs = (ms._theme and ms._theme.fadeMs) or 150
+                        local step, steps = 0, 25
+                        local fadeMs = (ms._theme and ms._theme.fadeMs) or 250
                         _shellFadeTimer = hs.timer.doEvery(fadeMs / 1000 / steps, function()
                             step = step + 1
                             pcall(function() view:alpha(startAlpha * (1 - (step / steps))) end)
@@ -4124,7 +4100,11 @@
                 end
 
                 ms.shell.toggle = function()
-                    if _shellView and _shellView:isVisible() then
+                    -- Use _shellState.visible instead of :isVisible() — the latter
+                    -- returns true during fade-out animations, causing toggle to close
+                    -- a shell that's already being dismissed.
+                    local isOpen = ms._shellState and ms._shellState.visible
+                    if _shellView and isOpen then
                         ms.shell.hide()
                     else
                         ms.shell.show()
@@ -5641,9 +5621,12 @@
                     pcall(function() ms.loadTheme() end)
                     local themeJson = hs.json.encode(ms._theme or {})
                     js("applyTheme(" .. themeJson .. ")")
-                    -- Set macro/profile names
+                    -- Set profile name and creator
                     if ms.macroMeta and ms.macroMeta.name then
-                        js("setMacroName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')")
+                        js("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')")
+                    end
+                    if ms.macroMeta and ms.macroMeta.author and ms.macroMeta.author ~= "" then
+                        js("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')")
                     end
                     -- Replay buffered messages
                     for _, entry in ipairs(_lMsgBuffer) do
@@ -5653,7 +5636,7 @@
                     _lMsgBuffer = {}
                     -- Show and fade in the panel (no content yet)
                     _lWebView:show()
-                    local step, steps = 0, 6
+                    local step, steps = 0, 25
                     _G._loadTimers.fadeIn = hs.timer.doEvery(0.15 / steps, function()
                         step = step + 1
                         if _lWebView then _lWebView:alpha(step / steps) end
@@ -5696,8 +5679,8 @@
             _lFadeOut = function()
                 if not _lWebView or _lFadingOut then return end
                 _lFadingOut = true
-                local step, steps = 0, 6
-                _G._loadTimers.fadeOut = hs.timer.doEvery((ms._theme.fadeMs or 100) / 1000 / steps, function()
+                local step, steps = 0, 25
+                _G._loadTimers.fadeOut = hs.timer.doEvery((ms._theme.fadeMs or 250) / 1000 / steps, function()
                     step = step + 1
                     if _lWebView then _lWebView:alpha(1 - (step / steps)) end
                     if step >= steps then
@@ -5792,13 +5775,17 @@
                 _lUpdate(48, "Applying theme\u{2026}")
                 -- Theme already applied at boot — no need to reapply
                 pcall(function() ms.playSlot("themeLoaded") end)
-                -- Show profile name when theme loads (macros loaded by now)
+                -- Show profile name and creator when theme loads (macros loaded by now)
                 if _lWebView then
-                    local profileName = (ms.macroMeta and ms.macroMeta.name) or ""
-                    if profileName ~= "" then
-                        pcall(function() _lWebView:evaluateJavaScript("setProfileName('" .. profileName:gsub("'", "\\'") .. "')") end)
+                    -- Re-push metadata now that ms_macros.lua has loaded
+                    if ms.macroMeta and ms.macroMeta.name then
+                        pcall(function() _lWebView:evaluateJavaScript("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')") end)
+                    end
+                    if ms.macroMeta and ms.macroMeta.author and ms.macroMeta.author ~= "" then
+                        pcall(function() _lWebView:evaluateJavaScript("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')") end)
                     end
                     pcall(function() _lWebView:evaluateJavaScript("showProfile()") end)
+                    pcall(function() _lWebView:evaluateJavaScript("showCreator()") end)
                 end
             end)
             _G._timers[5] = hs.timer.doAfter(t4, function()
