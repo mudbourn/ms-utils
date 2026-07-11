@@ -68,52 +68,17 @@
         local function _buildUIState()
             local macros = {}
 
-            local childrenOf = {}
             for _, id in ipairs(ms.registry._defList or {}) do
                 local def = ms.registry._defs[id]
-                if def and def.sub then
-                    childrenOf[def.sub] = childrenOf[def.sub] or {}
-                    table.insert(childrenOf[def.sub], id)
-                end
-            end
-
-            for _, id in ipairs(ms.registry._defList or {}) do
-                local def = ms.registry._defs[id]
-                if def and not def.sub then
+                if def and not (def.default and def.default.type) then
                     local enabled = ms.binds[id]
                     if enabled == nil then enabled = def.enabled end
-                    local subs = {}
-                    for _, subId in ipairs(childrenOf[id] or {}) do
-                        local subDef = ms.registry._defs[subId]
-                        if subDef then
-                            local subsubs = {}
-                            for _, ss in ipairs(childrenOf[subId] or {}) do
-                                local ssDef = ms.registry._defs[ss]
-                                if ssDef then
-                                    table.insert(subsubs, {
-                                        id    = ss,
-                                        label = ssDef.label or ss,
-                                        mod   = ms.modConfig[ss] or ssDef.mod or "",
-                                        bind  = _bindDisplay(ms.subBinds[ss]),
-                                    })
-                                end
-                            end
-                            table.insert(subs, {
-                                id      = subId,
-                                label   = subDef.label or subId,
-                                mod     = ms.modConfig[subId] or subDef.mod or "",
-                                bind    = _bindDisplay(ms.subBinds[subId]),
-                                subsubs = #subsubs > 0 and subsubs or nil,
-                            })
-                        end
-                    end
                     table.insert(macros, {
                         id        = id,
                         label     = def.label,
                         group     = def.group,
                         bind      = _bindDisplay(ms.effectiveBind(id)),
                         enabled   = enabled and true or false,
-                        subs      = subs,
                     })
                 end
             end
@@ -523,7 +488,7 @@
                 end
                 for _, id in ipairs(ms.registry._defList) do
                     local def = ms.registry._defs[id]
-                    if def and not def.sub and ms.binds[id] == nil then
+                    if def and not (def.default and def.default.type) and ms.binds[id] == nil then
                         ms.binds[id] = def.enabled
                     end
                 end
@@ -1467,11 +1432,7 @@
                             cancel  = "Cancel",
                         }, function(r)
                             if r.confirmed then
-                                if def.sub then
-                                    ms.subBinds[data.id] = parsed
-                                else
-                                    ms.bindConfig[data.id] = parsed
-                                end
+                                ms.bindConfig[data.id] = parsed
                                 ms.saveSettings()
                                 ms.playSlot("update")
                                 ms.bind.rebind()
@@ -1521,11 +1482,7 @@
                         cancel  = "Cancel",
                     }, function(r)
                         if r.confirmed then
-                            if def.sub then
-                                ms.subBinds[data.id] = gparsed
-                            else
-                                ms.bindConfig[data.id] = gparsed
-                            end
+                            ms.bindConfig[data.id] = gparsed
                             ms.saveSettings()
                             ms.playSlot("update")
                             ms.bind.rebind()
@@ -1635,12 +1592,7 @@
 
                 local def = ms.registry._defs[data.id]
                 if not def then return end
-                if def.sub then
-                    ms.subBinds[data.id] = nil
-
-                else
-                    ms.bindConfig[data.id] = nil
-                end
+                ms.bindConfig[data.id] = nil
                 ms.saveSettings()
                 ms.bind.rebind()
                 ms.playSlot("reset")
@@ -1651,13 +1603,7 @@
             end,
 
             setModifier = function(data)
-                if not data.id then return end
-                local key = type(data.key) == "string" and data.key:match("^%s*(.-)%s*$") or ""
-                ms.modConfig[data.id] = (key ~= "") and key or nil
-                ms.saveSettings()
-                ms.bind.rebind()
-                ms.playSlot("update")
-                ms.ui.refresh()
+                -- no-op: ms.modConfig removed (modifier system retired)
             end,
 
             clearModifier = function(data)

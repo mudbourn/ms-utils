@@ -171,6 +171,7 @@
         <div id="tabs">
             <button id="tab-window" class="tab active" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchTab('window')">Data</button>
             <button id="tab-element" class="tab" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchTab('element')">Logs</button>
+            <button id="inspectToggle" class="tab" onmouseenter="playSlot('hover')" onclick="toggleInspect()" style="flex:0 0 auto;padding:7px 10px;font-size:11px;font-weight:600;color:var(--text3);border-bottom:2px solid transparent;">Inspect</button>
         </div>
 
         <!-- ── Window tab (all live data) ──────────────────────────────── -->
@@ -403,6 +404,19 @@
                 if (log && tab === "element") log.scrollTop = log.scrollHeight;
             }
 
+            // ── Inspect toggle ─────────────────────────────────────────────
+            let inspectOn = false;
+            function toggleInspect() {
+                inspectOn = !inspectOn;
+                const btn = document.getElementById('inspectToggle');
+                if (btn) {
+                    btn.style.color = inspectOn ? 'var(--accent)' : 'var(--text3)';
+                    btn.style.borderBottomColor = inspectOn ? 'var(--accent)' : 'transparent';
+                }
+                lp.sendToHost({ action: 'setInspect', enabled: inspectOn });
+            }
+            window.toggleInspect = toggleInspect;
+
             function clearLog() {
                 document.getElementById("window-log").innerHTML = '<div class="log-empty">No window events yet</div>';
                 lp.sendToHost({ action: "clear" });
@@ -426,6 +440,14 @@
                         else if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
                         else if (action === "updateElement" && body) updateElement(body);
                         else if (action === "updateMousePos" && body) updateMousePos(body);
+                        else if (action === "updateInspect" && body) {
+                            inspectOn = !!body.enabled;
+                            const btn = document.getElementById('inspectToggle');
+                            if (btn) {
+                                btn.style.color = inspectOn ? 'var(--accent)' : 'var(--text3)';
+                                btn.style.borderBottomColor = inspectOn ? 'var(--accent)' : 'transparent';
+                            }
+                        }
                     });
                 }
                 if (window.shellPost) {

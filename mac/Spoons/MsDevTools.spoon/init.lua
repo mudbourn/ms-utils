@@ -67,6 +67,25 @@
 
     local _devBusy            = false
     local _devLastConsoleType = nil
+
+    -- Write-time log capping: periodically trim log files to _HIST_MAX lines
+    -- to prevent unbounded growth (the root cause of the Inputs Panel hang).
+    local _WRITE_TRIM_INTERVAL = 200
+    local _writeCounter        = 0
+    local function _trimLogFile(path, keep)
+        local lines = {}
+        local f = io.open(path, "r")
+        if not f then return end
+        for line in f:lines() do lines[#lines + 1] = line end
+        f:close()
+        if #lines <= keep then return end
+        local g = io.open(path, "w")
+        if not g then return end
+        for i = #lines - keep + 1, #lines do
+            g:write(lines[i]); g:write("\n")
+        end
+        g:close()
+    end
     local _lastReadLine       = nil
     local _consoleSkip = { roblox_focus=1, roblox_blur=1, target_focus=1, target_blur=1, macros_enabled=1, macros_disabled=1 }
     local _lastReadType       = nil
@@ -120,6 +139,10 @@
     -- element data card, which now lives in the Window tab alongside the focused
     -- window card.  We skip it while the Log tab is up.
     local _winElementTab = true
+    -- F6: decouple the expensive pixel-snapshot + AX element-inspection from
+    -- the engine.  Off by default — the user opts in via the Window panel.
+    -- Octane forces this off (along with the whole engine).
+    local _winElementInspect = false
     -- Pending minimize/hide transition (name + label) to log on the next tick, and
     -- the name of the app the scoped watcher is currently following.
     local _winPendingEvent, _winWatchedAppName
@@ -325,6 +348,10 @@
         end
 
         -- History loader (must be before bus handlers)
+        -- Bounded read: reads all raw lines (cheap string ops, no JSON decode),
+        -- then only decodes the last _HIST_MAX entries. The log is append-only
+        -- (entries written in chronological order), so no sort is needed. This
+        -- replaces the old full-file decode + sort + trim approach.
         local _HIST_MAX = 500
         local function _loadDevHistory(panel, categories, shellPanelId, skipEvents)
             local entries = {}
@@ -333,26 +360,27 @@
                 if path then
                     local f = io.open(path, "r")
                     if f then
+                        -- Phase 1: read raw lines (cheap — no JSON decode)
+                        local rawLines = {}
                         for line in f:lines() do
-                            local ok, entry = pcall(hs.json.decode, line)
+                            rawLines[#rawLines + 1] = line
+                        end
+                        f:close()
+                        -- Phase 2: decode only the last _HIST_MAX lines
+                        local start = math.max(1, #rawLines - _HIST_MAX + 1)
+                        for i = start, #rawLines do
+                            local ok, entry = pcall(hs.json.decode, rawLines[i])
                             if ok and entry then
-                                -- Filter out skipped events (e.g. _consoleSkip for console)
                                 if not skipEvents or not (entry.event and skipEvents[entry.event]) then
                                     entries[#entries + 1] = entry
                                 end
                             end
                         end
-                        f:close()
                     end
                 end
             end
             if #entries == 0 then return end
-            table.sort(entries, function(a, b)
-                return (a.ts or "") < (b.ts or "")
-            end)
-            while #entries > _HIST_MAX do
-                table.remove(entries, 1)
-            end
+            -- Entries are in append order (chronological); no sort needed.
             local ok, json = pcall(hs.json.encode, entries)
             if ok then
                 if shellPanelId then
@@ -456,6 +484,10 @@
                     -- recompute on entry so it fills immediately.
                     _winElementTab = (body.tab == "window")
                     if _winElementTab then _winLastMouse = nil end
+                elseif action == "setInspect" then
+                    -- F6: toggle the expensive pixel-snapshot + AX element inspection
+                    _winElementInspect = (body.enabled == true)
+                    if not _winElementInspect then _winLastMouse = nil end
                 elseif action == "ready" then
                     -- Panel handler is now registered — push current state so
                     -- the card fills immediately without requiring a tab-out.
@@ -738,6 +770,12 @@
                     f:close()
                 end
             end)
+
+            -- Periodic log cap: trim to _HIST_MAX lines to prevent unbounded growth
+            _writeCounter = _writeCounter + 1
+            if _writeCounter % _WRITE_TRIM_INTERVAL == 0 then
+                _trimLogFile(catPath, _HIST_MAX)
+            end
         end
 
         local readPath = _readablePaths[entry.category]
@@ -1883,6 +1921,13 @@
         if _winAppWatcher then pcall(function() _winAppWatcher:stop() end); _winAppWatcher = nil end
         if _winUiWatcher  then pcall(function() _winUiWatcher:stop()  end); _winUiWatcher  = nil end
         if _winMonitor then _winMonitor:stop(); _winMonitor = nil end
+        _winElementInspect = false  -- reset F6 gate on engine stop
+    end
+
+    -- F6: public setter for the element-inspect gate (called by Octane integration)
+    function MsDevTools:setWinElementInspect(enabled)
+        _winElementInspect = (enabled == true)
+        if not _winElementInspect then _winLastMouse = nil end
     end
 
     function MsDevTools:_winEngineStart()
@@ -2021,7 +2066,8 @@
             end
 
             -- ── Element under cursor (AX poll logic) ─────────────────────
-            if _winElementTab and hs.accessibilityState() then
+            -- Gated by _winElementInspect (F6): off by default, user opts in.
+            if _winElementInspect and _winElementTab and hs.accessibilityState() then
                 local p = hs.mouse.absolutePosition()
                 if not (_winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y) then
                     _winLastMouse = p

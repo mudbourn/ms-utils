@@ -408,10 +408,7 @@
             ms._keyBindings = {}
             ms.bindConfig = {}
             ms.bindHandles = {}
-            ms._activeSub = nil
             ms.systemBinds             = { _config = {}, _handles = {} }
-            ms.modConfig             = {}
-            ms.subBinds              = {}
 
             ms.trackpadMode          = false
             ms.trackpadHoldKeys      = { left = "n", right = "j" }
@@ -1615,6 +1612,10 @@
                     ms._menuHoverWatcher:stop()
                     ms._menuHoverWatcher = nil
                 end
+                -- Force Window Monitor element-inspect off (expensive pixel + AX)
+                if spoon.MsDevTools and spoon.MsDevTools.setWinElementInspect then
+                    pcall(function() spoon.MsDevTools:setWinElementInspect(false) end)
+                end
             end
             -- Internal: remove octane state (called on toggle off)
             ms.octane._remove = function()
@@ -2688,12 +2689,18 @@
                 assert(type(id) == "string", "ms.bind.define: id must be a string")
                 local fn   = type(a) == "function" and a or (type(b) == "function" and b or nil)
                 local opts = type(a) == "table"    and a or (type(b) == "table"    and b or {})
-                if opts.sub then
-                    assert(ms.registry._defs[opts.sub],
-                        "ms.bind.define: parent '" .. tostring(opts.sub) .. "' must be defined before '" .. id .. "'")
+                -- Compat shim: convert legacy sub/mod to unified default model.
+                -- A child bind's trigger becomes default = { type = <parentBindID>, mods = {mod} }
+                if opts.sub and not opts.default then
+                    opts.default = { type = opts.sub, mods = opts.mod and { opts.mod } or {} }
                 end
                 local label, group
-                if not opts.sub then
+                if opts.default and type(opts.default) == "table" and opts.default.type
+                    and ms.registry._defs[opts.default.type] then
+                    -- Derived bind: inherit label/group conventions
+                    label = opts.label or id
+                    group = opts.group
+                else
                     if opts.label then
                         label = opts.label
                     else
@@ -2701,9 +2708,6 @@
                         label = "Macro" .. ms.bind._autoCount
                     end
                     group = opts.group or "main"
-                else
-                    label = opts.label or id
-                    group = opts.group
                 end
                 ms.registry._defs[id] = {
                     label    = label,
@@ -2711,8 +2715,6 @@
                     enabled  = (opts.enabled ~= false),
                     cooldown = opts.cooldown or 1000,
                     shared   = opts.shared,
-                    sub      = opts.sub,
-                    mod      = opts.mod,
                     info     = opts.info,
                     default  = opts.default,
                     system   = opts.system or false,
@@ -2849,12 +2851,15 @@
                 local def = ms.registry._defs[id]
                 if not def then return "G_" .. tostring(id) end
                 if def.shared then return def.shared end
+                -- Walk derived triggers to find the root bind for group resolution
                 local current, seen = id, {}
                 while true do
                     local d = ms.registry._defs[current]
-                    if not d or not d.sub or seen[current] then break end
+                    if not d or not d.default or type(d.default) ~= "table"
+                        or not d.default.type or not ms.registry._defs[d.default.type]
+                        or seen[current] then break end
                     seen[current] = true
-                    current = d.sub
+                    current = d.default.type
                 end
                 local rootDef = ms.registry._defs[current]
                 if rootDef and rootDef.shared then return rootDef.shared end
@@ -3180,12 +3185,20 @@
                     return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
                 end
 
+                -- Count modifiers for a resolved bind (most-specific-wins ordering)
+                local function modCount(c)
+                    if not c or not c.mods then return 0 end
+                    local n = 0; for _ in ipairs(c.mods) do n = n + 1 end; return n
+                end
+
                 local conflicted = {}
 
+                -- Single conflict-detection pass: all binds go through the same
+                -- key-conflict path (derived binds resolve via effectiveBind).
                 local rootUsed = {}
                 for _, id in ipairs(ms.registry._defList) do
                     local def = ms.registry._defs[id]
-                    if not def or def.sub then goto c1 end
+                    if not def then goto c1 end
                     local enabled = ms.binds[id]; if enabled == nil then enabled = def.enabled end
                     if not enabled then goto c1 end
                     local key = bindKey(ms.effectiveBind(id))
@@ -3206,32 +3219,19 @@
                     ::c1::
                 end
 
-                local modUsed = {}
+                -- Registration: sort most-mods-first so more-specific binds
+                -- are registered before less-specific ones (first-match-wins).
+                local sortedIds = {}
                 for _, id in ipairs(ms.registry._defList) do
-                    local def = ms.registry._defs[id]
-                    if not def or not def.sub then goto c2 end
-                    local mod = ms.getMod(id)
-                    if not mod then goto c2 end
-                    local parent = def.sub
-                    modUsed[parent] = modUsed[parent] or {}
-                    if modUsed[parent][mod] then
-                        local other = modUsed[parent][mod]
-                        conflicted[id] = true; conflicted[other] = true
-                        local l1 = ms.registry._defs[id].label
-                        local l2 = ms.registry._defs[other].label
-                        local lp = (ms.registry._defs[parent] and ms.registry._defs[parent].label) or parent
-                        hs.timer.doAfter(0, function()
-                            ms.alert("Modifier conflict: \"" .. l1 .. "\" and \"" .. l2
-                                .. "\" share modifier \"" .. mod .. "\" under " .. lp
-                                .. ".\nBoth disabled — resolve via Settings › Modifiers.", 10)
-                        end)
-                    else
-                        modUsed[parent][mod] = id
-                    end
-                    ::c2::
+                    sortedIds[#sortedIds + 1] = id
                 end
+                table.sort(sortedIds, function(a, b)
+                    local ca = modCount(ms.effectiveBind(a))
+                    local cb = modCount(ms.effectiveBind(b))
+                    return ca > cb
+                end)
 
-                for _, id in ipairs(ms.registry._defList) do
+                for _, id in ipairs(sortedIds) do
                     if conflicted[id] then goto continue end
                     local fn  = ms.bind._wires[id]
                     local def = ms.registry._defs[id]
@@ -3240,43 +3240,38 @@
                     local group    = ms.bind.group(id)
                     local cooldown = ms.cooldowns[id] or def.cooldown or 1000
 
-                    if def.sub then
-                        -- sub-binds no longer fire independent keybinds
-                    else
-                        local enabled = ms.binds[id]
-                        if enabled == nil then enabled = def.enabled end
-                        if not enabled then goto continue end
-                        local c = ms.effectiveBind(id)
-                        if not c then goto continue end
-                        local function firedFn()
-                            if ms.running[group] then return end
-                            ms.running[group] = hs.timer.doAfter(cooldown / 1000, function()
-                                ms.running[group] = nil
-                            end)
-                            ms._activeSub = nil  -- clear sub-item state before root bind fires
-                            if ms.dev then
-                                local _trig = (function()
-                                    if c.type == "mouse" then return "M" .. c.button end
-                                    if c.type == "scroll" then return "S:" .. (c.direction or "?") end
-                                    if c.type == "gamepad" then return "G:" .. (c.button or "?") end
-                                    local _p = {}
-                                    for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
-                                    _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
-                                end)()
-                                pcall(ms.dev._onMacroFire, id, def.label, nil, nil, _trig)
-                            end
-                            ms._pendingLabel = def.label
-                            fn()
+                    local enabled = ms.binds[id]
+                    if enabled == nil then enabled = def.enabled end
+                    if not enabled then goto continue end
+                    local c = ms.effectiveBind(id)
+                    if not c then goto continue end
+                    local function firedFn()
+                        if ms.running[group] then return end
+                        ms.running[group] = hs.timer.doAfter(cooldown / 1000, function()
+                            ms.running[group] = nil
+                        end)
+                        if ms.dev then
+                            local _trig = (function()
+                                if c.type == "mouse" then return "M" .. c.button end
+                                if c.type == "scroll" then return "S:" .. (c.direction or "?") end
+                                if c.type == "gamepad" then return "G:" .. (c.button or "?") end
+                                local _p = {}
+                                for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
+                                _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
+                            end)()
+                            pcall(ms.dev._onMacroFire, id, def.label, nil, nil, _trig)
                         end
-                        if c.type == "mouse" then
-                            ms.mouse(c.button, false, firedFn)
-                        elseif c.type == "key" then
-                            ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
-                        elseif c.type == "scroll" then
-                            ms.bindHandles[id] = ms.scrollBind(c.direction, firedFn)
-                        elseif c.type == "gamepad" then
-                            ms.bindHandles[id] = ms.gamepadBind(c.button, firedFn)
-                        end
+                        ms._pendingLabel = def.label
+                        fn()
+                    end
+                    if c.type == "mouse" then
+                        ms.mouse(c.button, false, firedFn)
+                    elseif c.type == "key" then
+                        ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
+                    elseif c.type == "scroll" then
+                        ms.bindHandles[id] = ms.scrollBind(c.direction, firedFn)
+                    elseif c.type == "gamepad" then
+                        ms.bindHandles[id] = ms.gamepadBind(c.button, firedFn)
                     end
 
                     ::continue::
@@ -3374,20 +3369,6 @@
                 return nil
             end
 
-            ms.bind.siblingModConflict = function(id, modKey)
-                local def = ms.registry._defs[id]
-                if not def or not def.sub or not modKey then return nil end
-                for _, sibId in ipairs(ms.registry._defList) do
-                    if sibId ~= id then
-                        local sibDef = ms.registry._defs[sibId]
-                        if sibDef and sibDef.sub == def.sub and ms.getMod(sibId) == modKey then
-                            return sibId
-                        end
-                    end
-                end
-                return nil
-            end
-
             local _tpModMap = {shift=56, ctrl=59, alt=58, cmd=55}
 
             if not ms._trackpadLeftListener then
@@ -3454,49 +3435,6 @@
                     end
                     return true
                 end)
-            end
-
-            ms.getMod = function(id)
-                if ms.modConfig[id] ~= nil then return ms.modConfig[id] end
-                local def = ms.registry._defs[id]
-                return def and def.mod or nil
-            end
-
-            ms.modHeld = function(id)
-                local key = ms.getMod(id)
-                if not key then
-                    if ms.dev and ms.dev.trace then
-                        ms.dev.step("modHeld(" .. tostring(id) .. ") → false")
-                    end
-                    return false
-                end
-                local result = ms.keystate(key)
-                if ms.dev and ms.dev.trace then
-                    ms.dev.step("modHeld(" .. tostring(id) .. ") → " .. tostring(result))
-                end
-                return result
-            end
-
-            ms.isSub = function(id)
-                if ms._activeSub == id or (not ms._activeSub and ms.modHeld(id)) then
-                    ms._activeSub = nil
-                    if ms.dev then
-                        local def = ms.registry._defs[id]
-                        if def and def.sub then
-                            local pd  = ms.registry._defs[def.sub]
-                            pcall(ms.dev._onMacroFire, id, def.label,
-                                def.sub, pd and pd.label, ms.getMod(id) or "")
-                        end
-                        if ms.dev.trace then
-                            ms.dev.step("isSub(" .. tostring(id) .. ") → true")
-                        end
-                    end
-                    return true
-                end
-                if ms.dev and ms.dev.trace then
-                    ms.dev.step("isSub(" .. tostring(id) .. ") → false")
-                end
-                return false
             end
         -- END 9. Bind System & Settings Panel --
 

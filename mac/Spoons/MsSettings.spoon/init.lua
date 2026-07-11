@@ -198,14 +198,9 @@
                     end
                     if entry.bind then
                         local def = ms.registry._defs and ms.registry._defs[id]
-                        if def and not def.sub then
+                        if def and not (def.default and def.default.type) then
                             ms.bindConfig[id] = entry.bind
-                        else
-                            ms.subBinds[id] = entry.bind
                         end
-                    end
-                    if entry.mod ~= nil then
-                        ms.modConfig[id] = entry.mod
                     end
                     if entry.cooldown ~= nil then
                         local n = tonumber(entry.cooldown)
@@ -384,14 +379,6 @@
                     end
                 end
             end
-            for id, key in pairs(ms.modConfig or {}) do
-                data.macros[id] = data.macros[id] or {}
-                data.macros[id].mod = key
-            end
-            for id, cfg in pairs(ms.subBinds or {}) do
-                data.macros[id] = data.macros[id] or {}
-                data.macros[id].bind = cfg
-            end
             for id, cooldown in pairs(ms.cooldowns or {}) do
                 data.macros[id] = data.macros[id] or {}
                 data.macros[id].cooldown = cooldown
@@ -521,8 +508,6 @@
                 return false
             end
             ms.bindConfig = {}
-            ms.subBinds   = {}
-            ms.modConfig  = {}
             ms.cooldowns  = {}
             ms._applySettings(data)
             for key, def in pairs(ms._userSettingIndex) do
@@ -578,7 +563,7 @@
             end
             for _, id in ipairs(ms.registry._defList) do
                 local def = ms.registry._defs[id]
-                if def and not def.sub and ms.binds[id] == nil then
+                if def and not (def.default and def.default.type) and ms.binds[id] == nil then
                     ms.binds[id] = def.enabled
                 end
             end
@@ -1014,7 +999,7 @@
             end
             for _, id in ipairs(ms.registry._defList or {}) do
                 local def = ms.registry._defs[id]
-                if def and not def.sub then
+                if def and not (def.default and def.default.type) then
                     data.macros[id] = data.macros[id] or {}
                     if data.macros[id].enabled == nil then
                         data.macros[id].enabled = def.enabled
@@ -3005,7 +2990,38 @@
                 return ms.trackpadBindOverrides[id]
             end
             local def = ms.registry._defs and ms.registry._defs[id]
-            return ms.bindConfig[id] or (def and def.default)
+            local raw = ms.bindConfig[id] or (def and def.default)
+            -- Resolve derived triggers: default.type = <parentBindID> means
+            -- this bind's trigger is the parent's key + the child's mods.
+            if raw and type(raw) == "table" and raw.type and ms.registry._defs[raw.type] then
+                local visited = {}
+                local current = raw
+                while current and type(current) == "table" and current.type
+                    and ms.registry._defs[current.type] and not visited[current.type] do
+                    visited[current.type] = true
+                    local parentDef = ms.registry._defs[current.type]
+                    local parentBind = ms.bindConfig[current.type] or (parentDef and parentDef.default)
+                    if parentBind and type(parentBind) == "table" and parentBind.type
+                        and not ms.registry._defs[parentBind.type] then
+                        -- Parent resolved to an actual device trigger; merge mods.
+                        local mergedMods = {}
+                        for _, m in ipairs(parentBind.mods or {}) do mergedMods[#mergedMods+1] = m end
+                        for _, m in ipairs(current.mods or {}) do
+                            local dup = false
+                            for _, existing in ipairs(mergedMods) do
+                                if existing == m then dup = true; break end
+                            end
+                            if not dup then mergedMods[#mergedMods+1] = m end
+                        end
+                        return { type = parentBind.type, key = parentBind.key,
+                                 button = parentBind.button, direction = parentBind.direction,
+                                 mods = mergedMods }
+                    end
+                    current = parentBind
+                end
+                -- Cycle or missing parent — fall through to return raw as-is
+            end
+            return raw
         end
     -- END ms.showGuardian --
 
@@ -3188,7 +3204,7 @@
                 local mainBindDefs, optionalBindDefs = {}, {}
                 for _, id in ipairs(ms.registry._defList or {}) do
                     local def = ms.registry._defs[id]
-                    if def and not def.sub then
+                    if def and not (def.default and def.default.type) then
                         local entry = {
                             id    = id,
                             label = def.label,
@@ -3220,32 +3236,6 @@
 
             local function currentBindStr(id)
                 return bindStr(ms.effectiveBind(id))
-            end
-
-            local function getSubItems(parentId, depth)
-                depth = depth or 0
-                local result = {}
-                for _, id in ipairs(ms.registry._defList or {}) do
-                    local def = ms.registry._defs[id]
-                    if def and def.sub == parentId then
-                        table.insert(result, {
-                            item  = {
-                                id    = id,
-                                label = def.label,
-                                mod   = def.mod,
-                            },
-                            depth = depth,
-                        })
-                        for _, child in ipairs(getSubItems(id, depth + 1)) do
-                            table.insert(result, child)
-                        end
-                    end
-                end
-                return result
-            end
-
-            local function indent(depth)
-                return string.rep("    ", depth)
             end
         -- END Shared helpers --
 
@@ -3347,185 +3337,6 @@
                 end
             end
 
-            local function makeModRebindFn(item, parentLabel)
-                return function()
-                    local cur = ms.getMod(item.id)
-                    local curDisplay = cur or "unset"
-                    ms.alert("Rebinding modifier for:\n" .. parentLabel .. " › " .. item.label
-                        .. "\nCurrent: " .. curDisplay
-                        .. "\nPress a key, or Backspace to clear.\nEscape to cancel.", 15)
-                    local capture
-                    local cancelTimer
-                    capture = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(event)
-                        capture:stop(); capture = nil; cancelTimer:stop()
-                        local keyCode = event:getKeyCode()
-                        local flags = event:getFlags()
-                        if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then ms.alert("Rebind cancelled.", 2); return true end
-                        if keyCode == 51 then
-                            ms.playSlot("interact")
-                            ms.ui.modal({
-                                title   = "Clear Modifier",
-                                msg     = "Clear modifier for \"" .. item.label .. "\"?",
-                                confirm = "Clear",
-                                cancel  = "Cancel",
-                            }, function(r)
-                                if r.confirmed then
-                                    ms.modConfig[item.id] = ""
-                                    ms.saveSettings()
-                                    ms.playSlot("reset")
-                                    hs.timer.doAfter(0.2, function()
-                                        ms.alert(item.label .. " modifier cleared.", 3, true)
-                                    end)
-                                else
-                                    ms.alert("Rebind cancelled.", 2)
-                                end
-                            end)
-                            return true
-                        end
-                        local keyStr = hs.keycodes.map[keyCode]
-                        if keyStr then
-                            local conflictId = ms.bind.siblingModConflict(item.id, keyStr)
-                            if conflictId then
-                                ms.playSlot("alert")
-                                local cLabel = (ms.registry._defs[conflictId] and ms.registry._defs[conflictId].label) or conflictId
-                                ms.alert("Modifier Conflict: \"" .. keyStr .. "\" is already used by \"" .. cLabel .. "\". Try a different key.", 4)
-                                return true
-                            end
-                            ms.playSlot("interact")
-                            ms.ui.modal({
-                                title   = "Confirm Modifier",
-                                msg     = "Set modifier for \"" .. item.label .. "\" to:  " .. keyStr,
-                                confirm = "Confirm",
-                                cancel  = "Cancel",
-                            }, function(r)
-                                if r.confirmed then
-                                    ms.modConfig[item.id] = keyStr
-                                    ms.saveSettings()
-                                    ms.playSlot("update")
-                                    hs.timer.doAfter(0.2, function()
-                                        ms.alert(item.label .. " modifier set to: " .. keyStr, 3, true)
-                                    end)
-                                else
-                                    ms.alert("Rebind cancelled.", 2)
-                                end
-                            end)
-                        else
-                            ms.alert("Could not read key. Try again.", 2)
-                        end
-                        return true
-                    end)
-                    capture:start()
-                    cancelTimer = hs.timer.doAfter(15, function()
-                        if capture then capture:stop(); capture = nil; ms.alert("Rebind timed out.", 2) end
-                    end)
-                end
-            end
-
-            local function makeSubBindFn(item, parentLabel)
-                return function()
-
-                    local cur = ms.subBinds and ms.subBinds[item.id]
-                    local curDisplay = cur and bindStr(cur) or "unset"
-                    ms.alert("Rebinding: " .. parentLabel .. " › " .. item.label
-                        .. "\nCurrent: " .. curDisplay
-                        .. "\nPress your new key or mouse button.\nBackspace to clear. Escape to cancel.", 15)
-                    local capture
-                    local cancelTimer
-                    capture = hs.eventtap.new({
-                        hs.eventtap.event.types.keyDown,
-                        hs.eventtap.event.types.leftMouseDown,
-                        hs.eventtap.event.types.rightMouseDown,
-                        hs.eventtap.event.types.otherMouseDown,
-                    }, function(event)
-                        capture:stop(); capture = nil; cancelTimer:stop()
-                        local t = event:getType()
-                        if t == hs.eventtap.event.types.keyDown and event:getKeyCode() == 53 then
-                            ms.alert("Rebind cancelled.", 2); return true
-                        end
-                        if t == hs.eventtap.event.types.keyDown and event:getKeyCode() == 51 then
-                            ms.playSlot("interact")
-                            ms.ui.modal({
-                                title   = "Clear Bind",
-                                msg     = "Clear independent bind for \"" .. item.label .. "\"?",
-                                confirm = "Clear",
-                                cancel  = "Cancel",
-                            }, function(r)
-                                if r.confirmed then
-                                    ms.subBinds[item.id] = nil
-                                    ms.saveSettings()
-                                    ms.bind.rebind()
-                                    ms.playSlot("reset")
-                                    hs.timer.doAfter(0.2, function()
-                                        ms.alert(item.label .. " independent bind cleared.", 3, true)
-                                    end)
-                                else
-                                    ms.alert("Rebind cancelled.", 2)
-                                end
-                            end)
-                            return true
-                        end
-
-                        local parsed, displayStr
-                        if t == hs.eventtap.event.types.keyDown then
-                            local keyCode = event:getKeyCode()
-                            local flags   = event:getFlags()
-                            local mods = {}
-                            if flags.cmd   then table.insert(mods, "cmd")   end
-                            if flags.alt   then table.insert(mods, "alt")   end
-                            if flags.ctrl  then table.insert(mods, "ctrl")  end
-                            if flags.shift then table.insert(mods, "shift") end
-                            local keyStr = hs.keycodes.map[keyCode]
-                            if keyStr then
-                                parsed = {
-                                    type = "key",
-                                    mods = mods,
-                                    key  = keyStr,
-                                }
-                                local parts = {}
-                                for _, m in ipairs(mods) do table.insert(parts, m) end
-                                table.insert(parts, keyStr)
-                                displayStr = table.concat(parts, "+")
-                            end
-                        else
-                            local btn
-                            if     t == hs.eventtap.event.types.leftMouseDown  then btn = 0
-                            elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
-                            else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
-                            parsed     = {type="mouse", button=btn}
-                            displayStr = "Mouse " .. btn
-                        end
-
-                        if parsed then
-                            ms.playSlot("interact")
-                            ms.ui.modal({
-                                title   = "Confirm Sub-item Bind",
-                                msg     = "Set \"" .. parentLabel .. " › " .. item.label .. "\" to:  " .. displayStr,
-                                confirm = "Confirm",
-                                cancel  = "Cancel",
-                            }, function(r)
-                                if r.confirmed then
-                                    ms.subBinds[item.id] = parsed
-                                    ms.saveSettings()
-                                    ms.bind.rebind()
-                                    ms.playSlot("update")
-                                    hs.timer.doAfter(0.2, function()
-                                        ms.alert(item.label .. " bound to: " .. displayStr, 3, true)
-                                    end)
-                                else
-                                    ms.alert("Rebind cancelled.", 2)
-                                end
-                            end)
-                        else
-                            ms.alert("Could not read input. Try again.", 2)
-                        end
-                        return true
-                    end)
-                    capture:start()
-                    cancelTimer = hs.timer.doAfter(15, function()
-                        if capture then capture:stop(); capture = nil; ms.alert("Rebind timed out.", 2) end
-                    end)
-                end
-            end
         -- END Rebind capture --
 
         -- Section builder --
@@ -3545,20 +3356,6 @@
                             ms.alert(bind.label .. ": " .. (ms.binds[bind.id] and "ON" or "OFF"), 2, true)
                         end
                     })
-                    local subs = getSubItems(bind.id)
-                    if #subs > 0 then
-                        for _, entry in ipairs(subs) do
-                            local item = entry.item
-                            local mod  = ms.getMod(item.id)
-                            local modDisplay = mod and ("( " .. mod .. " )") or "( unset )"
-                            local subBindCfg = ms.subBinds and ms.subBinds[item.id]
-                            local bindDisplay = subBindCfg and bindStr(subBindCfg) or modDisplay
-                            table.insert(section, {
-                                title    = indent(entry.depth + 1) .. "↳ " .. item.label .. "  " .. bindDisplay,
-                                disabled = true
-                            })
-                        end
-                    end
                     table.insert(rebindSub, { title = "Rebind: " .. bind.label, fn = makeRebindFn(bind) })
                     table.insert(rebindSub, {
                         title = "Set Cooldown: " .. bind.label,
@@ -3646,53 +3443,6 @@
                 return section
             end
         -- END Section builder --
-
-        -- Modifiers submenu --
-            local function buildModifiersSubmenu()
-                local sub = {}
-                local allDefs = {}
-                for _, d in ipairs(mainBindDefs)     do table.insert(allDefs, d) end
-                for _, d in ipairs(optionalBindDefs) do table.insert(allDefs, d) end
-
-                for _, bind in ipairs(allDefs) do
-                    local subs = getSubItems(bind.id)
-                    if #subs > 0 then
-                        for _, entry in ipairs(subs) do
-                            local item = entry.item
-                            local mod  = ms.getMod(item.id)
-                            local modDisplay = mod and ("( " .. mod .. " )") or "( unset )"
-                            table.insert(sub, {
-                                title = indent(entry.depth) .. bind.label .. " › " .. item.label .. "  " .. modDisplay,
-                                fn    = makeModRebindFn(item, bind.label)
-                            })
-                        end
-                    end
-                end
-
-                table.insert(sub, { title = "-" })
-                table.insert(sub, { title = "Reset All Modifiers to Default", fn = function()
-                    ms.playSlot("interact")
-                    ms.ui.modal({
-                        title   = "Reset Modifiers",
-                        msg     = "Reset all modifiers to their default values?",
-                        confirm = "Reset",
-                        cancel  = "Cancel",
-                    }, function(r)
-                        if r.confirmed then
-                            ms.modConfig = {}
-                            ms.saveSettings()
-                            ms.playSlot("reset")
-                            hs.timer.doAfter(0.2, function()
-                                ms.alert("All modifiers reset to default.", 3, true)
-                                ms.ui.refresh()
-                            end)
-                        end
-                    end)
-                end })
-
-                return sub
-            end
-        -- END Modifiers submenu --
 
 
         -- System submenu --
@@ -4194,7 +3944,7 @@
                 { title = "-" },
 
                 { title = "-" },
-                { title = "Modifiers",         menu = buildModifiersSubmenu() },
+
             }
         -- END System submenu --
 

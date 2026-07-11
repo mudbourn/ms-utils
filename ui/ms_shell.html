@@ -1040,6 +1040,7 @@
         <div class="wtabs">
             <button class="wtab active" data-wtab="window" onmouseenter="playSlot('hover')" onclick="switchWindowTab('window')">Data</button>
             <button class="wtab" data-wtab="element" onmouseenter="playSlot('hover')" onclick="switchWindowTab('element')">Logs</button>
+            <button class="wtab wtab-inspect" id="inspectToggle" onmouseenter="playSlot('hover')" onclick="toggleInspect()" style="flex:0 0 auto;padding:7px 10px;font-size:11px;font-weight:600;color:var(--text3);border-bottom:2px solid transparent;">Inspect</button>
         </div>
 
         <!-- Window tab (all live data) -->
@@ -3067,6 +3068,19 @@ function createLogPanel(config) {
             }
             window.switchWindowTab = switchWindowTab;
 
+            // ── Inspect toggle ─────────────────────────────────────────────
+            let inspectOn = false;
+            function toggleInspect() {
+                inspectOn = !inspectOn;
+                const btn = document.getElementById('inspectToggle');
+                if (btn) {
+                    btn.style.color = inspectOn ? 'var(--accent)' : 'var(--text3)';
+                    btn.style.borderBottomColor = inspectOn ? 'var(--accent)' : 'transparent';
+                }
+                lp.sendToHost({ action: 'setInspect', enabled: inspectOn });
+            }
+            window.toggleInspect = toggleInspect;
+
             // ── Create LogPanel ─────────────────────────────────────────────
             const _panel = document.querySelector('.panel-window');
             const lp = createLogPanel({
@@ -3138,6 +3152,14 @@ function createLogPanel(config) {
                         else if (action === "updateElement" && body) { if (!lp.isPaused()) updateElement(body); }
                         else if (action === "updateMousePos" && body) { if (!lp.isPaused()) updateMousePos(body); }
                         else if (action === "loadHistory" && body) loadHistory(body);
+                        else if (action === "updateInspect" && body) {
+                            inspectOn = !!body.enabled;
+                            const btn = document.getElementById('inspectToggle');
+                            if (btn) {
+                                btn.style.color = inspectOn ? 'var(--accent)' : 'var(--text3)';
+                                btn.style.borderBottomColor = inspectOn ? 'var(--accent)' : 'transparent';
+                            }
+                        }
                     });
                 }
                 if (window.shellPost) {
@@ -4113,6 +4135,37 @@ function createLogPanel(config) {
                         );
                     }
                 }
+
+                // Octane Mode
+                if (hasTrackpad || hasSocd) body.appendChild(divider());
+                const octane = S.octaneMode === true;
+                body.appendChild(
+                    row(
+                        "Octane Mode",
+                        "Low-overhead mode: disables logging, animations, pollers, and sounds while macros run as normal",
+                        toggle(octane, (e) => {
+                            sendToHost({
+                                action: "setOctaneMode",
+                                value: e.target.checked,
+                            });
+                        }),
+                    ),
+                );
+
+                // Octane sound mute sub-toggle
+                const octaneMute = S.octaneMuteSounds === true;
+                body.appendChild(
+                    row(
+                        "Octane: mute sounds",
+                        "Silence all UI sounds when Octane Mode is active",
+                        toggle(octaneMute, (e) => {
+                            sendToHost({
+                                action: "setOctaneMuteSounds",
+                                value: e.target.checked,
+                            });
+                        }),
+                    ),
+                );
             }
 
             // ── renderUserItem — shared renderer for user-defined items ─────────────
@@ -4871,36 +4924,6 @@ function createLogPanel(config) {
                         toggle(cacheCleaner, (e) => {
                             sendToHost({
                                 action: "setCacheCleanerEnabled",
-                                value: e.target.checked,
-                            });
-                        }),
-                    ),
-                );
-
-                // Octane Mode toggle
-                const octane = S.octaneMode === true;
-                body.appendChild(
-                    row(
-                        "Octane Mode",
-                        "Low-overhead mode: disables logging, animations, pollers, and sounds while macros run as normal",
-                        toggle(octane, (e) => {
-                            sendToHost({
-                                action: "setOctaneMode",
-                                value: e.target.checked,
-                            });
-                        }),
-                    ),
-                );
-
-                // Octane sound mute sub-toggle
-                const octaneMute = S.octaneMuteSounds === true;
-                body.appendChild(
-                    row(
-                        "Octane: mute sounds",
-                        "Silence all UI sounds when Octane Mode is active",
-                        toggle(octaneMute, (e) => {
-                            sendToHost({
-                                action: "setOctaneMuteSounds",
                                 value: e.target.checked,
                             });
                         }),

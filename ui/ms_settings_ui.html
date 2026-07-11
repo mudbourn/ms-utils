@@ -1963,8 +1963,8 @@
                 return wrap;
             }
 
-            // ── buildTools — input and motion settings ─────────────────────────
-            function buildTools(body) {
+            // ── buildAccessibility — input and motion settings ─────────────────────
+            function buildAccessibility(body) {
                 const hidden = S.hiddenFeatures || {};
                 const hasTrackpad = !hidden.trackpad;
                 const hasSocd = !hidden.socd;
@@ -2064,6 +2064,37 @@
                         );
                     }
                 }
+
+                // Octane Mode
+                if (hasTrackpad || hasSocd) body.appendChild(divider());
+                const octane = S.octaneMode === true;
+                body.appendChild(
+                    row(
+                        "Octane Mode",
+                        "Low-overhead mode: disables logging, animations, pollers, and sounds while macros run as normal",
+                        toggle(octane, (e) => {
+                            sendToHost({
+                                action: "setOctaneMode",
+                                value: e.target.checked,
+                            });
+                        }),
+                    ),
+                );
+
+                // Octane sound mute sub-toggle
+                const octaneMute = S.octaneMuteSounds === true;
+                body.appendChild(
+                    row(
+                        "Octane: mute sounds",
+                        "Silence all UI sounds when Octane Mode is active",
+                        toggle(octaneMute, (e) => {
+                            sendToHost({
+                                action: "setOctaneMuteSounds",
+                                value: e.target.checked,
+                            });
+                        }),
+                    ),
+                );
             }
 
             // ── renderUserItem — shared renderer for user-defined items ─────────────
@@ -2212,120 +2243,7 @@
 
             // ── buildSettings — system + user-defined settings ─────────────────
             function buildSettings(body) {
-                const hidden = S.hiddenFeatures || {};
-
-                // Camera Sensitivity (moved from Tools)
-                if (!hidden.sensitivity) {
-                    body.appendChild(
-                        buildSlider(
-                            "Camera Sensitivity",
-                            null,
-                            0.1,
-                            4,
-                            0.05,
-                            null,
-                            S.sensitivity ?? 1.5,
-                            (v) =>
-                                sendToHost({
-                                    action: "setSensitivity",
-                                    value: v,
-                                }),
-                            [
-                                {
-                                    icon: "",
-                                    label: "Reset to default",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "resetSetting",
-                                            key: "sensitivity",
-                                        }),
-                                },
-                            ],
-                        ),
-                    );
-                }
-
-                // Independent Binds (moved from Tools)
-                if (!hidden.independentBinds) {
-                    if (!hidden.sensitivity) body.appendChild(divider());
-                    body.appendChild(
-                        row(
-                            "Independent Binds",
-                            null,
-                            toggle(S.independentBindsEnabled ?? false, (e) =>
-                                sendToHost({
-                                    action: "setIndependentBinds",
-                                    value: e.target.checked,
-                                }),
-                            ),
-                            "",
-                            [
-                                {
-                                    icon: "",
-                                    label: "Reset to default",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "resetSetting",
-                                            key: "independentBinds",
-                                        }),
-                                },
-                            ],
-                        ),
-                    );
-                }
-
-                // Custom theme toggle (moved from Developer)
-                if (!hidden.independentBinds) body.appendChild(divider());
-                const customTheme = S.customThemeEnabled !== false;
-                body.appendChild(
-                    row(
-                        "Custom theme",
-                        "Load ms_theme.json colors and font",
-                        h(
-                            "button",
-                            {
-                                cls:
-                                    "btn-macro " +
-                                    (customTheme ? "btn-enable" : "btn-disable"),
-                                onmouseenter: () => playSlot("hover"),
-                                onclick: () => {
-                                    sendToHost({
-                                        action: "setCustomTheme",
-                                        value: !customTheme,
-                                    });
-                                },
-                            },
-                            customTheme ? "ON" : "OFF",
-                        ),
-                    ),
-                );
-
-                // User-defined settings targeting the Settings section
-                const items = S.userSettings || [];
-                const hasSystem =
-                    !hidden.sensitivity || !hidden.independentBinds;
-                if (items.length > 0) {
-                    if (hasSystem) body.appendChild(divider());
-                    for (const item of items) {
-                        renderUserItem(body, item);
-                    }
-                } else if (!hasSystem) {
-                    body.appendChild(groupLabel("No settings defined."));
-                    const r = h("div", { cls: "row" });
-                    const lbl = h("div", { cls: "row-label" });
-                    lbl.appendChild(
-                        h(
-                            "small",
-                            {},
-                            "Use ms.settings.define() in your macro pack.",
-                        ),
-                    );
-                    r.appendChild(lbl);
-                    body.appendChild(r);
-                }
-
-                // Save / Reset as Default (moved from Tools)
-                body.appendChild(divider());
+                // Save / Reset as Default — always first
                 body.appendChild(
                     btnRow(
                         actionBtn("Save as Default", "", async () => {
@@ -2348,6 +2266,29 @@
                         }),
                     ),
                 );
+
+                // User-defined settings targeting the Settings section
+                const items = S.userSettings || [];
+                if (items.length > 0) {
+                    body.appendChild(divider());
+                    for (const item of items) {
+                        renderUserItem(body, item);
+                    }
+                } else {
+                    body.appendChild(divider());
+                    body.appendChild(groupLabel("No settings defined."));
+                    const r = h("div", { cls: "row" });
+                    const lbl = h("div", { cls: "row-label" });
+                    lbl.appendChild(
+                        h(
+                            "small",
+                            {},
+                            "Use ms.settings.define() in your macro pack.",
+                        ),
+                    );
+                    r.appendChild(lbl);
+                    body.appendChild(r);
+                }
             }
 
             // ── buildCalibration — user-injected calibration settings ──────────
@@ -3182,7 +3123,7 @@
                         section("calibration", "Calibration", buildCalibration),
                     );
                 }
-                scroll.appendChild(section("tools", "Tools", buildTools));
+                scroll.appendChild(section("accessibility", "Accessibility", buildAccessibility));
                 for (const menu of S.userMenus || []) {
                     const title = menu.icon
                         ? menu.icon + " " + menu.title
