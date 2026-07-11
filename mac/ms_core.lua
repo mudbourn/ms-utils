@@ -5463,6 +5463,18 @@
                         ms.alert("Warning: ms_macros.lua did not declare ms.macroMeta.", 6)
                     end)
                 end
+                -- Re-push metadata to the loading screen now that macroMeta is
+                -- populated.  _startBootChoreography fires on the DOM ready
+                -- handshake (before ms_macros.lua loads), so its macroMeta
+                -- guards are always nil on cold start.
+                if _lWebView and ms.macroMeta then
+                    if ms.macroMeta.name then
+                        pcall(function() _lWebView:evaluateJavaScript("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')") end)
+                    end
+                    if ms.macroMeta.author and ms.macroMeta.author ~= "" then
+                        pcall(function() _lWebView:evaluateJavaScript("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')") end)
+                    end
+                end
                 if not next(ms.registry._defs) then
                     error("ms_macros.lua: no ms.bind.define calls found — file may be malformed.")
                 end
