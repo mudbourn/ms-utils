@@ -408,6 +408,7 @@ window.createLogPanel = function createLogPanel(config) {
         let _clampTimer = null;
         const MIN_W = 400, MIN_H = 300;
         window.addEventListener("resize", function () {
+            if (window.__msResizing) return;  // Lua eventtap handles clamping
             if (_clampTimer) clearTimeout(_clampTimer);
             _clampTimer = setTimeout(function () {
                 _clampTimer = null;
@@ -417,6 +418,48 @@ window.createLogPanel = function createLogPanel(config) {
                 }
             }, 50);
         });
+    })();
+
+    // ── Resize grab zones (popout windows) ────────────────────────────
+    // Adds edge/corner grab zones for drag-to-resize on popout windows.
+    // The zones are injected into <body> outside #popout-root.
+    (function () {
+        var zones = [
+            { cls: "resize-n", edge: "n", css: "top:0;left:6px;right:6px;height:4px;cursor:ns-resize;" },
+            { cls: "resize-s", edge: "s", css: "bottom:0;left:6px;right:6px;height:4px;cursor:ns-resize;" },
+            { cls: "resize-e", edge: "e", css: "right:0;top:6px;bottom:6px;width:4px;cursor:ew-resize;" },
+            { cls: "resize-w", edge: "w", css: "left:0;top:6px;bottom:6px;width:4px;cursor:ew-resize;" },
+            { cls: "resize-ne", edge: "ne", css: "top:0;right:0;width:8px;height:8px;cursor:nesw-resize;" },
+            { cls: "resize-nw", edge: "nw", css: "top:0;left:0;width:8px;height:8px;cursor:nwse-resize;" },
+            { cls: "resize-se", edge: "se", css: "bottom:0;right:0;width:8px;height:8px;cursor:nwse-resize;" },
+            { cls: "resize-sw", edge: "sw", css: "bottom:0;left:0;width:8px;height:8px;cursor:nesw-resize;" },
+        ];
+        zones.forEach(function(z) {
+            var el = document.createElement("div");
+            el.className = "resize-zone " + z.cls;
+            el.setAttribute("data-edge", z.edge);
+            el.style.cssText = "position:fixed;z-index:9999;background:transparent;" + z.css;
+            el.addEventListener("mousedown", function(e) {
+                if (e.button !== 0) return;
+                window.__msResizing = true;
+                sendToHost({ action: "resizeStart", edge: z.edge });
+                document.body.classList.add("resizing");
+                var onUp = function() {
+                    window.__msResizing = false;
+                    document.body.classList.remove("resizing");
+                    window.removeEventListener("mouseup", onUp);
+                };
+                window.addEventListener("mouseup", onUp);
+            });
+            document.body.appendChild(el);
+        });
+        // Add resizing CSS if not already present
+        if (!document.getElementById("resize-zone-style")) {
+            var style = document.createElement("style");
+            style.id = "resize-zone-style";
+            style.textContent = "body.resizing * { pointer-events: none !important; }";
+            document.head.appendChild(style);
+        }
     })();
 
     // ── Controller ─────────────────────────────────────────────────────

@@ -104,7 +104,7 @@
     local _windowHistory, _windowLast, _windowMaxHistory
     local _pushMouseState
     -- Window Spy engine (event-driven, hang-safe; replaces the 0.4s poller)
-    local _winAppWatcher, _winUiWatcher, _winTick, _winAxPoll
+    local _winAppWatcher, _winUiWatcher, _winMonitor
     local _winDirty, _winMoveN, _winResizeN, _winLastMouse
     local _axTimeoutSet = false
     -- Shell state: which inline panel is showing + a move-driven mouse poller so
@@ -1833,6 +1833,19 @@
         }
     end
 
+    -- Light read: frame + flags only.  Used by the dirty tick (move/resize)
+    -- so drags don't re-query bundleID/role/screen every 150ms.
+    local function _winReadLight(win)
+        if not win then return nil end
+        local f = _winG(function() return win:frame() end)
+        return {
+            frame      = f and { x = math.floor(f.x), y = math.floor(f.y), w = math.floor(f.w), h = math.floor(f.h) } or nil,
+            minimized  = _winG(function() return win:isMinimized() end),
+            fullscreen = _winG(function() return win:isFullscreen() end),
+            visible    = _winG(function() return win:isVisible() end),
+        }
+    end
+
     local function _winPush(fn, payload)
         local ok, j = pcall(hs.json.encode, payload)
         if ok then pcall(function() _pushToPanel(_windowPanel, "window", fn .. "(" .. j .. ")") end) end
@@ -1865,17 +1878,30 @@
     function MsDevTools:_winEngineStop()
         if _winAppWatcher then pcall(function() _winAppWatcher:stop() end); _winAppWatcher = nil end
         if _winUiWatcher  then pcall(function() _winUiWatcher:stop()  end); _winUiWatcher  = nil end
-        if _winTick   then _winTick:stop();   _winTick   = nil end
-        if _winAxPoll then _winAxPoll:stop(); _winAxPoll = nil end
+        if _winMonitor then _winMonitor:stop(); _winMonitor = nil end
     end
 
     function MsDevTools:_winEngineStart()
         self:_winEngineStop()
         _winDirty, _winMoveN, _winResizeN, _winLastMouse = false, 0, 0, nil
         _winElementTab = true  -- engine starts with element tab active
+        local _winLastFullState = nil  -- cached full read for merging light reads
 
-        local function pushState(win)
-            local st = _winRead(win or hs.window.focusedWindow())
+        local function pushState(win, light)
+            local st
+            if light then
+                st = _winReadLight(win or hs.window.focusedWindow())
+                -- Merge light read into the cached full state so the UI
+                -- doesn't blank out app/title/etc during dirty ticks.
+                if st and _winLastFullState then
+                    for k, v in pairs(_winLastFullState) do
+                        if st[k] == nil then st[k] = v end
+                    end
+                end
+            else
+                st = _winRead(win or hs.window.focusedWindow())
+                _winLastFullState = st
+            end
             if st then _winPush("updateCurrentWindow", st) end
             return st
         end
@@ -1936,90 +1962,114 @@
         end)
         pcall(function() _winAppWatcher:start() end)
 
-        -- Throttled tick: collapse accumulated move/resize + refresh live state.
-        _winTick = hs.timer.doEvery(0.15, function()
+        -- Merged tick: coalesce window state + element/mouse into one push.
+        -- Replaces the old _winTick (0.15s) + _winAxPoll (0.2s) pair.
+        _winMonitor = hs.timer.doEvery(0.2, function()
             if not _winStillOpen() then self:_winEngineStop(); return end
             if _G.ms and _G.ms._shellDragging then return end
-            if not _winDirty then return end
-            _winDirty = false
-            local st = pushState()
-            local f = st and st.frame
-            if _winPendingEvent then
-                self:_pushWindowEvent({ type = _winPendingEvent.type, ts = os.date("%H:%M:%S"),
-                    app = _winPendingEvent.app })
-                _winPendingEvent = nil
+
+            local payload = {}
+            local hasData = false
+
+            -- ── Window state (dirty-flag logic) ───────────────────────────
+            if _winDirty then
+                _winDirty = false
+                local st = _winReadLight(hs.window.focusedWindow())
+                if st and _winLastFullState then
+                    for k, v in pairs(_winLastFullState) do
+                        if st[k] == nil then st[k] = v end
+                    end
+                end
+                if st then
+                    payload.window = st
+                    hasData = true
+                end
+                local f = st and st.frame
+                local events = {}
+                if _winPendingEvent then
+                    local entry = { type = _winPendingEvent.type, ts = os.date("%H:%M:%S"),
+                        app = _winPendingEvent.app }
+                    table.insert(_windowHistory, entry)
+                    if #_windowHistory > _windowMaxHistory then table.remove(_windowHistory, 1) end
+                    table.insert(events, entry)
+                    _winPendingEvent = nil
+                end
+                if _winMoveN > 0 then
+                    local entry = { type = "move", ts = os.date("%H:%M:%S"), count = _winMoveN,
+                        x = f and f.x or nil, y = f and f.y or nil }
+                    table.insert(_windowHistory, entry)
+                    if #_windowHistory > _windowMaxHistory then table.remove(_windowHistory, 1) end
+                    table.insert(events, entry)
+                    _winMoveN = 0
+                end
+                if _winResizeN > 0 then
+                    local entry = { type = "resize", ts = os.date("%H:%M:%S"), count = _winResizeN,
+                        w = f and f.w or nil, h = f and f.h or nil }
+                    table.insert(_windowHistory, entry)
+                    if #_windowHistory > _windowMaxHistory then table.remove(_windowHistory, 1) end
+                    table.insert(events, entry)
+                    _winResizeN = 0
+                end
+                if #events > 0 then
+                    payload.events = events
+                    hasData = true
+                end
             end
-            if _winMoveN > 0 then
-                self:_pushWindowEvent({ type = "move", ts = os.date("%H:%M:%S"), count = _winMoveN,
-                    x = f and f.x or nil, y = f and f.y or nil })
-                _winMoveN = 0
+
+            -- ── Element under cursor (AX poll logic) ─────────────────────
+            if _winElementTab and hs.accessibilityState() then
+                local p = hs.mouse.absolutePosition()
+                if not (_winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y) then
+                    _winLastMouse = p
+                    local pixel = _winG(function()
+                        local scr = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
+                        if not scr then return nil end
+                        local snap = scr:snapshot(hs.geometry.rect(p.x, p.y, 1, 1))
+                        if not snap then return nil end
+                        local c = snap:colorAt({ x = 0, y = 0 })
+                        if not c or c.red == nil then return nil end
+                        local r = math.floor((c.red or 0) * 255 + 0.5)
+                        local g = math.floor((c.green or 0) * 255 + 0.5)
+                        local b = math.floor((c.blue or 0) * 255 + 0.5)
+                        return { r = r, g = g, b = b, hex = string.format("#%02X%02X%02X", r, g, b) }
+                    end)
+                    local win = hs.window.focusedWindow()
+                    local wf = win and _winG(function() return win:frame() end)
+                    payload.mouse = {
+                        sx = math.floor(p.x), sy = math.floor(p.y),
+                        wx = wf and math.floor(p.x - wf.x) or nil,
+                        wy = wf and math.floor(p.y - wf.y) or nil,
+                        pixel = pixel,
+                    }
+                    local el = _winG(function() return hs.axuielement.systemElementAtPosition(p.x, p.y) end)
+                    if el then
+                        local function ga(a) return _axStr(_winG(function() return el:attributeValue(a) end)) end
+                        local fr = _winG(function() return el:attributeValue("AXFrame") end)
+                        local frame
+                        if type(fr) == "table" and fr.x then
+                            frame = { x = math.floor(fr.x), y = math.floor(fr.y), w = math.floor(fr.w), h = math.floor(fr.h) }
+                        end
+                        payload.element = {
+                            axPermission    = true,
+                            role            = ga("AXRole"),
+                            roleDescription = ga("AXRoleDescription"),
+                            title           = ga("AXTitle"),
+                            value           = ga("AXValue"),
+                            identifier      = ga("AXIdentifier"),
+                            frame           = frame,
+                        }
+                    end
+                    hasData = true
+                end
             end
-            if _winResizeN > 0 then
-                self:_pushWindowEvent({ type = "resize", ts = os.date("%H:%M:%S"), count = _winResizeN,
-                    w = f and f.w or nil, h = f and f.h or nil })
-                _winResizeN = 0
+
+            if hasData then
+                _winPush("updateAll", payload)
             end
         end)
 
-        -- Element under cursor — the AHK "control under mouse" parity. The single
-        -- riskiest call (elementAtPosition on whatever is under the cursor), so
-        -- it is throttled, only recomputes when the cursor moves, and is fully
-        -- bounded by the global AX timeout.
-        if hs.accessibilityState() then
-            _winAxPoll = hs.timer.doEvery(0.12, function()
-                if not _winStillOpen() then self:_winEngineStop(); return end
-                if _G.ms and _G.ms._shellDragging then return end
-                -- Element + cursor live only on the Element tab. Skip the whole
-                -- read (esp. the heavy systemElementAtPosition) while Window tab
-                -- is up — that is the default view, so this is the common case.
-                if not _winElementTab then return end
-                local p = hs.mouse.absolutePosition()
-                -- Pixel colour refreshes every tick regardless of cursor
-                -- movement — the scene under a stationary cursor can still
-                -- change (game rendering, video, animations, shiftlock).
-                local pixel = _winG(function()
-                    local scr = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
-                    if not scr then return nil end
-                    local snap = scr:snapshot(hs.geometry.rect(p.x, p.y, 1, 1))
-                    if not snap then return nil end
-                    local c = snap:colorAt({ x = 0, y = 0 })
-                    if not c or c.red == nil then return nil end
-                    local r = math.floor((c.red or 0) * 255 + 0.5)
-                    local g = math.floor((c.green or 0) * 255 + 0.5)
-                    local b = math.floor((c.blue or 0) * 255 + 0.5)
-                    return { r = r, g = g, b = b, hex = string.format("#%02X%02X%02X", r, g, b) }
-                end)
-                local win = hs.window.focusedWindow()
-                local wf = win and _winG(function() return win:frame() end)
-                _winPush("updateMousePos", {
-                    sx = math.floor(p.x), sy = math.floor(p.y),
-                    wx = wf and math.floor(p.x - wf.x) or nil,
-                    wy = wf and math.floor(p.y - wf.y) or nil,
-                    pixel = pixel,
-                })
-                -- AX element read is expensive — skip when cursor hasn't moved.
-                if _winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y then return end
-                _winLastMouse = p
-                local el = _winG(function() return hs.axuielement.systemElementAtPosition(p.x, p.y) end)
-                if el then
-                    local function ga(a) return _axStr(_winG(function() return el:attributeValue(a) end)) end
-                    local fr = _winG(function() return el:attributeValue("AXFrame") end)
-                    local frame
-                    if type(fr) == "table" and fr.x then
-                        frame = { x = math.floor(fr.x), y = math.floor(fr.y), w = math.floor(fr.w), h = math.floor(fr.h) }
-                    end
-                    _winPush("updateElement", {
-                        axPermission    = true,
-                        role            = ga("AXRole"),
-                        roleDescription = ga("AXRoleDescription"),
-                        title           = ga("AXTitle"),
-                        value           = ga("AXValue"),
-                        identifier      = ga("AXIdentifier"),
-                        frame           = frame,
-                    })
-                end
-            end)
-        else
+        -- One-shot AX banner when accessibility is off (matches original else branch).
+        if not hs.accessibilityState() then
             _winPush("updateElement", { axPermission = false })
         end
 

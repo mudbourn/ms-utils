@@ -374,6 +374,13 @@
                 else if (p.wx === null) setVal("e-mouse-win", "");
             }
 
+            function updateAll(payload) {
+                if (payload.window) updateCurrentWindow(payload.window);
+                if (payload.element) updateElement(payload.element);
+                if (payload.mouse) updateMousePos(payload.mouse);
+                if (payload.events) payload.events.forEach(function(e) { appendEntry(e); });
+            }
+
             // ── Flag row (last event) ───────────────────────────────────────
             function flagEvent(entry) {
                 if (!entry) return;
@@ -407,12 +414,14 @@
             window.updateCurrentWindow = updateCurrentWindow;
             window.updateElement       = updateElement;
             window.updateMousePos      = updateMousePos;
+            window.updateAll           = updateAll;
 
             // ── Init ────────────────────────────────────────────────────────
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("window", function (action, body) {
                         if (action === "appendEntry" && body) appendEntry(body);
+                        else if (action === "updateAll" && body) updateAll(body);
                         else if (action === "loadHistory" && body) loadHistory(body);
                         else if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
                         else if (action === "updateElement" && body) updateElement(body);

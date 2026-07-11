@@ -30,7 +30,7 @@
 
         /* Layer 2: Reset ──────────────────────────────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-        html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; min-width: 800px; min-height: 500px; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; min-width: 200px; min-height: 150px; }
         body { margin: 0; padding: 0; }
         #shell-root { display: flex; flex-direction: row; width: 100%; height: 100%; background: var(--bg); border-radius: var(--ms-window-radius, 0px); overflow: hidden; }
         button { cursor: pointer; border: none; background: none; color: inherit; font: inherit; }
@@ -78,11 +78,7 @@
             cursor: pointer; transition: background 0.1s, color 0.1s; position: relative;
         }
         .rail-item:hover { background: var(--hover); color: var(--text); }
-        .rail-item.active { background: var(--surface2); color: var(--accent-hi); }
-        .rail-item.active::before {
-            content: ""; position: absolute; left: 0; top: 4px; bottom: 4px;
-            width: 2px; background: var(--accent); border-radius: 1px;
-        }
+        .rail-item.active { background: var(--surface2); color: var(--accent-hi); box-shadow: inset 0 0 0 1px var(--accent); }
         .rail-item .rail-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 16px; height: 16px; }
         .rail-item .icon { opacity: 0.7; }
         .rail-item.active .icon { opacity: 1; }
@@ -661,10 +657,38 @@
         .fn-picker-overlay-close svg { width: 14px; height: 14px; }
         .fn-picker-overlay-close svg path { stroke: var(--text); fill: none; }
 
+        /* ── Resize grab zones ──────────────────────────────────────────── */
+        .resize-zone {
+            position: fixed; z-index: 9999;
+            /* Invisible by default; cursor reveals intent */
+            background: transparent;
+        }
+        /* Edge zones: 4px grab area */
+        .resize-n { top: 0; left: 6px; right: 6px; height: 4px; cursor: ns-resize; }
+        .resize-s { bottom: 0; left: 6px; right: 6px; height: 4px; cursor: ns-resize; }
+        .resize-e { right: 0; top: 6px; bottom: 6px; width: 4px; cursor: ew-resize; }
+        .resize-w { left: 0; top: 6px; bottom: 6px; width: 4px; cursor: ew-resize; }
+        /* Corner zones: 8x8 grab area */
+        .resize-ne { top: 0; right: 0; width: 8px; height: 8px; cursor: nesw-resize; }
+        .resize-nw { top: 0; left: 0; width: 8px; height: 8px; cursor: nwse-resize; }
+        .resize-se { bottom: 0; right: 0; width: 8px; height: 8px; cursor: nwse-resize; }
+        .resize-sw { bottom: 0; left: 0; width: 8px; height: 8px; cursor: nesw-resize; }
+        /* During resize, suppress pointer events on content so grab isn't lost */
+        body.resizing * { pointer-events: none !important; }
+
     </style>
     <script src="./modules/tool-editor.js"></script>
 </head>
 <body>
+<!-- Resize grab zones: thin invisible strips at window edges/corners -->
+<div class="resize-zone resize-n" data-edge="n"></div>
+<div class="resize-zone resize-s" data-edge="s"></div>
+<div class="resize-zone resize-e" data-edge="e"></div>
+<div class="resize-zone resize-w" data-edge="w"></div>
+<div class="resize-zone resize-ne" data-edge="ne"></div>
+<div class="resize-zone resize-nw" data-edge="nw"></div>
+<div class="resize-zone resize-se" data-edge="se"></div>
+<div class="resize-zone resize-sw" data-edge="sw"></div>
 <div id="shell-root">
 
     <!-- ── Left Rail ─────────────────────────────────────────────────────── -->
@@ -1730,11 +1754,33 @@ function createLogPanel(config) {
         });
     })();
 
+    // ── Resize grab zones ──────────────────────────────────────────────
+    (function () {
+        document.querySelectorAll(".resize-zone").forEach(function(zone) {
+            zone.addEventListener("mousedown", function(e) {
+                if (e.button !== 0) return;
+                var edge = zone.dataset.edge;
+                if (!edge) return;
+                window.__msResizing = true;
+                sendToHost({ action: "resizeStart", edge: edge });
+                document.body.classList.add("resizing");
+                var onUp = function() {
+                    window.__msResizing = false;
+                    document.body.classList.remove("resizing");
+                    window.removeEventListener("mouseup", onUp);
+                };
+                window.addEventListener("mouseup", onUp);
+            });
+        });
+    })();
+
     // ── Minimum size enforcement ───────────────────────────────────────
     (function () {
         const MIN_W = 800, MIN_H = 500;
         let _resizeTimer = null;
         function checkSize() {
+            // Skip during active resize — the Lua eventtap handles clamping
+            if (window.__msResizing) return;
             if (window.innerWidth < MIN_W || window.innerHeight < MIN_H) {
                 sendToHost({
                     action: "clampSize",
@@ -2966,6 +3012,13 @@ function createLogPanel(config) {
                 }
             }
 
+            function updateAll(payload) {
+                if (payload.window) updateCurrentWindow(payload.window);
+                if (payload.element) updateElement(payload.element);
+                if (payload.mouse) updateMousePos(payload.mouse);
+                if (payload.events) payload.events.forEach(function(e) { appendEntry(e); });
+            }
+
             function flagEvent(entry) {
                 if (!entry) return;
                 const nm = _q(".win-flag-name"), dt = _q(".win-flag-detail"), pill = _q(".win-flag-pill");
@@ -3055,6 +3108,7 @@ function createLogPanel(config) {
                 if (typeof registerPanel === "function") {
                     registerPanel("window", function(action, body) {
                         if (action === "appendEntry" && body) appendEntry(body);
+                        else if (action === "updateAll" && body) updateAll(body);
                         else if (action === "updateCurrentWindow" && body) updateCurrentWindow(body);
                         else if (action === "updateElement" && body) updateElement(body);
                         else if (action === "updateMousePos" && body) updateMousePos(body);

@@ -642,7 +642,7 @@
                 -- Recolor existing toasts to match new theme
                 pcall(function() ms.alert:recolor() end)
                 pcall(function() ms.dev:recolor() end)
-                ms.playSlot(data.value and "toggleOff" or "toggleOn")
+                local snd = ms.sounds[data.value and 'a_Update' or 'd_Update']; if snd then ms.sound(snd) end
                 ms.ui.refresh()
                 -- Delayed refresh to ensure shell preset detection picks up new soundAssign
                 hs.timer.doAfter(0.2, function() ms.ui.refresh() end)
@@ -767,7 +767,7 @@
                 ms.binds[data.id] = (data.value == true)
                 ms.saveSettings()
                 ms.bind.rebind()
-                ms.playSlot("update")
+                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 
@@ -775,7 +775,7 @@
                 ms.trackpadMode = (data.value == true)
                 ms.saveSettings()
                 ms.bind.rebind()
-                ms.playSlot("update")
+                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 
@@ -783,7 +783,7 @@
                 ms.socdEnabled = (data.value == true)
                 ms.saveSettings()
                 ms.socdApply()
-                ms.playSlot("update")
+                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 
@@ -831,7 +831,7 @@
                 end
                 ms.saveSettings()
                 ms.bind.rebind()
-                ms.playSlot("update")
+                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 
@@ -848,7 +848,7 @@
             setSoundEnabled = function(data)
                 ms.soundEnabled = (data.value == true)
                 ms.saveSettings()
-                ms.playSlot("update")
+                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 

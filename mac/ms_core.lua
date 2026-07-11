@@ -1650,6 +1650,10 @@
                 local modSet = {}
                 for _, m in ipairs(mods or {}) do modSet[m] = true end
 
+                -- NOTE: modsMatch rejects when incidental flags (capslock, fn, numeric keypad)
+                -- are present — macOS reports these alongside alt/shift/etc. If Bug 8 diagnosis
+                -- confirms this is the issue, fix by only checking that REQUIRED mods are present
+                -- (remove the count == #mods check) rather than requiring EXACTLY those mods.
                 local function modsMatch(flags)
                     for m, _ in pairs(modSet) do
                         if not flags[m] then return false end
@@ -1672,6 +1676,11 @@
                     local kc = e:getKeyCode()
 
                     if type == hs.eventtap.event.types.flagsChanged then
+                        -- DEBUG: Bug 8 instrumentation, remove after diagnosis
+                        local flagStr = ""
+                        local flagCount = 0
+                        for f, v in pairs(flags) do flagStr = flagStr .. f .. "=" .. tostring(v) .. " "; flagCount = flagCount + 1 end
+                        print("[BUG8] flagsChanged id=" .. id .. " flags={ " .. flagStr .. "} flagCount=" .. flagCount .. " modsMatch=" .. tostring(modsMatch(flags)) .. " requiredMods=" .. #mods)
                         -- Modifier released: reset state
                         if not modsMatch(flags) then
                             _hotkeyDown[id] = false
@@ -1681,6 +1690,13 @@
                     end
 
                     if type == hs.eventtap.event.types.keyDown then
+                        -- DEBUG: Bug 8 instrumentation, remove after diagnosis
+                        if kc == keyCode then
+                            local flagStr = ""
+                            local flagCount = 0
+                            for f, v in pairs(flags) do flagStr = flagStr .. f .. "=" .. tostring(v) .. " "; flagCount = flagCount + 1 end
+                            print("[BUG8] keyDown id=" .. id .. " kc=" .. kc .. " flags={ " .. flagStr .. "} flagCount=" .. flagCount .. " modsMatch=" .. tostring(modsMatch(flags)) .. " _hotkeyDown=" .. tostring(_hotkeyDown[id]) .. " _hotkeyCooldowns=" .. tostring(_hotkeyCooldowns[id]))
+                        end
                         if kc == keyCode and modsMatch(flags) and not _hotkeyDown[id] and not _hotkeyCooldowns[id] then
                             _hotkeyDown[id] = true
                             onDown()
@@ -1747,6 +1763,8 @@
                 -- Open Menu
                 hk = ms._hotkeys.openMenu
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
+                    -- DEBUG: Bug 8 instrumentation, remove after diagnosis
+                    print("[BUG8] openMenu onDown fired: _loadComplete=" .. tostring(ms._loadComplete) .. " _robloxActive=" .. tostring(ms._robloxActive) .. " _isSafeZone=" .. tostring(ms._isSafeZone()))
                     if not ms._loadComplete then return end
                     if not ms._robloxActive and not ms._isSafeZone() then return end
                     if ms._macroLabEnabled and ms.shell and ms.shell.toggle then
@@ -3619,6 +3637,46 @@
                 ms.shell.isReady = function() return _shellReady end
                 ms.shell.webview = function() return _shellView end
 
+                -- Shared resize edge-math: computes new frame from edge, start frame,
+                -- and mouse deltas. Used by both shell and popout resize handlers.
+                ms._resizeEdgeMath = function(edge, sf, dx, dy, minW, minH)
+                    local x, y, w, h = sf.x, sf.y, sf.w, sf.h
+                    local hasE = edge:find("e") ~= nil
+                    local hasW = edge:find("w") ~= nil
+                    local hasN = edge:find("n") ~= nil
+                    local hasS = edge:find("s") ~= nil
+                    -- East edge: grow/shrink width
+                    if hasE then w = sf.w + dx end
+                    -- West edge: grow/shrink width, shift x
+                    if hasW then
+                        w = sf.w - dx
+                        if w < minW then
+                            -- Clamp: don't let x move past the point where the
+                            -- opposite (east) edge would cross.
+                            x = sf.x + sf.w - minW
+                            w = minW
+                        else
+                            x = sf.x + dx
+                        end
+                    end
+                    -- South edge: grow/shrink height
+                    if hasS then h = sf.h + dy end
+                    -- North edge: grow/shrink height, shift y
+                    if hasN then
+                        h = sf.h - dy
+                        if h < minH then
+                            y = sf.y + sf.h - minH
+                            h = minH
+                        else
+                            y = sf.y + dy
+                        end
+                    end
+                    -- Final clamp (for east/south that don't shift origin)
+                    w = math.max(w, minW)
+                    h = math.max(h, minH)
+                    return { x = x, y = y, w = w, h = h }
+                end
+
                 ms.shell.init = function()
                     if _shellView then return end
                     require("hs.webview")
@@ -3717,6 +3775,43 @@
                                         return false
                                     end)
                                 ms._shellDragTap:start()
+                            end)
+                            return
+                        end
+                        -- ResizeStart: drag-to-resize via OS mouse deltas,
+                        -- mirroring the move eventtap pattern.
+                        if action == "resizeStart" and body and body.edge then
+                            pcall(function()
+                                if ms._shellResizeTap then ms._shellResizeTap:stop() end
+                                ms._shellDragging = true
+                                local edge = body.edge  -- "n","s","e","w","ne","nw","se","sw"
+                                local startFrame = _shellView:frame()
+                                local startMouse = hs.mouse.absolutePosition()
+                                local MIN_W, MIN_H = 800, 500
+                                -- Tell the page to suspend its checkSize loop
+                                ms.shell.eval("window.__msResizing = true")
+                                pcall(function() _shellView:shadow(false) end)
+                                local et = hs.eventtap.event.types
+                                ms._shellResizeTap = hs.eventtap.new(
+                                    { et.leftMouseDragged, et.leftMouseUp },
+                                    function(ev)
+                                        if not _shellView then return false end
+                                        if ev:getType() == et.leftMouseUp then
+                                            if ms._shellResizeTap then ms._shellResizeTap:stop(); ms._shellResizeTap = nil end
+                                            ms._shellDragging = false
+                                            pcall(function() _shellView:shadow(true) end)
+                                            ms.shell.eval("window.__msResizing = false")
+                                            pcall(ms.shell.saveState)
+                                            return false
+                                        end
+                                        local mp = hs.mouse.absolutePosition()
+                                        local dx = mp.x - startMouse.x
+                                        local dy = mp.y - startMouse.y
+                                        local nf = ms._resizeEdgeMath(edge, startFrame, dx, dy, MIN_W, MIN_H)
+                                        pcall(function() _shellView:frame(nf) end)
+                                        return false
+                                    end)
+                                ms._shellResizeTap:start()
                             end)
                             return
                         end
@@ -4038,6 +4133,9 @@
 
                 ms.shell.destroy = function()
                     if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
+                    if ms._shellDragTap then ms._shellDragTap:stop(); ms._shellDragTap = nil end
+                    if ms._shellResizeTap then ms._shellResizeTap:stop(); ms._shellResizeTap = nil end
+                    ms._shellDragging = false
                     if _shellView then
                         pcall(function() _shellView:delete() end)
                         _shellView = nil
@@ -4056,6 +4154,7 @@
 
                 -- popOut: load standalone panel HTML into its own webview
                 local _popouts = {}
+                local _popResizeTaps = {}
                 local _panelFiles = {
                     console = "ms_console.html",
                     watcher = "ms_watcher.html",
@@ -4242,6 +4341,12 @@
                         end
                         -- Close: hide instantly, restore to shell, then delete
                         if action == "close" then
+                            -- Clean up any active resize tap
+                            if _popResizeTaps and _popResizeTaps[panelId] then
+                                _popResizeTaps[panelId]:stop()
+                                _popResizeTaps[panelId] = nil
+                            end
+                            ms._shellDragging = false
                             pcall(function() popView:hide() end)
                             _popouts[panelId] = nil
                             -- Tell shell directly (don't rely on bus)
@@ -4269,6 +4374,43 @@
                                     w = f2.w,
                                     h = f2.h,
                                 })
+                            end)
+                            return
+                        end
+                        -- ResizeStart: drag-to-resize for popout windows
+                        if action == "resizeStart" and body and body.edge then
+                            pcall(function()
+                                local popResizeTap = _popResizeTaps[panelId]
+                                if popResizeTap then popResizeTap:stop() end
+                                ms._shellDragging = true
+                                local edge = body.edge
+                                local startFrame = popView:frame()
+                                local startMouse = hs.mouse.absolutePosition()
+                                local MIN_W, MIN_H = 400, 300
+                                pcall(function() popView:shadow(false) end)
+                                local et = hs.eventtap.event.types
+                                local tap = hs.eventtap.new(
+                                    { et.leftMouseDragged, et.leftMouseUp },
+                                    function(ev)
+                                        if not popView then return false end
+                                        if ev:getType() == et.leftMouseUp then
+                                            if _popResizeTaps and _popResizeTaps[panelId] then
+                                                _popResizeTaps[panelId]:stop()
+                                                _popResizeTaps[panelId] = nil
+                                            end
+                                            ms._shellDragging = false
+                                            pcall(function() popView:shadow(true) end)
+                                            return false
+                                        end
+                                        local mp = hs.mouse.absolutePosition()
+                                        local dx = mp.x - startMouse.x
+                                        local dy = mp.y - startMouse.y
+                                        local nf = ms._resizeEdgeMath(edge, startFrame, dx, dy, MIN_W, MIN_H)
+                                        pcall(function() popView:frame(nf) end)
+                                        return false
+                                    end)
+                                _popResizeTaps[panelId] = tap
+                                tap:start()
                             end)
                             return
                         end
@@ -5376,6 +5518,7 @@
         end
         ms._devArchiveLimit   = 15     -- overridden by loadSettings() if previously saved
         ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
+        _G._bootChoreographyStarted = false  -- reset guard for loading screen ready handshake
         ms.loadSettings()            -- load first so importedSounds/soundAssign are available
         -- If custom themes disabled, reset loading sound presets to defaults
         if ms._customThemeDisabled then
@@ -5444,6 +5587,13 @@
                 _ucLoad:setCallback(function(message)
                     local ok, data = pcall(hs.json.decode, message.body)
                     if not ok or type(data) ~= "table" then return end
+                    -- Page-ready handshake: the loading page posts {action="ready"}
+                    -- on DOMContentLoaded.  This anchors the boot choreography
+                    -- to when the page is actually alive, fixing the race where
+                    -- blind timers fire before the page's <script> has parsed.
+                    if data.action == "ready" then
+                        _startBootChoreography()
+                    end
                 end)
 
                 local htmlPath = hs.configdir .. "/ui/ms_loading.html"
@@ -5472,15 +5622,22 @@
                     _lWebView:html(html, baseURL)
                 end
 
-                -- Boot animation sequence
-                _G._loadTimers = {}
+                -- Boot choreography — anchored to page-ready handshake.
+                -- Called from the loading channel callback when the page posts
+                -- {action="ready"} on DOMContentLoaded.  This replaces the old
+                -- blind timers that raced WKWebView's async html() load.
                 local function js(code)
                     if _lWebView then pcall(function() _lWebView:evaluateJavaScript(code) end) end
                 end
 
-                -- t=0: Bake invisible, load theme
-                _G._loadTimers[1] = hs.timer.doAfter(0.05, function()
-                    if not _lWebView then return end
+                _startBootChoreography = function()
+                    -- Guard: only run once (defensive against duplicate ready signals)
+                    if _G._bootChoreographyStarted then return end
+                    _G._bootChoreographyStarted = true
+
+                    _G._loadTimers = {}
+
+                    -- t=0: Load theme, replay buffers, show panel, fade in, boot sound
                     pcall(function() ms.loadTheme() end)
                     local themeJson = hs.json.encode(ms._theme or {})
                     js("applyTheme(" .. themeJson .. ")")
@@ -5506,22 +5663,30 @@
                     end)
                     -- Play boot sound
                     pcall(function() ms.sound(SoundDefaultsDir .. "d_Boot.wav") end)
+
+                    -- t=0.2: Brand text fades in (400ms CSS)
+                    _G._loadTimers[2] = hs.timer.doAfter(0.2, function() js("showBrand()") end)
+
+                    -- t=1.7: Shift brand to top-left (600ms CSS)
+                    _G._loadTimers[3] = hs.timer.doAfter(1.7, function() js("shiftBrand()") end)
+
+                    -- t=2.5: Divider + content fade in (300ms CSS)
+                    _G._loadTimers[4] = hs.timer.doAfter(2.5, function()
+                        js("showDivider()")
+                        js("showVersion()")
+                        js("showContent()")
+                    end)
+
+                    -- t=2.9: Loading sequence begins (handled by animGate below)
+                end
+
+                -- Fallback: if the ready signal never arrives (defensive),
+                -- start the choreography after 0.5s anyway.
+                hs.timer.doAfter(0.5, function()
+                    if not _G._bootChoreographyStarted then
+                        _startBootChoreography()
+                    end
                 end)
-
-                -- t=0.2: Brand text fades in (400ms CSS)
-                _G._loadTimers[2] = hs.timer.doAfter(0.2, function() js("showBrand()") end)
-
-                -- t=1.7: Shift brand to top-left (600ms CSS)
-                _G._loadTimers[3] = hs.timer.doAfter(1.7, function() js("shiftBrand()") end)
-
-                -- t=2.5: Divider + content fade in (300ms CSS)
-                _G._loadTimers[4] = hs.timer.doAfter(2.5, function()
-                    js("showDivider()")
-                    js("showVersion()")
-                    js("showContent()")
-                end)
-
-                -- t=2.9: Loading sequence begins (handled by animGate below)
             end
         -- END Loading Screen — Webview Creation --
 

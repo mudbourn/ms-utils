@@ -2925,7 +2925,6 @@
                                 cls: "btn-macro " + (chan === "testing" ? "btn-enable" : ""),
                                 onmouseenter: () => playSlot("hover"),
                                 onclick: () => {
-                                    playSlot("interact");
                                     const next = chan === "testing" ? "stable" : "testing";
                                     sendToHost({
                                         action: "setUpdateChannel",
@@ -2955,7 +2954,6 @@
                                     cls: "btn-macro " + (src === "artifact" ? "btn-enable" : ""),
                                     onmouseenter: () => playSlot("hover"),
                                     onclick: () => {
-                                        playSlot("interact");
                                         const next = src === "artifact" ? "release" : "artifact";
                                         sendToHost({
                                             action: "setTestingSource",
