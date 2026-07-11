@@ -728,9 +728,7 @@
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        shellDispatch('_shell', 'close');
+                    onclick="                        shellDispatch('_shell', 'close');
                     "
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
@@ -817,9 +815,7 @@
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        shellDispatch('_shell', 'close');
+                    onclick="                        shellDispatch('_shell', 'close');
                     "
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
@@ -874,9 +870,7 @@
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        shellDispatch('_shell', 'close');
+                    onclick="                        shellDispatch('_shell', 'close');
                     "
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
@@ -999,9 +993,7 @@
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        shellDispatch('_shell', 'close');
+                    onclick="                        shellDispatch('_shell', 'close');
                     "
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
@@ -1092,9 +1084,7 @@
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        shellDispatch('_shell', 'close');
+                    onclick="                        shellDispatch('_shell', 'close');
                     "
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
@@ -1108,9 +1098,7 @@
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        shellDispatch('_shell', 'close');
+                    onclick="                        shellDispatch('_shell', 'close');
                     "
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
@@ -1124,9 +1112,7 @@
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        shellDispatch('_shell', 'close');
+                    onclick="                        shellDispatch('_shell', 'close');
                     "
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
@@ -1140,9 +1126,7 @@
             <button
                 class="btn-close"
                 onmouseenter="playSlot('hover')"
-                onclick="
-                    playSlot('back');
-                    shellDispatch('_shell', 'close');
+                onclick="                    shellDispatch('_shell', 'close');
                 "
             ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         </div>
@@ -1218,7 +1202,6 @@
                         class="btn-ghost"
                         onmouseenter="playSlot('hover')"
                         onclick="
-                            playSlot('interact');
                             var s = document.getElementById('btn-toggle-macros');
                             var on = s.dataset.on === '1';
                             sendToHost({ action: 'setMacros', value: on ? 0 : 1 });
@@ -1238,19 +1221,19 @@
                         <div class="reload-dd-menu" id="reloadMenu">
                             <div class="reload-dd-row">
                                 <span class="qr-check checked" data-qr="macros" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
+                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
                             </div>
                             <div class="reload-dd-row">
                                 <span class="qr-check checked" data-qr="theme" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
+                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
                             </div>
                             <div class="reload-dd-row">
                                 <span class="qr-check checked" data-qr="settings" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
+                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
                             </div>
                             <div class="reload-dd-row">
                                 <span class="qr-check checked" data-qr="ui" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
+                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
                             </div>
                             <div class="reload-dd-sep"></div>
                             <button class="reload-dd-item reload-dd-full" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadAll' }); document.getElementById('reloadDropdown').classList.remove('open');">All (hs.reload)</button>
@@ -1259,9 +1242,7 @@
                     <button
                         class="btn-close"
                         onmouseenter="playSlot('hover')"
-                        onclick="
-                            playSlot('back');
-                            shellDispatch('_shell', 'close');
+                        onclick="                            shellDispatch('_shell', 'close');
                         "
                     ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 </div>
@@ -1320,9 +1301,7 @@
                 <button
                     class="btn-close"
                     onmouseenter="playSlot('hover')"
-                    onclick="
-                        playSlot('back');
-                        shellDispatch('_shell', 'close');
+                    onclick="                        shellDispatch('_shell', 'close');
                     "
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
@@ -3200,7 +3179,6 @@ function createLogPanel(config) {
                 if (!key) return;
                 const now = !el.classList.contains("checked");
                 el.classList.toggle("checked", now);
-                playSlot("interact");
                 sendToHost({ action: "setQROption", key: key, value: now });
             }
             // Sync checkbox states from the Lua state object.
@@ -3602,7 +3580,6 @@ function createLogPanel(config) {
                         );
                         item.addEventListener("mouseenter", () => playSlot("hover"));
                         item.addEventListener("click", () => {
-                            playSlot("interact");
                             sendToHost({ action: "setSoundAssign", slot: slotId, name: opt.value });
                             if (list._scrollHandler) {
                                 document.getElementById("scroll").removeEventListener("scroll", list._scrollHandler);
@@ -4303,22 +4280,12 @@ function createLogPanel(config) {
                     row(
                         "Custom theme",
                         "Load ms_theme.json colors and font",
-                        h(
-                            "button",
-                            {
-                                cls:
-                                    "btn-macro " +
-                                    (customTheme ? "btn-enable" : "btn-disable"),
-                                onmouseenter: () => playSlot("hover"),
-                                onclick: () => {
-                                    sendToHost({
-                                        action: "setCustomTheme",
-                                        value: !customTheme,
-                                    });
-                                },
-                            },
-                            customTheme ? "ON" : "OFF",
-                        ),
+                        toggle(customTheme, (e) => {
+                            sendToHost({
+                                action: "setCustomTheme",
+                                value: e.target.checked,
+                            });
+                        }),
                     ),
                 );
 
@@ -4561,7 +4528,6 @@ function createLogPanel(config) {
                     cls: "seg-btn" + (activePreset === null ? " active" : ""),
                     onmouseenter: () => playSlot("hover"),
                     onclick: () => {
-                        playSlot("interact");
                         sendToHost({ action: "clearSoundPreset", slots: presetSlotIds });
                     },
                 }, "Custom");
@@ -4571,7 +4537,6 @@ function createLogPanel(config) {
                     cls: "seg-btn" + (activePreset === "default" ? " active" : ""),
                     onmouseenter: () => playSlot("hover"),
                     onclick: () => {
-                        playSlot("interact");
                         sendToHost({ action: "setSoundPreset", assigns: defaultAssigns });
                     },
                 }, "Default");
@@ -4582,7 +4547,6 @@ function createLogPanel(config) {
                         cls: "seg-btn" + (activePreset === String(p.num) ? " active" : ""),
                         onmouseenter: () => playSlot("hover"),
                         onclick: () => {
-                            playSlot("interact");
                             sendToHost({ action: "setSoundPreset", assigns: p.assigns });
                         },
                     }, String(p.num));
@@ -4934,23 +4898,42 @@ function createLogPanel(config) {
                     row(
                         "Roblox cache cleaner",
                         "Auto-purge micro-profiler dumps & stale logs every 6 h",
-                        h(
-                            "button",
-                            {
-                                cls:
-                                    "btn-macro " +
-                                    (cacheCleaner ? "btn-enable" : "btn-disable"),
-                                onmouseenter: () => playSlot("hover"),
-                                onclick: () => {
-                                    playSlot("interact");
-                                    sendToHost({
-                                        action: "setCacheCleanerEnabled",
-                                        value: !cacheCleaner,
-                                    });
-                                },
-                            },
-                            cacheCleaner ? "ON" : "OFF",
-                        ),
+                        toggle(cacheCleaner, (e) => {
+                            sendToHost({
+                                action: "setCacheCleanerEnabled",
+                                value: e.target.checked,
+                            });
+                        }),
+                    ),
+                );
+
+                // Octane Mode toggle
+                const octane = S.octaneMode === true;
+                body.appendChild(
+                    row(
+                        "Octane Mode",
+                        "Low-overhead mode: disables logging, animations, pollers, and sounds while macros run as normal",
+                        toggle(octane, (e) => {
+                            sendToHost({
+                                action: "setOctaneMode",
+                                value: e.target.checked,
+                            });
+                        }),
+                    ),
+                );
+
+                // Octane sound mute sub-toggle
+                const octaneMute = S.octaneMuteSounds === true;
+                body.appendChild(
+                    row(
+                        "Octane: mute sounds",
+                        "Silence all UI sounds when Octane Mode is active",
+                        toggle(octaneMute, (e) => {
+                            sendToHost({
+                                action: "setOctaneMuteSounds",
+                                value: e.target.checked,
+                            });
+                        }),
                     ),
                 );
 

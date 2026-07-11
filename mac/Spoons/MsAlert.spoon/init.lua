@@ -137,11 +137,22 @@
 
 -- Animation --
     local function animateEntry(entry, fromY, toY, fromAlpha, toAlpha, onDone)
+        if entry._animTimer then entry._animTimer:stop() end
+
+        -- Octane: snap to final state, no animation timer
+        if ms and ms._octaneMode then
+            if entry.canvas then
+                local f = entry.canvas:frame()
+                entry.canvas:frame({ x = f.x, y = toY, w = f.w, h = f.h })
+                entry.canvas:alpha(toAlpha)
+            end
+            if onDone then onDone() end
+            return
+        end
+
         local step = 0
         local animDuration = MsAlert.getAnimDuration()
         local animSteps = MsAlert.getAnimSteps()
-
-        if entry._animTimer then entry._animTimer:stop() end
 
         entry._animTimer = hs.timer.doEvery(animDuration / animSteps, function()
             step = step + 1

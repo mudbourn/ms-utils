@@ -141,6 +141,11 @@
     local _devFadeTimers = {}
     local _htmlCache = {}
 
+    -- Octane logging gate: maps channel → enabled (true = logging active)
+    -- All channels default to enabled. Octane _apply sets all to false.
+    -- Channels: console, watcher, keys, window
+    local _logEnabled = { console = true, watcher = true, keys = true, window = true }
+
     local function _cacheDevHTML()
         local files = {
             console = _home .. "/.hammerspoon/ui/ms_console.html",
@@ -225,9 +230,37 @@
             end,
         })
 
-        ms.dev.log = function(entry)
-            self:log(entry)
-        end
+        -- Callable table so ms.dev.log(entry) works AND ms.dev.log.pause/etc are fields
+        ms.dev.log = setmetatable({
+            pause = function(channel)
+                _logEnabled[channel] = false
+            end,
+            resume = function(channel)
+                _logEnabled[channel] = true
+            end,
+            only = function(channel)
+                for ch, _ in pairs(_logEnabled) do
+                    _logEnabled[ch] = (ch == channel)
+                end
+            end,
+            pauseAll = function()
+                for ch, _ in pairs(_logEnabled) do
+                    _logEnabled[ch] = false
+                end
+            end,
+            resumeAll = function()
+                for ch, _ in pairs(_logEnabled) do
+                    _logEnabled[ch] = true
+                end
+            end,
+            isEnabled = function(channel)
+                return _logEnabled[channel] == true
+            end,
+        }, {
+            __call = function(_, entry)
+                self:log(entry)
+            end,
+        })
 
         ms.dev._onMacroFire = function(...)
             self:onMacroFire(...)
@@ -440,6 +473,20 @@
             ms.bus.on("ui:_shell:navigate", function(_, data)
                 if not data or not data.panel then return end
                 local p = data.panel
+
+                -- Octane logging gate: auto-resume the target channel and
+                -- re-pause the previous channel so only the active panel logs.
+                local _octaneActive = _G.ms and _G.ms._octaneMode
+                if _octaneActive then
+                    -- Pause previous channel
+                    local _panelToChannel = { console="console", watcher="watcher", keys="keys", window="window" }
+                    local prevCh = _panelToChannel[_activePanel]
+                    if prevCh then _logEnabled[prevCh] = false end
+                    -- Resume new channel
+                    local newCh = _panelToChannel[p]
+                    if newCh then _logEnabled[newCh] = true end
+                end
+
                 _activePanel = p
                 -- Leaving the Window monitor: tear the AX engine down NOW, not on
                 -- the next 0.15s tick. On the Element tab a heavy element poll may
@@ -471,8 +518,10 @@
                     -- froze between clicks. Poll the pointer so it follows drags,
                     -- matching AHK Window Spy. Idle while another panel is shown;
                     -- self-stops when the shell goes away.
-                    if _shellMousePoller then _shellMousePoller:stop() end
-                    _shellMousePoller = hs.timer.doEvery(0.08, function()
+                    -- Under octane, skip the poller — coordinate tracking is cosmetic.
+                    if not _octaneActive then
+                        if _shellMousePoller then _shellMousePoller:stop() end
+                        _shellMousePoller = hs.timer.doEvery(0.08, function()
                         if not _shellActive() then
                             if _shellMousePoller then _shellMousePoller:stop(); _shellMousePoller = nil end
                             return
@@ -488,6 +537,7 @@
                             pcall(function() _pushMouseState(_x, _y) end)
                         end
                     end)
+                    end -- not _octaneActive
                 elseif p == "window" then
                     _windowOpen = true
                     hs.timer.doAfter(0.15, function()
@@ -502,7 +552,10 @@
                     -- longer push a focus-shaped payload here: it carried no frame,
                     -- pid, role, screen or flags and clobbered the rich state,
                     -- leaving the card showing only App/Title.
-                    self:_winEngineStart()
+                    -- Under octane, skip the Window Spy engine entirely.
+                    if not _octaneActive then
+                        self:_winEngineStart()
+                    end
                 end
             end)
 
@@ -510,8 +563,16 @@
             -- isn't polling AX in the background). Restart it when the shell is
             -- shown again while the Window panel is the active one.
             ms.bus.on("macroLab:toggled", function(_, body)
-                if body and body.visible and _activePanel == "window" and _windowOpen then
+                -- Under octane, don't restart Window Spy engine
+                if body and body.visible and _activePanel == "window" and _windowOpen
+                    and not (_G.ms and _G.ms._octaneMode) then
                     self:_winEngineStart()
+                end
+                -- Octane: re-pause the active channel when the shell closes
+                if body and not body.visible and _G.ms and _G.ms._octaneMode then
+                    local _panelToChannel = { console="console", watcher="watcher", keys="keys", window="window" }
+                    local ch = _panelToChannel[_activePanel]
+                    if ch then _logEnabled[ch] = false end
                 end
             end)
         end
@@ -605,6 +666,26 @@
         if _devBusy then return end
         -- Step entries belong in the watcher panel only, not the log file
         if entry.type == "step" then return end
+
+        -- Octane logging gate: skip all I/O and panel pushes when the entry's
+        -- channel is disabled. Each entry type maps to one primary channel.
+        local _typeToChannel = {
+            key = "keys", mouse = "keys", scroll = "keys", mousemove = "keys",
+            macro = "watcher", sound = "watcher",
+            system = "console", print = "console", result = "console",
+            error = "console",  -- error primary channel; also gated per-panel for watcher
+        }
+        local ch = _typeToChannel[entry.type]
+        if ch and not _logEnabled[ch] then
+            -- Even when the primary channel is disabled, check if the entry
+            -- also belongs to another enabled channel (e.g. error → watcher).
+            local alsoChannel = nil
+            if entry.type == "error" then alsoChannel = "watcher" end
+            if not alsoChannel or not _logEnabled[alsoChannel] then
+                _devBusy = false
+                return
+            end
+        end
 
         _devBusy = true
 
@@ -748,7 +829,7 @@
 
         local t = entry.type
 
-        if (_consolePanel or _shellActive()) and t ~= "mousemove" and t ~= "step" then
+        if (_consolePanel or _shellActive()) and _logEnabled.console and t ~= "mousemove" and t ~= "step" then
             local send = false
 
             -- Filter status events from console (kept in watcher)
@@ -770,13 +851,13 @@
             end
         end
 
-        if (_watcherPanel or _shellActive()) and (t == "macro" or t == "error" or t == "sound") then
+        if (_watcherPanel or _shellActive()) and _logEnabled.watcher and (t == "macro" or t == "error" or t == "sound") then
             pcall(function()
                 _pushToPanel(_watcherPanel, "watcher", "appendEntry(" .. json .. ")")
             end)
         end
 
-        if (_keysPanel or _shellActive()) and _keysReady
+        if (_keysPanel or _shellActive()) and _logEnabled.keys and _keysReady
             and (t == "key" or t == "mouse" or t == "scroll" or t == "mousemove") then
             pcall(function()
                 _pushToPanel(_keysPanel, "keys", "appendEntry(" .. json .. ")")
@@ -1145,6 +1226,12 @@
             _devFadeTimers[key] = nil
         end
 
+        -- Octane: snap to final opacity, no timer
+        if ms and ms._octaneMode then
+            pcall(function() panel:alpha(1) end)
+            return
+        end
+
         pcall(function() panel:alpha(0) end)
 
         local step, steps = 0, 6
@@ -1165,6 +1252,13 @@
         if _devFadeTimers[key] then
             _devFadeTimers[key]:stop()
             _devFadeTimers[key] = nil
+        end
+
+        -- Octane: snap to hidden, no timer
+        if ms and ms._octaneMode then
+            pcall(function() panel:alpha(0) end)
+            if onDone then onDone() end
+            return
         end
 
         local step, steps = 0, 6
@@ -1673,6 +1767,37 @@
             self:hideKeys()
         else
             self:showKeys()
+        end
+    end
+
+    -- Octane Mode support: stop all idle pollers
+    function MsDevTools:stopAllPollers()
+        if _mousePoller then _mousePoller:stop(); _mousePoller = nil end
+        if _shellMousePoller then _shellMousePoller:stop(); _shellMousePoller = nil end
+        self:_winEngineStop()
+    end
+
+    -- Octane Mode support: restart pollers for currently active panels
+    function MsDevTools:restartPollersIfActive()
+        -- Restart standalone keys mouse poller if keys panel is open
+        if _keysOpen and _keysPanel and not _mousePoller then
+            _mousePoller = hs.timer.doEvery(0.1, function()
+                if not _keysPanel then
+                    if _mousePoller then _mousePoller:stop(); _mousePoller = nil end
+                    return
+                end
+                local _p      = hs.mouse.absolutePosition()
+                local _x, _y  = math.floor(_p.x), math.floor(_p.y)
+                local prev    = _mousePos
+                if not prev or _x ~= prev.x or _y ~= prev.y then
+                    _mousePos = { x = _x, y = _y }
+                    _pushMouseState(_x, _y)
+                end
+            end)
+        end
+        -- Restart Window Spy engine if window panel is active
+        if _windowOpen and _activePanel == "window" then
+            self:_winEngineStart()
         end
     end
 -- END Inputs Panel --

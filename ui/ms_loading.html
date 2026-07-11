@@ -320,6 +320,9 @@
                 var el = document.getElementById("profile-name");
                 if (el && name) el.textContent = name;
             }
+
+            /* ── Suppress context menu ──────────────────────────────────────── */
+            document.addEventListener("contextmenu", (e) => e.preventDefault());
         </script>
     </body>
 </html>

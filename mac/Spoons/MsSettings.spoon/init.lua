@@ -179,6 +179,8 @@
                 ms._updateChannel = data.updateChannel
             end
             if data.cacheCleanerEnabled ~= nil then ms._cacheCleanerEnabled = (data.cacheCleanerEnabled == true) end
+            if data.octaneMode ~= nil then ms._octaneMode = (data.octaneMode == true) end
+            if data.octaneMuteSounds ~= nil then ms._octaneMuteSounds = (data.octaneMuteSounds == true) end
             -- Legacy migration: antiTimeoutEnabled moved from system to user settings
             -- Preserves existing toggle value for macro profiles that define it via ms.settings.define
             if data.antiTimeoutEnabled ~= nil then
@@ -334,6 +336,8 @@
                 updateChannel    = ms._updateChannel or "stable",
                 testingSource    = ms._testingSource or "release",
                 cacheCleanerEnabled = ms._cacheCleanerEnabled or false,
+                octaneMode         = ms._octaneMode or false,
+                octaneMuteSounds   = ms._octaneMuteSounds or false,
                 macroLabEnabled    = ms._macroLabEnabled ~= false,
                 quickReloaded    = ms._quickReloaded or 0,
                 qrOptions        = ms._qrOptions or {

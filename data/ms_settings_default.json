@@ -81,6 +81,8 @@
   ],
   "devArchiveLimit" : 15,
   "cacheCleanerEnabled" : false,
+  "octaneMode" : false,
+  "octaneMuteSounds" : false,
   "windowRadius" : 4,
   "macroLabEnabled" : true,
   "shell" : {

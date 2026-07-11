@@ -348,6 +348,8 @@
                 updateChannel           = ms._updateChannel or "stable",
                 testingSource           = ms._testingSource or "release",
                 cacheCleanerEnabled     = ms._cacheCleanerEnabled or false,
+                octaneMode              = ms._octaneMode or false,
+                octaneMuteSounds        = ms._octaneMuteSounds or false,
                 macroLabEnabled         = ms._macroLabEnabled ~= false,
                 githubToken             = (function()
                     if ms._githubToken then return ms._githubToken end
@@ -640,8 +642,7 @@
                 -- Recolor existing toasts to match new theme
                 pcall(function() ms.alert:recolor() end)
                 pcall(function() ms.dev:recolor() end)
-                ms.playSlot("interact")
-                ms.playSlot("update")
+                ms.playSlot(data.value and "toggleOff" or "toggleOn")
                 ms.ui.refresh()
                 -- Delayed refresh to ensure shell preset detection picks up new soundAssign
                 hs.timer.doAfter(0.2, function() ms.ui.refresh() end)
@@ -703,7 +704,26 @@
                     os.remove(plistDst)
                 end
                 ms.saveSettings()
-                ms.playSlot("update")
+                ms.playSlot(enabled and "toggleOn" or "toggleOff")
+                ms.ui.refresh()
+            end,
+
+            setOctaneMode = function(data)
+                local enabled = data.value and true or false
+                ms._octaneMode = enabled
+                ms.saveSettings()
+                -- Apply/remove octane state at runtime
+                if ms.octane then
+                    if enabled then ms.octane._apply() else ms.octane._remove() end
+                end
+                ms.playSlot(enabled and "toggleOn" or "toggleOff")
+                ms.ui.refresh()
+            end,
+
+            setOctaneMuteSounds = function(data)
+                ms._octaneMuteSounds = data.value and true or false
+                ms.saveSettings()
+                ms.playSlot(ms._octaneMuteSounds and "toggleOn" or "toggleOff")
                 ms.ui.refresh()
             end,
 
@@ -712,7 +732,7 @@
                 ms._macroLabEnabled = enabled
                 if ms._userSettingVals then ms._userSettingVals["macroLabEnabled"] = enabled end
                 ms.saveSettings()
-                ms.playSlot("update")
+                ms.playSlot(enabled and "toggleOn" or "toggleOff")
                 if not enabled and ms.shell and ms.shell.isReady and ms.shell.isReady() then
                     -- Close shell and open legacy settings
                     hs.timer.doAfter(0.3, function()
@@ -1851,14 +1871,19 @@
             -- Capture panel ref locally so the timer survives _panel being
             -- swapped or nilled by a concurrent hide().
             local panel = ms.ui._panel
-            local step, steps = 0, 6
-            ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                step = step + 1
-                pcall(function() panel:alpha(step / steps) end)
-                if step >= steps then
-                    if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-                end
-            end)
+            -- Octane: snap to visible, no fade timer
+            if ms._octaneMode then
+                pcall(function() panel:alpha(1) end)
+            else
+                local step, steps = 0, 6
+                ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
+                    step = step + 1
+                    pcall(function() panel:alpha(step / steps) end)
+                    if step >= steps then
+                        if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
+                    end
+                end)
+            end
         end
 
         ms.ui.hide = function()
@@ -1867,19 +1892,25 @@
             ms.ui._open = false
             local panel = ms.ui._panel
             if panel then
-                -- Capture current alpha so fade-out starts from wherever we are,
-                -- not from an assumed 1.0 (which would flash a transparent panel).
-                local startAlpha = 1
-                pcall(function() startAlpha = panel:alpha() or 1 end)
-                local step, steps = 0, 6
-                ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                    step = step + 1
-                    pcall(function() panel:alpha(startAlpha * (1 - (step / steps))) end)
-                    if step >= steps then
-                        if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-                        pcall(function() panel:hide() end)
-                    end
-                end)
+                -- Octane: snap to hidden, no fade timer
+                if ms._octaneMode then
+                    pcall(function() panel:alpha(0) end)
+                    pcall(function() panel:hide() end)
+                else
+                    -- Capture current alpha so fade-out starts from wherever we are,
+                    -- not from an assumed 1.0 (which would flash a transparent panel).
+                    local startAlpha = 1
+                    pcall(function() startAlpha = panel:alpha() or 1 end)
+                    local step, steps = 0, 6
+                    ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
+                        step = step + 1
+                        pcall(function() panel:alpha(startAlpha * (1 - (step / steps))) end)
+                        if step >= steps then
+                            if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
+                            pcall(function() panel:hide() end)
+                        end
+                    end)
+                end
             end
             ms._inputOpen = true
             local targetApp = hs.application.get(ms._targetApp)

@@ -163,7 +163,14 @@
                         _keysReady       = false,
                     }
 
-                    ms.dev.log = function() end
+                    ms.dev.log = setmetatable({
+                        pause      = function() end,
+                        resume     = function() end,
+                        only       = function() end,
+                        pauseAll   = function() end,
+                        resumeAll  = function() end,
+                        isEnabled  = function() return true end,
+                    }, { __call = function() end })
                     ms.dev._onMacroFire  = function() end
                     ms.dev._onKeyEvent   = function() end
                     ms.dev._onMouseEvent = function() end
@@ -193,6 +200,8 @@
                         flushTraceBuffer = function() end,
                         setTraceSuppress = function() end,
                         getTraceSuppress = function() return false end,
+                        stopAllPollers         = function() end,
+                        restartPollersIfActive = function() end,
                     }
 
                     print("MsDevTools: running without dev panels (spoon not loaded)")
@@ -1485,12 +1494,12 @@
                     _debounceTimer = nil
                     if _stateSound then pcall(function() _stateSound:stop() end); _stateSound = nil end
                     if state == 1 then
-                        _stateSound = ms.playSlot("toggleOn")
+                        _stateSound = ms.playSlot("enabled")
                         if not ms.alert.updateById("_state", "Macros enabled!", 3) then
                             ms.alert("Macros enabled!",  3, true, { id = "_state", source = "system" })
                         end
                     else
-                        _stateSound = ms.playSlot("toggleOff")
+                        _stateSound = ms.playSlot("disabled")
                         if not ms.alert.updateById("_state", "Macros disabled.", 3) then
                             ms.alert("Macros disabled.", 3, true, { id = "_state", source = "system" })
                         end
@@ -1569,12 +1578,63 @@
                 end
             end)
 
+            -- Octane Mode: low-overhead performance toggle
+            -- Strips logging, animations, pollers, and sounds while macros run unchanged
+            ms.octane = ms.octane or {}
+            ms.octane.on = function()
+                if ms._octaneMode then return end
+                ms._octaneMode = true
+                if ms.saveSettings then pcall(ms.saveSettings) end
+                ms.octane._apply()
+            end
+            ms.octane.off = function()
+                if not ms._octaneMode then return end
+                ms._octaneMode = false
+                if ms.saveSettings then pcall(ms.saveSettings) end
+                ms.octane._remove()
+            end
+            ms.octane.toggle = function()
+                if ms._octaneMode then ms.octane.off() else ms.octane.on() end
+            end
+            -- Internal: apply octane state (called on load if persisted on)
+            ms.octane._apply = function()
+                -- Logging gate: pause all channels
+                if ms.dev and ms.dev.log and ms.dev.log.pauseAll then
+                    pcall(ms.dev.log.pauseAll)
+                end
+                -- Stop all idle pollers (mouse, shell mouse, window spy)
+                if spoon.MsDevTools and spoon.MsDevTools.stopAllPollers then
+                    pcall(function() spoon.MsDevTools:stopAllPollers() end)
+                end
+                -- Stop menu hover watcher entirely under octane
+                if ms._menuHoverWatcher then
+                    ms._menuHoverWatcher:stop()
+                    ms._menuHoverWatcher = nil
+                end
+            end
+            -- Internal: remove octane state (called on toggle off)
+            ms.octane._remove = function()
+                -- Re-enable all logging channels
+                if ms.dev and ms.dev.log and ms.dev.log.resumeAll then
+                    pcall(ms.dev.log.resumeAll)
+                end
+                -- Restart pollers for panels that are currently active
+                if spoon.MsDevTools and spoon.MsDevTools.restartPollersIfActive then
+                    pcall(function() spoon.MsDevTools:restartPollersIfActive() end)
+                end
+                -- Restart menu hover watcher if menu is visible
+                if ms._menuVisible and ms._menuHoverStart then
+                    pcall(ms._menuHoverStart)
+                end
+            end
+
             -- System hotkey bindings (configurable via shell)
             ms._hotkeys = {
                 panic       = { mods = {"alt"}, key = "F10" },
                 quickReload = { mods = {"alt"}, key = "[" },
                 fullReload  = { mods = {"alt"}, key = "]" },
                 openMenu    = { mods = {"alt"}, key = "p" },
+                octane      = { mods = {"alt"}, key = "o" },
             }
             ms._hotkeyHandles = {}
 
@@ -1696,6 +1756,15 @@
                     end
                 end)
                 if tap then ms._hotkeyHandles.openMenu = tap; tap:start() end
+
+                -- Octane Mode
+                hk = ms._hotkeys.octane
+                tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
+                    if not ms._loadComplete then return end
+                    if not ms._robloxActive and not ms._isSafeZone() then return end
+                    ms.octane.toggle()
+                end)
+                if tap then ms._hotkeyHandles.octane = tap; tap:start() end
             end
 
             ms._bindHotkeys()
@@ -2191,6 +2260,8 @@
                 if not ms.soundEnabled then return false end
                 -- Suppress all sounds during reload to avoid jarring duplicate close/open sounds
                 if ms._quickReloading then return false end
+                -- Octane sound mute: independent axis from the master octane toggle
+                if ms._octaneMode and ms._octaneMuteSounds then return false end
                 if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" and slotId ~= "settingsOpen" and slotId ~= "settingsClose" then return false end
                 ms._slotHandles = ms._slotHandles or {}
                 -- If this slot is already playing, stop it and play fresh
@@ -5498,6 +5569,10 @@
                     end
                     ms._loadComplete = true
                     ms.dev.log({ type = "system", event = "startup_complete" })
+                    -- Apply Octane Mode if persisted as on
+                    if ms._octaneMode and ms.octane and ms.octane._apply then
+                        pcall(ms.octane._apply)
+                    end
                     if ms._robloxActive then ms.setMacros(1, true) end
                     _G._loadTimers.integrityWarn = hs.timer.doAfter(10, function()
                         if _needsIntegrityWarning then
