@@ -22,7 +22,7 @@
             --success-state: #7aa63c; --success-text: #8db84e; --success-bg: rgba(122,166,60,0.15);
             --error-state: #c0492e; --error-text: #c0492e; --error-bg: rgba(192,73,46,0.15);
             --radius: 2px; --radius-s: 1px;
-            --font: "Almendra", Arial, sans-serif;
+            --font: Arial, "Almendra", sans-serif;
             --font-mono: "JetBrains Mono", "SF Mono", "Menlo", monospace;
             --transition: 120ms ease;
             --rail-w: 140px;
@@ -5118,8 +5118,8 @@ function createLogPanel(config) {
                                     const r = await openModal(
                                         "Delete Trusted Hash",
                                         "This removes integrity protection entirely.\n\n" +
-                                            "From this point on mudscript will load ANY version of ms_core.lua " +
-                                            "without warning — including maliciously modified ones.\n\n" +
+                                            "From this point on mudscript will load ANY version of its code " +
+                                            "without warning — including maliciously modified files.\n\n" +
                                             "You are on your own. Proceed only if you know what you are doing.",
                                         "Delete — I understand the risk",
                                     );
@@ -5141,7 +5141,8 @@ function createLogPanel(config) {
                     h(
                         "div",
                         { cls: "group-label" },
-                        "mudscript HS Utilities \u2013 Version: " + ver,
+                        "mudscript HS Utilities \u2013 Version: ",
+                        h("span", { style: "text-transform: none" }, ver),
                     ),
                 );
 

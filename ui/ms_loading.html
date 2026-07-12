@@ -241,7 +241,7 @@
             <div id="macro-name"></div>
             <div id="divider"></div>
             <div id="content">
-                <div id="version">v1.3.0-pre.16</div>
+                <div id="version"></div>
                 <div id="status">Starting up…</div>
                 <div id="track"></div>
                 <div id="fill"></div>
@@ -315,6 +315,12 @@
 
             function showCreator() {
                 document.getElementById("macro-name").classList.add("visible");
+            }
+
+            /* ── Version ────────────────────────────────────────────────────── */
+            function setVersion(v) {
+                var el = document.getElementById("version");
+                if (el && v) el.textContent = "v" + v;
             }
 
             /* ── Profile name ────────────────────────────────────────────────── */
