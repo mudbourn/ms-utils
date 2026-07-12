@@ -109,7 +109,7 @@
                 if num and num >= 0.1 and num <= 4 then
                     ms._pendingUserSettings = ms._pendingUserSettings or {}
                     ms._pendingUserSettings["cameraSensitivity"] = num
-                    CUR_CAM_SENS = num
+                    ms._camSens = num
                 end
             end
             if data.frameLevel ~= nil then
@@ -181,6 +181,7 @@
             if data.cacheCleanerEnabled ~= nil then ms._cacheCleanerEnabled = (data.cacheCleanerEnabled == true) end
             if data.octaneMode ~= nil then ms._octaneMode = (data.octaneMode == true) end
             if data.octaneMuteSounds ~= nil then ms._octaneMuteSounds = (data.octaneMuteSounds == true) end
+            if data.swallowHotkeys ~= nil then ms._swallowHotkeys = (data.swallowHotkeys == true) end
             -- Legacy migration: antiTimeoutEnabled moved from system to user settings
             -- Preserves existing toggle value for macro profiles that define it via ms.settings.define
             if data.antiTimeoutEnabled ~= nil then
@@ -336,6 +337,7 @@
                 cacheCleanerEnabled = ms._cacheCleanerEnabled or false,
                 octaneMode         = ms._octaneMode or false,
                 octaneMuteSounds   = ms._octaneMuteSounds or false,
+                swallowHotkeys     = ms._swallowHotkeys or false,
                 macroLabEnabled    = ms._macroLabEnabled ~= false,
                 quickReloaded    = ms._quickReloaded or 0,
                 qrOptions        = ms._qrOptions or {
@@ -2990,6 +2992,10 @@
             if not f then return end
             _panel:html(f:read("*all"), _baseURL); f:close()
             _panel:show()
+            -- Error cue: a_Error when custom theming is on, d_Error when off.
+            local _errSound = (not ms._customThemeDisabled and ms.sounds and ms.sounds["a_Error"])
+                or (ms.sounds and ms.sounds["d_Error"])
+            if _errSound then pcall(function() ms.sound(_errSound) end) end
             _panel:navigationCallback(function()
                 pcall(function()
                     local t = trusted:sub(1, 16) .. "\xe2\x80\xa6"
@@ -2998,9 +3004,13 @@
                         "setHashes('" .. t .. "', '" .. c .. "')"
                     )
                     _panel:evaluateJavaScript("setPreviewMode()")
-                    local tj = hs.json.encode(ms._theme or {})
-                    if tj then
-                        _panel:evaluateJavaScript("applyTheme(" .. tj .. ")")
+                    -- Guardian is a security surface: only apply the custom theme
+                    -- when custom theming is enabled; otherwise leave the default look.
+                    if not ms._customThemeDisabled then
+                        local tj = hs.json.encode(ms._theme or {})
+                        if tj then
+                            _panel:evaluateJavaScript("applyTheme(" .. tj .. ")")
+                        end
                     end
                 end)
             end)
@@ -3981,6 +3991,12 @@
                     end },
                     { title = "Trackpad Hold Keys", menu = buildTrackpadHoldSubmenu() },
                     { title = "-" },
+                    { title = (ms._swallowHotkeys and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Swallow Hotkey Inputs", fn = function()
+                        ms._swallowHotkeys = not ms._swallowHotkeys
+                        ms.saveSettings()
+                        ms.playSlot("update")
+                        ms.alert("Swallow Hotkeys: " .. (ms._swallowHotkeys and "ON" .. "\nHotkey keypresses will be blocked from reaching the target app." or "OFF" .. "\nHotkey keypresses will pass through to the target app."), 4, true)
+                    end },
                     { title = (ms.gamepadEnabled and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Controller / Gamepad Input", fn = function()
                         ms.gamepadEnabled = not ms.gamepadEnabled
                         if not ms.gamepadEnabled then ms.gamepadStop() end

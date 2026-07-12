@@ -26,7 +26,7 @@
 -- Helpers --
 
     function MsCamera.updateMultiplier()
-        local curSens = (CUR_CAM_SENS and CUR_CAM_SENS > 0) and CUR_CAM_SENS or 1.5
+        local curSens = (ms._camSens and ms._camSens > 0) and ms._camSens or 1.5
         local win = ms.getRobloxWin()
 
         if not win then

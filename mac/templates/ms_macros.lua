@@ -37,6 +37,6 @@ ms.settings.define({
     step    = 0.1,
     default = 1.5,
     onChange = function(val)
-        CUR_CAM_SENS = val
+        ms._camSens = val
     end,
 })
