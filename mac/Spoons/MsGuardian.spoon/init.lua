@@ -278,7 +278,7 @@ YQIDAQAB
         local _archivePath = _home .. "/.hammerspoon/data/updates/"
         os.execute("mkdir -p '" .. _archivePath .. "'")
 
-        if onProgress then pcall(onProgress, "Fetching latest release info\u2026") end
+        if onProgress then pcall(onProgress, "Fetching latest release info…") end
 
         hs.http.asyncGet("https://api.github.com/repos/mudbourn/ms-utils/releases/latest", {
             ["Accept"] = "application/vnd.github+json",
@@ -305,7 +305,7 @@ YQIDAQAB
                 return
             end
 
-            if onProgress then pcall(onProgress, "Downloading signed bundle\u2026") end
+            if onProgress then pcall(onProgress, "Downloading signed bundle…") end
 
             hs.http.asyncGet(downloadUrl, nil, function(fCode, fBody, _)
                 if fCode ~= 200 or not fBody then
@@ -321,7 +321,7 @@ YQIDAQAB
                 end
                 tmpF:write(fBody); tmpF:close()
 
-                if onProgress then pcall(onProgress, "Extracting bundle\u2026") end
+                if onProgress then pcall(onProgress, "Extracting bundle…") end
 
                 local tmpExtract = _archivePath .. "ms_bundle_extract/"
                 os.execute("rm -rf '" .. tmpExtract .. "'")
@@ -342,7 +342,7 @@ YQIDAQAB
                 if not topDir:match("/$") then topDir = topDir .. "/" end
 
                 -- Read and verify MANIFEST.json signature
-                if onProgress then pcall(onProgress, "Verifying bundle signature\u2026") end
+                if onProgress then pcall(onProgress, "Verifying bundle signature…") end
 
                 local manifestPath = topDir .. "MANIFEST.json"
                 local manifest = nil
@@ -363,7 +363,7 @@ YQIDAQAB
                 end
 
                 -- Apply bundle: back up then overwrite
-                if onProgress then pcall(onProgress, "Applying update\u2026") end
+                if onProgress then pcall(onProgress, "Applying update…") end
 
                 local hsDir = _home .. "/.hammerspoon/"
                 local timestamp = os.date("%Y-%m-%d_%H%M")
@@ -417,7 +417,7 @@ YQIDAQAB
                 -- Clean up extract dir
                 os.execute("rm -rf '" .. tmpExtract .. "'")
 
-                if onProgress then pcall(onProgress, "Update applied — reloading\u2026") end
+                if onProgress then pcall(onProgress, "Update applied — reloading…") end
                 if onDone then pcall(onDone, true) end
             end)
         end)
