@@ -6,12 +6,6 @@
     }
 -- END Creator Credits --
 
--- Reference Resolution (used by ms.getScaled, ms.mousePos, coordinate helpers) --
-    REF_W    = 1680
-    REF_H    = 1044
-    REF_SENS = 1.5
--- END Reference Resolution --
-
 -- Pack Settings --
     -- Camera Sensitivity --
         ms.settings.define({
@@ -23,7 +17,7 @@
             step    = 0.1,
             default = 1.5,
             onChange = function(val)
-                CUR_CAM_SENS = val
+                ms._camSens = val
             end,
         })
     -- END Camera Sensitivity --
@@ -263,7 +257,7 @@
         end
 
         local JumpHigh = ms.sub("JumpHigh", function()
-            if ms.isSub("jumpHigh") then
+            if ms.held("jumpHigh") then
                 ms.log("if", "isSub(jumpHigh)", true)
                 ms.sound(JumpHighSound, true)
                 for i = 1, 60 do
@@ -280,7 +274,7 @@
         end)
 
         local JumpLow = ms.sub("JumpLow", function()
-            if ms.isSub("jumpLow") then
+            if ms.held("jumpLow") then
                 ms.log("if", "isSub(jumpLow)", true)
                 ms.sound(JumpLowSound, true)
                 for i = 1, 14 do
@@ -338,7 +332,7 @@
         end)
 
         local ThrowLow = ms.sub("ThrowLow", function()
-            if ms.isSub("throwLow") then
+            if ms.held("throwLow") then
                 ms.log("if", "isSub(throwLow)", true)
                 for i = 1, 15 do
                     ms.cam(-400, 0)
@@ -444,14 +438,7 @@
             end)
 
             ms.bind.define("superJump", function()
-                if ms.modHeld("superThrow") then
-                    ms.log("if", "modHeld(superThrow)", true)
-                    local fn = ms.bind._wires.superThrow
-                    if fn then fn() end
-                else
-                    ms.log("if", "modHeld(superThrow)", false)
-                    HighLeapAssistFunction()
-                end
+                HighLeapAssistFunction()
             end, {
                 group    = "main",
                 label    = "High Leap Assist",
@@ -462,15 +449,13 @@
             })
 
             ms.bind.define("jumpHigh", HighLeapAssistFunction, {
-                sub   = "superJump",
-                label = "Jump High",
-                mod   = "v",
+                default = { type = "superJump", mods = {"v"} },
+                label   = "Jump High",
             })
 
             ms.bind.define("jumpLow",  HighLeapAssistFunction, {
-                sub   = "superJump",
-                label = "Jump Low",
-                mod   = "x",
+                default = { type = "superJump", mods = {"x"} },
+                label   = "Jump Low",
             })
         -- END High Leap Assist --
 
@@ -512,15 +497,13 @@
             end)
 
             ms.bind.define("superThrow", ThrowTrickFunction, {
-                sub   = "superJump",
-                label = "Throw Trick",
-                mod   = "alt",
+                default = { type = "superJump", mods = {"alt"} },
+                label   = "Throw Trick",
             })
 
             ms.bind.define("throwLow",   ThrowTrickFunction, {
-                sub   = "superThrow",
-                label = "Throw Low",
-                mod   = "v",
+                default = { type = "superThrow", mods = {"v"} },
+                label   = "Throw Low",
             })
         -- END Throw Trick --
 
@@ -613,14 +596,7 @@
             end)
 
             ms.bind.define("frameDump", function()
-                if ms.modHeld("spawnAlt") then
-                    ms.log("if", "modHeld(spawnAlt)", true)
-                    local fn = ms.bind._wires.spawnAlt
-                    if fn then fn() end
-                else
-                    ms.log("if", "modHeld(spawnAlt)", false)
-                    ActionSpammerFunction()
-                end
+                ActionSpammerFunction()
             end, {
                 group   = "optional",
                 label   = "Lag Simulator (Micro Profiler)",
@@ -666,9 +642,8 @@
             end)
 
             ms.bind.define("spawnAlt", SpawnAltFunction, {
-                sub   = "frameDump",
-                label = "Load Second Account",
-                mod   = "alt",
+                default = { type = "frameDump", mods = {"alt"} },
+                label   = "Load Second Account",
             })
         -- END Load Second Account --
 

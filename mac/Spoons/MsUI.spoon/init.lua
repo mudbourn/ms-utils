@@ -1616,12 +1616,14 @@
             end,
 
             setModifier = function(data)
-                -- no-op: ms.modConfig removed (modifier system retired)
+                -- Handled by startModRebind — this entry is a no-op.
             end,
 
             clearModifier = function(data)
                 if not data.id then return end
-                ms.modConfig[data.id] = ""
+                local def = ms.registry._defs and ms.registry._defs[data.id]
+                if not def or not def.default then return end
+                ms.bindConfig[data.id] = { type = def.default.type, mods = {} }
                 ms.saveSettings()
                 ms.bind.rebind()
                 ms.playSlot("reset")
@@ -1631,9 +1633,12 @@
             startModRebind = function(data)
                 if not data.id then return end
                 local def = ms.registry._defs[data.id]
-                if not def or not def.sub then return end
+                if not def or not def.default then return end
                 local label = def.label or data.id
-                local cur   = ms.getMod(data.id)
+                -- Get current modifier from bindConfig override or definition default
+                local curCfg  = ms.bindConfig[data.id] or def.default
+                local curMods = curCfg and curCfg.mods or {}
+                local cur     = curMods[1]
 
                 ms.alert("Modifier for \"" .. label .. "\""
                     .. "\nCurrent: " .. (cur or "unset")
@@ -1648,7 +1653,12 @@
                 local function finish(newKey, cancelled)
                     ms._inputOpen = false
                     if not cancelled then
-                        ms.modConfig[data.id] = newKey  -- nil = cleared
+                        -- Update bindConfig: preserve parent type, swap modifier
+                        if newKey then
+                            ms.bindConfig[data.id] = { type = def.default.type, mods = { newKey } }
+                        else
+                            ms.bindConfig[data.id] = { type = def.default.type, mods = {} }
+                        end
                         ms.saveSettings()
                         ms.bind.rebind()
                         ms.playSlot(newKey and "update" or "reset")
