@@ -147,14 +147,6 @@
     -- the name of the app the scoped watcher is currently following.
     local _winPendingEvent, _winWatchedAppName
 
-    local _camMoveAccum  = 0
-    local _camLastDx     = nil
-    local _camLastDy     = nil
-    local _camLabel      = nil
-    local _waitAccum     = 0
-    local _waitDuration  = 0
-    local _waitRounded   = 0
-    local _waitLabel     = nil
     local _traceSuppress = false
 
     -- Shell-mode helper: returns true when the shell is the active display
@@ -1042,75 +1034,26 @@
         })
     end
 
-    function MsDevTools:accCamMove(dx, dy)
+    -- Bunching removed: cam/wait steps log immediately, one line each.
+    function MsDevTools:accCamMove(dx, dy, label)
         if _traceSuppress then return end
-        if _camMoveAccum > 0 and (dx ~= _camLastDx or dy ~= _camLastDy) then
-            self:flushCam()
-        end
-        _camMoveAccum = _camMoveAccum + 1
-        _camLastDx = dx
-        _camLastDy = dy
-    end
-
-    function MsDevTools:flushCam(label)
-        if _camMoveAccum > 0 then
-            local effectiveLabel = label or _camLabel
-            local dx = _camLastDx or 0
-            local dy = _camLastDy or 0
-            local msg = "cam(" .. dx .. ", " .. dy .. ")"
-            if _camMoveAccum > 1 then msg = msg .. " ×" .. _camMoveAccum end
-
-            if _watcherPanel then
-                self:watcherStep(msg, effectiveLabel)
-            end
-
-            self:macroLog(msg, effectiveLabel)
-            _camMoveAccum = 0
-            _camLastDx = nil
-            _camLastDy = nil
-            _camLabel = nil
-        end
-    end
-
-    function MsDevTools:flushWait(label)
-        if _waitAccum > 0 then
-            local effectiveLabel = label or _waitLabel
-            local msg = "wait " .. _waitDuration .. "ms"
-
-            if _waitAccum > 1 then
-                msg = msg .. " ×" .. _waitAccum
-            end
-
-            if _watcherPanel then
-                self:watcherStep(msg, effectiveLabel)
-            end
-
-            self:macroLog(msg, effectiveLabel)
-            _waitAccum = 0
-            _waitLabel = nil
-        end
-    end
-
-    function MsDevTools:flushAll(label)
-        self:flushCam(label)
-        self:flushWait(label)
+        if dx == nil or dy == nil then return end
+        local msg = "cam(" .. dx .. ", " .. dy .. ")"
+        if _watcherPanel then self:watcherStep(msg, label) end
+        self:macroLog(msg, label)
     end
 
     function MsDevTools:accWait(duration, label)
         if _traceSuppress then return end
-        -- Round to nearest ms for comparison (so 0.5 and 1 collapse)
-        local rounded = math.floor(duration + 0.5)
-        if _waitAccum > 0 and rounded == _waitRounded then
-            _waitAccum = _waitAccum + 1
-        else
-            self:flushWait()
-            _waitAccum    = 1
-            _waitDuration = duration
-            _waitRounded  = rounded
-        end
-        -- Store the label for use when flushing
-        if label then _waitLabel = label end
+        local msg = "wait " .. (tonumber(duration) or 0) .. "ms"
+        if _watcherPanel then self:watcherStep(msg, label) end
+        self:macroLog(msg, label)
     end
+
+    -- Flushes are no-ops now (nothing is buffered).
+    function MsDevTools:flushCam(label) end
+    function MsDevTools:flushWait(label) end
+    function MsDevTools:flushAll(label) end
 
     function MsDevTools:setTraceSuppress(val)
         _traceSuppress = val
