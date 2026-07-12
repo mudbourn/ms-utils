@@ -643,6 +643,18 @@
                 return false
             end
 
+            -- ms.held(id): true iff every identifier modifier of bind `id` is
+            -- currently held. Used to route a shared trigger among its claimants.
+            -- Binds with no identifier mods (the fallback) return false.
+            ms.held = function(id)
+                local c = ms.effectiveBind and ms.effectiveBind(id)
+                if not c or not c.mods or #c.mods == 0 then return false end
+                for _, m in ipairs(c.mods) do
+                    if not ms.keystate(m) then return false end
+                end
+                return true
+            end
+
             local _prevModFlags = { shift = false, alt = false, ctrl = false, cmd = false }
 
             ms._keyListener = hs.eventtap.new({
@@ -751,26 +763,18 @@
                 return false
             end):start()
 
-            -- Key press/release/type accumulator (value-change flushing, like wait/cam)
-            local _keyAccum      = 0
-            local _keyMsg        = nil
-            local _keyFlushLabel = nil
-            local _keyFlush = function()
-                if _keyAccum > 0 then
-                    local msg = _keyMsg
-                    if _keyAccum > 1 then msg = msg .. " ×" .. _keyAccum end
-                    if ms.dev and spoon.MsDevTools then
-                        spoon.MsDevTools:macroLog(msg, _keyFlushLabel)
-                        if ms.dev._watcherPanel then
-                            spoon.MsDevTools:watcherStep(msg, _keyFlushLabel)
-                        end
+            -- Key logging: immediate, one line each (bunching removed).
+            local function _keyLog(msg)
+                if ms.dev and spoon.MsDevTools then
+                    local label = ms._getCallChain()
+                    spoon.MsDevTools:macroLog(msg, label)
+                    if ms.dev._watcherPanel then
+                        spoon.MsDevTools:watcherStep(msg, label)
                     end
-                    _keyAccum      = 0
-                    _keyMsg        = nil
-                    _keyFlushLabel = nil
                 end
             end
-            -- END Key accumulator --
+            local _keyFlush = function() end
+            -- END Key logging --
 
                 ms.press = function(key, mods, hidinject)
                     if ms.dev then spoon.MsDevTools:flushAll(); _keyFlush() end
@@ -787,14 +791,7 @@
                         if ms.dev and not spoon.MsDevTools:getTraceSuppress() then
                             local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                             local msg = "↓ " .. tostring(key) .. modsStr
-                            if _keyAccum > 0 and msg == _keyMsg then
-                                _keyAccum = _keyAccum + 1
-                            else
-                                _keyFlush()
-                                _keyAccum = 1
-                                _keyMsg   = msg
-                            end
-                            if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
+                            _keyLog(msg)
                         end
                     end
                     ms._macroHeldKeys[keyCode] = { mods = mods or {}, hidinject = hidinject }
@@ -827,14 +824,7 @@
                     end
                     if ms.dev and not spoon.MsDevTools:getTraceSuppress() then
                         local msg = "↑ " .. tostring(key) .. durationStr
-                        if _keyAccum > 0 and msg == _keyMsg then
-                            _keyAccum = _keyAccum + 1
-                        else
-                            _keyFlush()
-                            _keyAccum = 1
-                            _keyMsg   = msg
-                        end
-                        if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
+                        _keyLog(msg)
                     end
                     ms._macroHeldKeys[keyCode] = nil
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, false)
@@ -852,14 +842,7 @@
                     if ms.dev then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                         local msg = "type " .. tostring(key) .. modsStr .. " (" .. _hold .. "ms)"
-                        if _keyAccum > 0 and msg == _keyMsg then
-                            _keyAccum = _keyAccum + 1
-                        else
-                            _keyFlush()
-                            _keyAccum = 1
-                            _keyMsg   = msg
-                        end
-                        if not _keyFlushLabel then _keyFlushLabel = ms._getCallChain() end
+                        _keyLog(msg)
                     end
                     local _saved = spoon.MsDevTools:getTraceSuppress()
                     spoon.MsDevTools:setTraceSuppress(true)
@@ -1254,7 +1237,7 @@
                     -- Scale by sensitivity ratio so macros calibrated at refSens
                     -- produce the same rotation regardless of in-game sensitivity
                     local refSens = ms.settings and ms.settings.get("refSensitivity") or 1.5
-                    local curSens = CUR_CAM_SENS or 1.5
+                    local curSens = ms._camSens or 1.5
                     if refSens > 0 and curSens > 0 and refSens ~= curSens then
                         local scale = refSens / curSens
                         dx = dx * scale
@@ -1301,7 +1284,7 @@
                 if saved ~= nil then spoon.MsDevTools:setTraceSuppress(saved) end
                 -- Accumulate (flushes on value change or before scroll/wait)
                 if ms.dev and spoon.MsDevTools then
-                    spoon.MsDevTools:accCamMove(dx, dy)
+                    spoon.MsDevTools:accCamMove(dx, dy, ms._getCallChain())
                 end
             end
 
@@ -1456,7 +1439,7 @@
                     local f = win:frame()
                     local screen = win:screen():frame()
                     local currentRatio = f.w / f.h
-                    local currentSens = CUR_CAM_SENS or 1.5
+                    local currentSens = ms._camSens or 1.5
                     local output = {
                         "--- ROBLOX DEBUG INFO ---",
                         string.format("Window Title: %s", win:title()),
@@ -1687,7 +1670,7 @@
                             _hotkeyDown[id] = true
                             onDown()
                         end
-                        return false  -- never swallow
+                        return ms._swallowHotkeys and true or false
                     end
 
                     if type == hs.eventtap.event.types.keyUp then
@@ -1698,6 +1681,7 @@
                             hs.timer.doAfter(0.15, function()
                                 _hotkeyCooldowns[id] = false
                             end)
+                            return ms._swallowHotkeys and true or false
                         end
                         return false
                     end
@@ -2689,10 +2673,11 @@
                 assert(type(id) == "string", "ms.bind.define: id must be a string")
                 local fn   = type(a) == "function" and a or (type(b) == "function" and b or nil)
                 local opts = type(a) == "table"    and a or (type(b) == "table"    and b or {})
-                -- Compat shim: convert legacy sub/mod to unified default model.
-                -- A child bind's trigger becomes default = { type = <parentBindID>, mods = {mod} }
-                if opts.sub and not opts.default then
-                    opts.default = { type = opts.sub, mods = opts.mod and { opts.mod } or {} }
+                -- Reject legacy sub/mod syntax — user must update ms_macros.lua
+                if opts.sub or opts.mod then
+                    error("bind '" .. id .. "' uses deprecated sub/mod syntax. "
+                        .. "Update to: default = { type = \"<parentID>\", mods = {\"<mod>\"} } "
+                        .. "— see documentation for the unified bind model.", 2)
                 end
                 local label, group
                 if opts.default and type(opts.default) == "table" and opts.default.type
@@ -3343,7 +3328,7 @@
 
             ms.bind.siblingConflict = function(id, c)
                 local def = ms.registry._defs[id]
-                if not def or def.sub or not c then return nil end
+                if not def or def.default or not c then return nil end
                 local function key(cfg)
                     if not cfg then return nil end
                     if cfg.type == "mouse" then return "mouse:" .. tostring(cfg.button) end
@@ -3358,7 +3343,7 @@
                 for _, sibId in ipairs(ms.registry._defList) do
                     if sibId ~= id then
                         local sibDef = ms.registry._defs[sibId]
-                        if sibDef and not sibDef.sub then
+                        if sibDef and not sibDef.default then
                             local sibEnabled = ms.binds[sibId]
                             if sibEnabled == nil then sibEnabled = sibDef.enabled end
                             if sibEnabled and key(ms.effectiveBind(sibId)) == ck then
@@ -5456,7 +5441,7 @@
 
         for _, id in ipairs(ms.registry._defList) do
             local def = ms.registry._defs[id]
-            if def and not def.sub and ms.binds[id] == nil then
+            if def and not def.default and ms.binds[id] == nil then
                 ms.binds[id] = def.enabled
             end
         end
@@ -5622,7 +5607,6 @@
                     -- t=2.5: Divider + content fade in (300ms CSS)
                     _G._loadTimers[4] = hs.timer.doAfter(2.5, function()
                         js("showDivider()")
-                        js("showVersion()")
                         js("showContent()")
                     end)
 
@@ -5745,7 +5729,7 @@
                     pcall(function() _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)
                 end
                 pcall(function() ms.playSlot("themeLoaded") end)
-                -- Show profile name and creator when theme loads (macros loaded by now)
+                -- Show profile name, creator, and version when theme loads (macros loaded by now)
                 if _lWebView then
                     -- Re-push metadata now that ms_macros.lua has loaded
                     if ms.macroMeta and ms.macroMeta.name then
@@ -5754,8 +5738,33 @@
                     if ms.macroMeta and ms.macroMeta.author and ms.macroMeta.author ~= "" then
                         pcall(function() _lWebView:evaluateJavaScript("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')") end)
                     end
+                    -- Push version from MANIFEST.json (same source as MsUI.spoon)
+                    local _ver = (function()
+                        local p = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
+                        local f = io.open(p, "r")
+                        if not f then return nil end
+                        local ok, m = pcall(hs.json.decode, f:read("*all")); f:close()
+                        local base = (ok and m and m.version) or nil
+                        if not base then return nil end
+                        if ms._updateChannel == "testing" then
+                            local maj, min, pat = base:match("^(%d+)%.(%d+)%.(%d+)$")
+                            if maj and min and pat then
+                                local nextVer = maj .. "." .. min .. "." .. tostring(tonumber(pat) + 1)
+                                local buildPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_build_num"
+                                local bf = io.open(buildPath, "r")
+                                local buildNum = 0
+                                if bf then buildNum = tonumber(bf:read("*all")) or 0; bf:close() end
+                                return nextVer .. "-pre." .. tostring(buildNum)
+                            end
+                        end
+                        return base
+                    end)()
+                    if _ver then
+                        pcall(function() _lWebView:evaluateJavaScript("setVersion('" .. _ver:gsub("'", "\\'") .. "')") end)
+                    end
                     pcall(function() _lWebView:evaluateJavaScript("showProfile()") end)
                     pcall(function() _lWebView:evaluateJavaScript("showCreator()") end)
+                    pcall(function() _lWebView:evaluateJavaScript("showVersion()") end)
                 end
             end)
             _G._timers[5] = hs.timer.doAfter(t4, function()
