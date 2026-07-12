@@ -176,6 +176,16 @@
                 background: color-mix(in srgb, var(--danger) 28%, transparent);
             }
 
+            button.accent {
+                background: color-mix(in srgb, var(--accent) 25%, transparent);
+                border-color: var(--accent);
+                color: var(--accent);
+            }
+
+            button.accent:hover {
+                background: color-mix(in srgb, var(--accent) 40%, transparent);
+            }
+
             /* ── Preview badge (hidden by default, shown via setPreviewMode()) ── */
             #preview-badge {
                 display: none;
@@ -250,11 +260,13 @@
                 </div>
 
                 <div id="buttons">
+                    <button class="accent" onclick="repair()">Update &amp; Repair</button>
                     <button onclick="keepBlocked()">Keep Blocked</button>
                     <button class="danger" onclick="showConfirm()">
                         Delete Hash &amp; Reload
                     </button>
                 </div>
+                <div id="repair-status" style="display:none; font-size:11px; color:var(--text2); margin-top:6px; padding:6px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); line-height:1.5;"></div>
             </div>
 
             <!-- Step 2: Confirmation -->
@@ -269,8 +281,8 @@
 
                 <div id="warning" style="flex: 1">
                     From this point on mudscript will load
-                    <strong>any version</strong> of init.lua without warning —
-                    including maliciously modified ones.<br /><br />
+                    <strong>any version</strong> of its code without warning —
+                    including maliciously modified files.<br /><br />
                     You are on your own. Proceed only if you know what you are
                     doing.
                 </div>
@@ -378,6 +390,27 @@
 
             function confirmDelete() {
                 sendToHost("confirmDelete");
+            }
+
+            function repair() {
+                var btns = document.querySelectorAll("#step1 button");
+                btns.forEach(function(b) { b.disabled = true; b.style.opacity = "0.5"; });
+                var st = document.getElementById("repair-status");
+                st.style.display = "block";
+                st.style.color = "var(--text2)";
+                st.textContent = "Repairing\u2026 downloading signed bundle";
+                sendToHost(JSON.stringify({ action: "repair" }));
+            }
+
+            function setRepairStatus(msg, isError) {
+                var st = document.getElementById("repair-status");
+                st.style.display = "block";
+                st.textContent = msg;
+                if (isError) {
+                    st.style.color = "var(--danger)";
+                    var btns = document.querySelectorAll("#step1 button");
+                    btns.forEach(function(b) { b.disabled = false; b.style.opacity = "1"; });
+                }
             }
         </script>
     </body>

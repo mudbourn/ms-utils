@@ -272,12 +272,179 @@ YQIDAQAB
         return "ok"
     end
 
+    -- Update & Repair pipeline — downloads latest signed bundle, verifies, applies, reloads.
+    -- Runs with no ms.* namespace; uses only raw hs.* and existing guardian helpers.
+    local function _repairViaUpdate(onProgress, onDone)
+        local _archivePath = _home .. "/.hammerspoon/data/updates/"
+        os.execute("mkdir -p '" .. _archivePath .. "'")
+
+        if onProgress then pcall(onProgress, "Fetching latest release info\u2026") end
+
+        hs.http.asyncGet("https://api.github.com/repos/mudbourn/ms-utils/releases/latest", {
+            ["Accept"] = "application/vnd.github+json",
+        }, function(code, body, _)
+            if code ~= 200 or not body then
+                if onDone then pcall(onDone, false, "GitHub API returned HTTP " .. tostring(code)) end
+                return
+            end
+            local ok, data = pcall(hs.json.decode, body)
+            if not ok or not data then
+                if onDone then pcall(onDone, false, "Could not parse release JSON") end
+                return
+            end
+            local downloadUrl
+            local assets = data.assets or {}
+            for _, asset in ipairs(assets) do
+                if asset.name and asset.name:match("^mudscript%-macos%-.*%.zip$") then
+                    downloadUrl = asset.browser_download_url
+                    break
+                end
+            end
+            if not downloadUrl then
+                if onDone then pcall(onDone, false, "No mudscript-macos bundle found in latest release") end
+                return
+            end
+
+            if onProgress then pcall(onProgress, "Downloading signed bundle\u2026") end
+
+            hs.http.asyncGet(downloadUrl, nil, function(fCode, fBody, _)
+                if fCode ~= 200 or not fBody then
+                    if onDone then pcall(onDone, false, "Bundle download returned HTTP " .. tostring(fCode)) end
+                    return
+                end
+
+                local tmpArchive = _archivePath .. "ms_bundle_update.zip"
+                local tmpF = io.open(tmpArchive, "wb")
+                if not tmpF then
+                    if onDone then pcall(onDone, false, "Could not write temp file") end
+                    return
+                end
+                tmpF:write(fBody); tmpF:close()
+
+                if onProgress then pcall(onProgress, "Extracting bundle\u2026") end
+
+                local tmpExtract = _archivePath .. "ms_bundle_extract/"
+                os.execute("rm -rf '" .. tmpExtract .. "'")
+                os.execute("mkdir -p '" .. tmpExtract .. "'")
+                local _, extractOk = hs.execute("unzip -o '" .. tmpArchive .. "' -d '" .. tmpExtract .. "' 2>&1")
+                os.remove(tmpArchive)
+                if not extractOk then
+                    os.execute("rm -rf '" .. tmpExtract .. "'")
+                    if onDone then pcall(onDone, false, "Could not extract bundle zip") end
+                    return
+                end
+
+                -- Resolve mudscript-* top dir
+                local topDir = nil
+                local dh = io.popen("ls -d '" .. tmpExtract .. "'/mudscript-* 2>/dev/null | head -1")
+                if dh then topDir = dh:read("*l"); dh:close() end
+                if not topDir or topDir == "" then topDir = tmpExtract end
+                if not topDir:match("/$") then topDir = topDir .. "/" end
+
+                -- Read and verify MANIFEST.json signature
+                if onProgress then pcall(onProgress, "Verifying bundle signature\u2026") end
+
+                local manifestPath = topDir .. "MANIFEST.json"
+                local manifest = nil
+                local mf = io.open(manifestPath, "r")
+                if mf then
+                    local mOk, m = pcall(hs.json.decode, mf:read("*all")); mf:close()
+                    if mOk then manifest = m end
+                end
+                if not manifest then
+                    os.execute("rm -rf '" .. tmpExtract .. "'")
+                    if onDone then pcall(onDone, false, "Bundle missing MANIFEST.json") end
+                    return
+                end
+                if not _verifyManifestSignature(manifest) then
+                    os.execute("rm -rf '" .. tmpExtract .. "'")
+                    if onDone then pcall(onDone, false, "Signature verification failed — unsigned or tampered bundle") end
+                    return
+                end
+
+                -- Apply bundle: back up then overwrite
+                if onProgress then pcall(onProgress, "Applying update\u2026") end
+
+                local hsDir = _home .. "/.hammerspoon/"
+                local timestamp = os.date("%Y-%m-%d_%H%M")
+                local replaceList = { "ms_core.lua", "init.lua", "ui", "bin", "Spoons" }
+                local templateList = { "ms_macros.lua", "profiles/Default" }
+
+                os.execute("mkdir -p '" .. _archivePath .. "'")
+
+                for _, name in ipairs(replaceList) do
+                    local src = topDir .. name
+                    local dst = hsDir .. name
+                    if hs.fs.attributes(src) then
+                        if hs.fs.attributes(dst) then
+                            local safeName = name:gsub("/", "_")
+                            local bak = _archivePath .. safeName .. "_" .. timestamp
+                                .. (hs.fs.attributes(dst).mode == "directory" and ".d.bak" or ".bak")
+                            os.execute("rm -rf '" .. bak .. "'")
+                            os.execute("cp -R '" .. dst .. "' '" .. bak .. "'")
+                        end
+                        os.execute("rm -rf '" .. dst .. "'")
+                        os.execute("cp -R '" .. src .. "' '" .. dst .. "'")
+                    end
+                end
+
+                -- Copy per-file manifest from bundle
+                local fmSrc = topDir .. "data/.ms_file_manifest.json"
+                local fmDst = hsDir .. "data/.ms_file_manifest.json"
+                if hs.fs.attributes(fmSrc) then
+                    os.execute("mkdir -p '" .. hsDir .. "data'")
+                    os.execute("cp '" .. fmSrc .. "' '" .. fmDst .. "'")
+                end
+
+                -- Copy MANIFEST.json from bundle
+                local mfSrc = topDir .. "MANIFEST.json"
+                local mfDst = hsDir .. "MANIFEST.json"
+                if hs.fs.attributes(mfSrc) then
+                    os.execute("cp '" .. mfSrc .. "' '" .. mfDst .. "'")
+                end
+
+                -- Template list: only copy if destination doesn't exist (don't clobber user data)
+                for _, name in ipairs(templateList) do
+                    local src = topDir .. name
+                    local dst = hsDir .. name
+                    if hs.fs.attributes(src) and not hs.fs.attributes(dst) then
+                        local parent = dst:match("(.+)/[^/]+$")
+                        if parent then os.execute("mkdir -p '" .. parent .. "'") end
+                        os.execute("cp -R '" .. src .. "' '" .. dst .. "'")
+                    end
+                end
+
+                -- Clean up extract dir
+                os.execute("rm -rf '" .. tmpExtract .. "'")
+
+                if onProgress then pcall(onProgress, "Update applied — reloading\u2026") end
+                if onDone then pcall(onDone, true) end
+            end)
+        end)
+    end
+
     -- Show the Guardian blocking UI (webview or dialog fallback).
     -- Called when integrity check fails and we need to block loading.
     local function _showGuardianBlock(expectedHash, currentHash)
+        -- Read settings to gate custom theming (default: disabled if file missing/corrupt)
+        local _customThemeDisabled = true
         pcall(function()
-            local _snd = hs.sound.getByFile(_home .. "/.hammerspoon/sounds/d_Error.wav")
+            local _sf = io.open(_home .. "/.hammerspoon/data/ms_settings.json", "r")
+            if _sf then
+                local _raw = _sf:read("*all"); _sf:close()
+                local _ok, _sd = pcall(hs.json.decode, _raw)
+                if _ok and type(_sd) == "table" then
+                    _customThemeDisabled = (_sd.customThemeDisabled == true)
+                end
+            end
+        end)
 
+        -- Play error sound once on show
+        pcall(function()
+            local _soundPath = _customThemeDisabled
+                and (_home .. "/.hammerspoon/sounds/Default/d_Error.wav")
+                or  (_home .. "/.hammerspoon/sounds/active/a_Error.wav")
+            local _snd = hs.sound.getByFile(_soundPath)
             if _snd then _snd:play() end
         end)
 
@@ -301,7 +468,29 @@ YQIDAQAB
             else
                 local ok, data = pcall(hs.json.decode, body) -- JSON move delta from the drag handler
 
-                if ok and data and data.action == "move" then
+                if ok and data and data.action == "repair" then
+                    _repairViaUpdate(
+                        function(progressMsg)
+                            pcall(function()
+                                _guardianView:evaluateJavaScript(
+                                    "setRepairStatus(" .. hs.json.encode(progressMsg) .. ", false)"
+                                )
+                            end)
+                        end,
+                        function(repairOk, errMsg)
+                            if repairOk then
+                                hs.reload()
+                            else
+                                pcall(function()
+                                    _guardianView:evaluateJavaScript(
+                                        "setRepairStatus(" .. hs.json.encode("Repair failed: " .. (errMsg or "unknown error")) .. ", true)"
+                                    )
+                                end)
+                            end
+                        end
+                    )
+
+                elseif ok and data and data.action == "move" then
                     pcall(function()
                         if not _guardianPos then return end
                         _guardianPos.x = _guardianPos.x + (data.dx or 0)
@@ -317,7 +506,7 @@ YQIDAQAB
         if _ok and _screen then
             local _gw, _gh = 480, 360 -- 4:3
 
-            do
+            if not _customThemeDisabled then
                 local _tq = io.open(_home .. "/.hammerspoon/data/ms_theme.json", "r")
 
                 if _tq then
@@ -366,22 +555,25 @@ YQIDAQAB
 
             local _guardianTheme = nil
             local _guardianUIFC  = nil
-            local _tf = io.open(_home .. "/.hammerspoon/data/ms_theme.json", "r")
 
-            if _tf then
-                local _td = hs.json.decode(_tf:read("*all")); _tf:close()
+            if not _customThemeDisabled then
+                local _tf = io.open(_home .. "/.hammerspoon/data/ms_theme.json", "r")
 
-                if type(_td) == "table" then
-                    _guardianTheme = _td
+                if _tf then
+                    local _td = hs.json.decode(_tf:read("*all")); _tf:close()
 
-                    if type(_td.uifc) == "table"
-                        and type(_td.uifc.guardian) == "string"
-                        and _td.uifc.guardian ~= "" then
-                        local _gp = _home .. "/.hammerspoon/"
-                            .. (function(p) p=p:gsub("%.%.[/\\]",""):gsub("[/\\]%.%.",""):gsub("^%.%.$",""):gsub("^[/~]+",""); return p end)(_td.uifc.guardian)
+                    if type(_td) == "table" then
+                        _guardianTheme = _td
 
-                        if hs.fs.attributes(_gp) then
-                            _guardianUIFC = "file://" .. _gp
+                        if type(_td.uifc) == "table"
+                            and type(_td.uifc.guardian) == "string"
+                            and _td.uifc.guardian ~= "" then
+                            local _gp = _home .. "/.hammerspoon/"
+                                .. (function(p) p=p:gsub("%.%.[/\\]",""):gsub("[/\\]%.%.",""):gsub("^%.%.$",""):gsub("^[/~]+",""); return p end)(_td.uifc.guardian)
+
+                            if hs.fs.attributes(_gp) then
+                                _guardianUIFC = "file://" .. _gp
+                            end
                         end
                     end
                 end
@@ -393,7 +585,10 @@ YQIDAQAB
                 local _ghtml = _gf:read("*all"); _gf:close()
 
                 _guardianView:html(_ghtml, _baseURL)
+                _guardianView:alpha(0)
                 _guardianView:show()
+
+                local _fadeStarted = false
 
                 _guardianView:navigationCallback(function(action)
                     pcall(function()
@@ -422,6 +617,19 @@ YQIDAQAB
                             )
                         end
                     end)
+
+                    -- Fade-in: ramp alpha 0→1 over ~150ms (once)
+                    if not _fadeStarted then
+                        _fadeStarted = true
+                        local _fadeSteps = 8
+                        local _fadeStep  = 0
+                        hs.timer.doEvery(0.019, function(t)
+                            _fadeStep = _fadeStep + 1
+                            local _a = math.min(_fadeStep / _fadeSteps, 1.0)
+                            pcall(function() _guardianView:alpha(_a) end)
+                            if _a >= 1.0 then t:stop() end
+                        end)
+                    end
                 end)
 
             else
