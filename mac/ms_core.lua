@@ -3171,6 +3171,13 @@
                     return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
                 end
 
+                local function triggerKey(c)
+                    if c.type == "mouse"   then return "mouse:"   .. tostring(c.button) end
+                    if c.type == "scroll"  then return "scroll:"  .. (c.direction or "up") end
+                    if c.type == "gamepad" then return "gamepad:" .. (c.button or "?") end
+                    return nil
+                end
+
                 -- Count modifiers for a resolved bind (most-specific-wins ordering)
                 local function modCount(c)
                     if not c or not c.mods then return 0 end
@@ -3217,6 +3224,9 @@
                     return ca > cb
                 end)
 
+                local deviceGroups = {}
+                local deviceOrder  = {}
+
                 for _, id in ipairs(sortedIds) do
                     if conflicted[id] then goto continue end
                     local fn  = ms.bind._wires[id]
@@ -3250,17 +3260,44 @@
                         ms._pendingLabel = def.label
                         fn()
                     end
-                    if c.type == "mouse" then
-                        ms.mouse(c.button, false, firedFn)
-                    elseif c.type == "key" then
+                    if c.type == "key" then
                         ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
-                    elseif c.type == "scroll" then
-                        ms.bindHandles[id] = ms.scrollBind(c.direction, firedFn)
-                    elseif c.type == "gamepad" then
-                        ms.bindHandles[id] = ms.gamepadBind(c.button, firedFn)
+                    elseif c.type == "mouse" or c.type == "scroll" or c.type == "gamepad" then
+                        local tkey = triggerKey(c)
+                        local grp  = deviceGroups[tkey]
+                        if not grp then
+                            grp = { ctype = c.type, button = c.button, direction = c.direction, claimants = {} }
+                            deviceGroups[tkey] = grp
+                            deviceOrder[#deviceOrder + 1] = tkey
+                        end
+                        grp.claimants[#grp.claimants + 1] = { mods = c.mods or {}, firedFn = firedFn }
                     end
 
                     ::continue::
+                end
+
+                for _, tkey in ipairs(deviceOrder) do
+                    local grp       = deviceGroups[tkey]
+                    local claimants = grp.claimants
+                    local function dispatch()
+                        for _, cl in ipairs(claimants) do
+                            local match = (#cl.mods == 0)
+                            if not match then
+                                match = true
+                                for _, m in ipairs(cl.mods) do
+                                    if not ms.keystate(m) then match = false; break end
+                                end
+                            end
+                            if match then cl.firedFn(); return end
+                        end
+                    end
+                    if grp.ctype == "mouse" then
+                        ms.mouse(grp.button, false, dispatch)
+                    elseif grp.ctype == "scroll" then
+                        ms.bindHandles["_disp:" .. tkey] = ms.scrollBind(grp.direction, dispatch)
+                    elseif grp.ctype == "gamepad" then
+                        ms.bindHandles["_disp:" .. tkey] = ms.gamepadBind(grp.button, dispatch)
+                    end
                 end
 
                 if ms.trackpadMode then

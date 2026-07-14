@@ -3045,6 +3045,17 @@
             -- this bind's trigger is the parent's key + the child's mods.
             if raw and type(raw) == "table" and raw.type and ms.registry._defs[raw.type] then
                 local visited = {}
+                local accum = {}
+                local function addMods(mods)
+                    for _, m in ipairs(mods or {}) do
+                        local dup = false
+                        for _, e in ipairs(accum) do
+                            if e == m then dup = true; break end
+                        end
+                        if not dup then accum[#accum+1] = m end
+                    end
+                end
+                addMods(raw.mods)
                 local current = raw
                 while current and type(current) == "table" and current.type
                     and ms.registry._defs[current.type] and not visited[current.type] do
@@ -3053,23 +3064,14 @@
                     local parentBind = ms.bindConfig[current.type] or (parentDef and parentDef.default)
                     if parentBind and type(parentBind) == "table" and parentBind.type
                         and not ms.registry._defs[parentBind.type] then
-                        -- Parent resolved to an actual device trigger; merge mods.
-                        local mergedMods = {}
-                        for _, m in ipairs(parentBind.mods or {}) do mergedMods[#mergedMods+1] = m end
-                        for _, m in ipairs(current.mods or {}) do
-                            local dup = false
-                            for _, existing in ipairs(mergedMods) do
-                                if existing == m then dup = true; break end
-                            end
-                            if not dup then mergedMods[#mergedMods+1] = m end
-                        end
+                        addMods(parentBind.mods)
                         return { type = parentBind.type, key = parentBind.key,
                                  button = parentBind.button, direction = parentBind.direction,
-                                 mods = mergedMods }
+                                 mods = accum }
                     end
+                    addMods(parentBind and parentBind.mods)
                     current = parentBind
                 end
-                -- Cycle or missing parent — fall through to return raw as-is
             end
             return raw
         end
