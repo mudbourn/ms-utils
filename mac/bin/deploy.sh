@@ -44,6 +44,13 @@ if [ -d "$REPO/ui/svg" ]; then
     cp -R "$REPO/ui/svg/"* "$HS/ui/svg/" 2>/dev/null || true
 fi
 
+# Copy Lua library modules (rm -rf first so deletions propagate).
+if [ -d "$REPO/mac/lib" ]; then
+    rm -rf "$HS/lib"
+    mkdir -p "$HS/lib"
+    cp -R "$REPO/mac/lib/"* "$HS/lib/" 2>/dev/null || true
+fi
+
 # Copy all spoons (rm first — cp -R into existing dir nests instead of overwriting).
 for spoon in "$REPO/mac/Spoons/"*.spoon; do
     dest="$HS/Spoons/$(basename "$spoon")"

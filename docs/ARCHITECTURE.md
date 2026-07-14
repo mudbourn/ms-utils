@@ -25,6 +25,8 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 │   ├── init.lua                Bootstrap stub (read-only: chmod 444)
 │   ├── ms_core.lua             Main library. Protected by the Guardian.
 │   ├── ms_macros.lua           Macro pack — the file you edit.
+│   ├── lib/                    Extracted Lua modules (require'd by ms_core). Guardian-tracked.
+│   │   └── ms_compiler.lua     Visual Macro Compiler (JSON macro defs → sandbox Lua).
 │   ├── templates/
 │   │   └── ms_macros.lua       Barebones macro template for new packs.
 │   ├── Spoons/
@@ -106,6 +108,34 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 │                               Auto-stamped and signed by GitHub Actions on every release.
 └── LICENSE
 ```
+
+---
+
+## Extracting a Lua module (`mac/lib/*.lua`)
+
+The lightweight alternative to authoring a full Spoon, for pure logic/codegen/helpers
+that have no `:start()` lifecycle. `ms_compiler.lua` is the reference example.
+
+**Recipe:**
+1. Create `mac/lib/ms_<name>.lua` that returns an initializer taking the shared table:
+   `return function(ms) ... ms.<name> = {...} ... end`. Keep the body hermetic —
+   reference only `ms.*`, `hs.*`, Lua stdlib, and the module's own locals (no
+   file-scoped upvalues from `ms_core.lua`).
+2. In `ms_core.lua`, at the point the old inline code sat, call it:
+   `package.loaded["lib.ms_<name>"] = nil; require("lib.ms_<name>")(ms)`.
+   The cache-clear makes a re-`dofile` (deploy + reload without a full Lua reset)
+   pick up an edited module instead of the cached copy. Runtime deps on `ms.*`
+   resolve at call time, so load order only needs `ms` to exist (it does, early).
+3. No stub-completeness rule (that's Spoons only) — nothing calls the module before
+   it's `require`d.
+
+**⚠️ Integrity is two-sided — update BOTH or a released build breaks:** the `mac/lib`
+tree is tamper-tracked exactly like `ms_core.lua`. Coverage is defined in
+`mac/guardian_patterns.json` (`include: "mac/lib/**/*.lua"`, CI-side, drives the
+signed per-file manifest) **and** `MsGuardian.spoon` `_trackedFiles()` (runtime walk
+of `~/.hammerspoon/lib/`). `mac/bin/deploy.sh` and the release workflow both copy the
+tree. Adding a new `lib/` file is covered automatically; adding a *new tracked
+directory* is the thing that needs both sides taught about it.
 
 ---
 

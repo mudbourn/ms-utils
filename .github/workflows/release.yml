@@ -44,7 +44,7 @@ jobs:
           for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua README.md; do
             [ -f "$f" ] && cp "$f" "$DIST/"
           done
-          for d in mac/Spoons mac/templates ui mac/bin; do
+          for d in mac/Spoons mac/lib mac/templates ui mac/bin; do
             [ -d "$d" ] && cp -R "$d" "$DIST/"
           done
           mkdir -p "$DIST/data" "$DIST/sounds/defaults"

@@ -116,6 +116,25 @@ YQIDAQAB
             dir3:close()
         end
 
+        -- Lib: lib/**/*.lua
+        local function _walkLua(dir)
+            local okd, iterd, dobj = pcall(hs.fs.dir, dir)
+            if not okd or not iterd then return end
+            for entry in iterd, dobj do
+                if entry ~= "." and entry ~= ".." then
+                    local path = dir .. entry
+                    local attr = hs.fs.attributes(path)
+                    if attr and attr.mode == "directory" then
+                        _walkLua(path .. "/")
+                    elseif entry:match("%.lua$") then
+                        files[#files + 1] = path
+                    end
+                end
+            end
+            dobj:close()
+        end
+        _walkLua(_home .. "/.hammerspoon/lib/")
+
         table.sort(files)
         return files
     end

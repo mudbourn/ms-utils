@@ -117,6 +117,7 @@
             transition: background 0.15s, color 0.15s;
         }
         .btn-ghost:hover { background: var(--hover); color: var(--text); }
+        .btn-ghost.active { background: var(--accent); color: var(--bg); }
 
         /* ── Close Button ── */
         .btn-close {
@@ -988,6 +989,14 @@
             <span id="panel-title">mudscript — window monitor</span>
             <div class="header-btns">
                 <button
+                    id="inspectToggle"
+                    class="btn-ghost"
+                    onmouseenter="playSlot('hover')"
+                    onclick="toggleInspect()"
+                >
+                    Inspect
+                </button>
+                <button
                     id="pause-btn"
                     class="btn-ghost"
                     onmouseenter="playSlot('hover')"
@@ -1040,7 +1049,6 @@
         <div class="wtabs">
             <button class="wtab active" data-wtab="window" onmouseenter="playSlot('hover')" onclick="switchWindowTab('window')">Data</button>
             <button class="wtab" data-wtab="element" onmouseenter="playSlot('hover')" onclick="switchWindowTab('element')">Logs</button>
-            <button class="wtab wtab-inspect" id="inspectToggle" onmouseenter="playSlot('hover')" onclick="toggleInspect()" style="flex:0 0 auto;padding:7px 10px;font-size:11px;font-weight:600;color:var(--text3);border-bottom:2px solid transparent;">Inspect</button>
         </div>
 
         <!-- Window tab (all live data) -->
@@ -3073,10 +3081,7 @@ function createLogPanel(config) {
             function toggleInspect() {
                 inspectOn = !inspectOn;
                 const btn = document.getElementById('inspectToggle');
-                if (btn) {
-                    btn.style.color = inspectOn ? 'var(--accent)' : 'var(--text3)';
-                    btn.style.borderBottomColor = inspectOn ? 'var(--accent)' : 'transparent';
-                }
+                if (btn) btn.classList.toggle('active', inspectOn);
                 lp.sendToHost({ action: 'setInspect', enabled: inspectOn });
             }
             window.toggleInspect = toggleInspect;
@@ -3155,10 +3160,7 @@ function createLogPanel(config) {
                         else if (action === "updateInspect" && body) {
                             inspectOn = !!body.enabled;
                             const btn = document.getElementById('inspectToggle');
-                            if (btn) {
-                                btn.style.color = inspectOn ? 'var(--accent)' : 'var(--text3)';
-                                btn.style.borderBottomColor = inspectOn ? 'var(--accent)' : 'transparent';
-                            }
+                            if (btn) btn.classList.toggle('active', inspectOn);
                         }
                     });
                 }

@@ -37,8 +37,9 @@
             }
             #panel-title { flex: 1; font-weight: 600; font-size: 13px; }
             .header-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
-            .btn-ghost { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text2); transition: opacity 0.15s; }
+            .btn-ghost { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text2); transition: opacity 0.15s, background 0.15s, color 0.15s; }
             .btn-ghost:hover { opacity: 0.8; }
+            .btn-ghost.active { background: var(--accent); color: var(--bg); }
             .btn-close { width: 28px; height: 28px; border-radius: 50%; background: var(--surface2); color: var(--text2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
             .btn-close .icon { width: 14px; height: 14px; display: block; }
             .btn-close:hover { background: var(--hover); color: var(--text); }
@@ -150,6 +151,7 @@
         <div id="header">
             <span id="panel-title">mudscript — window spy</span>
             <div class="header-btns">
+                <button id="inspectToggle" class="btn-ghost" onmouseenter="playSlot('hover')" onclick="toggleInspect()">Inspect</button>
                 <button id="pause-btn" class="btn-ghost" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); togglePause();">Pause</button>
                 <button class="btn-ghost" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); clearLog();">Clear</button>
                 <button class="btn-close" onmouseenter="playSlot('hover')" onclick="playSlot('back'); closePanel();">
@@ -171,7 +173,6 @@
         <div id="tabs">
             <button id="tab-window" class="tab active" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchTab('window')">Data</button>
             <button id="tab-element" class="tab" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); switchTab('element')">Logs</button>
-            <button id="inspectToggle" class="tab" onmouseenter="playSlot('hover')" onclick="toggleInspect()" style="flex:0 0 auto;padding:7px 10px;font-size:11px;font-weight:600;color:var(--text3);border-bottom:2px solid transparent;">Inspect</button>
         </div>
 
         <!-- ── Window tab (all live data) ──────────────────────────────── -->
@@ -409,10 +410,7 @@
             function toggleInspect() {
                 inspectOn = !inspectOn;
                 const btn = document.getElementById('inspectToggle');
-                if (btn) {
-                    btn.style.color = inspectOn ? 'var(--accent)' : 'var(--text3)';
-                    btn.style.borderBottomColor = inspectOn ? 'var(--accent)' : 'transparent';
-                }
+                if (btn) btn.classList.toggle('active', inspectOn);
                 lp.sendToHost({ action: 'setInspect', enabled: inspectOn });
             }
             window.toggleInspect = toggleInspect;
@@ -443,10 +441,7 @@
                         else if (action === "updateInspect" && body) {
                             inspectOn = !!body.enabled;
                             const btn = document.getElementById('inspectToggle');
-                            if (btn) {
-                                btn.style.color = inspectOn ? 'var(--accent)' : 'var(--text3)';
-                                btn.style.borderBottomColor = inspectOn ? 'var(--accent)' : 'transparent';
-                            }
+                            if (btn) btn.classList.toggle('active', inspectOn);
                         }
                     });
                 }
