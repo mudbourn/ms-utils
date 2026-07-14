@@ -34,21 +34,6 @@
             _uiFadeTimer   = nil,
         }
 
-        local uiHTMLPath   = os.getenv("HOME") .. "/.hammerspoon/ui/ms_settings_ui.html"
-        local uiBasePath    = "file://" .. os.getenv("HOME") .. "/.hammerspoon/ui/"
-        local panelW, panelH = 360, 640  -- 9:16 portrait
-
-        local function _loadPanelHTML()
-            local f = io.open(uiHTMLPath, "r")
-            if not f then
-                return "<body style='background:#1c1c1e;color:#fff;font:13px -apple-system, sans-serif;padding:20px'>"
-                    .. "Could not read ms_settings_ui.html.<br><br>Expected at:<br>" .. uiHTMLPath .. "</body>"
-            end
-            local html = f:read("*all")
-            f:close()
-            return html
-        end
-
         local function _bindDisplay(c)
             if not c then return nil end
             if c.type == "mouse" then return "Mouse " .. tostring(c.button) end
@@ -375,12 +360,6 @@
         ms.ui.refresh = function()
             if _uiStateDirty or not _uiStateJSON then _rebuildUICache() end
             if _uiStateJSON then
-                -- Push to standalone panel if open
-                if ms.ui._panel then
-                    pcall(function()
-                        ms.ui._panel:evaluateJavaScript(_uiStateJSON)
-                    end)
-                end
                 -- Push to shell if active
                 if ms.shell and ms.shell.isReady and ms.shell.isReady() then
                     pcall(function()
@@ -397,7 +376,8 @@
         end
 
         ms.ui._precacheHTML = function()
-            _loadPanelHTML()
+            -- No-op since the legacy standalone panel was deleted (2026-07-13);
+            -- kept so boot warmup callers don't break.
         end
 
         local function _emptyToNil(s) if s == nil or s == "" then return nil end; return s end
@@ -419,26 +399,6 @@
             end,
 
             close = function() ms.ui.hide() end,
-
-            moveWindow = function(data)
-                if not ms.ui._panel then return end
-                pcall(function()
-                    local dx = tonumber(data.dx) or 0
-                    local dy = tonumber(data.dy) or 0
-                    if not ms.ui._panelPos then
-                        local f = ms.ui._panel:frame()
-                        ms.ui._panelPos = {
-                            x = f.x,
-                            y = f.y,
-                            w = f.w,
-                            h = f.h,
-                        }
-                    end
-                    ms.ui._panelPos.x = ms.ui._panelPos.x + dx
-                    ms.ui._panelPos.y = ms.ui._panelPos.y + dy
-                    ms.ui._panel:frame(ms.ui._panelPos)
-                end)
-            end,
 
             reloadMacros = function()
                 -- Phase 1: Validate source (no destructive ops — bind system untouched)
@@ -763,15 +723,8 @@
                 if ms._userSettingVals then ms._userSettingVals["macroLabEnabled"] = enabled end
                 ms.saveSettings()
                 ms.playSlot(enabled and "toggleOn" or "toggleOff")
-                if not enabled and ms.shell and ms.shell.isReady and ms.shell.isReady() then
-                    -- Close shell and open legacy settings
-                    hs.timer.doAfter(0.3, function()
-                        pcall(function() ms.shell.hide() end)
-                        hs.timer.doAfter(0.2, function()
-                            pcall(function() ms.ui.show() end)
-                        end)
-                    end)
-                end
+                -- (Legacy fallback removed 2026-07-13: the shell is the only
+                -- settings UI now; disabling Macro Lab no longer swaps windows.)
                 ms.ui.refresh()
             end,
 
@@ -1755,24 +1708,6 @@
                 __len      = function() return #_backing end,
             })
         end
-        local _ucMS = hs.webview.usercontent.new("ms")
-        _ucMS:setCallback(function(message)
-            local ok, data = pcall(hs.json.decode, message.body)
-            if not ok or type(data) ~= "table" or not data.action then
-                print("ms.ui: malformed message from panel: " .. tostring(message.body))
-                return
-            end
-            local handler = ms.ui._actions[data.action]
-            if not handler then
-                print("ms.ui: unknown action from panel: " .. tostring(data.action))
-                return
-            end
-            local ok2, err = pcall(handler, data)
-            if not ok2 then
-                print("ms.ui: action '" .. data.action .. "' error: " .. tostring(err))
-            end
-        end)
-
         -- Shell integration: route bus messages to the same action handlers
         -- Topic shape: ui:<panel>:<action> (emitted by ms.shell's msShell channel)
         if ms.bus then
@@ -1788,162 +1723,36 @@
             end)
         end
 
-        local function _panelFrame()
-            local screen = hs.screen.mainScreen():frame()
-            local w, h = panelW, panelH
-            local x = screen.x + math.floor((screen.w / 2 - w) / 2)
-            local y = screen.y + math.floor((screen.h - h) / 2)
-            h = math.min(h, (screen.y + screen.h) - y - 20)
-            return {
-                x = x,
-                y = y,
-                w = w,
-                h = h,
-            }
-        end
-
-        local function _buildPanel()
-            local panel = hs.webview.new(_panelFrame(), { developerExtrasEnabled = true }, _ucMS)
-            if not panel then return nil end
-            pcall(function() panel:windowStyle(0) end)
-            pcall(function() panel:level(hs.canvas.windowLevels.floating) end)
-            pcall(function() panel:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-            pcall(function() panel:allowTextEntry(true) end)
-            pcall(function() panel:shadow(true) end)
-            pcall(function() panel:closeOnEscape(true) end)
-            if ms and ms.theme and ms.theme.applyWindowRadius then ms.theme.applyWindowRadius(panel) end
-            if ms and ms.theme and ms.theme.onChanged then
-                ms.theme.onChanged(function()
-                    if ms and ms.theme and ms.theme._pushWindowRadius then ms.theme._pushWindowRadius(panel) end
-                end)
-            end
-            pcall(function()
-                panel:windowCallback(function(action)
-                    if action == "closing" then
-                        ms.ui.hide()
-                    end
-                end)
-            end)
-            panel:html(_loadPanelHTML(), uiBasePath)
-            return panel
-        end
-
+        -- ms.ui window methods are a thin adapter over the shell — the legacy
+        -- standalone panel (ui/ms_settings_ui.html) was deleted 2026-07-13.
+        -- ms.ui._open stays as adapter-local state: the rebind capture flows
+        -- flip it and ms_core's focus watcher reads it.
         ms.ui.show = function()
-            if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-            if not ms.ui._panel then
-                ms.ui._panel = _buildPanel()
-                if not ms.ui._panel then
-                    ms.alert("Settings panel failed to load — check the Hammerspoon Console.", 5)
-                    return
-                end
-            end
-            local _pf = _panelFrame()
-            ms.ui._panelPos = {
-                x = _pf.x,
-                y = _pf.y,
-                w = _pf.w,
-                h = _pf.h,
-            }
-            pcall(function() ms.ui._panel:frame(_pf) end)
-            ms.ui._open = true
-            ms.playSlot("settingsOpen")
-            pcall(function() ms.ui._panel:alpha(0) end)
-            ms.ui._panel:show()
-            pcall(function() ms.ui._panel:bringToFront(true) end)
-            ms.ui.refresh()
-            -- Capture panel ref locally so the timer survives _panel being
-            -- swapped or nilled by a concurrent hide().
-            local panel = ms.ui._panel
-            -- Octane: snap to visible, no fade timer
-            if ms._octaneMode then
-                pcall(function() panel:alpha(1) end)
-            else
-                local step, steps = 0, 6
-                ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                    step = step + 1
-                    pcall(function() panel:alpha(step / steps) end)
-                    if step >= steps then
-                        if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-                    end
-                end)
-            end
+            if ms.shell and ms.shell.show then ms.shell.show() end
         end
 
         ms.ui.hide = function()
-            if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-            if ms.ui._open then ms.playSlot("settingsClose") end
             ms.ui._open = false
-            local panel = ms.ui._panel
-            if panel then
-                -- Octane: snap to hidden, no fade timer
-                if ms._octaneMode then
-                    pcall(function() panel:alpha(0) end)
-                    pcall(function() panel:hide() end)
-                else
-                    -- Capture current alpha so fade-out starts from wherever we are,
-                    -- not from an assumed 1.0 (which would flash a transparent panel).
-                    local startAlpha = 1
-                    pcall(function() startAlpha = panel:alpha() or 1 end)
-                    local step, steps = 0, 6
-                    ms.ui._uiFadeTimer = hs.timer.doEvery((ms._theme.fadeMs or 150) / 1000 / steps, function()
-                        step = step + 1
-                        pcall(function() panel:alpha(startAlpha * (1 - (step / steps))) end)
-                        if step >= steps then
-                            if ms.ui._uiFadeTimer then ms.ui._uiFadeTimer:stop(); ms.ui._uiFadeTimer = nil end
-                            pcall(function() panel:hide() end)
-                        end
-                    end)
-                end
-            end
-            ms._inputOpen = true
-            local targetApp = hs.application.get(ms._targetApp)
-            if targetApp then
-                hs.timer.doAfter(0.05, function()
-                    local ok, win = pcall(function() return targetApp:mainWindow() end)
-                    if ok and win then pcall(function() win:focus() end) end
-                    pcall(function() targetApp:activate() end)
-                end)
-            end
+            if ms.shell and ms.shell.hide then ms.shell.hide() end
         end
 
         ms.ui.toggle = function()
-            if ms.ui._open then ms.ui.hide() else ms.ui.show() end
+            if ms.shell and ms.shell.toggle then ms.shell.toggle() end
         end
 
         ms.ui.prewarm = function()
-            if not ms.ui._panel then
-                ms.ui._panel = _buildPanel()
-            end
-            -- The WebView's 'ready' callback calls ms.ui.refresh()
-            -- automatically when the HTML finishes parsing.
+            -- No-op: the shell webview is built by ms.shell.init() at boot.
         end
     -- END UI State Cache --
 
     -- ms.ui.modal --
         ms.ui.modal = function(data, callback)
             if not callback then return end
-            -- Shell path: use the shell's built-in modal
-            if ms.shell and ms.shell.isReady and ms.shell.isReady() then
-                local ok, json = pcall(hs.json.encode, {
-                    title   = data.title   or "",
-                    msg     = data.msg     or "",
-                    confirm = data.confirm or "OK",
-                    cancel  = data.cancel  or "Cancel",
-                })
-                if not ok then pcall(callback, { confirmed = false }); return end
-                ms.ui._modalCallback = callback
-                pcall(function()
-                    ms.shell.eval("openLuaModal(" .. json .. ")")
-                end)
-                return
-            end
-            -- Legacy path: v1 standalone panel
-            if not ms.ui._panel then
+            -- Shell modal host (openLuaModal → modalResult round-trip)
+            if not (ms.shell and ms.shell.isReady and ms.shell.isReady()) then
                 pcall(callback, { confirmed = false })
                 return
             end
-            ms.ui._modalCallback = callback
-            if not ms.ui._open then ms.ui.show() end
             local ok, json = pcall(hs.json.encode, {
                 title   = data.title   or "",
                 msg     = data.msg     or "",
@@ -1951,10 +1760,9 @@
                 cancel  = data.cancel  or "Cancel",
             })
             if not ok then pcall(callback, { confirmed = false }); return end
-            hs.timer.doAfter(0.05, function()
-                pcall(function()
-                    ms.ui._panel:evaluateJavaScript("openLuaModal(" .. json .. ")")
-                end)
+            ms.ui._modalCallback = callback
+            pcall(function()
+                ms.shell.eval("openLuaModal(" .. json .. ")")
             end)
         end
     -- END ms.ui.modal --
@@ -1962,30 +1770,11 @@
     -- ms.ui.prompt --
         ms.ui.prompt = function(data, callback)
             if not callback then return end
-            -- Shell path: use the shell's built-in modal
-            if ms.shell and ms.shell.isReady and ms.shell.isReady() then
-                local ok, json = pcall(hs.json.encode, {
-                    title        = data.title   or "",
-                    msg          = data.msg     or "",
-                    confirm      = data.confirm or "OK",
-                    cancel       = data.cancel  or "Cancel",
-                    hasInput     = true,
-                    inputDefault = data.default or "",
-                })
-                if not ok then pcall(callback, { confirmed = false, value = "" }); return end
-                ms.ui._modalCallback = callback
-                pcall(function()
-                    ms.shell.eval("openLuaModal(" .. json .. ")")
-                end)
-                return
-            end
-            -- Legacy path: v1 standalone panel
-            if not ms.ui._panel then
+            -- Shell modal host with text input (openLuaModal → modalResult)
+            if not (ms.shell and ms.shell.isReady and ms.shell.isReady()) then
                 pcall(callback, { confirmed = false, value = "" })
                 return
             end
-            ms.ui._modalCallback = callback
-            if not ms.ui._open then ms.ui.show() end
             local ok, json = pcall(hs.json.encode, {
                 title        = data.title   or "",
                 msg          = data.msg     or "",
@@ -1995,10 +1784,9 @@
                 inputDefault = data.default or "",
             })
             if not ok then pcall(callback, { confirmed = false, value = "" }); return end
-            hs.timer.doAfter(0.05, function()
-                pcall(function()
-                    ms.ui._panel:evaluateJavaScript("openLuaModal(" .. json .. ")")
-                end)
+            ms.ui._modalCallback = callback
+            pcall(function()
+                ms.shell.eval("openLuaModal(" .. json .. ")")
             end)
         end
     -- END ms.ui.prompt --

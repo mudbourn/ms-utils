@@ -585,7 +585,12 @@
             -- ms.legacycam.updateAnchor()
             -- ms.legacycam.updateMultiplier()
             ms.socdApply()
-            ms.ui.hide()
+            if ms._macroLabEnabled and ms.shell and ms.shell.hide then
+                ms.shell.hide()
+                if ms.ui and ms.ui._open then pcall(function() ms.ui.hide() end) end
+            else
+                ms.ui.hide()
+            end
             pcall(function() ms.dev.console.hide() end)
             pcall(function() ms.dev.watcher.hide() end)
             pcall(function() ms.dev.keys.hide() end)
@@ -644,9 +649,16 @@
                     ms.loadTheme()
                     pcall(function() ms.alert:recolor() end)
                     pcall(function() ms.dev:recolor() end)
-                    -- Rebuild popout windows (they bake theme CSS at creation)
-                    ms.ui.hide()
-                    hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                    if ms._macroLabEnabled and ms.shell and ms.shell.eval then
+                        -- Shell repaints live via JS push (loadTheme already
+                        -- rebaked popout HTML) — no window rebuild, and the
+                        -- legacy window must never surface on reload.
+                        ms.shell.eval("applyTheme(" .. hs.json.encode(ms._theme or {}) .. ")")
+                    else
+                        -- Rebuild legacy popout windows (they bake theme CSS at creation)
+                        ms.ui.hide()
+                        hs.timer.doAfter(0.15, function() ms.ui.show() end)
+                    end
                 end)
                 if not ok then
                     reloadOk = false
@@ -665,7 +677,14 @@
             end
 
             -- 5. Close all panels silently (sounds suppressed by _quickReloading)
-            if not qr.theme then
+            if ms._macroLabEnabled and ms.shell and ms.shell.hide then
+                -- Shell mode: theme repaint is a JS push (no hide/show cycle),
+                -- so always close here. Only touch the legacy panel if it is
+                -- actually open — ms.ui.hide() refocuses the target app as a
+                -- side effect, and the reload path does its own refocus below.
+                pcall(function() ms.shell.hide() end)
+                if ms.ui and ms.ui._open then pcall(function() ms.ui.hide() end) end
+            elseif not qr.theme then
                 -- Theme branch already hides/shows; only hide here if theme didn't
                 pcall(function() ms.ui.hide() end)
             end

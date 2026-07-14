@@ -61,8 +61,7 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 │       └── ms_settings_default.json  Windows default settings baseline.
 │
 ├── ui/                         Shared UI assets (both platforms)
-│   ├── ms_shell.html           Macro Development Lab shell
-│   ├── ms_settings_ui.html     Settings panel
+│   ├── ms_shell.html           Macro Development Lab shell (single settings UI)
 │   ├── ms_guardian.html        Tamper-detection dialog
 │   ├── ms_console.html         Developer Console
 │   ├── ms_watcher.html         Macro Monitor

@@ -4910,6 +4910,9 @@ function createLogPanel(config) {
                         actionBtn("Edit Theme", "", () =>
                             sendToHost({ action: "editTheme" }),
                         ),
+                        actionBtn("Open Log Folder", "", () =>
+                            sendToHost({ action: "openDevLogs" }),
+                        ),
                     ),
                 );
 

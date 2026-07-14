@@ -22,6 +22,10 @@ for f in "$REPO/ui/"*.html; do
     cp "$f" "$HS/ui/$(basename "$f")" 2>/dev/null || true
 done
 
+# Prune UI files deleted from the repo (deploy only ever copied, so removals
+# never propagated). ms_settings_ui.html: legacy settings UI, deleted 2026-07-13.
+rm -f "$HS/ui/ms_settings_ui.html"
+
 # Copy UI fonts.
 if [ -d "$REPO/ui/fonts" ]; then
     mkdir -p "$HS/ui/fonts"
