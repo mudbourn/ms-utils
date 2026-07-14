@@ -1,0 +1,234 @@
+    /* panel: window */
+    (function() {
+    "use strict";
+// ── Window buildRow ─────────────────────────────────────────────
+            const BADGE = { focus:"badge-focus", move:"badge-move", resize:"badge-resize",
+                minimize:"badge-state", unminimize:"badge-state", fullscreen:"badge-state" };
+            const LABEL = { focus:"focused", move:"moved", resize:"resized",
+                minimize:"minimized", unminimize:"restored", fullscreen:"fullscreen",
+                hide:"hidden", show:"shown" };
+
+            function mkSpan(cls, txt) { const s = document.createElement("span"); s.className = cls; s.textContent = txt; return s; }
+
+            function buildRow(entry) {
+                const row = document.createElement("div");
+                const t = entry.type;
+                row.className = "entry" + (t === "move" || t === "resize" ? " move-entry" : "");
+                row.appendChild(mkSpan("ts", "[" + (entry.ts || "") + "]"));
+                row.appendChild(mkSpan("badge " + (BADGE[t] || "badge-state"), LABEL[t] || t));
+                if (t === "focus") {
+                    row.appendChild(mkSpan("ename", entry.app || "?"));
+                    if (entry.title) row.appendChild(mkSpan("edetail", "\u00b7 " + entry.title));
+                } else if (t === "move") {
+                    row.appendChild(mkSpan("edetail", (entry.x ?? "?") + ", " + (entry.y ?? "?")));
+                    if (entry.count > 1) row.appendChild(mkSpan("ecount", "\u00d7" + entry.count));
+                } else if (t === "resize") {
+                    row.appendChild(mkSpan("edetail", (entry.w ?? "?") + " \u00d7 " + (entry.h ?? "?")));
+                    if (entry.count > 1) row.appendChild(mkSpan("ecount", "\u00d7" + entry.count));
+                } else if (t === "fullscreen") {
+                    row.appendChild(mkSpan("ename", entry.on ? "entered" : "exited"));
+                    if (entry.app) row.appendChild(mkSpan("edetail", "\u00b7 " + entry.app));
+                } else {
+                    if (entry.app) row.appendChild(mkSpan("ename", entry.app));
+                    if (entry.title) row.appendChild(mkSpan("edetail", "\u00b7 " + entry.title));
+                }
+                row.onmouseenter = function() { lp.playSlot("hover"); };
+                row.onclick = lp._handleEntryClick;
+                return row;
+            }
+
+            // \u2500\u2500 Live state helpers (scoped to this panel) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+            function _q(sel) { return _panel ? _panel.querySelector(sel) : document.querySelector(".panel-window " + sel); }
+            function setVal(sel, text) {
+                const el = _q(sel); if (!el) return;
+                const has = text != null && text !== "";
+                el.textContent = has ? text : "\u2014";
+                el.classList.toggle("empty", !has);
+            }
+            function setFlag(name, on) { const el = _q('[data-flag="' + name + '"]'); if (el) el.classList.toggle("on", !!on); }
+            function frameStr(f) { return f ? (f.x + ", " + f.y + "  \u00b7  " + f.w + " \u00d7 " + f.h) : ""; }
+
+            function updateCurrentWindow(s) {
+                if (!s) return;
+                setVal('[data-k="app"]', s.app);
+                setVal('[data-k="pid"]', s.pid != null ? String(s.pid) : "");
+                setVal('[data-k="bundle"]', s.bundleID);
+                setVal('[data-k="title"]', s.title);
+                setVal('[data-k="role"]', [s.role, s.subrole].filter(Boolean).join(" / "));
+                setVal('[data-k="frame"]', frameStr(s.frame));
+                setVal('[data-k="screen"]', s.screen);
+                setVal('[data-k="id"]', s.id != null ? String(s.id) : "");
+                setFlag("standard", s.standard); setFlag("minimized", s.minimized);
+                setFlag("fullscreen", s.fullscreen); setFlag("visible", s.visible);
+            }
+
+            function updateElement(e) {
+                if (!e) return;
+                const banner = _q(".ax-banner");
+                if (e.axPermission === false) {
+                    if (banner) banner.classList.add("show");
+                    ["role","desc","title","value","ident","frame"].forEach((k) => setVal('[data-e="' + k + '"]', ""));
+                    return;
+                }
+                if (banner) banner.classList.remove("show");
+                setVal('[data-e="role"]', e.role);
+                setVal('[data-e="desc"]', e.roleDescription);
+                setVal('[data-e="title"]', e.title);
+                setVal('[data-e="value"]', e.value);
+                setVal('[data-e="ident"]', e.identifier);
+                setVal('[data-e="frame"]', frameStr(e.frame));
+            }
+
+            function updateMousePos(p) {
+                if (!p) return;
+                if (p.sx != null) setVal('[data-cursor="screen"]', p.sx + ", " + p.sy);
+                if (p.wx != null) setVal('[data-cursor="win"]', p.wx + ", " + p.wy);
+                const cell = _q('[data-cursor="pixel"]');
+                if (cell) {
+                    const sw = cell.querySelector(".pixel-swatch");
+                    const hx = cell.querySelector(".pixel-hex");
+                    if (p.pixel && p.pixel.hex) {
+                        if (sw) { sw.style.background = p.pixel.hex; sw.style.display = ""; }
+                        if (hx) hx.textContent = p.pixel.hex + "  ·  " + p.pixel.r + ", " + p.pixel.g + ", " + p.pixel.b;
+                        cell.classList.remove("empty");
+                    } else {
+                        if (sw) sw.style.display = "none";
+                        if (hx) hx.textContent = "—";
+                        cell.classList.add("empty");
+                    }
+                }
+            }
+
+            function updateAll(payload) {
+                if (lp.isPaused()) return;
+                if (payload.window) updateCurrentWindow(payload.window);
+                if (payload.element) updateElement(payload.element);
+                if (payload.mouse) updateMousePos(payload.mouse);
+                if (payload.events) payload.events.forEach(function(e) { appendEntry(e); });
+            }
+
+            function flagEvent(entry) {
+                if (!entry) return;
+                const nm = _q(".win-flag-name"), dt = _q(".win-flag-detail"), pill = _q(".win-flag-pill");
+                if (nm) nm.textContent = LABEL[entry.type] || entry.type;
+                let detail = "";
+                if (entry.type === "focus") detail = entry.app || "";
+                else if (entry.type === "move") detail = (entry.x ?? "") + ", " + (entry.y ?? "");
+                else if (entry.type === "resize") detail = (entry.w ?? "") + " \u00d7 " + (entry.h ?? "");
+                else detail = entry.app || "";
+                if (dt) dt.textContent = detail;
+                if (pill) pill.classList.add("flag-recent");
+            }
+
+            function switchWindowTab(tab) {
+                if (!_panel) return;
+                // Same-destination: play 'back' if already on this tab
+                const activeTab = _panel.querySelector(".wtab.active");
+                if (activeTab && activeTab.dataset.wtab === tab) {
+                    playSlot("back");
+                    return;
+                }
+                playSlot("interact");
+                _panel.querySelectorAll(".wtab").forEach((t) => t.classList.toggle("active", t.dataset.wtab === tab));
+                _panel.querySelectorAll(".wtab-section").forEach((s) => s.classList.toggle("active", s.dataset.wsection === tab));
+                // Tell Lua which tab is up so it only runs the heavy element-under-
+                // cursor AX poll while the Element tab is actually visible.
+                lp.sendToHost({ action: "tab", tab: tab });
+            }
+            window.switchWindowTab = switchWindowTab;
+
+            // ── Inspect toggle ─────────────────────────────────────────────
+            let inspectOn = false;
+            function toggleInspect() {
+                inspectOn = !inspectOn;
+                const btn = document.getElementById('inspectToggle');
+                if (btn) btn.classList.toggle('active', inspectOn);
+                lp.sendToHost({ action: 'setInspect', enabled: inspectOn });
+            }
+            window.toggleInspect = toggleInspect;
+
+            // ── Create LogPanel ─────────────────────────────────────────────
+            const _panel = document.querySelector('.panel-window');
+            const lp = createLogPanel({
+                channel: "window",
+                buildRow,
+                container: _panel,
+                maxEntries: 500,
+                scrollThresh: 48,
+                extractCopyText(el) {
+                    const ts = el.querySelector(".ts")?.textContent || "";
+                    const app = el.querySelector(".entry-app")?.textContent || "";
+                    const title = el.querySelector(".entry-title")?.textContent || "";
+                    const dim = el.querySelector(".dim-pill")?.textContent || "";
+                    const parts = [ts, app];
+                    if (title) parts.push(title);
+                    if (dim) parts.push(dim);
+                    return parts.join(" ");
+                },
+            });
+
+            // ── Expose globals for inline handlers ──────────────────────────
+            window._panelPauseFns['window'] = lp.togglePause;
+            window.playSlot    = lp.playSlot;
+            window._panelClearFns['window'] = lp.clearLog;
+            window.closePanel  = lp.closePanel;
+            window.windowApplyTheme = lp.applyTheme;
+
+            // ── Event log ───────────────────────────────────────────────────
+            // lp.appendEntry/loadHistory target document.getElementById("log");
+            // this panel's log is `.log` scoped under .panel-window (no #log), so
+            // we build rows into it directly via the shared primitives. Delegating
+            // to lp silently dropped every window event.
+            function appendEntry(entry) {
+                if (lp.isPaused()) return;
+                const log = _q(".log");
+                if (!log) return;
+                const empty = log.querySelector(".log-empty");
+                if (empty) empty.remove();
+                flagEvent(entry);
+                const atBottom = lp.isNearBottom(log);
+                log.appendChild(buildRow(entry));
+                lp.trimLog(log);
+                if (atBottom) log.scrollTop = log.scrollHeight;
+            }
+
+            function loadHistory(entries) {
+                const log = _q(".log");
+                if (!log) return;
+                if (!entries || entries.length === 0) {
+                    log.innerHTML = '<div class="log-empty">No window events yet</div>';
+                    return;
+                }
+                log.innerHTML = "";
+                const capped = entries.length > lp.maxEntries ? entries.slice(-lp.maxEntries) : entries;
+                const frag = document.createDocumentFragment();
+                capped.forEach((e) => frag.appendChild(buildRow(e)));
+                log.appendChild(frag);
+                log.scrollTop = log.scrollHeight;
+                flagEvent(capped[capped.length - 1]);
+            }
+
+            // ── Init ────────────────────────────────────────────────────────
+            document.addEventListener("DOMContentLoaded", () => {
+                if (typeof registerPanel === "function") {
+                    registerPanel("window", function(action, body) {
+                        if (action === "appendEntry" && body) appendEntry(body);
+                        else if (action === "updateAll" && body) updateAll(body);
+                        else if (action === "updateCurrentWindow" && body) { if (!lp.isPaused()) updateCurrentWindow(body); }
+                        else if (action === "updateElement" && body) { if (!lp.isPaused()) updateElement(body); }
+                        else if (action === "updateMousePos" && body) { if (!lp.isPaused()) updateMousePos(body); }
+                        else if (action === "loadHistory" && body) loadHistory(body);
+                        else if (action === "updateInspect" && body) {
+                            inspectOn = !!body.enabled;
+                            const btn = document.getElementById('inspectToggle');
+                            if (btn) btn.classList.toggle('active', inspectOn);
+                        }
+                    });
+                }
+                if (window.shellPost) {
+                    var p = document.getElementById("panel");
+                    if (p) { p.style.borderRadius = "0"; p.style.clipPath = "none"; }
+                }
+                lp.sendToHost({ action: "ready" });
+            });
+    })();

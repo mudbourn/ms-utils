@@ -11,7 +11,7 @@
         return (ms._theme and ms._theme.alertAnimMs or 250) / 1000
     end
     MsAlert.getAnimSteps = function()
-        return (ms._theme and ms._theme.alertAnimSteps or 20)
+        return (ms._theme and ms._theme.alertAnimSteps or 30)
     end
 -- END MsAlert --
 
@@ -255,34 +255,15 @@
         end
     end
 
-    function MsAlert:updateById(id, msg, duration)
-        for i = #queue, 1, -1 do
-            local e = queue[i]
-
+    -- Dismisses any queued entry sharing the given id, animated the same
+    -- way the x button does, so a fresh alert with that id can replace it.
+    local function dismissByIdAnimated(id)
+        for _, e in ipairs(queue) do
             if e.id == id then
-                if e.canvas then pcall(function() e.canvas:delete() end); e.canvas = nil end
-
-                e.msg = msg
-
-                -- Move to top only if not low-priority
-                if e.priority ~= "low" then
-                    table.remove(queue, i)
-                    table.insert(queue, e)
-                end
-
-                self:_redraw(e)
-
-                if e.timer then e.timer:stop() end
-
-                e.timer = hs.timer.doAfter(duration, function()
-                    dismissEntry(e)
-                end)
-
-                return true
+                dismissEntry(e)
+                break
             end
         end
-
-        return false
     end
 -- END Dismiss --
 
@@ -365,9 +346,10 @@
         local src = opts and opts.source or "system"
         local id  = opts and opts.id or nil
 
-        -- Auto-replace: if a toast with this id already exists, update it in-place
+        -- Auto-replace: dismiss any existing toast with this id (same as the
+        -- x button) so the new one is sent as a brand new, sequential alert.
         if id then
-            if self:updateById(id, msg, duration) then return end
+            dismissByIdAnimated(id)
         end
 
         if ms.dev and ms.dev.log and id ~= "_state" then
@@ -413,14 +395,10 @@
             priority = opts and opts.priority or "normal",
         }
 
-        -- Low-priority toasts go to the bottom of the queue
-        -- _redraw iterates #queue→1, positioning from bottom to top
-        -- queue[1]=bottom, queue[#queue]=top
-        if entry.priority == "low" then
-            table.insert(queue, entry)
-        else
-            table.insert(queue, 1, entry)
-        end
+        -- Alerts appear sequentially in send order.
+        -- _redraw iterates #queue→1, positioning from bottom to top,
+        -- so appending keeps the newest alert nearest the bottom.
+        table.insert(queue, entry)
         self:_redraw(entry)
 
         entry.timer = hs.timer.doAfter(duration, function()

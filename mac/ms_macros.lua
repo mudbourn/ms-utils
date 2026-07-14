@@ -437,11 +437,20 @@
                 EndMovementChecker()
             end)
 
+            -- Cooldown covers HighLeapAssistFunction's worst-case run time
+            -- (preamble + longest jump loop + trailing wait(3000) ≈ 3.3s).
+            -- All three variants share group G_superJump and the same
+            -- ms.cam accumulator, so a shorter cooldown lets a second click
+            -- start an overlapping run that corrupts the in-flight camera
+            -- rotation totals of the first (inconsistent/missing jumps).
+            local SUPER_JUMP_COOLDOWN = 4000
+
             ms.bind.define("superJump", function()
                 HighLeapAssistFunction()
             end, {
                 group    = "main",
                 label    = "High Leap Assist",
+                cooldown = SUPER_JUMP_COOLDOWN,
                 default  = {
                     type   = "mouse",
                     button = 3,
@@ -449,13 +458,15 @@
             })
 
             ms.bind.define("jumpHigh", HighLeapAssistFunction, {
-                default = { type = "superJump", mods = {"v"} },
-                label   = "Jump High",
+                default  = { type = "superJump", mods = {"v"} },
+                label    = "Jump High",
+                cooldown = SUPER_JUMP_COOLDOWN,
             })
 
             ms.bind.define("jumpLow",  HighLeapAssistFunction, {
-                default = { type = "superJump", mods = {"x"} },
-                label   = "Jump Low",
+                default  = { type = "superJump", mods = {"x"} },
+                label    = "Jump Low",
+                cooldown = SUPER_JUMP_COOLDOWN,
             })
         -- END High Leap Assist --
 

@@ -522,8 +522,6 @@
             end
             ms.saveSettings()
             ms.bind.rebind()
-            -- ms.legacycam.updateAnchor()
-            -- ms.legacycam.updateMultiplier()
             ms.socdApply()
             return true
         end
@@ -531,8 +529,6 @@
         ms.reloadSettings = function()
             ms.loadSettings()
             ms.bind.rebind()
-            -- ms.legacycam.updateAnchor()
-            -- ms.legacycam.updateMultiplier()
             ms.socdApply()
             if not ms._quickReloading then
                 ms.playSlot("update")
@@ -582,8 +578,6 @@
             ms.loadTheme()
             if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
             ms.bind.rebind()
-            -- ms.legacycam.updateAnchor()
-            -- ms.legacycam.updateMultiplier()
             ms.socdApply()
             if ms._macroLabEnabled and ms.shell and ms.shell.hide then
                 ms.shell.hide()

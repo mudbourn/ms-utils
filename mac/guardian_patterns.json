@@ -5,9 +5,11 @@
     "mac/lib/**/*.lua",
     "mac/Spoons/**/*.lua",
     "ui/**/*.html",
+    "ui/**/*.js",
     "mac/bin/*.sh"
   ],
   "exclude": [
+    "ui/_popout_",
     "mac/ms_macros.lua",
     "mac/ms_macros_visual.lua",
     "data/ms_settings.json",

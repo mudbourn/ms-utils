@@ -476,8 +476,6 @@
                 ms.loadSettings()
                 if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
                 ms.bind.rebind()
-                -- ms.legacycam.updateAnchor()
-                -- ms.legacycam.updateMultiplier()
                 ms.socdApply()
                 if not ms._quickReloading then
                     ms.playSlot("update")
@@ -505,8 +503,6 @@
             reloadSettings = function()
                 ms.loadSettings()
                 ms.bind.rebind()
-                -- ms.legacycam.updateAnchor()
-                -- ms.legacycam.updateMultiplier()
                 ms.socdApply()
                 ms.playSlot("update")
                 ms.alert("Settings reloaded.", 4, true)

@@ -92,17 +92,35 @@ YQIDAQAB
             dir_obj:close()
         end
 
-        -- UI: ui/*.html
+        -- UI: ui/*.html + ui/**/*.js (module scripts are code, track them too)
         local uiDir = _home .. "/.hammerspoon/ui/"
         local ok2, iter2, dir2 = pcall(hs.fs.dir, uiDir)
         if ok2 and iter2 then
             for entry in iter2, dir2 do
-                if entry:match("%.html$") then
+                -- _popout_*.html are runtime-baked (theme CSS injected) — never track
+                if entry:match("%.html$") and not entry:match("^_popout_") then
                     files[#files + 1] = uiDir .. entry
                 end
             end
             dir2:close()
         end
+        local function _walkUiJs(dir)
+            local okd, iterd, dobj = pcall(hs.fs.dir, dir)
+            if not okd or not iterd then return end
+            for entry in iterd, dobj do
+                if entry ~= "." and entry ~= ".." then
+                    local path = dir .. entry
+                    local attr = hs.fs.attributes(path)
+                    if attr and attr.mode == "directory" then
+                        _walkUiJs(path .. "/")
+                    elseif entry:match("%.js$") then
+                        files[#files + 1] = path
+                    end
+                end
+            end
+            dobj:close()
+        end
+        _walkUiJs(uiDir)
 
         -- Bin: bin/*.sh
         local binDir = _home .. "/.hammerspoon/bin/"

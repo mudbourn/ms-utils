@@ -1,3 +1,7 @@
+    (function() {
+    "use strict";
+
+    /* ── log-panel.js ──────────────────────────────────────────────────── */
 /**
  * LogPanel — shared factory for ms-utils dev-tool log panels.
  *
@@ -14,6 +18,7 @@
  *   const lp = createLogPanel({
  *     channel: "msConsole",
  *     buildRow(entry) { ... return HTMLElement; },
+ *     container: document.querySelector('.panel-console'), // scopes #log lookups
  *     // optional overrides:
  *     entrySelector: "#log .entry, #log .step",
  *     extractCopyText(el) { return "..."; },
@@ -119,8 +124,22 @@ function applyTheme(t) {
 function defaultExtractCopyText(el) {
     const ts = el.querySelector(".ts")?.textContent || "";
     const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
-    const msg = el.querySelector(".msg")?.textContent || "";
-    return msg ? `${ts} [${badge}] ${msg}` : `${ts} [${badge}]`;
+    // Try .msg first, then .tool-msg, then gather all text content as fallback
+    let msg = el.querySelector(".msg")?.textContent || "";
+    if (!msg) msg = el.querySelector(".tool-msg")?.textContent || "";
+    if (!msg) {
+        // Fallback: gather non-ts, non-badge text from child spans
+        const parts = [];
+        el.querySelectorAll(".key-name, .mouse-name, .scroll-name, .arrow, .dim, .input").forEach(s => {
+            const t = s.textContent?.trim();
+            if (t) parts.push(t);
+        });
+        msg = parts.join(" ");
+    }
+    const repeat = el.querySelector(".repeat-badge")?.textContent || "";
+    const prefix = badge ? `${ts} [${badge}]` : ts;
+    const suffix = repeat ? ` ${repeat}` : '';
+    return msg ? `${prefix} ${msg}${suffix}` : `${prefix}${suffix}`;
 }
 
 // ── Time helpers ─────────────────────────────────────────────────────────
@@ -162,16 +181,23 @@ function _trimLog(logEl, max) {
  * @param {number} [config.scrollThresh=48]
  * @returns {Object} controller with methods to expose as globals
  */
-window.createLogPanel = function createLogPanel(config) {
+function createLogPanel(config) {
     const {
         channel,
         buildRow,
+        container = null,
         entrySelector = "#log .entry, #log .step",
         extractCopyText = defaultExtractCopyText,
         clearAction = "clearLog",
         maxEntries = 300,
         scrollThresh = 48,
     } = config;
+
+    // Scoped DOM queries — container.querySelector finds the right #log
+    // even when multiple panels share the same id="log"
+    const _root = container || document;
+    function _byId(id) { return _root.querySelector('#' + id); }
+    function _queryAll(sel) { return _root.querySelectorAll(sel); }
 
     // ── Host bridge ────────────────────────────────────────────────────
     function sendToHost(msg) {
@@ -188,6 +214,7 @@ window.createLogPanel = function createLogPanel(config) {
     }
 
     function playSlot(slot) {
+        if (slot === "hover" && !document.hasFocus()) return;
         sendToHost({ action: "playSlot", slot });
     }
 
@@ -195,7 +222,7 @@ window.createLogPanel = function createLogPanel(config) {
     let _paused = false;
     function togglePause() {
         _paused = !_paused;
-        const btn = document.getElementById("pause-btn");
+        const btn = _byId("pause-btn");
         if (btn) btn.textContent = _paused ? "Resume" : "Pause";
     }
 
@@ -204,7 +231,7 @@ window.createLogPanel = function createLogPanel(config) {
     let _lastClicked = null;
 
     function _getEntries() {
-        return Array.from(document.querySelectorAll(entrySelector));
+        return Array.from(_queryAll(entrySelector));
     }
 
     function _updateSelectionVisuals() {
@@ -248,7 +275,18 @@ window.createLogPanel = function createLogPanel(config) {
             }
         }
         const text = lines.join("\n");
-        try { navigator.clipboard.writeText(text); } catch (_) {}
+        // Try native clipboard first, fall back to host
+        try {
+            navigator.clipboard.writeText(text).catch(() => {
+                if (typeof shellDispatch === "function") {
+                    shellDispatch("_shell", "clipboard", { text });
+                }
+            });
+        } catch (_) {
+            if (typeof shellDispatch === "function") {
+                shellDispatch("_shell", "clipboard", { text });
+            }
+        }
         playSlot("update");
     }
 
@@ -260,11 +298,13 @@ window.createLogPanel = function createLogPanel(config) {
 
     // ── Context menu ───────────────────────────────────────────────────
     function closeCtxMenu() {
-        document.getElementById("ctx-menu").classList.remove("open");
+        const el = _byId("ctx-menu");
+        if (el) el.classList.remove("open");
     }
 
     function showCtxMenu(x, y, items) {
-        const el = document.getElementById("ctx-menu");
+        const el = _byId("ctx-menu");
+        if (!el) return;
         el.innerHTML = "";
         for (const item of items) {
             if (item === "divider") {
@@ -285,17 +325,33 @@ window.createLogPanel = function createLogPanel(config) {
             });
             el.appendChild(row);
         }
+        // Keep the menu fully visible: clamp horizontally, flip up when there's
+        // more room above, and cap the height so a tall menu scrolls internally
+        // rather than spilling past the window border and getting clipped.
         el.classList.add("open");
+        el.style.maxHeight = "";
+        const MARGIN = 6;
+        const vw = window.innerWidth, vh = window.innerHeight;
         const mw = el.offsetWidth || 140;
-        const mh = el.offsetHeight || 80;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        el.style.left = Math.min(x, vw - mw - 4) + "px";
-        el.style.top = Math.min(y, vh - mh - 4) + "px";
+        const naturalH = el.scrollHeight;
+        const left = Math.max(MARGIN, Math.min(x, vw - mw - MARGIN));
+        const spaceBelow = vh - y - MARGIN, spaceAbove = y - MARGIN;
+        let top, maxH;
+        if (naturalH <= spaceBelow)      { top = y;            maxH = spaceBelow; }
+        else if (naturalH <= spaceAbove) { top = y - naturalH; maxH = spaceAbove; }
+        else if (spaceBelow >= spaceAbove) { top = y;          maxH = spaceBelow; }
+        else                             { top = MARGIN;        maxH = spaceAbove; }
+        top = Math.max(MARGIN, top);
+        el.style.left = left + "px";
+        el.style.top = top + "px";
+        el.style.maxHeight = maxH + "px";
     }
 
     // Suppress native context menu, show custom menu
     document.addEventListener("contextmenu", (e) => {
+        // Only handle when this panel is visible
+        if (container && container.style.display === "none") return;
+        if (container && getComputedStyle(container).display === "none") return;
         e.preventDefault();
         const row = e.target.closest(".entry, .step");
         const items = [];
@@ -323,6 +379,9 @@ window.createLogPanel = function createLogPanel(config) {
     // ── Keyboard shortcuts ─────────────────────────────────────────────
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeCtxMenu();
+        // Only handle shortcuts when this panel is visible
+        if (container && container.style.display === "none") return;
+        if (container && getComputedStyle(container).display === "none") return;
         const inInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
         if ((e.metaKey || e.ctrlKey) && e.key === "a" && !inInput) {
             e.preventDefault();
@@ -334,50 +393,176 @@ window.createLogPanel = function createLogPanel(config) {
         }
     });
 
-    // ── Header drag ────────────────────────────────────────────────────
+    // ── Window drag (title header + rail top strip) ────────────────────
+    // A webview reports pointer coords relative to its own (moving) window, so any
+    // JS-side delta feeds back and flings the panel off-screen. We only tell Lua
+    // when the drag starts/ends; it tracks the real OS mouse position itself.
     (function () {
-        let _drag = null;
-        const header = document.getElementById("header");
-        if (!header) return;
-        header.addEventListener("mousedown", (e) => {
+        document.addEventListener("mousedown", (e) => {
             if (e.button !== 0) return;
+            if (!e.target.closest("#header, #rail-drag")) return;
             if (e.target.closest(".header-btns")) return;
-            _drag = { ox: e.screenX, oy: e.screenY };
-            const onMove = (ev) => {
-                if (!_drag) return;
-                sendToHost({
-                    action: "move",
-                    dx: ev.screenX - _drag.ox,
-                    dy: ev.screenY - _drag.oy,
-                });
-                _drag.ox = ev.screenX;
-                _drag.oy = ev.screenY;
-            };
+            sendToHost({ action: "dragStart" });
+            // While dragging, the window slides under a near-stationary cursor, which
+            // would otherwise sweep hover across every rail item (their transitions
+            // leave a trail of half-highlighted rows). Suppress pointer interaction
+            // for the duration so nothing spuriously highlights.
+            document.body.classList.add("dragging");
             const onUp = () => {
-                _drag = null;
-                window.removeEventListener("mousemove", onMove);
+                document.body.classList.remove("dragging");
+                sendToHost({ action: "moveEnd" });
                 window.removeEventListener("mouseup", onUp);
             };
-            window.addEventListener("mousemove", onMove);
             window.addEventListener("mouseup", onUp);
         });
     })();
 
+    // ── Resize grab zones ──────────────────────────────────────────────
+    (function () {
+        document.querySelectorAll(".resize-zone").forEach(function(zone) {
+            zone.addEventListener("mousedown", function(e) {
+                if (e.button !== 0) return;
+                var edge = zone.dataset.edge;
+                if (!edge) return;
+                window.__msResizing = true;
+                sendToHost({ action: "resizeStart", edge: edge });
+                document.body.classList.add("resizing");
+                var onUp = function() {
+                    window.__msResizing = false;
+                    document.body.classList.remove("resizing");
+                    window.removeEventListener("mouseup", onUp);
+                };
+                window.addEventListener("mouseup", onUp);
+            });
+        });
+    })();
+
+    // ── Minimum size enforcement ───────────────────────────────────────
+    (function () {
+        const MIN_W = 800, MIN_H = 500;
+        let _resizeTimer = null;
+        function checkSize() {
+            // Skip during active resize — the Lua eventtap handles clamping
+            if (window.__msResizing) return;
+            if (window.innerWidth < MIN_W || window.innerHeight < MIN_H) {
+                sendToHost({
+                    action: "clampSize",
+                    w: Math.max(window.innerWidth, MIN_W),
+                    h: Math.max(window.innerHeight, MIN_H),
+                });
+            }
+        }
+        window.addEventListener("resize", function() {
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(checkSize, 50);
+        });
+    })();
+
     // ── Default appendEntry / loadHistory (single #log) ────────────────
+    let _lastEntry = null;
+    const _pendingHolds = {}; // label+key → { row, ts }
+
+    function _entryBadge(entry) {
+        if (entry.type === 'step') {
+            const msg = entry.msg || '';
+            if (/\] wait /.test(msg)) return 'wait';
+            if (/\] sound /.test(msg)) return 'sound';
+            if (/\] cam\.move/.test(msg)) return 'cam';
+            if (/\] [↓↑] |\] type /.test(msg)) return 'keys';
+            if (/\] Mouse /.test(msg)) return 'mouse';
+            if (/\] scroll /.test(msg)) return 'scroll';
+            if (/\] copy/.test(msg)) return 'copy';
+            return 'other';
+        }
+        return entry.type || 'unknown';
+    }
+
+    function _entryLabel(entry) {
+        const m = (entry.msg || '').match(/^\[([^\]]+)\]\s/);
+        return m ? m[1] : (entry.label || entry.type || '_default');
+    }
+
+    function _isKeyDown(entry) {
+        return (entry.msg || '').includes('] ↓ ');
+    }
+
+    function _isKeyUp(entry) {
+        return (entry.msg || '').includes('] ↑ ');
+    }
+
+    function _holdKey(entry) {
+        // Extract key name from "[label] ↓ W" → "W"
+        const m = (entry.msg || '').match(/\] [↓↑]\s+(.+)$/);
+        return m ? m[1] : null;
+    }
+
     function appendEntry(entry) {
         if (_paused) return;
-        const log = document.getElementById("log");
+        const log = _byId("log");
         if (!log) return;
         const atBottom = _isNearBottom(log, scrollThresh);
-        log.appendChild(buildRow(entry));
+        const label = _entryLabel(entry);
+
+        // Key hold tracking: ↓ stores pending, ↑ replaces with hold entry
+        if (_isKeyDown(entry)) {
+            const keyName = _holdKey(entry);
+            if (keyName) {
+                const holdId = label + ':' + keyName;
+                const row = buildRow(entry);
+                row.dataset.holdId = holdId;
+                _pendingHolds[holdId] = { row, ts: entry.ts };
+                log.appendChild(row);
+                // Update _lastEntry so this doesn't also get consecutive-collapsed
+                _lastEntry = { cat: _entryBadge(entry), row, count: 1 };
+                _trimLog(log, maxEntries);
+                if (atBottom) log.scrollTop = log.scrollHeight;
+                return;
+            }
+        }
+
+        if (_isKeyUp(entry)) {
+            const keyName = _holdKey(entry);
+            if (keyName) {
+                const holdId = label + ':' + keyName;
+                const pending = _pendingHolds[holdId];
+                if (pending && pending.row && pending.row.parentNode) {
+                    // Replace the ↓ row with a hold row
+                    const holdRow = document.createElement('div');
+                    holdRow.className = 'step';
+                    holdRow.dataset.cat = 'keys';
+                    const ts = document.createElement('span');
+                    ts.className = 'ts';
+                    ts.textContent = '[' + (entry.ts || '') + ']';
+                    const msg = document.createElement('span');
+                    msg.className = 'tool-msg';
+                    msg.textContent = '[' + label + '] hold ' + keyName;
+                    holdRow.append(ts, msg);
+                    holdRow.onmouseenter = function() { lp.playSlot('hover'); };
+                    holdRow.onclick = lp._handleEntryClick;
+                    pending.row.replaceWith(holdRow);
+                    delete _pendingHolds[holdId];
+                    // Clear dedup state so next entry starts fresh
+                    _lastEntry = null;
+                    _trimLog(log, maxEntries);
+                    if (atBottom) log.scrollTop = log.scrollHeight;
+                    return;
+                }
+            }
+        }
+
+        const row = buildRow(entry);
+        log.appendChild(row);
+
         _trimLog(log, maxEntries);
         if (atBottom) log.scrollTop = log.scrollHeight;
     }
 
     function loadHistory(entries) {
-        const log = document.getElementById("log");
+        const log = _byId("log");
         if (!log) return;
         log.innerHTML = "";
+        _lastEntry = null;
+        for (const k in _pendingHolds) delete _pendingHolds[k];
         const capped =
             entries && entries.length > maxEntries
                 ? entries.slice(-maxEntries)
@@ -390,7 +575,7 @@ window.createLogPanel = function createLogPanel(config) {
 
     // ── Actions ────────────────────────────────────────────────────────
     function clearLog() {
-        const log = document.getElementById("log");
+        const log = _byId("log");
         if (log) log.innerHTML = "";
         sendToHost({ action: "clear" });
     }
@@ -398,69 +583,6 @@ window.createLogPanel = function createLogPanel(config) {
     function closePanel() {
         sendToHost({ action: "close" });
     }
-
-    // ── Resize guard (popout boundary protection) ─────────────────────
-    // Borderless popout windows don't get native resize handles, but yabai
-    // or other window managers can still resize them.  Enforce minimum
-    // dimensions by sending a clampSize action to the host when the window
-    // shrinks below threshold.
-    (function () {
-        let _clampTimer = null;
-        const MIN_W = 400, MIN_H = 300;
-        window.addEventListener("resize", function () {
-            if (window.__msResizing) return;  // Lua eventtap handles clamping
-            if (_clampTimer) clearTimeout(_clampTimer);
-            _clampTimer = setTimeout(function () {
-                _clampTimer = null;
-                const w = window.innerWidth, h = window.innerHeight;
-                if (w < MIN_W || h < MIN_H) {
-                    sendToHost({ action: "clampSize", w: Math.max(w, MIN_W), h: Math.max(h, MIN_H) });
-                }
-            }, 50);
-        });
-    })();
-
-    // ── Resize grab zones (popout windows) ────────────────────────────
-    // Adds edge/corner grab zones for drag-to-resize on popout windows.
-    // The zones are injected into <body> outside #popout-root.
-    (function () {
-        var zones = [
-            { cls: "resize-n", edge: "n", css: "top:0;left:6px;right:6px;height:4px;cursor:ns-resize;" },
-            { cls: "resize-s", edge: "s", css: "bottom:0;left:6px;right:6px;height:4px;cursor:ns-resize;" },
-            { cls: "resize-e", edge: "e", css: "right:0;top:6px;bottom:6px;width:4px;cursor:ew-resize;" },
-            { cls: "resize-w", edge: "w", css: "left:0;top:6px;bottom:6px;width:4px;cursor:ew-resize;" },
-            { cls: "resize-ne", edge: "ne", css: "top:0;right:0;width:8px;height:8px;cursor:nesw-resize;" },
-            { cls: "resize-nw", edge: "nw", css: "top:0;left:0;width:8px;height:8px;cursor:nwse-resize;" },
-            { cls: "resize-se", edge: "se", css: "bottom:0;right:0;width:8px;height:8px;cursor:nwse-resize;" },
-            { cls: "resize-sw", edge: "sw", css: "bottom:0;left:0;width:8px;height:8px;cursor:nesw-resize;" },
-        ];
-        zones.forEach(function(z) {
-            var el = document.createElement("div");
-            el.className = "resize-zone " + z.cls;
-            el.setAttribute("data-edge", z.edge);
-            el.style.cssText = "position:fixed;z-index:9999;background:transparent;" + z.css;
-            el.addEventListener("mousedown", function(e) {
-                if (e.button !== 0) return;
-                window.__msResizing = true;
-                sendToHost({ action: "resizeStart", edge: z.edge });
-                document.body.classList.add("resizing");
-                var onUp = function() {
-                    window.__msResizing = false;
-                    document.body.classList.remove("resizing");
-                    window.removeEventListener("mouseup", onUp);
-                };
-                window.addEventListener("mouseup", onUp);
-            });
-            document.body.appendChild(el);
-        });
-        // Add resizing CSS if not already present
-        if (!document.getElementById("resize-zone-style")) {
-            var style = document.createElement("style");
-            style.id = "resize-zone-style";
-            style.textContent = "body.resizing * { pointer-events: none !important; }";
-            document.head.appendChild(style);
-        }
-    })();
 
     // ── Controller ─────────────────────────────────────────────────────
     return {
@@ -486,3 +608,8 @@ window.createLogPanel = function createLogPanel(config) {
         _updateSelectionVisuals,
     };
 }
+
+
+    window.createLogPanel = createLogPanel;
+
+    })();

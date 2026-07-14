@@ -124,12 +124,45 @@
     local _pushMouseState
     -- Window Spy engine (event-driven, hang-safe; replaces the 0.4s poller)
     local _winAppWatcher, _winUiWatcher, _winMonitor
-    local _winDirty, _winMoveN, _winResizeN, _winLastMouse
+    local _winDirty, _winMoveN, _winResizeN, _winLastMouse, _winLastInspectAt
     -- Forward-declared so the Window bus handler in :start() (registered far above
     -- their definitions) captures these upvalues instead of resolving to nil
     -- globals — the "ready" push fired _winRead/_winPush before they existed.
     local _winRead, _winPush
     local _axTimeoutSet = false
+    -- Standalone-panel drag: OS-mouse-delta eventtap, mirroring the shell
+    -- window (log-panel.js sends dragStart/moveEnd, not per-move deltas)
+    local _devDragTap
+    local function _devDragEnd(getView)
+        if _devDragTap then _devDragTap:stop(); _devDragTap = nil end
+        local v = getView and getView()
+        if v then pcall(function() v:shadow(true) end) end
+    end
+    local function _devDragStart(getView, pos)
+        if _devDragTap then _devDragTap:stop(); _devDragTap = nil end
+        local view = getView()
+        if not view then return end
+        local startFrame = view:frame()
+        local startMouse = hs.mouse.absolutePosition()
+        local topLimit = (hs.mouse.getCurrentScreen() or hs.screen.mainScreen()):frame().y
+        pcall(function() view:shadow(false) end)
+        local et = hs.eventtap.event.types
+        _devDragTap = hs.eventtap.new({ et.leftMouseDragged, et.leftMouseUp }, function(ev)
+            local v = getView()
+            if not v then return false end
+            if ev:getType() == et.leftMouseUp then
+                _devDragEnd(getView)
+                return false
+            end
+            local mp = hs.mouse.absolutePosition()
+            local nx = startFrame.x + (mp.x - startMouse.x)
+            local ny = math.max(startFrame.y + (mp.y - startMouse.y), topLimit)
+            if pos then pos.x = nx; pos.y = ny end
+            pcall(function() v:frame({ x = nx, y = ny, w = startFrame.w, h = startFrame.h }) end)
+            return false
+        end)
+        _devDragTap:start()
+    end
     -- Shell state: which inline panel is showing + a move-driven mouse poller so
     -- the Inputs coordinate readout follows the cursor (the click-only eventtap
     -- was the sole coord source in the shell; there is no standalone keys panel).
@@ -1383,6 +1416,12 @@
             elseif data.action == "openKeys" then
                 self:showKeys()
 
+            elseif data.action == "dragStart" then
+                _devDragStart(function() return _consolePanel end, _consolePanelPos)
+
+            elseif data.action == "moveEnd" then
+                _devDragEnd(function() return _consolePanel end)
+
             elseif data.action == "move" and _consolePanelPos then
                 _consolePanelPos.x = _consolePanelPos.x + (data.dx or 0)
                 _consolePanelPos.y = _consolePanelPos.y + (data.dy or 0)
@@ -1492,6 +1531,12 @@
 
             elseif data.action == "close" then
                 self:hideWatcher()
+
+            elseif data.action == "dragStart" then
+                _devDragStart(function() return _watcherPanel end, _watcherPanelPos)
+
+            elseif data.action == "moveEnd" then
+                _devDragEnd(function() return _watcherPanel end)
 
             elseif data.action == "move" and _watcherPanelPos then
                 _watcherPanelPos.x = _watcherPanelPos.x + (data.dx or 0)
@@ -1621,6 +1666,12 @@
                         pcall(function() _pushMouseState() end)
                     end
                 end)
+
+            elseif data.action == "dragStart" then
+                _devDragStart(function() return _keysPanel end, _keysPanelPos)
+
+            elseif data.action == "moveEnd" then
+                _devDragEnd(function() return _keysPanel end)
 
             elseif data.action == "move" and _keysPanelPos then
                 _keysPanelPos.x = _keysPanelPos.x + (data.dx or 0)
@@ -2012,8 +2063,14 @@
             -- Gated by _winElementInspect (F6): off by default, user opts in.
             if _winElementInspect and _winElementTab and hs.accessibilityState() then
                 local p = hs.mouse.absolutePosition()
-                if not (_winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y) then
+                -- Stationary refresh: shiftlock (pointer-lock) pins the cursor, so
+                -- position-equality alone would freeze the pixel/AX readout while
+                -- the screen under it keeps changing. Re-sample every 0.5s anyway.
+                local _now = hs.timer.secondsSinceEpoch()
+                local _stationaryDue = (not _winLastInspectAt) or (_now - _winLastInspectAt) >= 0.5
+                if _stationaryDue or not (_winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y) then
                     _winLastMouse = p
+                    _winLastInspectAt = _now
                     local pixel = _winG(function()
                         local scr = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
                         if not scr then return nil end
@@ -2119,6 +2176,12 @@
 
             elseif data.action == "close" then
                 self:hideWindow()
+
+            elseif data.action == "dragStart" then
+                _devDragStart(function() return _windowPanel end, _windowPanelPos)
+
+            elseif data.action == "moveEnd" then
+                _devDragEnd(function() return _windowPanel end)
 
             elseif data.action == "move" and _windowPanelPos then
                 _windowPanelPos.x = _windowPanelPos.x + (data.dx or 0)
