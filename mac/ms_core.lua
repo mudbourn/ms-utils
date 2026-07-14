@@ -1,20 +1,20 @@
 -- Core System ---- PLEASE EDIT CAREFULLY --
     -- Hammerspoon mudscript Utility Library --
         -- 0. Bootstrap & Spoons --
-            ms = {}
-            if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
             if _G.__ms_core_running then return end
             _G.__ms_core_running = true
+            ms = {}
+            if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
 
-            -- Loading Screen locals (webview created after spoon loading) --
-                local _lWebView, _lFadingOut, _lFadeTimer
-                local _lFadeOut, _loadAnnounced, _announceLoad
+            -- Loading Screen boot-completion locals --
+                local _loadAnnounced, _announceLoad
                 local _needsIntegrityWarning = false
-                local _lMsgBuffer = {}
-                local _lUpdate = function(pct, msg)
-                    _lMsgBuffer[#_lMsgBuffer + 1] = { pct = pct, msg = msg }
-                end
-            -- END Loading Screen locals --
+            -- END Loading Screen boot-completion locals --
+
+            -- Loading Screen (webview mechanism) --
+                package.loaded["lib.ms_loading"] = nil
+                require("lib.ms_loading")(ms)
+            -- END Loading Screen --
 
             -- Guardian (moved to MsGuardian.spoon) --
             -- END Guardian --
@@ -71,7 +71,7 @@
             -- END Font installation --
 
             -- MsGuardian (integrity check) --
-                _lUpdate(3, "Configuring Guardian\u{2026}")
+                ms.loading.update(3, "Configuring Guardian\u{2026}")
                 pcall(function() hs.loadSpoon("MsGuardian"); spoon.MsGuardian:check() end)
                 -- Guardian tether: all spoons check this flag
                 ms.checkGuardian = function(name)
@@ -137,7 +137,7 @@
             -- END Event Bus --
 
             -- MsDevTools (logging & dev panels) --
-                _lUpdate(6, "Configuring Dev Tools\u{2026}")
+                ms.loading.update(6, "Configuring Dev Tools\u{2026}")
                 local _msDevOk, _msDevErr = pcall(function()
                     hs.loadSpoon("MsDevTools")
                     spoon.MsDevTools:init()
@@ -209,7 +209,7 @@
             -- END MsDevTools (logging & dev panels) --
 
             -- MsAlert (toast notifications) --
-                _lUpdate(9, "Configuring Alerts\u{2026}")
+                ms.loading.update(9, "Configuring Alerts\u{2026}")
                 local _msAlertOk, _msAlertErr = pcall(function()
                     hs.loadSpoon("MsAlert")
                 end)
@@ -236,7 +236,7 @@
             -- MsCamera removed (ms.cam uses CGEvent directly) --
 
             -- MsSettings (settings menu & profiles) --
-                _lUpdate(15, "Configuring Settings\u{2026}")
+                ms.loading.update(15, "Configuring Settings\u{2026}")
                 local _msSettingsOk, _msSettingsErr = pcall(function()
                     hs.loadSpoon("MsSettings")
                 end)
@@ -304,7 +304,7 @@
             -- END MsSettings (settings menu & profiles) --
 
             -- MsUI (webview settings panel) --
-                _lUpdate(18, "Configuring UI\u{2026}")
+                ms.loading.update(18, "Configuring UI\u{2026}")
                 local _msUIOk, _msUIErr = pcall(function()
                     hs.loadSpoon("MsUI")
                 end)
@@ -4732,18 +4732,7 @@
                         ms.alert("Warning: ms_macros.lua did not declare ms.macroMeta.", 6)
                     end)
                 end
-                -- Re-push metadata to the loading screen now that macroMeta is
-                -- populated.  _startBootChoreography fires on the DOM ready
-                -- handshake (before ms_macros.lua loads), so its macroMeta
-                -- guards are always nil on cold start.
-                if _lWebView and ms.macroMeta then
-                    if ms.macroMeta.name then
-                        pcall(function() _lWebView:evaluateJavaScript("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')") end)
-                    end
-                    if ms.macroMeta.author and ms.macroMeta.author ~= "" then
-                        pcall(function() _lWebView:evaluateJavaScript("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')") end)
-                    end
-                end
+                ms.loading.pushMeta()
                 if not next(ms.registry._defs) then
                     error("ms_macros.lua: no ms.bind.define calls found — file may be malformed.")
                 end
@@ -4837,141 +4826,8 @@
         BindValidity = 0  -- block macros during loading; _announceLoad re-enables when toasts fire
         ms._startupSoundDone = false  -- suppresses all non-load sounds until _announceLoad runs
 
-        -- Loading Screen — Webview Creation --
-            do
-                local sf  = hs.screen.mainScreen():frame()
-                local lw, lh = 360, 140
-                local lx  = sf.x + math.floor((sf.w - lw) / 2)
-                local ly  = sf.y + math.floor((sf.h - lh) / 2)
-
-                local _ucLoad = hs.webview.usercontent.new("loadingScreen")
-                _ucLoad:setCallback(function(message)
-                    local ok, data = pcall(hs.json.decode, message.body)
-                    if not ok or type(data) ~= "table" then return end
-                    -- Page-ready handshake: the loading page posts {action="ready"}
-                    -- on DOMContentLoaded.  This anchors the boot choreography
-                    -- to when the page is actually alive, fixing the race where
-                    -- blind timers fire before the page's <script> has parsed.
-                    if data.action == "ready" then
-                        _startBootChoreography()
-                    end
-                end)
-
-                local htmlPath = hs.configdir .. "/ui/ms_loading.html"
-                local baseURL  = "file://" .. hs.configdir .. "/ui/"
-
-                _lWebView = hs.webview.new({ x=lx, y=ly, w=lw, h=lh }, {}, _ucLoad)
-                pcall(function() _lWebView:windowStyle(0) end)
-                pcall(function() _lWebView:transparent(true) end)
-                pcall(function() _lWebView:level(hs.canvas.windowLevels.popUpMenu or 25) end)
-                pcall(function() _lWebView:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                pcall(function() _lWebView:allowTextEntry(false) end)
-                pcall(function() _lWebView:shadow(false) end)
-                _lWebView:alpha(0)
-
-                -- Replace buffer function with live function
-                _lUpdate = function(pct, msg)
-                    if not _lWebView then return end
-                    local encoded = msg and ('"' .. msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
-                    local js = string.format("setProgress(%d, %s)", pct, encoded)
-                    _lWebView:evaluateJavaScript(js)
-                end
-
-                local f = io.open(htmlPath, "r")
-                if f then
-                    local html = f:read("*all"); f:close()
-                    _lWebView:html(html, baseURL)
-                end
-
-                -- Boot choreography — anchored to page-ready handshake.
-                -- Called from the loading channel callback when the page posts
-                -- {action="ready"} on DOMContentLoaded.  This replaces the old
-                -- blind timers that raced WKWebView's async html() load.
-                local function js(code)
-                    if _lWebView then pcall(function() _lWebView:evaluateJavaScript(code) end) end
-                end
-
-                _startBootChoreography = function()
-                    -- Guard: only run once (defensive against duplicate ready signals)
-                    if _G._bootChoreographyStarted then return end
-                    _G._bootChoreographyStarted = true
-
-                    _G._loadTimers = {}
-
-                    -- t=0: Load theme into memory, replay buffers, show panel, fade in, boot sound
-                    pcall(function() ms.loadTheme() end)
-                    -- Theme application deferred to t3 (synced with themeLoaded sound)
-                    -- Set profile name and creator
-                    if ms.macroMeta and ms.macroMeta.name then
-                        js("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')")
-                    end
-                    if ms.macroMeta and ms.macroMeta.author and ms.macroMeta.author ~= "" then
-                        js("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')")
-                    end
-                    -- Replay buffered messages
-                    for _, entry in ipairs(_lMsgBuffer) do
-                        local encoded = entry.msg and ('"' .. entry.msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
-                        js(string.format("setProgress(%d, %s)", entry.pct, encoded))
-                    end
-                    _lMsgBuffer = {}
-                    -- Show and fade in the panel (no content yet)
-                    _lWebView:show()
-                    local step, steps = 0, 25
-                    _G._loadTimers.fadeIn = hs.timer.doEvery(0.15 / steps, function()
-                        step = step + 1
-                        if _lWebView then _lWebView:alpha(step / steps) end
-                        if step >= steps then
-                            if _G._loadTimers.fadeIn then _G._loadTimers.fadeIn:stop(); _G._loadTimers.fadeIn = nil end
-                        end
-                    end)
-                    -- Play boot sound
-                    pcall(function() ms.sound(SoundDefaultsDir .. "d_Boot.wav") end)
-
-                    -- Brand text: show immediately at t=0 so it's part of the
-                    -- first composited frame (avoids the title vanishing when
-                    -- the webview hitches during its initial show).
-                    js("showBrand()")
-                    _G._loadTimers[2] = hs.timer.doAfter(0.2, function() js("showBrand()") end)
-
-                    -- t=1.7: Shift brand to top-left (600ms CSS)
-                    _G._loadTimers[3] = hs.timer.doAfter(1.7, function() js("shiftBrand()") end)
-
-                    -- t=2.5: Divider + content fade in (300ms CSS)
-                    _G._loadTimers[4] = hs.timer.doAfter(2.5, function()
-                        js("showDivider()")
-                        js("showContent()")
-                    end)
-
-                    -- t=2.9: Loading sequence begins (handled by animGate below)
-                end
-
-                -- Fallback: if the ready signal never arrives (defensive),
-                -- start the choreography after 0.5s anyway.
-                hs.timer.doAfter(0.5, function()
-                    if not _G._bootChoreographyStarted then
-                        _startBootChoreography()
-                    end
-                end)
-            end
-        -- END Loading Screen — Webview Creation --
-
-        -- Loading Screen — Fade, Announce & Timers --
-            -- Initial update deferred to animGate
-
-            _lFadeOut = function()
-                if not _lWebView or _lFadingOut then return end
-                _lFadingOut = true
-                local step, steps = 0, 25
-                _G._loadTimers.fadeOut = hs.timer.doEvery((ms._theme.fadeMs or 250) / 1000 / steps, function()
-                    step = step + 1
-                    if _lWebView then _lWebView:alpha(1 - (step / steps)) end
-                    if step >= steps then
-                        if _G._loadTimers.fadeOut then _G._loadTimers.fadeOut:stop(); _G._loadTimers.fadeOut = nil end
-                        if _lWebView then _lWebView:delete(); _lWebView = nil end
-                        _G._loadTimers.announce = hs.timer.doAfter(0.1, _announceLoad)
-                    end
-                end)
-            end
+        -- Loading Screen — Announce & Boot Completion --
+            ms.loading.create()
 
             _announceLoad = function()
                 if _loadAnnounced then return end
@@ -4992,11 +4848,7 @@
                             ms.alert(msg, 3, true, { priority = "low" })
                         end
                     end)
-                    -- Re-inject theme now that MsSettings has loaded it
-                    if _lWebView then
-                        local themeJson = hs.json.encode(ms._theme or {})
-                        _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")")
-                    end
+                    ms.loading.applyTheme()
                     ms._loadComplete = true
                     ms.dev.log({ type = "system", event = "startup_complete" })
                     -- Apply Octane Mode if persisted as on
@@ -5025,7 +4877,7 @@
             _G._timers = {}
             -- Delay loading sequence until boot animation completes (~2.9s)
             _G._timers.animGate = hs.timer.doAfter(2.9, function()
-            _lUpdate(20, "Initializing\u{2026}")
+            ms.loading.update(20, "Initializing\u{2026}")
             -- Timing for loading sequence
             local t1 = 0.3
             local t2 = 0.5
@@ -5041,34 +4893,34 @@
                 print("[startup] t=0: prebuild")
                 pcall(function() ms.ui.prebuild() end)
                 pcall(function() ms.ui._precacheHTML() end)
-                _lUpdate(25, "Building UI state cache\u{2026}")
+                ms.loading.update(25, "Building UI state cache\u{2026}")
             end)
             _G._timers[2] = hs.timer.doAfter(t1, function()
                 print("[startup] t=" .. t1 .. ": prep settings")
-                _lUpdate(32, "Preparing settings panel\u{2026}")
+                ms.loading.update(32, "Preparing settings panel\u{2026}")
             end)
             _G._timers[3] = hs.timer.doAfter(t2, function()
                 print("[startup] t=" .. t2 .. ": prewarm")
                 pcall(function() ms.ui.prewarm() end)
-                _lUpdate(40, "Loading settings panel\u{2026}")
+                ms.loading.update(40, "Loading settings panel\u{2026}")
             end)
             _G._timers[4] = hs.timer.doAfter(t3, function()
                 print("[startup] t=" .. t3 .. ": theme")
-                _lUpdate(48, "Applying theme\u{2026}")
+                ms.loading.update(48, "Applying theme\u{2026}")
                 -- Apply theme in sync with themeLoaded sound
-                if _lWebView then
+                if ms.loading.isVisible() then
                     local themeJson = hs.json.encode(ms._theme or {})
-                    pcall(function() _lWebView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)
+                    pcall(function() ms.loading.eval("applyTheme(" .. themeJson .. ")") end)
                 end
                 pcall(function() ms.playSlot("themeLoaded") end)
                 -- Show profile name, creator, and version when theme loads (macros loaded by now)
-                if _lWebView then
+                if ms.loading.isVisible() then
                     -- Re-push metadata now that ms_macros.lua has loaded
                     if ms.macroMeta and ms.macroMeta.name then
-                        pcall(function() _lWebView:evaluateJavaScript("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')") end)
+                        pcall(function() ms.loading.eval("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')") end)
                     end
                     if ms.macroMeta and ms.macroMeta.author and ms.macroMeta.author ~= "" then
-                        pcall(function() _lWebView:evaluateJavaScript("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')") end)
+                        pcall(function() ms.loading.eval("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')") end)
                     end
                     -- Push version from MANIFEST.json (same source as MsUI.spoon)
                     local _ver = (function()
@@ -5092,63 +4944,63 @@
                         return base
                     end)()
                     if _ver then
-                        pcall(function() _lWebView:evaluateJavaScript("setVersion('" .. _ver:gsub("'", "\\'") .. "')") end)
+                        pcall(function() ms.loading.eval("setVersion('" .. _ver:gsub("'", "\\'") .. "')") end)
                     end
-                    pcall(function() _lWebView:evaluateJavaScript("showProfile()") end)
-                    pcall(function() _lWebView:evaluateJavaScript("showCreator()") end)
-                    pcall(function() _lWebView:evaluateJavaScript("showVersion()") end)
+                    pcall(function() ms.loading.eval("showProfile()") end)
+                    pcall(function() ms.loading.eval("showCreator()") end)
+                    pcall(function() ms.loading.eval("showVersion()") end)
                 end
             end)
             _G._timers[5] = hs.timer.doAfter(t4, function()
                 print("[startup] t=" .. t4 .. ": integrity seed")
-                _lUpdate(55, "Seeding integrity hash\u{2026}")
+                ms.loading.update(55, "Seeding integrity hash\u{2026}")
             end)
             _G._timers[6] = hs.timer.doAfter(t5, function()
                 print("[startup] t=" .. t5 .. ": console")
-                _lUpdate(62, "Loading console\u{2026}")
+                ms.loading.update(62, "Loading console\u{2026}")
                 _G._timers[60] = hs.timer.doAfter(0, function()
                     pcall(function() ms.dev.prewarmStep("console") end)
                 end)
             end)
             _G._timers[7] = hs.timer.doAfter(t6, function()
                 print("[startup] t=" .. t6 .. ": watcher")
-                _lUpdate(72, "Loading macro monitor\u{2026}")
+                ms.loading.update(72, "Loading macro monitor\u{2026}")
                 _G._timers[70] = hs.timer.doAfter(0, function()
                     pcall(function() ms.dev.prewarmStep("watcher") end)
                 end)
             end)
             _G._timers[8] = hs.timer.doAfter(t7, function()
                 print("[startup] t=" .. t7 .. ": keys")
-                _lUpdate(82, "Loading input monitor\u{2026}")
+                ms.loading.update(82, "Loading input monitor\u{2026}")
                 _G._timers[80] = hs.timer.doAfter(0, function()
                     pcall(function() ms.dev.prewarmStep("keys") end)
                 end)
             end)
             _G._timers[9] = hs.timer.doAfter(t8, function()
                 print("[startup] t=" .. t8 .. ": window")
-                _lUpdate(90, "Loading window monitor\u{2026}")
+                ms.loading.update(90, "Loading window monitor\u{2026}")
                 _G._timers[90] = hs.timer.doAfter(0, function()
                     pcall(function() ms.dev.prewarmStep("window") end)
                 end)
             end)
             _G._timers[10] = hs.timer.doAfter(t9, function()
                 print("[startup] t=" .. t9 .. ": finalize")
-                if not _lFadingOut then _lUpdate(96, "Finalizing\u{2026}") end
+                if not ms.loading.isFadingOut() then ms.loading.update(96, "Finalizing\u{2026}") end
             end)
             _G._timers[11] = hs.timer.doAfter(t10, function()
                 print("[startup] t=" .. t10 .. ": fade start")
-                if not _lFadingOut then
-                    _lUpdate(100, "Ready.")
+                if not ms.loading.isFadingOut() then
+                    ms.loading.update(100, "Ready.")
                     _G._timers[12] = hs.timer.doAfter(0.8, function()
                         print("[startup] fade out")
-                        pcall(function() _lFadeOut() end)
+                        pcall(function() ms.loading.fadeOut(_announceLoad) end)
                     end)
                 end
             end)
             _G._timers.guard = hs.timer.doAfter(8, function()
                 print("[startup] t=8: GUARD fired")
                 pcall(function()
-                    if _lWebView and not _lFadingOut then _lFadeOut() end
+                    if ms.loading.isVisible() and not ms.loading.isFadingOut() then ms.loading.fadeOut(_announceLoad) end
                 end)
                 ms._startupSoundDone = true
                 print("[startup] t=8: startupSoundDone set to", ms._startupSoundDone)
@@ -5212,6 +5064,6 @@
                 notice = 1
             end
             end) -- end animGate
-        -- END Startup Loading Indicator --
+        -- END Loading Screen — Announce & Boot Completion --
     -- END Startup Executions --
 -- END Core System --
