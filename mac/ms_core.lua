@@ -405,6 +405,7 @@
             ms.vars = {}
             ms.keytrack = {}
             ms._keyBindings = {}
+            ms._keyBindingsByCode = {}   -- [keyCode] = { binding, ... } — derived index, synced at ms.key/delete
             ms.bindConfig = {}
             ms.bindHandles = {}
             ms.systemBinds             = { _config = {}, _handles = {} }
@@ -676,7 +677,7 @@
                     ms.keytrack[61] = flags.ctrl
                     ms.keytrack[55] = flags.cmd
                     ms.keytrack[54] = flags.cmd
-                    if ms.dev and ms.dev._onKeyEvent then
+                    if ms.dev and ms.dev._wantsKeyEvents and ms.dev._wantsKeyEvents() then
                         local now = {
                             shift = flags.shift and true or false,
                             alt   = flags.alt   and true or false,
@@ -702,13 +703,15 @@
                 if type == hs.eventtap.event.types.keyDown then
                     local isRepeat = ms.keytrack[keyCode] == true
                     ms.keytrack[keyCode] = true
-                    if not isRepeat and ms.dev then
+                    if not isRepeat and ms.dev and ms.dev._wantsKeyEvents and ms.dev._wantsKeyEvents() then
                         pcall(ms.dev._onKeyEvent, keyCode, hs.keycodes.map[keyCode], true)
                     end
-                    if not isRepeat and ms._keyBindings then
+                    if not isRepeat and ms._keyBindingsByCode then
                         ms._currentFlags = flags
-                        for _, binding in pairs(ms._keyBindings) do
-                            if binding and binding.keyCode == keyCode then
+                        local bucket = ms._keyBindingsByCode[keyCode]
+                        if bucket then
+                        for _, binding in ipairs(bucket) do
+                            if binding then
                                 -- Exact-match: required mods held AND no extra mods held,
                                 -- so bare-key binds don't swallow modified combos (alt+esc)
                                 local modsMatch = true
@@ -730,15 +733,17 @@
                                 end
                             end
                         end
+                        end -- bucket
                     end
                 elseif type == hs.eventtap.event.types.keyUp then
                     ms.keytrack[keyCode] = false
-                    if ms.dev then
+                    if ms.dev and ms.dev._wantsKeyEvents and ms.dev._wantsKeyEvents() then
                         pcall(ms.dev._onKeyEvent, keyCode, hs.keycodes.map[keyCode], false)
                     end
-                    if ms._keyBindings then
-                        for _, binding in pairs(ms._keyBindings) do
-                            if binding and binding.keyCode == keyCode then
+                    local bucketUp = ms._keyBindingsByCode and ms._keyBindingsByCode[keyCode]
+                    if bucketUp then
+                        for _, binding in ipairs(bucketUp) do
+                            if binding then
                                 local modsMatch = true
                                 if binding.mods.cmd   and not flags.cmd   then modsMatch = false end
                                 if binding.mods.alt   and not flags.alt   then modsMatch = false end
@@ -763,6 +768,14 @@
 
                 return false
             end):start()
+
+            -- Tap-disable recovery watchdog: macOS silently disables eventtaps
+            -- when their callback overruns (kCGEventTapDisabledByTimeout).
+            -- Re-enable any dead taps every 2s so macros don't silently die.
+            ms._resilientTaps = { ms._keyListener }
+
+            -- Register mouse/scroll listeners as they're created (in ms.mouse/ms.scrollBind below)
+            -- The watchdog starts lazily after all taps are registered.
 
             -- Key logging: immediate, one line each (bunching removed).
             local function _keyLog(msg)
@@ -873,6 +886,9 @@
                     }
 
                     table.insert(ms._keyBindings, binding)
+                    local bucket = ms._keyBindingsByCode[keyCode]
+                    if not bucket then bucket = {}; ms._keyBindingsByCode[keyCode] = bucket end
+                    bucket[#bucket + 1] = binding
 
                     return { delete = function()
                         for i, b in ipairs(ms._keyBindings) do
@@ -880,6 +896,17 @@
                                 table.remove(ms._keyBindings, i)
                                 break
                             end
+                        end
+                        -- Remove from by-code index
+                        local bcBucket = ms._keyBindingsByCode[keyCode]
+                        if bcBucket then
+                            for i, b in ipairs(bcBucket) do
+                                if b == binding then
+                                    table.remove(bcBucket, i)
+                                    break
+                                end
+                            end
+                            if #bcBucket == 0 then ms._keyBindingsByCode[keyCode] = nil end
                         end
                     end}
                 end
@@ -941,7 +968,7 @@
                             if b == 2 then ms.keytrack[998] = false end
                         end
 
-                        if ms.dev and ms.dev._onMouseEvent then
+                        if ms.dev and ms.dev._wantsMouseEvents and ms.dev._wantsMouseEvents() then
                             local _mp = hs.mouse.absolutePosition()
                             pcall(ms.dev._onMouseEvent, b, isDown,
                                 math.floor(_mp.x), math.floor(_mp.y))
@@ -969,6 +996,7 @@
 
                         return false
                     end):start()
+                    ms._resilientTaps[#ms._resilientTaps+1] = ms._mouseListener
                 end
                 ms._mouseCallbacks[button] = { fn = clickFn, swallow = swallow, hidinject = hidinject, system = isSystem or false }
             end
@@ -992,6 +1020,7 @@
                         end
                         return false
                     end):start()
+                    ms._resilientTaps[#ms._resilientTaps+1] = ms._scrollListener
                 end
                 ms._scrollCallbacks[direction] = fn
                 return {
@@ -1309,6 +1338,69 @@
             ms.cam.reset = function()
                 _camTotalX = 0
                 _camTotalY = 0
+            end
+
+            -- ms.flick(dx, dy, opts): deterministic tightly-bunched delta stream.
+            -- Runs synchronously (no yield). count = number of deltas, gapUs = microsecond spacing.
+            ms.flick = function(dx, dy, opts)
+                opts = opts or {}
+                local count = opts.count or math.max(1, math.floor(math.abs(dx) / 100 + 0.5))
+                local gapUs = opts.gapUs or ms._flickGapUs or 1000
+                -- Bresenham-style remainder so emitted sum == requested total exactly
+                local perX, remX = math.floor(dx / count), dx % count
+                local perY, remY = math.floor(dy / count), dy % count
+                local accX, accY = 0, 0
+                for i = 1, count do
+                    local ex = perX; accX = accX + remX; if accX >= count then ex = ex + 1; accX = accX - count end
+                    local ey = perY; accY = accY + remY; if accY >= count then ey = ey + 1; accY = accY - count end
+                    ms.cam(ex, ey)
+                    if i < count then hs.timer.usleep(gapUs) end
+                end
+            end
+
+            -- ms.cam.sweep — async single doEvery pump (for throws)
+            local _sweepQueue = {}
+            local _sweepTimer = nil
+            local _SWEEP_HZ   = 120
+
+            local function _sweepTick()
+                if #_sweepQueue == 0 then
+                    if _sweepTimer then _sweepTimer:stop(); _sweepTimer = nil end
+                    return
+                end
+                local job = _sweepQueue[1]
+                if job.ticksLeft <= 0 then
+                    table.remove(_sweepQueue, 1)
+                    if #_sweepQueue == 0 then
+                        if _sweepTimer then _sweepTimer:stop(); _sweepTimer = nil end
+                    end
+                    return
+                end
+                local perTickX = job.dx / job.totalTicks
+                local perTickY = job.dy / job.totalTicks
+                local ex = math.floor(perTickX * (job.totalTicks - job.ticksLeft + 1)) - math.floor(perTickX * (job.totalTicks - job.ticksLeft))
+                local ey = math.floor(perTickY * (job.totalTicks - job.ticksLeft + 1)) - math.floor(perTickY * (job.totalTicks - job.ticksLeft))
+                if ex == 0 and ey == 0 then ex = perTickX >= 0 and 1 or -1; ey = 0 end
+                ms.cam(ex, ey)
+                job.ticksLeft = job.ticksLeft - 1
+            end
+
+            ms.cam.sweep = function(dx, dy, durationMs)
+                local ticks = math.max(1, math.floor((durationMs / 1000) * _SWEEP_HZ + 0.5))
+                _sweepQueue[#_sweepQueue + 1] = { dx = dx, dy = dy, ticksLeft = ticks, totalTicks = ticks }
+                if not _sweepTimer then
+                    _sweepTimer = hs.timer.doEvery(1 / _SWEEP_HZ, _sweepTick)
+                end
+            end
+
+            ms.cam.sweepBlocking = function(dx, dy, durationMs)
+                ms.cam.sweep(dx, dy, durationMs)
+                ms.wait(durationMs)
+            end
+
+            ms.cam.sweepCancel = function()
+                _sweepQueue = {}
+                if _sweepTimer then _sweepTimer:stop(); _sweepTimer = nil end
             end
 
             -- END ms.cam --
@@ -1757,6 +1849,21 @@
                 end)
                 if tap then ms._hotkeyHandles.octane = tap; tap:start() end
             end
+
+            -- Register all hotkey taps with the resilience watchdog
+            for _, tap in pairs(ms._hotkeyHandles) do
+                if tap then ms._resilientTaps[#ms._resilientTaps+1] = tap end
+            end
+
+            -- Start the tap watchdog (2s poll)
+            ms._tapWatchdog = hs.timer.doEvery(2, function()
+                for _, tap in ipairs(ms._resilientTaps) do
+                    if tap and not tap:isEnabled() then
+                        tap:start()
+                        if ms.dev then print("ms: revived a disabled eventtap") end
+                    end
+                end
+            end)
 
             ms._bindHotkeys()
 

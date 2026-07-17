@@ -65,8 +65,47 @@
         result    = "console",
     }
 
+    local _typeToChannel = {
+        key = "keys", mouse = "keys", scroll = "keys", mousemove = "keys",
+        macro = "watcher", sound = "watcher",
+        system = "console", print = "console", result = "console",
+        error = "console",  -- error primary channel; also gated per-panel for watcher
+    }
+
     local _devBusy            = false
     local _devLastConsoleType = nil
+
+    -- Persistent file handles: one long-lived append handle per log file,
+    -- opened lazily, flushed per line (immediacy preserved), reopened after
+    -- a trim, closed on teardown. Eliminates open→write→close syscalls.
+    local _catHandles  = {}   -- [path] = open file* for the JSON log
+    local _readHandles = {}   -- [path] = open file* for the readable log
+    local _dirsEnsured = false
+
+    local function _ensureDirs()
+        if _dirsEnsured then return end
+        hs.fs.mkdir(_devBaseDir)
+        if _jsonDir then hs.fs.mkdir(_jsonDir) end
+        if _readDir then hs.fs.mkdir(_readDir) end
+        _dirsEnsured = true
+    end
+
+    local function _handleFor(tbl, path)
+        local h = tbl[path]
+        if h then return h end
+        _ensureDirs()
+        h = io.open(path, "a")
+        if h then tbl[path] = h end
+        return h
+    end
+
+    -- Close all persistent log handles (call on teardown / full reload)
+    function MsDevTools:closeLogHandles()
+        for path, h in pairs(_catHandles) do pcall(function() h:close() end) end
+        for path, h in pairs(_readHandles) do pcall(function() h:close() end) end
+        _catHandles = {}
+        _readHandles = {}
+    end
 
     -- Write-time log capping: periodically trim log files to _HIST_MAX lines
     -- to prevent unbounded growth (the root cause of the Inputs Panel hang).
@@ -97,17 +136,11 @@
         local catPath = _readablePaths and _readablePaths[_lastReadCategory]
 
         if catPath then
-            pcall(function()
-                hs.fs.mkdir(_devBaseDir)
-                hs.fs.mkdir(_readDir)
-
-                local f = io.open(catPath, "a")
-
-                if f then
-                    f:write(_lastReadLine .. "\n")
-                    f:close()
-                end
-            end)
+            local h = _handleFor(_readHandles, catPath)
+            if h then
+                h:write(_lastReadLine .. "\n")
+                h:flush()
+            end
         end
 
         _lastReadLine     = nil
@@ -324,6 +357,15 @@
 
         ms.dev._onMouseEvent = function(...)
             self:onMouseEvent(...)
+        end
+
+        -- Hot-path predicates: gate expensive per-event work in ms_core.lua
+        -- when no dev consumer would use the data.
+        ms.dev._wantsMouseEvents = function()
+            return _keysPanel or _shellActive() or _logEnabled.keys
+        end
+        ms.dev._wantsKeyEvents = function()
+            return _keysPanel or _shellActive() or _logEnabled.keys
         end
 
         ms.dev.console = {}
@@ -730,12 +772,6 @@
 
         -- Octane logging gate: skip all I/O and panel pushes when the entry's
         -- channel is disabled. Each entry type maps to one primary channel.
-        local _typeToChannel = {
-            key = "keys", mouse = "keys", scroll = "keys", mousemove = "keys",
-            macro = "watcher", sound = "watcher",
-            system = "console", print = "console", result = "console",
-            error = "console",  -- error primary channel; also gated per-panel for watcher
-        }
         local ch = _typeToChannel[entry.type]
         if ch and not _logEnabled[ch] then
             -- Even when the primary channel is disabled, check if the entry
@@ -784,114 +820,104 @@
         local catPath = _catPaths[entry.category]
 
         if catPath then
-            pcall(function()
-                hs.fs.mkdir(_devBaseDir)
-                hs.fs.mkdir(_jsonDir)
-
-                local f = io.open(catPath, "a")
-
-                if f then
-                    f:write(json .. "\n")
-                    f:close()
-                end
-            end)
+            local h = _handleFor(_catHandles, catPath)
+            if h then
+                h:write(json .. "\n")
+                h:flush()
+            end
 
             -- Periodic log cap: trim to _HIST_MAX lines to prevent unbounded growth
             _writeCounter = _writeCounter + 1
             if _writeCounter % _WRITE_TRIM_INTERVAL == 0 then
                 _trimLogFile(catPath, _HIST_MAX)
+                -- Trim rewrites the file; invalidate the handle so next write reopens
+                if _catHandles[catPath] then _catHandles[catPath]:close(); _catHandles[catPath] = nil end
             end
         end
 
         local readPath = _readablePaths[entry.category]
 
         if readPath then
-            pcall(function()
-                hs.fs.mkdir(_devBaseDir)
-                hs.fs.mkdir(_readDir)
+            local h = _handleFor(_readHandles, readPath)
+            if h then
+                local t    = entry.type
+                local line
 
-                local f = io.open(readPath, "a")
+                if t == "key" then
+                    local arrow = entry.down and "\226\134\147" or "\226\134\145"
 
-                if f then
-                    local t    = entry.type
-                    local line
+                    line = "[" .. entry.ts .. "] " .. arrow .. " "
+                        .. (entry.key or "?") .. " (" .. tostring(entry.keyCode or "?") .. ")"
 
-                    if t == "key" then
-                        local arrow = entry.down and "\226\134\147" or "\226\134\145"
+                elseif t == "mouse" then
+                    local arrow = entry.down and "\226\134\147" or "\226\134\145"
+                    local pos   = ""
 
-                        line = "[" .. entry.ts .. "] " .. arrow .. " "
-                            .. (entry.key or "?") .. " (" .. tostring(entry.keyCode or "?") .. ")"
+                    if entry.x and entry.y then
+                        pos = "  " .. entry.x .. "," .. entry.y
+                    end
 
-                    elseif t == "mouse" then
-                        local arrow = entry.down and "\226\134\147" or "\226\134\145"
-                        local pos   = ""
+                    line = "[" .. entry.ts .. "] " .. arrow .. " mouse:"
+                        .. tostring(entry.button or "?") .. pos
 
-                        if entry.x and entry.y then
-                            pos = "  " .. entry.x .. "," .. entry.y
-                        end
+                elseif t == "scroll" then
+                    line = "[" .. entry.ts .. "] \226\134\165 scroll " .. (entry.direction or "")
 
-                        line = "[" .. entry.ts .. "] " .. arrow .. " mouse:"
-                            .. tostring(entry.button or "?") .. pos
+                elseif t == "mousemove" then
+                    line = "[" .. entry.ts .. "] \226\134\146 " .. (entry.x or "?") .. ", " .. (entry.y or "?")
 
-                    elseif t == "scroll" then
-                        line = "[" .. entry.ts .. "] \226\134\165 scroll " .. (entry.direction or "")
+                else
+                    local parts = {}
 
-                    elseif t == "mousemove" then
-                        line = "[" .. entry.ts .. "] \226\134\146 " .. (entry.x or "?") .. ", " .. (entry.y or "?")
-
-                    else
-                        local parts = {}
-
-                        local function add(label, val)
-                            if val ~= nil and val ~= "" then
-                                parts[#parts + 1] = "  " .. label .. ": " .. tostring(val)
-                            end
-                        end
-
-                        local headline = entry.msg or entry.label or entry.event or entry.type or "log"
-                        local first, rest = headline:match("^([^\n]+)\n(.*)$")
-
-                        if first then
-                            headline = first
-                            add("detail", rest:gsub("\n", " | "))
-                        end
-
-                        add("fromDialog", entry.fromDialog)
-                        add("to",          entry.to)
-                        add("status",      entry.status)
-                        add("cur",         entry.cur)
-                        add("trusted",     entry.trusted)
-                        add("code",        entry.code)
-                        add("version",     entry.version)
-                        add("channel",     entry.channel)
-                        add("target",      entry.target)
-                        add("format",      entry.format)
-                        add("id",          entry.id)
-                        add("label",       entry.label)
-                        add("parent",      entry.parentLabel)
-                        add("trigger",     entry.trigger)
-
-                        line = "[" .. entry.ts .. "] " .. headline
-
-                        if #parts > 0 then
-                            line = line .. "\n" .. table.concat(parts, "\n")
+                    local function add(label, val)
+                        if val ~= nil and val ~= "" then
+                            parts[#parts + 1] = "  " .. label .. ": " .. tostring(val)
                         end
                     end
 
-                    -- Refuse to send: skip consecutive same-type entries entirely
-                    if _lastReadType == entry.type then
-                        -- Refused — same badge type as last entry
-                    else
-                        if _lastReadLine then
-                            f:write(_lastReadLine .. "\n")
-                        end
-                        _lastReadLine     = line
-                        _lastReadType     = entry.type
-                        _lastReadCategory = entry.category
+                    local headline = entry.msg or entry.label or entry.event or entry.type or "log"
+                    local first, rest = headline:match("^([^\n]+)\n(.*)$")
+
+                    if first then
+                        headline = first
+                        add("detail", rest:gsub("\n", " | "))
                     end
-                    f:close()
+
+                    add("fromDialog", entry.fromDialog)
+                    add("to",          entry.to)
+                    add("status",      entry.status)
+                    add("cur",         entry.cur)
+                    add("trusted",     entry.trusted)
+                    add("code",        entry.code)
+                    add("version",     entry.version)
+                    add("channel",     entry.channel)
+                    add("target",      entry.target)
+                    add("format",      entry.format)
+                    add("id",          entry.id)
+                    add("label",       entry.label)
+                    add("parent",      entry.parentLabel)
+                    add("trigger",     entry.trigger)
+
+                    line = "[" .. entry.ts .. "] " .. headline
+
+                    if #parts > 0 then
+                        line = line .. "\n" .. table.concat(parts, "\n")
+                    end
                 end
-            end)
+
+                -- Refuse to send: skip consecutive same-type entries entirely
+                if _lastReadType == entry.type then
+                    -- Refused — same badge type as last entry
+                else
+                    if _lastReadLine then
+                        h:write(_lastReadLine .. "\n")
+                    end
+                    _lastReadLine     = line
+                    _lastReadType     = entry.type
+                    _lastReadCategory = entry.category
+                end
+                h:flush()
+            end
         end
 
         local t = entry.type
@@ -1111,20 +1137,13 @@
 
         if not st or #st.buffer == 0 then return end
 
-        pcall(function()
-            hs.fs.mkdir(_devBaseDir)
-            hs.fs.mkdir(_readDir)
-
-            local f = io.open(_readablePaths["macro"], "a")
-
-            if f then
-                for _, line in ipairs(st.buffer) do
-                    f:write(line .. "\n")
-                end
-
-                f:close()
+        local h = _handleFor(_readHandles, _readablePaths and _readablePaths["macro"])
+        if h then
+            for _, line in ipairs(st.buffer) do
+                h:write(line .. "\n")
             end
-        end)
+            h:flush()
+        end
 
         if _watcherPanel then
             for _, line in ipairs(st.buffer) do

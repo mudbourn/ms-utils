@@ -601,6 +601,9 @@
             -- Panic: cancel all active macros, release held keys/buttons, stop timers
             pcall(function() ms.setMacros(0, true) end)
 
+            -- Stop tap watchdog before reload
+            if ms._tapWatchdog then ms._tapWatchdog:stop(); ms._tapWatchdog = nil end
+
             ms._quickReloading = true   -- suppress ALL sounds + per-module toasts
 
             -- Ensure user settings tables exist before any reload path touches them
