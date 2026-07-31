@@ -50,23 +50,67 @@
             return table.concat(parts, "+")
         end
 
-        local function _buildUIState()
-            local macros = {}
+        -- A bind is *derived* (a sub-bind of another macro) when its
+        -- default.type names another registered bind id — the same test
+        -- ms.bind.define uses. Testing default.type alone is not enough:
+        -- ordinary binds carry default.type = "key"/"mouse"/"scroll"/"gamepad",
+        -- and treating those as derived hides them from the macro list.
+        local function _parentOf(def)
+            if not def then return nil end
+            local d = def.default
+            if type(d) ~= "table" or not d.type then return nil end
+            if ms.registry._defs[d.type] then return d.type end
+            return nil
+        end
+
+        -- Builds the full macro list: top-level macros in registration order,
+        -- each carrying its derived sub-binds, followed by the system binds.
+        local function _buildMacroList()
+            local macros  = {}
+            local byId    = {}
 
             for _, id in ipairs(ms.registry._defList or {}) do
                 local def = ms.registry._defs[id]
-                if def and not (def.default and def.default.type) then
+                if def and not def.system and not _parentOf(def) then
                     local enabled = ms.binds[id]
                     if enabled == nil then enabled = def.enabled end
-                    table.insert(macros, {
+                    local entry = {
                         id        = id,
                         label     = def.label,
                         group     = def.group,
                         bind      = _bindDisplay(ms.effectiveBind(id)),
                         enabled   = enabled and true or false,
-                    })
+                        subs      = {},
+                    }
+                    byId[id] = entry
+                    table.insert(macros, entry)
                 end
             end
+
+            -- Attach derived binds to their parent. Walk up the chain so a
+            -- sub-of-a-sub (e.g. throwLow → superThrow → superJump) lands on
+            -- the nearest ancestor that is itself top-level.
+            for _, id in ipairs(ms.registry._defList or {}) do
+                local def    = ms.registry._defs[id]
+                local parent = _parentOf(def)
+                if def and not def.system and parent then
+                    local seen = { [id] = true }
+                    while parent and not byId[parent] and not seen[parent] do
+                        seen[parent] = true
+                        parent = _parentOf(ms.registry._defs[parent])
+                    end
+                    local host = parent and byId[parent]
+                    if host then
+                        table.insert(host.subs, {
+                            id     = id,
+                            label  = def.label,
+                            bind   = _bindDisplay(ms.effectiveBind(id)),
+                            parent = parent,
+                        })
+                    end
+                end
+            end
+
             for _, id in ipairs({"enable", "disable", "toggle"}) do
                 local def = ms.systemBinds._defs[id]
                 if def then
@@ -76,9 +120,17 @@
                         group      = "system",
                         bind       = _bindDisplay(ms.systemBinds.effective(id)),
                         systemBind = true,
+                        subs       = {},
                     })
                 end
             end
+
+            return macros
+        end
+        ms.ui._buildMacroList = _buildMacroList
+
+        local function _buildUIState()
+            local macros = _buildMacroList()
 
             ms._discoverSounds()
             local soundNames = {}
@@ -401,6 +453,19 @@
                     end)
                 end
             end
+            -- The macros panel owns rebinding, so it needs the same refresh
+            -- signal: a completed capture must repaint its bind list too.
+            pcall(function() ms.ui.pushBindList() end)
+        end
+
+        --- Push the full macro/bind list to the macros panel.
+        ms.ui.pushBindList = function()
+            if not (ms.shell and ms.shell.isReady and ms.shell.isReady()) then return end
+            local ok, json = pcall(hs.json.encode, _buildMacroList())
+            if not ok or not json then return end
+            pcall(function()
+                ms.shell.eval("shellReceive('macros', 'bindList', " .. json .. ")")
+            end)
         end
 
         ms.ui.prebuild = function()
@@ -1854,7 +1919,7 @@
         -- Shell integration: route bus messages to the same action handlers
         -- Topic shape: ui:<panel>:<action> (emitted by ms.shell's msShell channel)
         if ms.bus then
-            ms.bus.on("ui:settings:*", function(topic, body)
+            local function _routeAction(topic, body)
                 if not body or type(body) ~= "table" then return end
                 local action = body.action
                 if not action then return end
@@ -1863,7 +1928,16 @@
                     local ok, err = pcall(handler, body)
                     if not ok then print("[MsUI] handler error: " .. tostring(err)) end
                 end
-            end)
+            end
+
+            ms.bus.on("ui:settings:*", _routeAction)
+            -- The macros panel owns rebinding, so it needs the same action set
+            -- (startRebind, resetBind, startModRebind, clearModifier,
+            -- setMacroEnabled). Compiler-owned actions on this channel
+            -- (listMacros, saveMacro, …) are absent from ms.ui._actions and
+            -- fall through untouched to their own handlers in ms_core.
+            ms.bus.on("ui:macros:*", _routeAction)
+            ms.bus.on("ui:tools:*",  _routeAction)
         end
 
         -- ms.ui window methods are a thin adapter over the shell — the legacy

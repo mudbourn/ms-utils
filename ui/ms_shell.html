@@ -619,6 +619,31 @@
         .macro-name-input:focus { border-color: var(--accent); background: var(--surface2); }
 
         .macros-layout { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; position: relative; }
+        /* ── Macros panel tab strip (Builder | Binds) ──────────────────────
+           Same shape as .wtab/.ttab above, panel-scoped so the strips stay
+           independent. */
+        .panel-macros .mtabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .panel-macros .mtab { flex: 1; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text2); text-align: center; cursor: pointer; border: none; border-bottom: 2px solid transparent; background: none; transition: color 0.15s, border-color 0.15s; }
+        .panel-macros .mtab:hover { color: var(--text); }
+        .panel-macros .mtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .panel-macros .mtab-section { display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+        .panel-macros .mtab-section.active { display: flex; }
+        /* ── Binds list ──────────────────────────────────────────────────── */
+        .binds-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0 20px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
+        .binds-empty { padding: 20px 14px; font-size: 12px; color: var(--text3); text-align: center; }
+        .binds-group { padding: 10px 14px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text3); }
+        .bind-row { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-bottom: 1px solid var(--border-dim); }
+        .bind-row:hover { background: var(--surface); }
+        .bind-row-sub { padding-left: 30px; }
+        .bind-row-sub .bind-label { color: var(--text2); font-size: 12px; }
+        .bind-label { flex: 1; min-width: 0; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bind-acts { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .bind-pill { padding: 2px 8px; border-radius: 3px; font: 12px var(--font-mono); color: var(--text); background: var(--surface2); border: 1px solid var(--border); cursor: pointer; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
+        .bind-pill:hover { color: var(--accent); border-color: var(--accent); }
+        .bind-pill.unset { color: var(--text3); font-style: italic; }
+        .bind-act { width: 22px; height: 22px; padding: 0; font-size: 12px; line-height: 1; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+        .bind-act:hover { color: var(--accent); border-color: var(--accent); }
+        .bind-toggle { margin-left: 2px; }
         #slot-macros { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
         .macros-main { flex: 1; display: flex; flex-direction: row; overflow: hidden; position: relative; }
         .macros-tool-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }

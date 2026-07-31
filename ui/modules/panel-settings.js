@@ -467,186 +467,6 @@
 
             // ── Sections ───────────────────────────────────────────────────────
 
-            function buildMacros(body) {
-                // Dynamic grouping: collect macros by group, preserve order of first appearance
-                const groupOrder = [];
-                const groups = {};
-                (S.macros || []).forEach((m) => {
-                    const g = m.group || "ungrouped";
-                    if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
-                    groups[g].push(m);
-                });
-
-                function subRow(sub) {
-                    const r = h("div", {
-                        cls: "row row-sub",
-                        onmouseenter: () => playSlot("hover"),
-                    });
-                    r.appendChild(h("div", { cls: "row-label" }, sub.label));
-                    if (sub.mod)
-                        r.appendChild(h("span", { cls: "pill" }, sub.mod));
-                    if (sub.bind)
-                        r.appendChild(h("span", { cls: "pill" }, sub.bind));
-                    // If this sub-item itself has sub-items, show them as nested pills.
-                    if (sub.subsubs && sub.subsubs.length) {
-                        const nest = h("div", { cls: "row-subsubs" });
-                        sub.subsubs.forEach((ss) => {
-                            const chip = h(
-                                "span",
-                                { cls: "pill pill-subsub" },
-                                ss.label,
-                            );
-                            if (ss.mod) chip.title = "mod: " + ss.mod;
-                            chip.style.cursor = "context-menu";
-                            chip.addEventListener("contextmenu", (e) => {
-                                e.preventDefault();
-                                e.stopImmediatePropagation();
-                                playSlot("interact");
-                                const items = [
-                                    {
-                                        icon: "",
-                                        label: "Change Modifier\u2026",
-                                        action: () =>
-                                            sendToHost({
-                                                action: "startModRebind",
-                                                id: ss.id,
-                                            }),
-                                    },
-                                ];
-                                if (ss.mod) {
-                                    items.push("divider");
-                                    items.push({
-                                        icon: "",
-                                        label: "Clear Modifier",
-                                        danger: true,
-                                        action: () =>
-                                            sendToHost({
-                                                action: "clearModifier",
-                                                id: ss.id,
-                                            }),
-                                    });
-                                }
-                                showCtxMenu(
-                                    e.clientX,
-                                    e.clientY,
-                                    items,
-                                    ss.label,
-                                );
-                            });
-                            nest.appendChild(chip);
-                        });
-                        r.appendChild(nest);
-                    }
-                    r.addEventListener("contextmenu", (e) => {
-                        e.preventDefault();
-                        e.stopImmediatePropagation();
-                        playSlot("interact");
-                        const items = [
-                            {
-                                icon: "",
-                                label: "Change Modifier\u2026",
-                                action: () =>
-                                    sendToHost({
-                                        action: "startModRebind",
-                                        id: sub.id,
-                                    }),
-                            },
-                        ];
-                        if (sub.mod) {
-                            items.push("divider");
-                            items.push({
-                                icon: "",
-                                label: "Clear Modifier",
-                                danger: true,
-                                action: () =>
-                                    sendToHost({
-                                        action: "clearModifier",
-                                        id: sub.id,
-                                    }),
-                            });
-                        }
-                        showCtxMenu(e.clientX, e.clientY, items, sub.label);
-                    });
-                    return r;
-                }
-
-                function macroRow(m) {
-                    const r = h("div", {
-                        cls: "row",
-                        onmouseenter: () => playSlot("hover"),
-                    });
-                    r.appendChild(h("div", { cls: "row-label" }, m.label));
-                    if (m.bind)
-                        r.appendChild(h("span", { cls: "pill" }, m.bind));
-                    if (m.group !== "system") {
-                        r.appendChild(
-                            toggle(m.enabled, (e) => {
-                                sendToHost({
-                                    action: "setMacroEnabled",
-                                    id: m.id,
-                                    value: e.target.checked,
-                                });
-                            }),
-                        );
-                    }
-
-                    // Right-click context menu (skip for non-rebindable system macros)
-                    if (!(m.group === "system" && !m.systemBind)) {
-                        r.addEventListener("contextmenu", (e) => {
-                            e.preventDefault();
-                            e.stopImmediatePropagation();
-                            playSlot("interact");
-                            const items = [
-                                {
-                                    icon: "",
-                                    label: "Rebind\u2026",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "startRebind",
-                                            id: m.id,
-                                            systemBind: m.systemBind || false,
-                                        }),
-                                },
-                            ];
-                            if (m.bind) {
-                                items.push("divider");
-                                items.push({
-                                    icon: "",
-                                    label: "Reset Bind",
-                                    danger: true,
-                                    action: () =>
-                                        sendToHost({
-                                            action: "resetBind",
-                                            id: m.id,
-                                            systemBind: m.systemBind || false,
-                                        }),
-                                });
-                            }
-                            showCtxMenu(e.clientX, e.clientY, items, m.label);
-                        });
-                    }
-
-                    return r;
-                }
-
-                function appendMacro(m) {
-                    body.appendChild(macroRow(m));
-                    (m.subs || []).forEach((sub) =>
-                        body.appendChild(subRow(sub)),
-                    );
-                }
-
-                groupOrder.forEach((g) => {
-                    if (groups[g].length) {
-                        body.appendChild(
-                            groupLabel(
-                                g.charAt(0).toUpperCase() + g.slice(1),
-                            ),
-                        );
-                        groups[g].forEach(appendMacro);
-                    }
-                });
-            }
 
             // ── Reusable slider row builder ────────────────────────────────────────
             // Builds a complete slider row element and returns it.
@@ -1048,14 +868,6 @@
                     );
                     r.appendChild(lbl);
                     body.appendChild(r);
-                }
-            }
-
-            // ── buildCalibration — user-injected calibration settings ──────────
-            function buildCalibration(body) {
-                const items = S.userCalibrationSettings || [];
-                for (const item of items) {
-                    renderUserItem(body, item);
                 }
             }
 
@@ -1541,17 +1353,13 @@
                 const scrollTop = scroll.scrollTop;
                 scroll.innerHTML = "";
 
-                scroll.appendChild(section("macros", "Macros", buildMacros));
+                // Macros moved to the macros panel (which owns rebinding) and
+                // Calibration to the tools panel (its content is entirely
+                // user-defined settings). Settings keeps only what has no
+                // panel of its own.
                 scroll.appendChild(
                     section("settings", "Settings", buildSettings),
                 );
-                // Calibration section is only rendered when at least one user
-                // setting targets it (via ms.settings.define({ section: "calibration" })).
-                if ((S.userCalibrationSettings || []).length > 0) {
-                    scroll.appendChild(
-                        section("calibration", "Calibration", buildCalibration),
-                    );
-                }
                 scroll.appendChild(section("accessibility", "Accessibility", buildAccessibility));
                 for (const menu of S.userMenus || []) {
                     const title = menu.icon

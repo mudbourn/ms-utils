@@ -1422,6 +1422,20 @@
     nameInput.setAttribute("autocapitalize", "off");
     toolbar.appendChild(nameInput);
 
+    // Bind field — the compiler already emits a ms.bind.define default block
+    // from macroDef.bind; without this control the builder never supplied one,
+    // so builder-authored macros were never bindable.
+    var bindLabel = document.createElement("span");
+    bindLabel.style.cssText = "font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-left:8px;margin-right:4px";
+    bindLabel.textContent = "Bind";
+    toolbar.appendChild(bindLabel);
+
+    var bindBtn = document.createElement("button");
+    bindBtn.className = "bind-pill unset";
+    bindBtn.textContent = "unset";
+    bindBtn.title = "Click to capture a bind for this macro";
+    toolbar.appendChild(bindBtn);
+
     var spacer = document.createElement("div");
     spacer.className = "macro-toolbar-spacer";
     toolbar.appendChild(spacer);
@@ -1510,9 +1524,50 @@
     }
     mainArea.appendChild(overlay);
 
+    // ── Tab strip: Builder | Binds ───────────────────────────────────
+    // Rebinding lives here rather than in Settings: the macros panel owns
+    // every macro, whether it was authored in the builder or declared in
+    // ms_macros.lua.
+    var mtabs = document.createElement("div");
+    mtabs.className = "mtabs";
+
+    var builderSection = document.createElement("div");
+    builderSection.className = "mtab-section active";
+    builderSection.setAttribute("data-msec", "builder");
+
+    var bindsSection = document.createElement("div");
+    bindsSection.className = "mtab-section";
+    bindsSection.setAttribute("data-msec", "binds");
+
+    var bindsScroll = document.createElement("div");
+    bindsScroll.className = "binds-scroll";
+    bindsSection.appendChild(bindsScroll);
+
+    var _mtabBtns = {};
+    ["builder", "binds"].forEach(function(id) {
+        var b = document.createElement("button");
+        b.className = "mtab" + (id === "builder" ? " active" : "");
+        b.textContent = id === "builder" ? "Builder" : "Binds";
+        b.addEventListener("mouseenter", function() {
+            if (window.playSlot) playSlot("hover");
+        });
+        b.addEventListener("click", function() {
+            for (var k in _mtabBtns) _mtabBtns[k].classList.remove("active");
+            b.classList.add("active");
+            builderSection.classList.toggle("active", id === "builder");
+            bindsSection.classList.toggle("active", id === "binds");
+            if (id === "binds") refreshBindList();
+        });
+        _mtabBtns[id] = b;
+        mtabs.appendChild(b);
+    });
+
     // Assemble layout
-    layout.appendChild(toolbar);
-    layout.appendChild(mainArea);
+    builderSection.appendChild(toolbar);
+    builderSection.appendChild(mainArea);
+    layout.appendChild(mtabs);
+    layout.appendChild(builderSection);
+    layout.appendChild(bindsSection);
     slot.appendChild(layout);
 
     // ── Tool Canvas instance ──
@@ -1585,6 +1640,146 @@
         }
     }
 
+    /* ── Binds tab ───────────────────────────────────────────────────
+       Lists every registered macro (builder-authored and ms_macros.lua
+       alike) with its effective bind, its derived sub-binds, and controls
+       to rebind, reset, or disable it. The actions are the same ones the
+       settings panel used — they are routed to ms.ui._actions by the
+       ui:macros:* bus subscription.                                     */
+    var _bindList = [];
+
+    function refreshBindList() {
+        if (window.shellPost) shellPost("macros", "listBinds", {});
+    }
+
+    function bindPill(text, onClick, title) {
+        var b = document.createElement("button");
+        b.className = "bind-pill" + (text ? "" : " unset");
+        b.textContent = text || "unset";
+        if (title) b.title = title;
+        b.addEventListener("mouseenter", function() {
+            if (window.playSlot) playSlot("hover");
+        });
+        b.addEventListener("click", function(e) {
+            e.stopPropagation();
+            if (window.playSlot) playSlot("interact");
+            onClick();
+        });
+        return b;
+    }
+
+    function iconBtn(label, title, onClick) {
+        var b = document.createElement("button");
+        b.className = "bind-act";
+        b.textContent = label;
+        b.title = title;
+        b.addEventListener("mouseenter", function() {
+            if (window.playSlot) playSlot("hover");
+        });
+        b.addEventListener("click", function(e) {
+            e.stopPropagation();
+            if (window.playSlot) playSlot("interact");
+            onClick();
+        });
+        return b;
+    }
+
+    function bindRow(m, isSub) {
+        var r = document.createElement("div");
+        r.className = "bind-row" + (isSub ? " bind-row-sub" : "");
+
+        var lbl = document.createElement("div");
+        lbl.className = "bind-label";
+        lbl.textContent = m.label || m.id;
+        r.appendChild(lbl);
+
+        var acts = document.createElement("div");
+        acts.className = "bind-acts";
+
+        acts.appendChild(bindPill(m.bind, function() {
+            shellPost("macros", "startRebind", {
+                action:     "startRebind",
+                id:         m.id,
+                systemBind: m.systemBind || false,
+            });
+        }, "Click to rebind"));
+
+        acts.appendChild(iconBtn("↺", "Reset to default bind", function() {
+            shellPost("macros", "resetBind", {
+                action:     "resetBind",
+                id:         m.id,
+                systemBind: m.systemBind || false,
+            });
+        }));
+
+        // System binds are always live; only real macros can be disabled.
+        if (!isSub && m.group !== "system" && !m.systemBind) {
+            // Same markup as the settings panel's toggle() so it picks up the
+            // shared .toggle track/thumb styling rather than a native checkbox.
+            var lbl = document.createElement("label");
+            lbl.className = "toggle bind-toggle";
+            var t = document.createElement("input");
+            t.type = "checkbox";
+            t.checked = !!m.enabled;
+            t.addEventListener("change", function() {
+                shellPost("macros", "setMacroEnabled", {
+                    action: "setMacroEnabled",
+                    id:     m.id,
+                    value:  t.checked,
+                });
+            });
+            var track = document.createElement("div");
+            track.className = "toggle-track";
+            var thumb = document.createElement("div");
+            thumb.className = "toggle-thumb";
+            lbl.appendChild(t); lbl.appendChild(track); lbl.appendChild(thumb);
+            acts.appendChild(lbl);
+        }
+
+        r.appendChild(acts);
+        return r;
+    }
+
+    function renderBindList() {
+        bindsScroll.innerHTML = "";
+
+        if (!_bindList.length) {
+            var empty = document.createElement("div");
+            empty.className = "binds-empty";
+            empty.textContent = "No macros registered.";
+            bindsScroll.appendChild(empty);
+            return;
+        }
+
+        // Group in registration order, same grouping the macro list uses.
+        var order = [];
+        var groups = {};
+        _bindList.forEach(function(m) {
+            var g = m.group || "ungrouped";
+            if (!groups[g]) { groups[g] = []; order.push(g); }
+            groups[g].push(m);
+        });
+
+        order.forEach(function(g) {
+            var h = document.createElement("div");
+            h.className = "binds-group";
+            h.textContent = g.charAt(0).toUpperCase() + g.slice(1);
+            bindsScroll.appendChild(h);
+            groups[g].forEach(function(m) {
+                bindsScroll.appendChild(bindRow(m, false));
+                (m.subs || []).forEach(function(sub) {
+                    bindsScroll.appendChild(bindRow(sub, true));
+                });
+            });
+        });
+    }
+
+    function setBindList(list) {
+        _bindList = Array.isArray(list) ? list : [];
+        renderBindList();
+        updateBindBtn();
+    }
+
     function setMacroList(ids) {
         macroSelect.innerHTML = "";
         var none = document.createElement("option");
@@ -1612,6 +1807,7 @@
             nameInput.value = "";
             _macroDirty = false;
             updateSaveBtnState();
+            updateBindBtn();
             return;
         }
         // Ask Lua for the macro definition
@@ -1628,7 +1824,41 @@
         _macroDirty = false;
         updateSaveBtnState();
         macroSelect.value = def.id;
+        updateBindBtn();
     }
+
+    // Show the macro's effective bind, preferring the live value from the
+    // binds tab (which reflects user overrides) over the compiled default.
+    function updateBindBtn() {
+        var text = "";
+        for (var i = 0; i < _bindList.length; i++) {
+            if (_bindList[i].id === _currentMacroId) { text = _bindList[i].bind || ""; break; }
+        }
+        if (!text && _currentMacroDef && _currentMacroDef.bind) {
+            var b = _currentMacroDef.bind;
+            if (b.type === "mouse") text = "Mouse " + b.button;
+            else if (b.key) text = (b.mods || []).concat([b.key]).join("+");
+        }
+        bindBtn.textContent = text || "unset";
+        bindBtn.className = "bind-pill" + (text ? "" : " unset");
+    }
+
+    bindBtn.addEventListener("mouseenter", function() {
+        if (window.playSlot) playSlot("hover");
+    });
+    bindBtn.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
+        // Capture targets a registered bind id, which only exists once the
+        // macro has been compiled — so it must be saved first.
+        if (!_currentMacroId || _macroDirty) {
+            showTestToast("Save the macro before binding it", "error");
+            return;
+        }
+        shellPost("macros", "startRebind", {
+            action: "startRebind",
+            id:     _currentMacroId,
+        });
+    });
 
     function saveMacro() {
         if (!_currentMacroId) {
@@ -1648,6 +1878,15 @@
             author: "User",
             steps: _canvas.serialize()
         };
+        // Carry the compiled default bind through a save — the compiler reads
+        // macroDef.bind, so dropping it here would silently unbind the macro.
+        if (_currentMacroDef && _currentMacroDef.bind) {
+            def.bind = _currentMacroDef.bind;
+        }
+        if (_currentMacroDef && _currentMacroDef.cooldown) {
+            def.cooldown = _currentMacroDef.cooldown;
+        }
+        _currentMacroDef = def;
 
         if (window.shellPost) {
             shellPost("macros", "saveMacro", { id: _currentMacroId, def: def });
@@ -1684,6 +1923,7 @@
         _macroDirty = false;
         updateSaveBtnState();
         macroSelect.value = "";
+        updateBindBtn();
     });
 
     saveBtn.addEventListener("click", function() { saveMacro(); });
@@ -1822,6 +2062,12 @@
             _macroDirty = false;
             updateSaveBtnState();
             refreshMacroList();
+            // A saved macro may have gained or changed its bind.
+            refreshBindList();
+            return;
+        }
+        if (action === "bindList" && Array.isArray(body)) {
+            setBindList(body);
             return;
         }
         if (action === "testRunResult" && body) {
@@ -1858,6 +2104,8 @@
         refreshList: refreshMacroList,
         setMacroList: setMacroList,
         setMacroDef: setMacroDef,
+        setBindList: setBindList,
+        refreshBinds: refreshBindList,
         addTool: function(def) { _canvas.addTool(def); closeFnOverlay(); },
         // Test Run & Record Mode
         testRun: function() { testBtn.click(); },
@@ -1874,6 +2122,7 @@
     /* ── Initial state ───────────────────────────────────────────── */
     updateSaveBtnState();
     refreshMacroList();
+    refreshBindList();
 
     /* ── Header drag ──────────────────────────────────────────── */
     (function() {

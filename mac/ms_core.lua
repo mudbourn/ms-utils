@@ -3695,6 +3695,15 @@
                         _macroShellEval("if(window.macroLab)macroLab.setMacroList(" .. json .. ")")
                     end)
 
+                    -- Full bind list (every registered macro plus its derived
+                    -- sub-binds, and the system binds) — the macros panel owns
+                    -- rebinding, so it pulls this on open and after any change.
+                    ms.bus.on("ui:macros:listBinds", function()
+                        if ms.ui and ms.ui.pushBindList then
+                            pcall(ms.ui.pushBindList)
+                        end
+                    end)
+
                     ms.bus.on("ui:macros:getMacro", function(body)
                         if not body or not body.id then return end
                         local def = ms.compiler.get(body.id)
