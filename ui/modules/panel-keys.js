@@ -260,28 +260,30 @@
             }
 
             // ── Tab switching ───────────────────────────────────────────────
-            function switchTab(tab) {
-                // Same-destination: play 'back' if already on this tab
-                const activeTab = document.querySelector(".tab.active");
-                if (activeTab && activeTab.id === "tab-" + tab) {
-                    playSlot("back");
-                    return;
+            // At load, not lazily: the styles must be up whether or not anyone
+            // ever clicks a tab. The shell no longer carries its own copy.
+            injectTabStyles();
+
+            // Scoped to this panel — the shell hosts every panel's markup at
+            // once, so an unscoped ".tab" would reach into its neighbours.
+            let _ktabs = null;
+            function _tabs() {
+                if (!_ktabs) {
+                    _ktabs = createTabs({
+                        root: document.querySelector(".panel-keys") || document,
+                        onSame: () => playSlot("back"),
+                        onSwitch(tab) {
+                            playSlot("interact");
+                            // Scroll the newly-visible log to the bottom
+                            const log = document.getElementById(tab + "-log");
+                            if (log) log.scrollTop = log.scrollHeight;
+                        },
+                    });
                 }
-                playSlot("interact");
-                document
-                    .querySelectorAll(".tab")
-                    .forEach((t) =>
-                        t.classList.toggle("active", t.id === "tab-" + tab),
-                    );
-                document
-                    .querySelectorAll(".tab-section")
-                    .forEach((s) =>
-                        s.classList.toggle("active", s.id === tab + "-section"),
-                    );
-                // Scroll the newly-visible log to the bottom
-                const log = document.getElementById(tab + "-log");
-                if (log) log.scrollTop = log.scrollHeight;
+                return _ktabs;
             }
+
+            function switchTab(tab) { _tabs().switch(tab); }
 
             // ── Button actions ──────────────────────────────────────────────
             function clearLog() {

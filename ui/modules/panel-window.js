@@ -120,20 +120,31 @@
                 if (pill) pill.classList.add("flag-recent");
             }
 
-            function switchWindowTab(tab) {
-                if (!_panel) return;
-                // Same-destination: play 'back' if already on this tab
-                const activeTab = _panel.querySelector(".wtab.active");
-                if (activeTab && activeTab.dataset.wtab === tab) {
-                    playSlot("back");
-                    return;
+            // Built on first use — _panel and lp are both defined below this point.
+            let _wtabs = null;
+            function _tabs() {
+                if (!_wtabs && _panel) {
+                    _wtabs = createTabs({
+                        root: _panel,
+                        tabSelector: ".wtab",
+                        sectionSelector: ".wtab-section",
+                        tabKey: (el) => el.dataset.wtab,
+                        sectionKey: (el) => el.dataset.wsection,
+                        onSame: () => playSlot("back"),
+                        onSwitch(tab) {
+                            playSlot("interact");
+                            // Tell Lua which tab is up so it only runs the heavy
+                            // element-under-cursor AX poll while Element is visible.
+                            lp.sendToHost({ action: "tab", tab: tab });
+                        },
+                    });
                 }
-                playSlot("interact");
-                _panel.querySelectorAll(".wtab").forEach((t) => t.classList.toggle("active", t.dataset.wtab === tab));
-                _panel.querySelectorAll(".wtab-section").forEach((s) => s.classList.toggle("active", s.dataset.wsection === tab));
-                // Tell Lua which tab is up so it only runs the heavy element-under-
-                // cursor AX poll while the Element tab is actually visible.
-                lp.sendToHost({ action: "tab", tab: tab });
+                return _wtabs;
+            }
+
+            function switchWindowTab(tab) {
+                const t = _tabs();
+                if (t) t.switch(tab);
             }
             window.switchWindowTab = switchWindowTab;
 

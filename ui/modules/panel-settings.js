@@ -4,7 +4,6 @@
 // ── State ──────────────────────────────────────────────────────────
             let S = {};
             let _openSections = new Set();
-            let _openSoundPicker = null;
             let _modalResolve = null;
             let _toastTimer = null;
             let _ctxTarget = null; // { macro: m } — what was right-clicked
@@ -456,149 +455,15 @@
                 return h("div", { cls: "group-label" }, txt);
             }
 
-            // ── Sound picker ───────────────────────────────────────────────────
-            function soundPicker(slotId, assigned, soundNames) {
-                const display = assigned || "off";
-                const wrap = h("div", { cls: "sound-picker-wrap" });
-                const btn = h(
-                    "div",
-                    {
-                        cls: "sound-picker-btn",
-                        onmouseenter: () => playSlot("hover"),
-                    },
-                    display,
-                    h("span", { cls: "arrow" }, "▾"),
-                );
-                const list = h("div", { cls: "sound-list" });
-
-                // Filter state
-                let _filter = "all"; // "all" | "default" | "active" | "macro"
-                function categoryOf(name) {
-                    if (name.startsWith("d_")) return "default";
-                    if (name.startsWith("m_")) return "macro";
-                    if (name.startsWith("a_")) return "active";
-                    return "other";
-                }
-
-                // Filter bar
-                const filterBar = h("div", { cls: "sound-filter-bar" });
-                const filters = [
-                    { key: "all", label: "All" },
-                    { key: "default", label: "Default" },
-                    { key: "active", label: "Active" },
-                    { key: "macro", label: "Macro" },
-                ];
-                function rebuildList() {
-                    // Remove existing items (keep filter bar)
-                    while (list.children.length > 1) list.removeChild(list.lastChild);
-                    const opts = [
-                        { name: "None", value: "" },
-                        ...soundNames
-                            .filter(n => _filter === "all" || categoryOf(n) === _filter)
-                            .map(n => ({ name: n, value: n })),
-                    ];
-                    for (const opt of opts) {
-                        const isSelected = opt.value === (assigned || "");
-                        const item = h(
-                            "div",
-                            { cls: "sound-opt" + (isSelected ? " selected" : "") },
-                            h("span", { cls: "check" }, isSelected ? "✓" : ""),
-                            opt.name,
-                        );
-                        item.addEventListener("mouseenter", () => playSlot("hover"));
-                        item.addEventListener("click", () => {
-                            sendToHost({ action: "setSoundAssign", slot: slotId, name: opt.value });
-                            if (list._scrollHandler) {
-                                document.getElementById("scroll").removeEventListener("scroll", list._scrollHandler);
-                                list._scrollHandler = null;
-                            }
-                            list.classList.remove("open");
-                            _openSoundPicker = null;
-                        });
-                        list.appendChild(item);
-                    }
-                }
-                for (const f of filters) {
-                    const fBtn = h("button", {
-                        cls: "seg-btn sound-filter-btn" + (_filter === f.key ? " active" : ""),
-                        onmouseenter: () => playSlot("hover"),
-                        onclick: (e) => {
-                            e.stopPropagation();
-                            playSlot("interact");
-                            _filter = f.key;
-                            for (const child of filterBar.children) child.classList.remove("active");
-                            fBtn.classList.add("active");
-                            rebuildList();
-                        },
-                    }, f.label);
-                    filterBar.appendChild(fBtn);
-                }
-                list.appendChild(filterBar);
-                rebuildList();
-
-                btn.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    playSlot("interact");
-                    if (_openSoundPicker && _openSoundPicker !== list)
-                        _openSoundPicker.classList.remove("open");
-                    const open = !list.classList.contains("open");
-                    list.classList.toggle("open", open);
-                    if (open) {
-                        // Position after toggling open so offsetWidth is valid
-                        const positionList = () => {
-                            const rect = btn.getBoundingClientRect();
-                            const MARGIN = 6;
-                            const vw = window.innerWidth, vh = window.innerHeight;
-                            const w = list.offsetWidth || 140;
-                            const spaceBelow = vh - rect.bottom - MARGIN;
-                            const spaceAbove = rect.top - MARGIN;
-                            // Cap height to the roomier side (never past the CSS 200 default)
-                            // so the list scrolls internally instead of spilling off-window.
-                            list.style.maxHeight =
-                                Math.min(200, Math.max(spaceBelow, spaceAbove)) + "px";
-                            const menuH = list.offsetHeight;
-                            let top;
-                            if (menuH <= spaceBelow)        top = rect.bottom + 4;      // room below
-                            else if (menuH <= spaceAbove)   top = rect.top - menuH - 4; // flip up
-                            else if (spaceBelow >= spaceAbove) top = rect.bottom + 4;   // scroll, down
-                            else                            top = rect.top - menuH - 4; // scroll, up
-                            top = Math.max(MARGIN, Math.min(top, vh - menuH - MARGIN));
-                            list.style.top = top + "px";
-                            list.style.left =
-                                Math.max(MARGIN, Math.min(rect.right - w, vw - w - MARGIN)) + "px";
-                        };
-                        positionList();
-                        // Reposition while the scroll container scrolls
-                        const scrollEl = document.getElementById("scroll");
-                        list._scrollHandler = positionList;
-                        scrollEl.addEventListener(
-                            "scroll",
-                            list._scrollHandler,
-                        );
-                    }
-                    _openSoundPicker = open ? list : null;
-                });
-
-                wrap.appendChild(btn);
-                wrap.appendChild(list);
-                return wrap;
-            }
-
-            document.addEventListener("click", () => {
-                if (_openSoundPicker) {
-                    if (_openSoundPicker._scrollHandler) {
-                        document
-                            .getElementById("scroll")
-                            .removeEventListener(
-                                "scroll",
-                                _openSoundPicker._scrollHandler,
-                            );
-                        _openSoundPicker._scrollHandler = null;
-                    }
-                    _openSoundPicker.classList.remove("open");
-                    _openSoundPicker = null;
-                }
-            });
+            // The row/toggle/section vocabulary is the settings panel's, but it
+            // is what every settings-shaped surface in the shell is built from.
+            // Panels split out of here (panel-theme.js, and the library and
+            // trust tabs to come) build with the same kit rather than growing a
+            // second, drifting copy of it.
+            window.msUI = {
+                h, toggle, seg, section, row, btnRow, actionBtn, divider,
+                groupLabel, showCtxMenu,
+            };
 
             // ── Sections ───────────────────────────────────────────────────────
 
@@ -1201,367 +1066,6 @@
                 }
             }
 
-            function buildSound(body) {
-                // Master toggle
-                body.appendChild(
-                    row(
-                        "Sound Effects",
-                        null,
-                        toggle(S.soundEnabled ?? true, (e) =>
-                            sendToHost({
-                                action: "setSoundEnabled",
-                                value: e.target.checked,
-                            }),
-                        ),
-                        "",
-                        [
-                            {
-                                icon: "",
-                                label: "Reset to default",
-                                action: () =>
-                                    sendToHost({
-                                        action: "resetSetting",
-                                        key: "soundEnabled",
-                                    }),
-                            },
-                        ],
-                    ),
-                );
-
-                // Volume slider
-                const volWrap = h("div", {
-                    cls: "row slider-row",
-                    onmouseenter: () => playSlot("hover"),
-                });
-                volWrap.addEventListener("contextmenu", (e) => {
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-                    playSlot("interact");
-                    showCtxMenu(
-                        e.clientX,
-                        e.clientY,
-                        [
-                            {
-                                icon: "",
-                                label: "Reset to 100",
-                                action: () =>
-                                    sendToHost({
-                                        action: "resetSetting",
-                                        key: "soundVolume",
-                                    }),
-                            },
-                        ],
-                        "Volume",
-                    );
-                });
-                const volTop = h("div", { cls: "slider-top" });
-                volTop.appendChild(h("div", { cls: "row-label" }, "Volume"));
-                const volNum = h("input", {
-                    type: "number",
-                    min: "0",
-                    max: "100",
-                    step: "1",
-                });
-                volNum.value = S.soundVolume ?? 100;
-                const volDiv = h("div", { cls: "slider-val" });
-                volDiv.appendChild(volNum);
-                volTop.appendChild(volDiv);
-                volWrap.appendChild(volTop);
-                const volSlider = h("input", {
-                    type: "range",
-                    min: "0",
-                    max: "100",
-                    step: "1",
-                });
-                volSlider.value = S.soundVolume ?? 100;
-                volSlider.addEventListener("input", () => {
-                    volNum.value = volSlider.value;
-                });
-                volSlider.addEventListener("change", () =>
-                    sendToHost({
-                        action: "setSoundVolume",
-                        value: parseInt(volSlider.value),
-                    }),
-                );
-                volNum.addEventListener("change", () => {
-                    const v = Math.max(
-                        0,
-                        Math.min(100, parseInt(volNum.value) || 0),
-                    );
-                    volSlider.value = v;
-                    sendToHost({ action: "setSoundVolume", value: v });
-                });
-                volWrap.appendChild(volSlider);
-                body.appendChild(volWrap);
-
-                body.appendChild(divider());
-
-                // Slot pickers
-                const SLOTS = [
-                    { id: "updateAvailable", label: "Update Available" },
-                    { id: "alert", label: "Alert / Notice" },
-                    { id: "enabled", label: "Macros Enabled" },
-                    { id: "disabled", label: "Macros Disabled" },
-                    { id: "toggleOn", label: "Toggle On" },
-                    { id: "toggleOff", label: "Toggle Off" },
-                    { id: "update", label: "Setting Updated" },
-                    { id: "reset", label: "Setting Reset" },
-                    { id: "interact", label: "Menu Interact" },
-                    { id: "hover", label: "Menu Hover" },
-                    { id: "back", label: "Menu Back" },
-                    { id: "settingsOpen", label: "Settings Open" },
-                    { id: "settingsClose", label: "Settings Close" },
-                ];
-
-                // Loading sound slots
-                const LOAD_SLOTS = [
-                    { id: "themeLoaded", label: "Theme Applied" },
-                    { id: "load", label: "Loading Screen End" },
-                    { id: "launch", label: "Launch Announcement" },
-                ];
-
-                // ── Sound Presets (all system slots) ──────────────────────────
-                const presets = S.soundPresets || [];
-                const ALL_SLOTS = [...LOAD_SLOTS, ...SLOTS];
-
-                // Slots managed by presets (all 14 system slots)
-                const presetSlotIds = ALL_SLOTS.map(s => s.id);
-
-                // d_* default mapping for "Default" preset
-                const dMap = {
-                    themeLoaded: "d_ThemeLoaded", load: "d_LoadEnd", launch: "d_Launch",
-                    alert: "d_Alert", enabled: "d_MacrosOn", disabled: "d_MacrosOff",
-                    toggleOn: "d_ToggleOn", toggleOff: "d_ToggleOff",
-                    update: "d_Update", updateAvailable: "d_UpdateAvailable",
-                    reset: "d_Reset", interact: "d_Interact", hover: "d_Hover",
-                    back: "d_Back", settingsOpen: "d_SettingsOpen", settingsClose: "d_SettingsClose",
-                };
-                const defaultAssigns = {};
-                for (const sid of presetSlotIds) {
-                    if (dMap[sid]) defaultAssigns[sid] = dMap[sid];
-                }
-
-                // Detect which preset is currently active
-                // Checks all slots the preset defines
-                let activePreset = null;
-                const sa = S.soundAssign || {};
-
-                // Check if "Default" (all d_*)
-                let isDefault = presetSlotIds.length > 0;
-                for (const sid of presetSlotIds) {
-                    if ((sa[sid] || "") !== (defaultAssigns[sid] || "")) { isDefault = false; break; }
-                }
-                if (isDefault) activePreset = "default";
-
-                // Check numbered presets
-                if (!activePreset) {
-                    for (const p of presets) {
-                        const pSlots = Object.keys(p.assigns || {});
-                        if (pSlots.length === 0) continue;
-                        let match = true;
-                        for (const sid of pSlots) {
-                            const expected = p.assigns[sid] || null;
-                            const actual = sa[sid] || null;
-                            if (expected !== actual) { match = false; break; }
-                        }
-                        if (match) { activePreset = String(p.num); break; }
-                    }
-                }
-
-                body.appendChild(groupLabel("Sound Presets"));
-                const presetWrap = h("div", { cls: "seg" });
-                // "Custom" option — no preset applied
-                const customBtn = h("button", {
-                    cls: "seg-btn" + (activePreset === null ? " active" : ""),
-                    onmouseenter: () => playSlot("hover"),
-                    onclick: () => {
-                        sendToHost({ action: "clearSoundPreset", slots: presetSlotIds });
-                    },
-                }, "Custom");
-                presetWrap.appendChild(customBtn);
-                // "Default" option — all d_* sounds
-                const defaultBtn = h("button", {
-                    cls: "seg-btn" + (activePreset === "default" ? " active" : ""),
-                    onmouseenter: () => playSlot("hover"),
-                    onclick: () => {
-                        sendToHost({ action: "setSoundPreset", assigns: defaultAssigns, preset: "default" });
-                    },
-                }, "Default");
-                presetWrap.appendChild(defaultBtn);
-                // Numbered presets
-                for (const p of presets) {
-                    const pBtn = h("button", {
-                        cls: "seg-btn" + (activePreset === String(p.num) ? " active" : ""),
-                        onmouseenter: () => playSlot("hover"),
-                        onclick: () => {
-                            sendToHost({ action: "setSoundPreset", assigns: p.assigns, preset: String(p.num) });
-                        },
-                    }, String(p.num));
-                    presetWrap.appendChild(pBtn);
-                }
-                body.appendChild(row("Preset", "Select a numbered sound set or Custom for individual control", presetWrap));
-
-                // Individual loading slots (always visible)
-                const names = S.soundNames || [];
-                for (const slot of LOAD_SLOTS) {
-                    const assigned = (S.soundAssign || {})[slot.id] || "";
-                    body.appendChild(
-                        row(
-                            slot.label,
-                            null,
-                            soundPicker(slot.id, assigned, names),
-                            "",
-                            [
-                                {
-                                    icon: "",
-                                    label: "Play",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "playSlot",
-                                            slot: slot.id,
-                                        }),
-                                },
-                                {
-                                    icon: "",
-                                    label: "Import",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "importSoundForSlot",
-                                            slot: slot.id,
-                                            label: slot.label,
-                                        }),
-                                },
-                                ...(assigned
-                                    ? [
-                                          {
-                                              icon: "",
-                                              label: "Clear",
-                                              action: () =>
-                                                  sendToHost({
-                                                      action: "setSoundAssign",
-                                                      slot: slot.id,
-                                                      name: "",
-                                                  }),
-                                          },
-                                      ]
-                                    : []),
-                            ],
-                        ),
-                    );
-                }
-
-                body.appendChild(divider());
-                body.appendChild(groupLabel("Event Slots"));
-                for (const slot of SLOTS) {
-                    const assigned = (S.soundAssign || {})[slot.id] || "";
-                    body.appendChild(
-                        row(
-                            slot.label,
-                            null,
-                            soundPicker(slot.id, assigned, names),
-                            "",
-                            [
-                                {
-                                    icon: "",
-                                    label: "Play",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "playSlot",
-                                            slot: slot.id,
-                                        }),
-                                },
-                                {
-                                    icon: "",
-                                    label: "Import",
-                                    action: () =>
-                                        sendToHost({
-                                            action: "importSoundForSlot",
-                                            slot: slot.id,
-                                            label: slot.label,
-                                        }),
-                                },
-                                ...(assigned
-                                    ? [
-                                          {
-                                              icon: "",
-                                              label: "Clear",
-                                              action: () =>
-                                                  sendToHost({
-                                                      action: "setSoundAssign",
-                                                      slot: slot.id,
-                                                      name: "",
-                                                  }),
-                                          },
-                                      ]
-                                    : []),
-                            ],
-                        ),
-                    );
-                }
-
-                // User-defined sound slots (from ms.settings.define({ type="soundSlot" }))
-                const userSlots = S.userSoundSlots || [];
-                if (userSlots.length > 0) {
-                    body.appendChild(divider());
-                    body.appendChild(groupLabel("Pack Slots"));
-                    for (const slot of userSlots) {
-                        const assigned = (S.soundAssign || {})[slot.key] || "";
-                        body.appendChild(
-                            row(
-                                slot.label,
-                                null,
-                                soundPicker(slot.key, assigned, names),
-                                "",
-                                [
-                                    {
-                                        icon: "",
-                                        label: "Play",
-                                        action: () =>
-                                            sendToHost({
-                                                action: "playSlot",
-                                                slot: slot.key,
-                                            }),
-                                    },
-                                    {
-                                        icon: "",
-                                        label: "Import for this slot",
-                                        action: () =>
-                                            sendToHost({
-                                                action: "importSoundForSlot",
-                                                slot: slot.key,
-                                                label: slot.label,
-                                            }),
-                                    },
-                                    ...(assigned
-                                        ? [
-                                              {
-                                                  icon: "",
-                                                  label: "Clear",
-                                                  action: () =>
-                                                      sendToHost({
-                                                          action: "setSoundAssign",
-                                                          slot: slot.key,
-                                                          name: "",
-                                                      }),
-                                              },
-                                          ]
-                                        : []),
-                                ],
-                            ),
-                        );
-                    }
-                }
-
-                body.appendChild(divider());
-                body.appendChild(
-                    btnRow(
-                        actionBtn("Import Sound Files\u2026", "", () =>
-                            sendToHost({ action: "importSounds" }),
-                        ),
-                    ),
-                );
-            }
-
             function buildProfiles(body) {
                 const current = S.currentProfile || "";
                 const profiles = S.profiles || [];
@@ -2081,49 +1585,6 @@
             }
             window.renderProfilesPanel = renderProfilesPanel;
 
-            // ── Theme & Sound panel (rendered into #theme-scroll) ───────────
-            function renderThemePanel() {
-                const el = document.getElementById("theme-scroll");
-                if (!el) return;
-                el.innerHTML = "";
-
-                // Custom theme toggle
-                const customTheme = S.customThemeEnabled !== false;
-                el.appendChild(
-                    row(
-                        "Custom theme",
-                        "Load ms_theme.json colors and font",
-                        toggle(customTheme, (e) => {
-                            sendToHost({
-                                action: "setCustomTheme",
-                                value: e.target.checked,
-                            });
-                        }),
-                    ),
-                );
-
-                // Edit Theme button
-                el.appendChild(divider());
-                const btnWrap = h("div", { cls: "btn-row" });
-                btnWrap.appendChild(
-                    actionBtn("Edit Theme File", "", () =>
-                        sendToHost({ action: "editTheme" }),
-                    ),
-                );
-                el.appendChild(btnWrap);
-                el.appendChild(divider());
-
-                // Sound settings
-                buildSound(el);
-
-                // Coming soon note
-                const note = h("div", {
-                    style: "padding:16px 14px 8px;font-size:11px;color:var(--text3);opacity:0.6;font-style:italic;",
-                }, "More theme features coming soon.");
-                el.appendChild(note);
-            }
-            window.renderThemePanel = renderThemePanel;
-
             // ── Theme application ──────────────────────────────────────────────
 
             window.settingsApplyTheme = settingsApplyTheme;
@@ -2141,26 +1602,6 @@
                     el.textContent = `@font-face { font-family: "${font}"; src: url("${fontURL}"); }`;
                 }
                 document.body.style.fontFamily = `"${font}", Almendra, Palatino, Georgia, serif`;
-            }
-
-            function applyUIFC(uifcURL) {
-                const panel = document.getElementById("panel");
-                if (uifcURL) {
-                    // Body becomes the full expanded canvas; #panel is centred within it.
-                    document.body.style.backgroundImage = `url("${uifcURL}")`;
-                    document.body.style.backgroundSize = "100% 100%";
-                    document.body.style.backgroundRepeat = "no-repeat";
-                    document.body.style.padding = "12.5%";
-                    document.body.style.boxSizing = "border-box";
-                    if (panel) panel.style.height = "100%";
-                } else {
-                    document.body.style.backgroundImage = "";
-                    document.body.style.backgroundSize = "";
-                    document.body.style.backgroundRepeat = "";
-                    document.body.style.padding = "";
-                    document.body.style.boxSizing = "";
-                    if (panel) panel.style.height = "";
-                }
             }
 
             // Parse #rrggbb or #rgb → { r, g, b }
@@ -2238,7 +1679,7 @@
                 if (t.dangerGlow) r.setProperty("--danger-glow", t.dangerGlow);
                 if (t.dangerBorder) r.setProperty("--danger-border", t.dangerBorder);
 
-                // ── Radius, font, UIFC ──────────────────────────────────
+                // ── Radius, font ────────────────────────────────────────
                 if (t.radius !== undefined) {
                     r.setProperty("--radius", t.radius + "px");
                     r.setProperty(
@@ -2247,7 +1688,6 @@
                     );
                 }
                 applyFont(t.font, t.fontURL);
-                applyUIFC(t.uifcURL);
             }
 
             // ── receiveState ───────────────────────────────────────────────────
@@ -2266,7 +1706,9 @@
                 syncQRChecks(S.qrOptions);
                 render();
                 renderProfilesPanel();
-                renderThemePanel();
+                // Theme & sound live in panel-theme.js — it gets the state it
+                // needs handed to it rather than reaching back for S.
+                if (window.renderThemePanel) window.renderThemePanel(state);
             }
 
             // ── Init ───────────────────────────────────────────────────────────

@@ -60,18 +60,7 @@
             #flag-event-detail { font-size: 11px; color: var(--text3); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
             /* ── Tabs ───────────────────────────────────────────────────────── */
-            #tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-            .tab {
-                flex: 1; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text2);
-                text-align: center; cursor: pointer; border-bottom: 2px solid transparent; background: none;
-                transition: color 0.15s, border-color 0.15s; -webkit-app-region: no-drag;
-            }
-            .tab:hover { color: var(--text); }
-            .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-            /* ── Tab sections ───────────────────────────────────────────────── */
-            .tab-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
-            .tab-section.active { display: flex; }
+            /* .tab / .tab-section styles come from modules/ui-tabs.js */
 
             /* ── State section ──────────────────────────────────────────────── */
             .state-section { padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -236,6 +225,7 @@
 
         <div id="ctx-menu"></div>
 
+        <script src="./modules/ui-tabs.js"></script>
         <script src="./modules/log-panel.js"></script>
         <script>
             "use strict";
@@ -398,12 +388,14 @@
             }
 
             // ── Tabs ────────────────────────────────────────────────────────
-            function switchTab(tab) {
-                document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + tab));
-                document.querySelectorAll(".tab-section").forEach((s) => s.classList.toggle("active", s.id === tab + "-section"));
-                const log = document.getElementById("window-log");
-                if (log && tab === "element") log.scrollTop = log.scrollHeight;
-            }
+            injectTabStyles();
+            const tabs = createTabs({
+                onSwitch(tab) {
+                    const log = document.getElementById("window-log");
+                    if (log && tab === "element") log.scrollTop = log.scrollHeight;
+                },
+            });
+            function switchTab(tab) { tabs.switch(tab); }
 
             // ── Inspect toggle ─────────────────────────────────────────────
             let inspectOn = false;

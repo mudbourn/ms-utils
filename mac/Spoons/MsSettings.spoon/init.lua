@@ -954,6 +954,44 @@
                 end
             end
         end
+
+        -- The raw on-disk theme, or {} when the user has never authored one.
+        -- The editor needs this to tell an explicitly-set key apart from a
+        -- default it merely inherited — ms._theme has already merged the two.
+        ms.readThemeFile = function()
+            local f = io.open(themePath, "r")
+            if not f then return {} end
+            local content = f:read("*all"); f:close()
+            local data = hs.json.decode(content or "")
+            return type(data) == "table" and data or {}
+        end
+
+        -- Merges a patch into ms_theme.json and reloads. An empty-string value
+        -- clears the key, which is how the editor reverts one back to default.
+        -- Everything written here still passes through loadTheme's validation,
+        -- so an out-of-range radius or a junk hex is dropped on the way in.
+        ms.saveTheme = function(patch)
+            if type(patch) ~= "table" then return false end
+            local data = ms.readThemeFile()
+            for k, v in pairs(patch) do
+                if v == "" then data[k] = nil else data[k] = v end
+            end
+            local f = io.open(themePath, "w")
+            if not f then return false end
+            f:write(hs.json.encode(data, true)); f:close()
+            ms.loadTheme()
+            return true
+        end
+
+        -- Clears the theme back to defaults, keeping a .bak so a hand-authored
+        -- file is recoverable.
+        ms.resetTheme = function()
+            if hs.fs.attributes(themePath) then
+                os.rename(themePath, themePath .. ".bak")
+            end
+            ms.loadTheme()
+            return true
+        end
     -- END Theme System --
 
     -- Capability Detection --

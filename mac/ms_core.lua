@@ -3717,6 +3717,27 @@
             end
         -- END 13a. Macro Lab Shell ↔ Compiler bridge --
 
+        -- 13b. Install Version (ms.version) --
+            -- MANIFEST.json is the single source of truth for the installed
+            -- version (same file MsUI.spoon and the loading screen read). The
+            -- package fingerprint records it, so it must exist before 13c.
+            do
+                local f = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
+                if f then
+                    local ok, m = pcall(hs.json.decode, f:read("*all"))
+                    f:close()
+                    if ok and type(m) == "table" and m.version then ms.version = m.version end
+                end
+            end
+        -- END 13b. Install Version --
+
+        -- 13c. Package Format (ms.package) --
+            -- Loads after the compiler: installing a macro package that ships
+            -- ms_macros_visual.json compiles it on the way in.
+            package.loaded["lib.ms_package"] = nil
+            require("lib.ms_package")(ms)
+        -- END 13c. Package Format --
+
         -- 14. Safety Nets --
             do
                 local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"

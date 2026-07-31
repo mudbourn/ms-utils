@@ -11,9 +11,5 @@
   "warning": "#c86010",
   "text": "#2a1808",
   "radius": 8,
-  "font": "Georgia",
-  "uifc": {
-    "settings": "",
-    "guardian": ""
-  }
+  "font": "Georgia"
 }

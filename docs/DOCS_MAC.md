@@ -1577,11 +1577,7 @@ The panel UI is fully themeable via `~/.hammerspoon/data/ms_theme.json`. Edit th
     "text":     "#f0ddb0",
     "radius":   3,
     "font":     "Almendra",
-    "fadeMs":   150,
-    "uifc": {
-        "settings": "",
-        "guardian": ""
-    }
+    "fadeMs":   150
 }
 ```
 
@@ -1640,30 +1636,6 @@ Supported file extensions: `.ttf`, `.otf`, `.woff`, `.woff2`. If a file path is 
 
 ---
 
-### `uifc` — UI Frame Cosmetic
-
-Each window can have its own UI Frame Cosmetic — a PNG image rendered as a full-window background behind the panel. Design it as a picture frame with a transparent centre. When a UIFC is set, the window expands to match the **PNG's actual pixel dimensions** as declared in its IHDR chunk — the system reads the image dimensions directly, so no fixed scale factor applies. Any aspect ratio works: **9:16, 16:9, 1:1, 3:4, 4:3** (and anything else). The inner content area is always **360 × 640 px** and is unaffected by the frame.
-
-**Authoring constraint.** Design your UIFC PNG so that the 360 × 640 content area sits centred inside it. The area outside that rectangle is the decorative frame; it can be any size in any direction. For example, a 16:9 UIFC would be roughly 1138 × 640 px with the 360 × 640 content centred horizontally.
-
-Each key is a relative path from `~/.hammerspoon/`. Leave a value as `""` to disable that window's frame.
-
-| Key | Window |
-|-----|--------|
-| `settings` | Main settings panel |
-| `guardian` | Tamper-protection dialog |
-
-```json
-{
-    "uifc": {
-        "settings": "ui/frames/settings.png",
-        "guardian": "ui/frames/guardian.png"
-    }
-}
-```
-
----
-
 ### `ms.loadTheme()`
 
 Reads and validates `data/ms_theme.json`. Called automatically at startup after `ms.loadSettings()`. Also triggered by **Developer › Reload Theme** in the panel.
@@ -1679,10 +1651,6 @@ if ms.has("theme") then
     -- user has a custom data/ms_theme.json loaded
 end
 
-if ms.has("uifc") then
-    -- UI Frame Cosmetic PNG is configured and the file exists
-end
-
 if ms.has("userSettings") then
     ms.settings.define({ ... })   -- safe on any version
 end
@@ -1693,7 +1661,6 @@ end
 | Flag | Returns `true` when |
 |------|--------------------|
 | `"theme"` | `data/ms_theme.json` was loaded from disk (not just built-in defaults) |
-| `"uifc"` | theme has a UI Frame Cosmetic (`uifc`) path set and the PNG file exists |
 | `"sound"` | sound is enabled (`ms.soundEnabled`) and at least one file is indexed |
 | `"socd"` | SOCD engine is currently enabled (`ms.socdEnabled`) |
 | `"trackpad"` | trackpad mode is currently active (`ms.trackpadMode`) |

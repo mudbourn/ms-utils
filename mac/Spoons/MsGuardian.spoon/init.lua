@@ -543,26 +543,6 @@ YQIDAQAB
         if _ok and _screen then
             local _gw, _gh = 480, 360 -- 4:3
 
-            if not _customThemeDisabled then
-                local _tq = io.open(_home .. "/.hammerspoon/data/ms_theme.json", "r")
-
-                if _tq then
-                    local _dq = hs.json.decode(_tq:read("*all")); _tq:close()
-
-                    if type(_dq) == "table" and type(_dq.uifc) == "table"
-                        and type(_dq.uifc.guardian) == "string"
-                        and _dq.uifc.guardian ~= "" then
-                        local _qp = _home .. "/.hammerspoon/"
-                            .. (function(p) p=p:gsub("%.%.[/\\]",""):gsub("[/\\]%.%.",""):gsub("^%.%.$",""):gsub("^[/~]+",""); return p end)(_dq.uifc.guardian)
-
-                        if hs.fs.attributes(_qp) then
-                            _gw = math.floor(_gw * 1.25)
-                            _gh = math.floor(_gh * 1.25)
-                        end
-                    end
-                end
-            end
-
             local _gx = _screen.x + math.floor((_screen.w - _gw) / 2)
             local _gy = _screen.y + math.floor((_screen.h - _gh) / 2)
 
@@ -591,7 +571,6 @@ YQIDAQAB
             local _baseURL  = "file://" .. _home .. "/.hammerspoon/ui/"
 
             local _guardianTheme = nil
-            local _guardianUIFC  = nil
 
             if not _customThemeDisabled then
                 local _tf = io.open(_home .. "/.hammerspoon/data/ms_theme.json", "r")
@@ -601,17 +580,6 @@ YQIDAQAB
 
                     if type(_td) == "table" then
                         _guardianTheme = _td
-
-                        if type(_td.uifc) == "table"
-                            and type(_td.uifc.guardian) == "string"
-                            and _td.uifc.guardian ~= "" then
-                            local _gp = _home .. "/.hammerspoon/"
-                                .. (function(p) p=p:gsub("%.%.[/\\]",""):gsub("[/\\]%.%.",""):gsub("^%.%.$",""):gsub("^[/~]+",""); return p end)(_td.uifc.guardian)
-
-                            if hs.fs.attributes(_gp) then
-                                _guardianUIFC = "file://" .. _gp
-                            end
-                        end
                     end
                 end
             end
@@ -644,15 +612,6 @@ YQIDAQAB
                             end
                         end
 
-                        if _guardianUIFC then
-                            _guardianView:evaluateJavaScript(
-                                "document.body.style.backgroundImage='url(\"" .. _guardianUIFC .. "\")';"
-                                .. "document.body.style.backgroundSize='100% 100%';"
-                                .. "document.body.style.backgroundRepeat='no-repeat';"
-                                .. "document.body.style.padding='12.5%';"
-                                .. "document.body.style.boxSizing='border-box';"
-                            )
-                        end
                     end)
 
                     -- Fade-in: ramp alpha 0→1 over ~150ms (once)

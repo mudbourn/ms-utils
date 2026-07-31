@@ -250,10 +250,38 @@
                 })
             end
 
-            local themeOut = {}
-            for k, v in pairs(ms._theme) do
-                if k ~= "_uifcW" and k ~= "_uifcH" then themeOut[k] = v end
+            -- What the theme editor can offer as a font: every font file under
+            -- ui/fonts/ (each file is its own @font-face family) plus the
+            -- families macOS always has. Values are what ms_theme.json stores —
+            -- a path relative to ~/.hammerspoon for files, a family name for the rest.
+            local themeFonts = {}
+            for _, fam in ipairs({ "Almendra", "Palatino", "Georgia", "Helvetica", "Menlo" }) do
+                table.insert(themeFonts, { label = fam, value = fam })
             end
+            local _fontDir = os.getenv("HOME") .. "/.hammerspoon/ui/fonts/"
+            if hs.fs.attributes(_fontDir) then
+                local files = {}
+                for entry in hs.fs.dir(_fontDir) do
+                    if entry:match("%.[ot]tf$") or entry:match("%.woff2?$") then
+                        table.insert(files, entry)
+                    end
+                end
+                table.sort(files)
+                for _, entry in ipairs(files) do
+                    table.insert(themeFonts, {
+                        label = entry:match("^(.+)%.[^%.]+$") or entry,
+                        value = "ui/fonts/" .. entry,
+                    })
+                end
+            end
+
+            -- The raw file, so the editor can show which keys are actually set.
+            local themeFile = ms.readThemeFile and ms.readThemeFile() or {}
+            local themeSet  = {}
+            for k in pairs(themeFile) do themeSet[k] = true end
+
+            local themeOut = {}
+            for k, v in pairs(ms._theme) do themeOut[k] = v end
             if themeOut.font and themeOut.font:match("%.[ot]tf$")
                 or (themeOut.font and themeOut.font:match("%.woff2?$"))
             then
@@ -318,6 +346,10 @@
                 keysOpen                = ms.dev._keysOpen or false,
                 windowOpen              = ms.dev._windowOpen or false,
                 theme                   = themeOut,
+                themeFonts              = themeFonts,
+                themeSet                = themeSet,
+                -- themeOut.font is the display family; this is the value on disk.
+                themeFontValue          = themeFile.font or ms._theme.font or "",
                 msVersion               = (function()
                     local p = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
                     local f = io.open(p, "r")
@@ -1050,6 +1082,121 @@
 
             editTheme = function()
                 os.execute("open '" .. os.getenv("HOME") .. "/.hammerspoon/data/ms_theme.json'")
+            end,
+
+            -- ── Theme editor ──────────────────────────────────────────────
+            -- One key at a time; the panel previews locally and only commits
+            -- on change, so this is not on the drag path of a colour picker.
+            setThemeKey = function(data)
+                if not data.key or not ms.saveTheme then return end
+                local value = data.value
+                if type(value) ~= "string" and type(value) ~= "number" then return end
+                ms.saveTheme({ [data.key] = value })
+                ms.playSlot("update")
+                ms.ui.refresh()
+            end,
+
+            resetTheme = function()
+                if not ms.resetTheme then return end
+                ms.resetTheme()
+                ms.playSlot("reset")
+                ms.alert("Theme reset to defaults.\nYour old file was kept as ms_theme.json.bak", 4, true)
+                ms.ui.refresh()
+            end,
+
+            -- ── Packages ──────────────────────────────────────────────────
+            -- Theme and sound export as separate typed packages: a theme can
+            -- never carry audio and a sound pack can never carry a theme.
+            exportPackage = function(data)
+                local kind = data and data.type
+                if not (ms.package and ms.package.collect and kind) then return end
+
+                local files = ms.package.collect(kind)
+                if kind == "sound" then
+                    local assignPath = ms.package.exportSoundAssign()
+                    if assignPath then files["sound_assign.json"] = assignPath end
+                end
+                if next(files) == nil then
+                    ms.alert("Nothing to export as a " .. kind .. " package.", 4)
+                    return
+                end
+
+                ms.playSlot("alert")
+                local chosen = hs.dialog.chooseFileOrFolder(
+                    "Choose where to save the " .. kind .. " package",
+                    os.getenv("HOME") .. "/Documents", false, true, false
+                )
+                local dir
+                for _, v in pairs(chosen or {}) do
+                    if type(v) == "string" then dir = v; break end
+                end
+                ms.ui.show()
+                if not dir then return end
+
+                local meta = ms.macroMeta or {}
+                local base = ms.sanitizeName(meta.name or "mudscript")
+                if base == "" then base = "mudscript" end
+                local out = dir:gsub("/$", "") .. "/" .. base .. "-" .. kind .. ".mspkg"
+
+                local manifest, err = ms.package.pack({
+                    type    = kind,
+                    name    = base .. " " .. kind,
+                    author  = meta.author,
+                    website = meta.website,
+                    files   = files,
+                    out     = out,
+                })
+                hs.timer.doAfter(0.15, function()
+                    if manifest then
+                        ms.playSlot("update")
+                        ms.alert("Exported " .. out:match("([^/]+)$") .. ".", 3, true)
+                    else
+                        ms.alert("Export failed:\n" .. tostring(err), 5)
+                    end
+                end)
+            end,
+
+            importPackage = function()
+                if not (ms.package and ms.package.install) then return end
+                ms.playSlot("alert")
+                local chosen = hs.dialog.chooseFileOrFolder(
+                    "Select a .mspkg package to import",
+                    os.getenv("HOME") .. "/Documents", true, false, false
+                )
+                local path
+                for _, v in pairs(chosen or {}) do
+                    if type(v) == "string" then path = v; break end
+                end
+                ms.ui.show()
+                if not path then return end
+
+                local result, err = ms.package.install(path)
+                -- An unsigned package is the normal case until the validated
+                -- library lands; confirm rather than refuse.
+                if not result and tostring(err):find("validated library") then
+                    local answer = hs.dialog.blockAlert(
+                        "This package is not in the validated library.",
+                        "Import " .. path:match("([^/]+)$") .. " anyway?",
+                        "Import", "Cancel"
+                    )
+                    if answer ~= "Import" then return end
+                    result, err = ms.package.install(path, { force = true })
+                end
+
+                hs.timer.doAfter(0.15, function()
+                    if not result then
+                        ms.alert("Import failed:\n" .. tostring(err), 5)
+                        return
+                    end
+                    if ms._soundsDirty then ms._discoverSounds() end
+                    if ms.loadTheme then ms.loadTheme() end
+                    ms.playSlot("update")
+                    ms.alert(
+                        (result.manifest.name or "Package") .. " imported (" ..
+                        #result.installed .. " files).", 4, true
+                    )
+                    ms.ui.refresh()
+                end)
             end,
 
             openDevLogs = function()
