@@ -884,6 +884,95 @@
             end
         -- END ms.menu.define --
 
+        -- ms.tools.define(def) --
+            -- Registers a user-defined tool: a callable action that appears in
+            -- the macro builder's function picker (under the "User" category)
+            -- and gets its own configuration card in the Tools panel.
+            --
+            -- Tool settings are ordinary user settings under a reserved key
+            -- namespace ("tool.<toolId>.<key>"), so they persist through the
+            -- existing ms._userSettingVals bucket with no new save path.
+            ms.tools.define = function(def)
+                assert(type(def) == "table",
+                    "ms.tools.define: argument must be a table")
+                assert(type(def.id) == "string" and #def.id > 0,
+                    "ms.tools.define: 'id' is required")
+                assert(def.id:match("^[%a_][%w_%.]*$"),
+                    "ms.tools.define: invalid id '" .. def.id
+                        .. "' (must be a Lua-callable path, e.g. 'myPkg.doThing')")
+                assert(not ms._toolIndex[def.id],
+                    "ms.tools.define: duplicate tool id '" .. def.id .. "'")
+                if def.run ~= nil then
+                    assert(type(def.run) == "function",
+                        "ms.tools.define: 'run' must be a function")
+                end
+                assert(def.params == nil or type(def.params) == "table",
+                    "ms.tools.define: 'params' must be a table")
+                assert(def.settings == nil or type(def.settings) == "table",
+                    "ms.tools.define: 'settings' must be a table")
+
+                -- Register each declared setting into the normal user-setting
+                -- tables so get/set/persist/validate all work unchanged.
+                for _, item in ipairs(def.settings or {}) do
+                    assert(type(item) == "table",
+                        "ms.tools.define: each entry in 'settings' must be a table")
+                    assert(_SETTING_TYPES[item.type],
+                        "ms.tools.define: unknown setting type '"
+                            .. tostring(item.type) .. "'")
+                    if item.type ~= "divider" and item.type ~= "groupLabel" then
+                        assert(type(item.key) == "string" and #item.key > 0,
+                            "ms.tools.define: setting 'key' is required for type '"
+                                .. item.type .. "'")
+                        local nsKey = "tool." .. def.id .. "." .. item.key
+                        assert(not ms._userSettingIndex[nsKey],
+                            "ms.tools.define: duplicate setting key '"
+                                .. item.key .. "' on tool '" .. def.id .. "'")
+                        item._nsKey  = nsKey
+                        item._toolId = def.id
+                        ms._userSettingIndex[nsKey] = item
+                        if item.type ~= "action" then
+                            local savedVal = ms._pendingUserSettings
+                                and ms._pendingUserSettings[nsKey]
+                            if savedVal ~= nil then
+                                local validated = _validateUserValue(item, savedVal)
+                                if validated ~= nil then
+                                    ms._userSettingVals[nsKey] = validated
+                                    ms._pendingUserSettings[nsKey] = nil
+                                else
+                                    ms._userSettingVals[nsKey] = item.default
+                                end
+                            else
+                                ms._userSettingVals[nsKey] = item.default
+                            end
+                            local v = ms._userSettingVals[nsKey]
+                            if v ~= nil and type(item.onChange) == "function" then
+                                pcall(item.onChange, v)
+                            end
+                        end
+                    end
+                end
+
+                ms._toolIndex[def.id] = def
+                table.insert(ms._toolDefs, def)
+            end
+        -- END ms.tools.define --
+
+        -- ms.tools.get(toolId, key) / ms.tools.set(toolId, key, value) --
+            -- Thin namespaced wrappers over ms.settings.get/set so a tool reads
+            -- its own configuration without hand-building the reserved key.
+            ms.tools.get = function(toolId, key)
+                assert(type(toolId) == "string", "ms.tools.get: toolId must be a string")
+                assert(type(key) == "string",    "ms.tools.get: key must be a string")
+                return ms.settings.get("tool." .. toolId .. "." .. key)
+            end
+
+            ms.tools.set = function(toolId, key, value)
+                assert(type(toolId) == "string", "ms.tools.set: toolId must be a string")
+                assert(type(key) == "string",    "ms.tools.set: key must be a string")
+                return ms.settings.set("tool." .. toolId .. "." .. key, value)
+            end
+        -- END ms.tools.get / ms.tools.set --
+
         -- ms.features.hide(name) --
             ms.features.hide = function(name)
                 if not _HIDEABLE_FEATURES[name] then

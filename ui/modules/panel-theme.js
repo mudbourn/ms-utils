@@ -440,15 +440,24 @@
     function slotButtons(slotId, label) {
         const { h } = ui();
         const wrap = h("div", { cls: "slot-btns" });
-        const mk = (glyph, title, action) => h("button", {
-            cls: "slot-btn",
-            title: title,
-            onmouseenter: () => playSlot("hover"),
-            onclick: (e) => { e.stopPropagation(); action(); },
-        }, glyph);
-        wrap.appendChild(mk("▶", "Preview",
+        // h() turns a string child into a text node, so an icon has to go in
+        // as markup. The glyph is kept as the fallback for the case where the
+        // shell's icon map has no such name.
+        const mk = (iconName, glyph, title, action) => {
+            const b = h("button", {
+                cls: "slot-btn",
+                title: title,
+                onmouseenter: () => playSlot("hover"),
+                onclick: (e) => { e.stopPropagation(); action(); },
+            });
+            const svg = typeof window.icon === "function" ? window.icon(iconName) : "";
+            if (svg && svg.indexOf("<path") !== -1) b.innerHTML = svg;
+            else b.textContent = glyph;
+            return b;
+        };
+        wrap.appendChild(mk("play", "▶", "Preview",
             () => sendToHost({ action: "playSlot", slot: slotId })));
-        wrap.appendChild(mk("⤓", "Import a file for this slot",
+        wrap.appendChild(mk("download", "⤓", "Import a file for this slot",
             () => sendToHost({ action: "importSoundForSlot", slot: slotId, label: label })));
         return wrap;
     }

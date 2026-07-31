@@ -248,17 +248,22 @@
                     ms.settings = ms.settings or {}
                     ms.menu     = ms.menu or {}
                     ms.features = ms.features or {}
+                    ms.tools    = ms.tools or {}
                     spoon.MsSettings:start()
                 else
                     ms.settings = ms.settings or {}
                     ms.menu     = ms.menu or {}
                     ms.features = ms.features or {}
+                    ms.tools    = ms.tools or {}
 
                     ms.settings.define = function() end
                     ms.settings.get    = function() return nil end
                     ms.settings.set    = function() end
                     ms.menu.define     = function() end
                     ms.features.hide   = function() end
+                    ms.tools.define    = function() end
+                    ms.tools.get       = function() return nil end
+                    ms.tools.set       = function() end
 
                     ms.saveSettings    = function() end
                     ms.loadSettings    = function() end
@@ -519,6 +524,11 @@
                 ms._userSettingVals  = {}
                 ms._userMenuDefs     = {}
                 ms._hiddenFeatures   = {}
+                -- User-defined tools (ms.tools.define) — callable actions the
+                -- macro builder can invoke, configured from the Tools panel.
+                ms.tools             = ms.tools or {}
+                ms._toolDefs         = {}
+                ms._toolIndex        = {}
                 -- Default palette mirrors the docs site (docs-ms.mudbourn.info):
                 -- olive/moss green accent on warm near-black, parchment text.
                 -- Supersedes the earlier grayscale default (see
@@ -3738,6 +3748,15 @@
             require("lib.ms_package")(ms)
         -- END 13c. Package Format --
 
+        -- 13d. Package Registry (ms.registry) --
+            -- Loads after the package format: it validates index entries
+            -- against ms.package.spec, and supplies the trustLookup that
+            -- ms.package.verify takes. Fetch is deferred — boot only reads
+            -- the on-disk cache, so a missing index costs nothing here.
+            package.loaded["lib.ms_registry"] = nil
+            require("lib.ms_registry")(ms)
+        -- END 13d. Package Registry --
+
         -- 14. Safety Nets --
             do
                 local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
@@ -3745,7 +3764,8 @@
                 local frozenMs = setmetatable({}, {
                     __index    = function(t, k)
                         if k == "integrity" or k == "dev" or k == "showGuardian" or k == "_systemActions"
-                       or k == "bus" or k == "docs" or k == "shell" or k == "compiler" then
+                       or k == "bus" or k == "docs" or k == "shell" or k == "compiler"
+                       or k == "registry" then
                             error("ms_macros.lua: ms." .. k .. " is not accessible from macros.", 2)
                         end
                         if k == "key" then
