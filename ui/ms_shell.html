@@ -376,6 +376,16 @@
         .panel-theme .ttab-section.active { display: flex; }
         .panel-theme .tsec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0 20px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
 
+        /* ── Profiles panel ──────────────────────────────────────────────── */
+        /* Same strip again, scoped to .panel-profiles. */
+        .panel-profiles .ptabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .panel-profiles .ptab { flex: 1; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text2); text-align: center; cursor: pointer; border: none; border-bottom: 2px solid transparent; background: none; transition: color 0.15s, border-color 0.15s; }
+        .panel-profiles .ptab:hover { color: var(--text); }
+        .panel-profiles .ptab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .panel-profiles .ptab-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        .panel-profiles .ptab-section.active { display: flex; }
+        .panel-profiles .psec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0 20px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
+
         /* Colour field: swatch + hex box editing the same value. */
         .panel-theme .color-field { display: flex; align-items: center; gap: 6px; }
         .panel-theme .color-swatch { width: 26px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-s); background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
@@ -1214,7 +1224,16 @@
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
-        <div id="profiles-scroll" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0 20px;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;"></div>
+        <div class="ptabs">
+            <button class="ptab active" data-ptab="profiles" onmouseenter="playSlot('hover')" onclick="switchProfilesTab('profiles')">Profiles</button>
+            <button class="ptab" data-ptab="browse" onmouseenter="playSlot('hover')" onclick="switchProfilesTab('browse')">Browse</button>
+        </div>
+        <div class="ptab-section active" data-psection="profiles">
+            <div id="profiles-scroll" class="psec-scroll"></div>
+        </div>
+        <div class="ptab-section" data-psection="browse">
+            <div id="profiles-browse-scroll" class="psec-scroll"></div>
+        </div>
 </div>
 <div class="panel-popped" style="display:none">
     <div id="header">

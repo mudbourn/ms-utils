@@ -1390,8 +1390,42 @@
                     style: "padding:16px 14px 8px;font-size:11px;color:var(--text3);opacity:0.6;font-style:italic;",
                 }, "More profile features coming soon.");
                 el.appendChild(note);
+
+                // Browse tab — stub until the profile browser lands.
+                const browse = document.getElementById("profiles-browse-scroll");
+                if (browse) {
+                    browse.innerHTML = "";
+                    browse.appendChild(h("div", {
+                        style: "display:flex;align-items:center;justify-content:center;"
+                            + "flex:1;padding:32px 14px;color:var(--text3);font-size:13px;",
+                    }, "Profile Browser coming soon."));
+                }
             }
             window.renderProfilesPanel = renderProfilesPanel;
+
+            // ── Profiles tab strip ───────────────────────────────────────────
+            let _ptabs = null;
+            function profilesTabs() {
+                if (_ptabs) return _ptabs;
+                const panel = document.querySelector(".panel-profiles");
+                if (!panel || !window.createTabs) return null;
+                _ptabs = window.createTabs({
+                    root: panel,
+                    tabSelector: ".ptab",
+                    sectionSelector: ".ptab-section",
+                    tabKey: (el) => el.dataset.ptab,
+                    sectionKey: (el) => el.dataset.psection,
+                    onSame: () => playSlot("back"),
+                    onSwitch: () => playSlot("interact"),
+                });
+                return _ptabs;
+            }
+
+            function switchProfilesTab(tab) {
+                const t = profilesTabs();
+                if (t) t.switch(tab);
+            }
+            window.switchProfilesTab = switchProfilesTab;
 
             // ── Theme application ──────────────────────────────────────────────
 
