@@ -53,7 +53,12 @@ YQIDAQAB
 -----END PUBLIC KEY-----
 ]]
 
-    ms.registry = {}
+    -- ms.registry is shared: ms_core.lua creates it as the bind registry
+    -- (_defs/_defList) at boot, and we add the package-registry API onto that
+    -- same table. Reassigning it here would silently drop every bind
+    -- definition, so extend in place. The two namespaces do not overlap —
+    -- binds own the _-prefixed internals, the package client owns the rest.
+    ms.registry = ms.registry or {}
 
     -- Live state. `_index` is always a table of the empty shape below, never
     -- nil, so every reader can index it without a guard.

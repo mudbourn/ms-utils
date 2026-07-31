@@ -662,6 +662,43 @@ YQIDAQAB
             end
         end
     end
+
+    -- Write the trusted-hash manifest from the files currently on disk.
+    -- Callers MUST establish trust (via _signedManifestConfirms) first — this
+    -- helper does no verification of its own.
+    local function _seedTrustedFromDisk()
+        local newManifest = {}
+        for _, absPath in ipairs(_trackedFiles()) do
+            local h = _hashFile(absPath)
+            if h then
+                newManifest[absPath:gsub(".*/%.hammerspoon/", "")] = h
+            end
+        end
+        local ok, json = pcall(hs.json.encode, newManifest)
+        if ok then
+            local wf = io.open(_trustPath, "w")
+            if wf then wf:write(json .. "\n"); wf:close() end
+        end
+    end
+
+    -- True only if a signed MANIFEST.json vouches for the ms_core.lua on disk.
+    -- This is the sole authority for (re-)seeding trust: without it, the files
+    -- on disk are just files, and hashing them proves nothing.
+    local function _signedManifestConfirms()
+        local _cur = _hashFile(_corePath)
+        if not _cur then return false end
+
+        local _mf = io.open(_home .. "/.hammerspoon/MANIFEST.json", "r")
+        if not _mf then return false end
+        local _raw = _mf:read("*all"); _mf:close()
+
+        local _ok, _m = pcall(hs.json.decode, _raw)
+        return _ok and type(_m) == "table"
+            and type(_m.sha256) == "string"
+            and #_m.sha256 == 64
+            and _m.sha256:lower() == _cur:lower()
+            and _verifyManifestSignature(_m)
+    end
 -- END Helpers --
 
 -- Integrity Check --
@@ -689,62 +726,26 @@ YQIDAQAB
         local _checkResult, _failedFile = _checkAll(_manifest)
 
         if _checkResult == "uninitialized" then
-            -- No trusted manifest at all — auto-seed from current files
-            local files = _trackedFiles()
-            local newManifest = {}
-            for _, absPath in ipairs(files) do
-                local h = _hashFile(absPath)
-                if h then
-                    local rel = absPath:gsub(".*/%.hammerspoon/", "")
-                    newManifest[rel] = h
-                end
+            -- No trusted manifest at all. Seeding from whatever is on disk would
+            -- make deleting the manifest a way to launder untrusted files into a
+            -- trusted state, so trust must come from a signed MANIFEST.json.
+            if _signedManifestConfirms() then
+                _seedTrustedFromDisk()
+                print("Guardian: no trusted manifest — seeded from signed MANIFEST.json.")
+            else
+                _blocked = true
+                print("Guardian: no trusted manifest and no valid signed MANIFEST.json — blocking.")
+                _showGuardianBlock(nil, _hashFile(_corePath))
             end
-            local ok, json = pcall(hs.json.encode, newManifest)
-            if ok then
-                local wf = io.open(_trustPath, "w")
-                if wf then wf:write(json .. "\n"); wf:close() end
-            end
-            print("Guardian: no trusted manifest — auto-seeded from current files.")
 
         elseif _checkResult == "error" then
             print("Guardian: could not hash " .. (_failedFile or "unknown") .. "; skipping check.")
 
         elseif _checkResult == "mismatch" then
-            local _manifestOk = false
-            do
-                local _cur = _hashFile(_corePath)
-                local _mPath = _home .. "/.hammerspoon/MANIFEST.json"
-                local _mf = io.open(_mPath, "r")
-                if _mf and _cur then
-                    local _raw = _mf:read("*all"); _mf:close()
-                    local _ok, _m = pcall(hs.json.decode, _raw)
-                    if _ok and type(_m) == "table"
-                        and type(_m.sha256) == "string"
-                        and #_m.sha256 == 64
-                        and _m.sha256:lower() == _cur:lower()
-                        and _verifyManifestSignature(_m) then
-                        -- Re-seed old manifest
-                        local files = _trackedFiles()
-                        local newManifest = {}
-                        for _, absPath in ipairs(files) do
-                            local h = _hashFile(absPath)
-                            if h then
-                                local rel = absPath:gsub(".*/%.hammerspoon/", "")
-                                newManifest[rel] = h
-                            end
-                        end
-                        local ok2, json = pcall(hs.json.encode, newManifest)
-                        if ok2 then
-                            local _wf = io.open(_trustPath, "w")
-                            if _wf then _wf:write(json .. "\n"); _wf:close() end
-                        end
-                        _manifestOk = true
-                        print("Guardian: hash mismatch but signed MANIFEST.json confirms update — auto-seeded all files.")
-                    end
-                end
-            end
-
-            if not _manifestOk then
+            if _signedManifestConfirms() then
+                _seedTrustedFromDisk()
+                print("Guardian: hash mismatch but signed MANIFEST.json confirms update — re-seeded all files.")
+            else
                 _blocked = true
                 local _exp = _manifest and _manifest["ms_core.lua"] or nil
                 local _got = _hashFile(_corePath)
@@ -759,61 +760,11 @@ YQIDAQAB
 
     elseif _fmResult == "mismatch" then
         -- Per-file hash mismatch. Check if MANIFEST.json confirms a legit update.
-        local _manifestOk = false
-        do
-            local _cur = _hashFile(_corePath)
-            local _mPath = _home .. "/.hammerspoon/MANIFEST.json"
-            local _mf = io.open(_mPath, "r")
-            if _mf and _cur then
-                local _raw = _mf:read("*all"); _mf:close()
-                local _ok, _m = pcall(hs.json.decode, _raw)
-                if _ok and type(_m) == "table"
-                    and type(_m.sha256) == "string"
-                    and #_m.sha256 == 64
-                    and _m.sha256:lower() == _cur:lower()
-                    and _verifyManifestSignature(_m) then
-                    -- MANIFEST confirms the current file is legit and signed.
-                    -- Re-seed both per-file manifest (unsigned) and old trusted hash.
-                    local fm = _readFileManifest()
-                    local tracked = fm and fm.files or {}
-                    local files = _trackedFiles()
-                    local newFM = { version = "", generated = os.date("!%Y-%m-%dT%H:%M:%SZ"), files = {}, signature = "" }
-
-                    if fm and fm.version then newFM.version = fm.version end
-                    if fm and fm.signature then newFM.signature = fm.signature end
-
-                    -- Hash all files from per-file manifest scope
-                    for relPath, _ in pairs(tracked) do
-                        local absPath = _home .. "/.hammerspoon/" .. relPath
-                        local h = _hashFile(absPath)
-                        if h then newFM.files[relPath] = h end
-                    end
-
-                    -- Also hash tracked files (spoons + core) not already covered
-                    local oldManifest = {}
-                    for _, absPath in ipairs(files) do
-                        local h = _hashFile(absPath)
-                        if h then
-                            local rel = absPath:gsub(".*/%.hammerspoon/", "")
-                            oldManifest[rel] = h
-                            if not newFM.files[rel] then newFM.files[rel] = h end
-                        end
-                    end
-
-                    -- Write old trusted hash for backward compat
-                    local okOld, jsonOld = pcall(hs.json.encode, oldManifest)
-                    if okOld then
-                        local _wf = io.open(_trustPath, "w")
-                        if _wf then _wf:write(jsonOld .. "\n"); _wf:close() end
-                    end
-
-                    _manifestOk = true
-                    print("Guardian: per-file mismatch but signed MANIFEST.json confirms update — auto-seeded trusted manifest.")
-                end
-            end
-        end
-
-        if not _manifestOk then
+        if _signedManifestConfirms() then
+            -- MANIFEST confirms the current file is legit and signed.
+            _seedTrustedFromDisk()
+            print("Guardian: per-file mismatch but signed MANIFEST.json confirms update — re-seeded trusted manifest.")
+        else
             _blocked = true
             -- Get expected hash from file manifest and current hash from disk
             local _exp, _got = nil, nil
