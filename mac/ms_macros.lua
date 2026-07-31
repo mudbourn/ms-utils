@@ -214,15 +214,15 @@
 
 -- Combat Warriors Macros --
     -- Helper Variables & Functions --
-        local QuickSlideSound    = SoundMacroDir .. "QuickSlide.wav"
-        local JumpLowSound       = SoundMacroDir .. "JumpLow.wav"
-        local JumpHighSound      = SoundMacroDir .. "JumpHigh.wav"
-        local SlideSetupSound    = SoundMacroDir .. "SlideSetup.wav"
-        local JumpNormalSound    = SoundMacroDir .. "JumpNormal.wav"
-        local ThrowTrickSound    = SoundMacroDir .. "ThrowTrick.wav"
-        local SpawnAltSound      = SoundMacroDir .. "SpawnAlt.wav"
-        local ThrowTrickEndSound = SoundMacroDir .. "ThrowTrickEnd.wav"
-        local ActionSpammerSound = SoundMacroDir .. "TimeSlower.wav"
+        local QuickSlideSound    = SoundMacroDir .. "m_QuickSlide.wav"
+        local JumpLowSound       = SoundMacroDir .. "m_JumpLow.wav"
+        local JumpHighSound      = SoundMacroDir .. "m_JumpHigh.wav"
+        local SlideSetupSound    = SoundMacroDir .. "m_SlideSetup.wav"
+        local JumpNormalSound    = SoundMacroDir .. "m_JumpNormal.wav"
+        local ThrowTrickSound    = SoundMacroDir .. "m_ThrowTrick.wav"
+        local SpawnAltSound      = SoundMacroDir .. "m_SpawnAlt.wav"
+        local ThrowTrickEndSound = SoundMacroDir .. "m_ThrowTrickEnd.wav"
+        local ActionSpammerSound = SoundMacroDir .. "m_TimeSlower.wav"
         local Running = 0
         local _movementTimer = nil
 

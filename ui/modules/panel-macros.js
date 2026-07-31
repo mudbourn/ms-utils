@@ -1385,6 +1385,7 @@
     var _currentMacroDef = null;
     var _macroDirty = false;
     var _canvas = null;
+    var _mtabs = null;
 
     /* ── Layout Setup ────────────────────────────────────────────── */
     var slot = document.getElementById("slot-macros");
@@ -1408,8 +1409,85 @@
     macroLabel.textContent = "Macro";
     toolbar.appendChild(macroLabel);
 
-    var macroSelect = document.createElement("select");
-    macroSelect.className = "macro-select";
+    // Custom dropdown rather than <select>: the closed control can be themed,
+    // but an open native <select> renders as a macOS popup menu that no CSS
+    // reaches, so it broke out of the shell's look. Exposes .value + "change"
+    // so the rest of this panel treats it like the select it replaced.
+    var macroSelect = (function() {
+        var root = document.createElement("div");
+        root.className = "macro-select";
+        root.tabIndex = 0;
+
+        var label = document.createElement("span");
+        label.className = "macro-select-label";
+        root.appendChild(label);
+
+        var arrow = document.createElement("span");
+        arrow.className = "macro-select-arrow";
+        arrow.textContent = "▾";
+        root.appendChild(arrow);
+
+        var menu = document.createElement("div");
+        menu.className = "macro-select-menu";
+        root.appendChild(menu);
+
+        var _opts = [];
+        var _value = "";
+
+        function labelFor(v) {
+            for (var i = 0; i < _opts.length; i++) {
+                if (_opts[i].value === v) return _opts[i].label;
+            }
+            return _opts.length ? _opts[0].label : "";
+        }
+        function close() { root.classList.remove("open"); }
+        function render() {
+            label.textContent = labelFor(_value);
+            menu.innerHTML = "";
+            _opts.forEach(function(o) {
+                var item = document.createElement("div");
+                item.className = "macro-select-item" + (o.value === _value ? " active" : "");
+                item.textContent = o.label;
+                item.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
+                item.addEventListener("click", function(e) {
+                    e.stopPropagation();
+                    if (window.playSlot) playSlot("interact");
+                    close();
+                    if (o.value === _value) return;
+                    _value = o.value;
+                    render();
+                    root.dispatchEvent(new Event("change"));
+                });
+                menu.appendChild(item);
+            });
+        }
+
+        root.setOptions = function(list) { _opts = list; render(); };
+        Object.defineProperty(root, "value", {
+            get: function() { return _value; },
+            set: function(v) { _value = v == null ? "" : String(v); render(); },
+        });
+
+        root.addEventListener("mouseenter", function() {
+            if (window.playSlot) playSlot("hover");
+        });
+        root.addEventListener("click", function(e) {
+            e.stopPropagation();
+            if (!root.classList.contains("open") && window.playSlot) playSlot("interact");
+            root.classList.toggle("open");
+        });
+        root.addEventListener("keydown", function(e) {
+            if (e.key === "Escape") close();
+        });
+        document.addEventListener("click", close);
+
+        // Seed the placeholder so the control reads correctly before the macro
+        // list arrives from Lua.
+        root.setOptions([{ value: "", label: "— Select —" }]);
+        return root;
+    })();
     toolbar.appendChild(macroSelect);
 
     var nameInput = document.createElement("input");
@@ -1543,22 +1621,17 @@
     bindsScroll.className = "binds-scroll";
     bindsSection.appendChild(bindsScroll);
 
-    var _mtabBtns = {};
     ["builder", "binds"].forEach(function(id) {
         var b = document.createElement("button");
         b.className = "mtab" + (id === "builder" ? " active" : "");
+        b.setAttribute("data-mtab", id);
         b.textContent = id === "builder" ? "Builder" : "Binds";
         b.addEventListener("mouseenter", function() {
             if (window.playSlot) playSlot("hover");
         });
         b.addEventListener("click", function() {
-            for (var k in _mtabBtns) _mtabBtns[k].classList.remove("active");
-            b.classList.add("active");
-            builderSection.classList.toggle("active", id === "builder");
-            bindsSection.classList.toggle("active", id === "binds");
-            if (id === "binds") refreshBindList();
+            if (_mtabs) _mtabs.switch(id);
         });
-        _mtabBtns[id] = b;
         mtabs.appendChild(b);
     });
 
@@ -1569,6 +1642,20 @@
     layout.appendChild(builderSection);
     layout.appendChild(bindsSection);
     slot.appendChild(layout);
+
+    // Shared tab model — same switch/sound behaviour as every other panel.
+    _mtabs = window.createTabs && window.createTabs({
+        root: layout,
+        tabSelector: ".mtab",
+        sectionSelector: ".mtab-section",
+        tabKey: function(el) { return el.getAttribute("data-mtab"); },
+        sectionKey: function(el) { return el.getAttribute("data-msec"); },
+        onSame: function() { if (window.playSlot) playSlot("back"); },
+        onSwitch: function(tab) {
+            if (window.playSlot) playSlot("interact");
+            if (tab === "binds") refreshBindList();
+        },
+    });
 
     // ── Tool Canvas instance ──
     _canvas = new ToolCanvas(canvasContainer, {
@@ -1781,18 +1868,11 @@
     }
 
     function setMacroList(ids) {
-        macroSelect.innerHTML = "";
-        var none = document.createElement("option");
-        none.value = "";
-        none.textContent = "— Select —";
-        macroSelect.appendChild(none);
-
+        var opts = [{ value: "", label: "— Select —" }];
         for (var i = 0; i < ids.length; i++) {
-            var opt = document.createElement("option");
-            opt.value = ids[i];
-            opt.textContent = ids[i];
-            macroSelect.appendChild(opt);
+            opts.push({ value: ids[i], label: ids[i] });
         }
+        macroSelect.setOptions(opts);
 
         if (_currentMacroId) {
             macroSelect.value = _currentMacroId;

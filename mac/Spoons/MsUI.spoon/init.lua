@@ -141,6 +141,35 @@
             for name in pairs(ms.macroSounds or {}) do table.insert(macroSoundNames, name) end
             table.sort(macroSoundNames)
 
+            -- One entry per sound *file*, which is the axis the Sounds tab
+            -- lists on — slots are a separate axis, and several slots can
+            -- point at one file. `kind` is derived from the directory the
+            -- scan found it in rather than the name prefix, because the
+            -- directory is what _autoSortSounds actually guarantees.
+            local soundEntries = {}
+            local function _entry(name, path, kind)
+                soundEntries[#soundEntries + 1] = {
+                    name      = name,
+                    kind      = kind,
+                    -- Defaults are the fallback floor; removing one would
+                    -- leave slots resolving to nothing.
+                    removable = (kind ~= "default"),
+                }
+            end
+            for _, name in ipairs(soundNames) do
+                local path = (ms.sounds or {})[name] or ""
+                local kind = "active"
+                if path:find("/sounds/defaults/") then
+                    kind = "default"
+                elseif (ms.importedSounds or {})[name] then
+                    kind = "imported"
+                end
+                _entry(name, path, kind)
+            end
+            for _, name in ipairs(macroSoundNames) do
+                _entry(name, (ms.macroSounds or {})[name] or "", "macro")
+            end
+
             -- Build sound presets from d_* (default) and a_* (active) series.
             -- Default preset: all 14 slots → d_* sounds
             -- Preset 1/2/3: all 14 slots → a_* sounds, with optional number suffix
@@ -356,6 +385,8 @@
                 soundAssign             = ms.soundAssign or {},
                 soundNames              = soundNames,
                 macroSoundNames         = macroSoundNames,
+                soundEntries            = soundEntries,
+                bundleSoundsWithTheme   = ms.bundleSoundsWithTheme ~= false,
                 soundPresets            = soundPresets,
                 currentProfile          = meta.name and ms.sanitizeName(meta.name) or "",
                 profiles                = ms.getProfiles(),
@@ -488,6 +519,14 @@
             end,
 
             playSlot = function(data) if data.slot then ms.playSlot(data.slot) end end,
+
+            -- Preview by file name rather than by slot: the sound library
+            -- lists files, and a macro sound has no slot to play through.
+            previewSound = function(data)
+                if data and type(data.name) == "string" and data.name ~= "" then
+                    ms.sound(data.name)
+                end
+            end,
 
             alert = function(data)
                 if data.msg then
@@ -1137,6 +1176,63 @@
                 end)
             end,
 
+            -- ── Sound removal ─────────────────────────────────────────────
+            -- Deletes the file behind a sound and every reference to it.
+            -- Defaults are never removable: they are the floor every slot
+            -- falls back to, so deleting one would leave a slot pointing at
+            -- nothing. The UI greys the control, and this refuses again —
+            -- the check belongs on the side that touches the disk.
+            removeSound = function(data)
+                local name = data and data.name
+                if type(name) ~= "string" or name == "" then return end
+
+                ms._discoverSounds()
+                local path = (ms.sounds or {})[name] or (ms.macroSounds or {})[name]
+                if not path then
+                    ms.alert("No such sound: " .. name, 3)
+                    return
+                end
+                if path:find("/sounds/defaults/") or name:sub(1, 2) == "d_" then
+                    ms.alert("Default sounds cannot be removed.", 3)
+                    return
+                end
+
+                local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
+                local ok = os.remove(path)
+                if not ok then
+                    local _, st = hs.execute("/bin/rm -f " .. sq(path))
+                    ok = (st == true) or (hs.fs.attributes(path) == nil)
+                end
+                if not ok then
+                    ms.alert("Could not remove \"" .. name .. "\".", 4)
+                    return
+                end
+
+                -- Drop every slot that pointed at it so nothing resolves to a
+                -- file that is gone; a cleared slot falls back to its default.
+                ms.soundAssign = ms.soundAssign or {}
+                for slot, assigned in pairs(ms.soundAssign) do
+                    if assigned == name then ms.soundAssign[slot] = nil end
+                end
+                if ms.importedSounds then ms.importedSounds[name] = nil end
+
+                ms.saveSettings()
+                ms._soundsDirty = true
+                ms._discoverSounds()
+                ms.playSlot("reset")
+                hs.timer.doAfter(0.15, function()
+                    ms.alert("\"" .. name .. "\" removed.", 3, true)
+                    ms.ui.refresh()
+                end)
+            end,
+
+            setBundleSoundsWithTheme = function(data)
+                ms.bundleSoundsWithTheme = (data and data.value) == true
+                ms.saveSettings()
+                ms.playSlot("update")
+                ms.ui.refresh()
+            end,
+
             openWindowMonitor = function() if ms.dev and ms.dev.window then ms.dev.window.toggle() end end,
 
             openConsole = function() hs.openConsole() end,
@@ -1170,8 +1266,10 @@
             end,
 
             -- ── Packages ──────────────────────────────────────────────────
-            -- Theme and sound export as separate typed packages: a theme can
-            -- never carry audio and a sound pack can never carry a theme.
+            -- Sound is a theme aspect, so a theme package may carry audio and
+            -- the slot map with it (see bundleSoundsWithTheme). The sound type
+            -- remains for sharing a set on its own; a sound pack still cannot
+            -- carry a theme, because that direction was never the ambiguity.
             exportPackage = function(data)
                 local kind = data and data.type
                 if not (ms.package and ms.package.collect and kind) then return end

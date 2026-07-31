@@ -460,6 +460,19 @@ YQIDAQAB
         end)
     end
 
+    -- Local copy of ms.safeShow (see ms_core § Safe webview show). Guardian is
+    -- loaded from init.lua before ms_core runs, so the global `ms` does not
+    -- exist yet and cannot be relied on here.
+    local function _safeShow(view)
+        if not view then return false end
+        local ok = pcall(function() view:show() end)
+        if ok then return true end
+        hs.timer.doAfter(0.05, function()
+            pcall(function() view:show() end)
+        end)
+        return false
+    end
+
     -- Show the Guardian blocking UI (webview or dialog fallback).
     -- Called when integrity check fails and we need to block loading.
     local function _showGuardianBlock(expectedHash, currentHash)
@@ -591,7 +604,7 @@ YQIDAQAB
 
                 _guardianView:html(_ghtml, _baseURL)
                 _guardianView:alpha(0)
-                _guardianView:show()
+                _safeShow(_guardianView)
 
                 local _fadeStarted = false
 

@@ -135,6 +135,9 @@
                 if data.trackpadHoldKeys.right then ms.trackpadHoldKeys.right = data.trackpadHoldKeys.right end
             end
             if data.soundEnabled ~= nil then ms.soundEnabled = (data.soundEnabled == true) end
+            if data.bundleSoundsWithTheme ~= nil then
+                ms.bundleSoundsWithTheme = (data.bundleSoundsWithTheme == true)
+            end
             if data.soundVolume  ~= nil then
                 local v = tonumber(data.soundVolume)
                 if v and v >= 0 and v <= 100 then ms.soundVolume = math.floor(v) end
@@ -328,6 +331,7 @@
                 soundEnabled     = ms.soundEnabled,
                 soundVolume      = ms.soundVolume,
                 soundAssign      = ms.soundAssign,
+                bundleSoundsWithTheme = ms.bundleSoundsWithTheme ~= false,
                 soundPreset      = ms._soundPreset,
                 importedSounds   = ms.importedSounds or {},
                 customThemeDisabled = ms._customThemeDisabled or false,
@@ -1145,6 +1149,7 @@
                 soundEnabled     = true,
                 soundVolume      = 100,
                 soundAssign      = {},
+                bundleSoundsWithTheme = true,
                 macros           = {},
                 macroLabEnabled  = true,
                 shell            = {
@@ -1988,30 +1993,79 @@
                 -- Import sounds (handles new subdirectory structure + legacy flat format)
                 local soundsAdded = {}
                 local macroAdded = {}
-                local function _importSndDir(srcDir, dstDir, added)
-                    if not hs.fs.attributes(srcDir) then return end
-                    local slibDir = dstDir:match("^(.-)[/\\]*$") or dstDir
-                    if not hs.fs.attributes(slibDir) then
+                -- Prefix each sound directory carries (see ms._autoSortSounds).
+                -- Packages ship sounds either bare or prefixed; imports normalize to
+                -- the destination's prefix so the library keeps one naming scheme.
+                local _sndDirPrefix = {
+                    [SoundDefaultsDir] = "d_",
+                    [SoundActiveDir]   = "a_",
+                    [SoundMacroDir]    = "m_",
+                }
+                -- Same-name imports become numbered variants (Name, Name2, Name3) —
+                -- the existing variant convention. Past slot 3 we stop guessing and
+                -- ask which one to replace; those land here for _resolveSndConflicts.
+                local _sndVariantSlots = 3
+                local _sndConflicts = {}
+
+                local function _readFile(path)
+                    local f = io.open(path, "rb"); if not f then return nil end
+                    local d = f:read("*all"); f:close(); return d
+                end
+                local function _writeFile(path, data)
+                    local f = io.open(path, "wb"); if not f then return false end
+                    f:write(data); f:close(); return true
+                end
+
+                -- Place one incoming sound file into dstDir, honouring the prefix and
+                -- the Name/Name2/Name3 variant slots.
+                local function _placeSnd(srcSnd, dstDir, file, added)
+                    if hs.fs.attributes(srcSnd, "mode") ~= "file" then return end
+                    if not hs.fs.attributes(dstDir) then
                         hs.execute("mkdir -p " .. sq(dstDir))
                     end
+                    local pfx  = _sndDirPrefix[dstDir]
+                    local stem = file:match("^(.+)%.[^%.]+$") or file
+                    local ext  = file:match("%.([^%.]+)$")
+                    ext = ext and ("." .. ext) or ""
+                    -- Normalize to the destination prefix, and strip any variant number
+                    -- the package already carried so it re-slots against what we have.
+                    if pfx and stem:sub(1, #pfx) ~= pfx then stem = pfx .. stem end
+                    local base = stem:match("^(.-)%d+$") or stem
+
+                    local function slotName(i)
+                        return base .. (i > 1 and tostring(i) or "") .. ext
+                    end
+
+                    local data = _readFile(srcSnd)
+                    if not data then return end
+
+                    local free
+                    for i = 1, _sndVariantSlots do
+                        local p = dstDir .. slotName(i)
+                        if not hs.fs.attributes(p) then
+                            free = free or i
+                        elseif _readFile(p) == data then
+                            return  -- byte-identical: same sound, not a new variant
+                        end
+                    end
+                    if free then
+                        local name = slotName(free)
+                        if _writeFile(dstDir .. name, data) then
+                            table.insert(added, name:match("^(.+)%.[^%.]+$") or name)
+                        end
+                    else
+                        table.insert(_sndConflicts, {
+                            data = data, dir = dstDir, base = base,
+                            ext = ext, added = added,
+                        })
+                    end
+                end
+
+                local function _importSndDir(srcDir, dstDir, added)
+                    if not hs.fs.attributes(srcDir) then return end
                     for file in hs.fs.dir(srcDir) do
                         if file ~= "." and file ~= ".." then
-                            local importName = file:match("^(.+)%.[^%.]+$") or file
-                            local srcSnd = srcDir .. file
-                            if hs.fs.attributes(srcSnd, "mode") == "file" then
-                                local dstSnd = dstDir .. file
-                                if not hs.fs.attributes(dstSnd) then
-                                    local sf = io.open(srcSnd, "rb")
-                                    if sf then
-                                        local data = sf:read("*all"); sf:close()
-                                        local out = io.open(dstSnd, "wb")
-                                        if out then
-                                            out:write(data); out:close()
-                                            table.insert(added, importName)
-                                        end
-                                    end
-                                end
-                            end
+                            _placeSnd(srcDir .. file, dstDir, file, added)
                         end
                     end
                 end
@@ -2050,23 +2104,8 @@
                                 elseif name:sub(1, 2) == "a_" then
                                     dest = SoundActiveDir
                                 end
-                                if not hs.fs.attributes(dest) then
-                                    hs.execute("mkdir -p " .. sq(dest))
-                                end
-                                local srcSnd = soundsDir .. f
-                                local dstSnd = dest .. f
-                                if hs.fs.attributes(srcSnd, "mode") == "file" and not hs.fs.attributes(dstSnd) then
-                                    local sf = io.open(srcSnd, "rb")
-                                    if sf then
-                                        local data = sf:read("*all"); sf:close()
-                                        local out = io.open(dstSnd, "wb")
-                                        if out then
-                                            out:write(data); out:close()
-                                            local added = (dest == SoundMacroDir) and macroAdded or soundsAdded
-                                            table.insert(added, name)
-                                        end
-                                    end
-                                end
+                                local added = (dest == SoundMacroDir) and macroAdded or soundsAdded
+                                _placeSnd(soundsDir .. f, dest, f, added)
                             end
                         end
                     end
@@ -2081,6 +2120,50 @@
                     ms._soundsDirty = true
                     ms._discoverSounds()
                 end
+
+                -- Sounds whose Name/Name2/Name3 slots are all taken by different audio.
+                -- Ask which slot to give up, one at a time — ms.ui.prompt has a single
+                -- callback slot, so these have to be chained rather than looped.
+                local function _resolveSndConflicts(idx)
+                    local c = _sndConflicts[idx]
+                    if not c then
+                        if idx > 1 then
+                            ms.saveSettings()
+                            ms._soundsDirty = true
+                            ms._discoverSounds()
+                            ms.ui.refresh()
+                        end
+                        return
+                    end
+                    local slots = {}
+                    for i = 1, _sndVariantSlots do
+                        slots[#slots + 1] = "  " .. i .. ". "
+                            .. c.base .. (i > 1 and tostring(i) or "")
+                    end
+                    ms.ui.prompt({
+                        title   = "Replace a Sound Variant?",
+                        msg     = "\"" .. c.base .. "\" already has "
+                            .. _sndVariantSlots .. " variants:\n"
+                            .. table.concat(slots, "\n")
+                            .. "\n\nEnter 1-" .. _sndVariantSlots
+                            .. " to replace one, or cancel to skip this sound:",
+                        confirm = "Replace",
+                        cancel  = "Skip",
+                        default = "",
+                    }, function(r)
+                        local n = r.confirmed and tonumber(r.value)
+                        if n and n >= 1 and n <= _sndVariantSlots then
+                            local name = c.base .. (n > 1 and tostring(n) or "") .. c.ext
+                            if _writeFile(c.dir .. name, c.data) then
+                                table.insert(c.added, name:match("^(.+)%.[^%.]+$") or name)
+                            end
+                        elseif r.confirmed then
+                            ms.alert("Invalid slot — skipped \"" .. c.base .. "\".", 2)
+                        end
+                        _resolveSndConflicts(idx + 1)
+                    end)
+                end
+                if #_sndConflicts > 0 then _resolveSndConflicts(1) end
                 -- Auto-install fonts from package
                 local fontsAdded = 0
                 do
@@ -3134,7 +3217,7 @@
             local f = io.open(_htmlPath, "r")
             if not f then return end
             _panel:html(f:read("*all"), _baseURL); f:close()
-            _panel:show()
+            ms.safeShow(_panel)
             -- Error cue: a_Error when custom theming is on, d_Error when off.
             local _errSound = (not ms._customThemeDisabled and ms.sounds and ms.sounds["a_Error"])
                 or (ms.sounds and ms.sounds["d_Error"])

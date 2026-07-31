@@ -311,7 +311,7 @@
                     if ms.shell and ms.shell.getPopOutView then
                         local popView = ms.shell.getPopOutView(body.panel)
                         if popView then
-                            pcall(function() popView:show() end)
+                            ms.safeShow(popView)
                             pcall(function() popView:bringToFront(true) end)
                             hs.timer.doAfter(0.15, function()
                                 pcall(function() popView:bringToFront(true) end)
@@ -472,7 +472,7 @@
             ms.shell._restoreFrame()
             pcall(function() ms.playSlot("settingsOpen") end)
             _shellView:alpha(0)
-            _shellView:show()
+            ms.safeShow(_shellView)
             pcall(function() _shellView:bringToFront(true) end)
             ms._shellState = ms._shellState or {}
             ms._shellState.visible = true
@@ -775,7 +775,7 @@
 
         ms.shell.popOut = function(panelId)
             if _popouts[panelId] then
-                pcall(function() _popouts[panelId].view:show() end)
+                ms.safeShow(_popouts[panelId].view)
                 pcall(function() _popouts[panelId].view:bringToFront(true) end)
                 hs.timer.doAfter(0.1, function()
                     pcall(function() _popouts[panelId].view:bringToFront(true) end)
@@ -1009,7 +1009,7 @@
             -- Load via url() — document gets a real file URL
             popView:url("file://" .. tmpName)
             popView:alpha(0)
-            popView:show()
+            ms.safeShow(popView)
             animatePopWindow(panelId, popView, startFrame, { x = x, y = y, w = w, h = h }, 0, 1, nil)
             -- Bring popout above the shell after window system settles
             hs.timer.doAfter(0.15, function()

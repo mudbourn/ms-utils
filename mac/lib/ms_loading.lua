@@ -112,7 +112,7 @@ return function(ms)
                 end
                 _lMsgBuffer = {}
 
-                _lWebView:show()
+                ms.safeShow(_lWebView)
                 local step, steps = 0, 25
                 _G._loadTimers.fadeIn = hs.timer.doEvery(0.15 / steps, function()
                     step = step + 1

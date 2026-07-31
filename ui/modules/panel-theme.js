@@ -437,6 +437,47 @@
 
     // Preview and import used to be right-click-only. They are the two things
     // you do most while assigning sounds, so they get their own controls.
+    // Sound files, indexed by name. Slots point at these; several slots can
+    // point at one file, which is why removal is keyed on the name and not
+    // on the slot that happens to be showing it.
+    function entryFor(name) {
+        if (!name) return null;
+        const entries = S.soundEntries || [];
+        for (const e of entries) if (e.name === name) return e;
+        return null;
+    }
+
+    // The one rule behind every X in this tab: a default is the floor a slot
+    // falls back to, so it can never be removed. Clearing a non-default drops
+    // the slot back to its default, which is how the control ends up greyed.
+    function removable(name) {
+        const e = entryFor(name);
+        return !!(e && e.removable);
+    }
+
+    function removeBtn(name, onRemoved) {
+        const { h } = ui();
+        const can = removable(name);
+        const b = h("button", {
+            cls: "slot-btn slot-btn-danger",
+            title: can ? "Remove “" + name + "”"
+                       : (name ? "Default sounds cannot be removed"
+                               : "Nothing assigned to remove"),
+            onmouseenter: () => { if (can) playSlot("hover"); },
+            onclick: (e) => {
+                e.stopPropagation();
+                if (!can) return;
+                sendToHost({ action: "removeSound", name: name });
+                if (onRemoved) onRemoved();
+            },
+        });
+        b.disabled = !can;
+        const svg = typeof window.icon === "function" ? window.icon("close") : "";
+        if (svg && svg.indexOf("<path") !== -1) b.innerHTML = svg;
+        else b.textContent = "✕";
+        return b;
+    }
+
     function slotButtons(slotId, label) {
         const { h } = ui();
         const wrap = h("div", { cls: "slot-btns" });
@@ -459,6 +500,9 @@
             () => sendToHost({ action: "playSlot", slot: slotId })));
         wrap.appendChild(mk("download", "⤓", "Import a file for this slot",
             () => sendToHost({ action: "importSoundForSlot", slot: slotId, label: label })));
+        // Removes the file this slot points at, not the slot itself — the
+        // slot is fixed, and afterwards it shows its default.
+        wrap.appendChild(removeBtn((S.soundAssign || {})[slotId] || ""));
         return wrap;
     }
 
@@ -610,27 +654,97 @@
             }
         }
 
+        // ── Sound library ────────────────────────────────────────────────
+        // The sections above list *slots* — a fixed set of events, each
+        // pointing at a file. This lists the files themselves, one row per
+        // sound, so a sound that no slot uses is still visible and still
+        // removable. Adding a sound adds a row here; removing one takes its
+        // row with it. Nothing is enumerated by hand.
+        const entries = S.soundEntries || [];
+        const byKind = (k) => entries.filter((e) => e.kind === k);
+
+        const soundEntryRow = (e) => {
+            const ctl = h("div", { cls: "slot-ctl" });
+            ctl.appendChild(h("span", { cls: "snd-entry-kind" }, e.kind));
+            const btns = h("div", { cls: "slot-btns" });
+            const play = h("button", {
+                cls: "slot-btn",
+                title: "Preview “" + e.name + "”",
+                onmouseenter: () => playSlot("hover"),
+                onclick: (ev) => {
+                    ev.stopPropagation();
+                    sendToHost({ action: "previewSound", name: e.name });
+                },
+            });
+            const psvg = typeof window.icon === "function" ? window.icon("play") : "";
+            if (psvg && psvg.indexOf("<path") !== -1) play.innerHTML = psvg;
+            else play.textContent = "▶";
+            btns.appendChild(play);
+            btns.appendChild(removeBtn(e.name));
+            ctl.appendChild(btns);
+            return row(e.name, null, ctl, "", [
+                { icon: "", label: "Play",
+                  action: () => sendToHost({ action: "previewSound", name: e.name }) },
+                ...(e.removable ? [{
+                    icon: "", label: "Remove",
+                    action: () => sendToHost({ action: "removeSound", name: e.name }),
+                }] : []),
+            ]);
+        };
+
+        const macroEntries = byKind("macro");
+        body.appendChild(divider());
+        body.appendChild(groupLabel("Macro Sounds"));
+        if (macroEntries.length === 0) {
+            body.appendChild(h("div", { cls: "theme-note" },
+                "Sounds in sounds/macro/ appear here, one row each. Macros play "
+                + "them by name with ms.sound(\"m_Name\") — they have no slot, "
+                + "because a macro chooses its own sound at the call."));
+        } else {
+            for (const e of macroEntries) body.appendChild(soundEntryRow(e));
+        }
+
+        const importedEntries = byKind("imported");
+        if (importedEntries.length > 0) {
+            body.appendChild(divider());
+            body.appendChild(groupLabel("Imported Sounds"));
+            for (const e of importedEntries) body.appendChild(soundEntryRow(e));
+        }
+
         body.appendChild(divider());
         body.appendChild(
             btnRow(actionBtn("Import Sound Files…", "", () =>
                 sendToHost({ action: "importSounds" }))),
         );
+
+        // ── Export bundling ──────────────────────────────────────────────
+        body.appendChild(divider());
+        body.appendChild(row(
+            "Bundle Sounds With Theme",
+            "Include your sounds and their slot assignments in theme exports",
+            toggle(S.bundleSoundsWithTheme ?? true, (e) =>
+                sendToHost({ action: "setBundleSoundsWithTheme", value: e.target.checked })),
+            "",
+            [{ icon: "", label: "Reset to default",
+               action: () => sendToHost({ action: "setBundleSoundsWithTheme", value: true }) }],
+        ));
     }
 
     // ── Share tab ────────────────────────────────────────────────────────
-    // A theme and a sound set are two different things to share, so they are
-    // two different packages. The typed format enforces that: a theme package
-    // physically cannot carry audio, and a sound package cannot carry colours.
+    // Sound is a theme aspect: a theme is the whole sensory surface, so a
+    // theme package carries its audio and the slot map that gives that audio
+    // meaning. The sound package still exists for sharing a set on its own,
+    // but it is the narrower thing, not the co-equal one.
     function buildShare(body) {
         const { h, divider, groupLabel, btnRow, actionBtn } = ui();
 
         body.appendChild(groupLabel("Export"));
 
         body.appendChild(h("div", { cls: "theme-note" },
-            "A theme package carries ms_theme.json and any font files in "
-            + "ui/fonts/. A sound package carries your sounds and the slot "
-            + "assignments that go with them. They export separately so either "
-            + "can be shared on its own."));
+            "A theme package carries ms_theme.json, any font files in "
+            + "ui/fonts/, and — unless you turn it off under Sounds — your "
+            + "sounds and their slot assignments. Export Sounds is for "
+            + "sharing a sound set on its own, without the colours."));
 
         body.appendChild(btnRow(
             actionBtn("Export Theme…", "", () =>

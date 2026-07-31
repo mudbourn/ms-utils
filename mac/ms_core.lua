@@ -6,6 +6,29 @@
             ms = {}
             if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
 
+            -- Safe webview show --
+                --- webview:show() can raise an ObjC exception out of AppKit when a
+                --- remote view service (e.g. Safari's autofill completion list,
+                --- which any WebKit text field can spawn) is still registered
+                --- against a different window:
+                ---   NSInternalInconsistencyException ...
+                ---   -[NSRemoteView containingWindowWillOrderOnScreen:]
+                --- LuaSkin turns that into a Lua error, which aborts the whole
+                --- enclosing callback — so a boot/animation timer dies partway
+                --- through and the panel is left invisible. Swallow it and retry
+                --- once on the next runloop turn, by which point the stale remote
+                --- view has been torn down.
+                ms.safeShow = function(view)
+                    if not view then return false end
+                    local ok = pcall(function() view:show() end)
+                    if ok then return true end
+                    hs.timer.doAfter(0.05, function()
+                        pcall(function() view:show() end)
+                    end)
+                    return false
+                end
+            -- END Safe webview show --
+
             -- Loading Screen boot-completion locals --
                 local _loadAnnounced, _announceLoad
                 local _needsIntegrityWarning = false
@@ -494,6 +517,9 @@
             ms.importedSounds  = {}
             ms.soundEnabled    = true
             ms.soundVolume     = 100
+            -- Sounds are a theme aspect, so theme exports carry them by
+            -- default. The Sounds tab can turn that off per install.
+            ms.bundleSoundsWithTheme = true
             ms.soundAssign     = {}
             ms._docsURL           = "https://docs-ms.mudbourn.info"
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"

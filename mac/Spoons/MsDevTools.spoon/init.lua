@@ -1490,7 +1490,7 @@
 
         ms.playSlot("settingsOpen")
 
-        _consolePanel:show()
+        ms.safeShow(_consolePanel)
 
         pcall(function() _consolePanel:bringToFront(true) end)
 
@@ -1605,7 +1605,7 @@
 
         ms.playSlot("settingsOpen")
 
-        _watcherPanel:show()
+        ms.safeShow(_watcherPanel)
 
         pcall(function() _watcherPanel:bringToFront(true) end)
 
@@ -1757,7 +1757,7 @@
 
         ms.playSlot("settingsOpen")
 
-        _keysPanel:show()
+        ms.safeShow(_keysPanel)
 
         pcall(function() _keysPanel:bringToFront(true) end)
 
@@ -2282,7 +2282,7 @@
 
         ms.playSlot("settingsOpen")
 
-        _windowPanel:show()
+        ms.safeShow(_windowPanel)
 
         pcall(function() _windowPanel:bringToFront(true) end)
 

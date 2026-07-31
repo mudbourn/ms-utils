@@ -88,9 +88,22 @@ return function(ms)
                 paths    = { "ms_macros.lua", "ms_macros_visual.json", "sounds/macro/" },
                 required = { "ms_macros.lua", "ms_macros_visual.json" },
             },
+            -- Sounds are a theme aspect, not a profile one: a theme is the
+            -- whole sensory surface, so it may carry audio and the slot map
+            -- that gives that audio meaning. Whether an export actually
+            -- includes them is the user's call (bundleSoundsWithTheme) —
+            -- these are the paths a theme is *allowed* to carry, not a list
+            -- of what it must.
             theme = {
                 label    = "Theme",
-                paths    = { "ms_theme.json", "ui/fonts/" },
+                -- No sounds/defaults/: those ship with the app, are identical
+                -- everywhere, and cannot be removed — carrying them would put
+                -- the same bytes in every theme anyone exports.
+                paths    = {
+                    "ms_theme.json", "ui/fonts/",
+                    "sounds/active/", "sounds/macro/",
+                    "sound_assign.json",
+                },
                 required = { "ms_theme.json" },
             },
             sound = {
@@ -103,11 +116,14 @@ return function(ms)
                 paths    = { "plugin.json", "lib/" },
                 required = { "plugin.json" },
             },
+            -- No sounds/ here. Audio travels with the theme; a profile that
+            -- also carried it would give two types a claim on the same files
+            -- and make "which one wins on import" a coin toss.
             profile = {
                 label    = "Profile",
                 paths    = {
                     "ms_macros.lua", "ms_macros_visual.json", "ms_settings.json",
-                    "ms_settings_default.json", "ms_theme.json", "sounds/",
+                    "ms_settings_default.json", "ms_theme.json",
                 },
                 required = {},
             },
@@ -456,7 +472,35 @@ return function(ms)
                 end
             end
 
-            if manifest.type == "sound" or manifest.type == "profile" then
+            -- A slot map is state, not a file the install root should keep:
+            -- copying it in is what the loop above did, so read it back into
+            -- ms.soundAssign and drop the stray copy. Without this the audio
+            -- lands but every slot still points where it did before, which
+            -- looks exactly like the import having silently failed.
+            for _, rel in ipairs(installed) do
+                if rel == "sound_assign.json" then
+                    local dropped = _hsDir .. "/sound_assign.json"
+                    local f = io.open(dropped, "r")
+                    if f then
+                        local raw = f:read("*all"); f:close()
+                        local ok, tbl = pcall(hs.json.decode, raw)
+                        if ok and type(tbl) == "table" then
+                            ms.soundAssign = ms.soundAssign or {}
+                            for slot, name in pairs(tbl) do
+                                if type(slot) == "string" and type(name) == "string" then
+                                    ms.soundAssign[slot] = name
+                                end
+                            end
+                            if ms.saveSettings then pcall(ms.saveSettings) end
+                        end
+                    end
+                    os.remove(dropped)
+                    break
+                end
+            end
+
+            if manifest.type == "sound" or manifest.type == "profile"
+                or manifest.type == "theme" then
                 ms._soundsDirty = true
             end
             if manifest.type == "profile" then
@@ -500,6 +544,14 @@ return function(ms)
             elseif kind == "theme" then
                 addIf("ms_theme.json", _dataDir .. "/ms_theme.json")
                 addDir("ui/fonts/",    _hsDir .. "/ui/fonts/")
+                -- Opt-out, not opt-in: sounds belong to the theme, so a theme
+                -- export carries them unless the user has ticked them off.
+                if ms.bundleSoundsWithTheme ~= false then
+                    addDir("sounds/active/", _hsDir .. "/sounds/active/")
+                    addDir("sounds/macro/",  _hsDir .. "/sounds/macro/")
+                    local assign = ms.package.exportSoundAssign()
+                    if assign then files["sound_assign.json"] = assign end
+                end
 
             elseif kind == "sound" then
                 addDir("sounds/active/",  _hsDir .. "/sounds/active/")
@@ -511,9 +563,6 @@ return function(ms)
                 addIf("ms_settings.json",         _dataDir .. "/ms_settings.json")
                 addIf("ms_settings_default.json", _dataDir .. "/ms_settings_default.json")
                 addIf("ms_theme.json",            _dataDir .. "/ms_theme.json")
-                addDir("sounds/active/",          _hsDir .. "/sounds/active/")
-                addDir("sounds/Default/",         _hsDir .. "/sounds/Default/")
-                addDir("sounds/macro/",           _hsDir .. "/sounds/macro/")
             end
 
             return files
