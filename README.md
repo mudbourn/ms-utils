@@ -48,7 +48,7 @@ I'm not interested in building a tool that hides what it does. If you can't unde
 
 ## Video Preview
 
-![alt text](https://share.mudbourn.info/s/yZx7GsQ6DQHF3Zb "Graph")
+[alt text](https://share.mudbourn.info/s/yZx7GsQ6DQHF3Zb "Graph")
 
 ---
 
