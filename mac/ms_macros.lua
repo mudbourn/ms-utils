@@ -262,18 +262,23 @@
             local MovementFailsafe = {
                 running = false,
                 timer = nil,
-                HardHeld = false,
+                hwHold = false,
             }
 
-            local function isRealMovementKeyDown()
+            local function hwKeyDown()
                 return ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
             end
 
-            local function releaseSynthW()
-                if MovementFailsafe.HardHeld then
-                    ms.release("w")
-                    MovementFailsafe.HardHeld = false
+            local function synthRel()
+                if not MovementFailsafe.hwHold then
+                    return
                 end
+                if ms.keystate("w") then
+                    MovementFailsafe.hwHold = false
+                    return
+                end
+                ms.release("w")
+                MovementFailsafe.hwHold = false
             end
 
             local MovementChecker = ms.sub("MovementChecker", function()
@@ -287,11 +292,11 @@
                         return
                     end
 
-                    if isRealMovementKeyDown() then
-                        releaseSynthW()
-                    elseif not MovementFailsafe.HardHeld then
+                    if hwKeyDown() then
+                        synthRel()
+                    elseif not MovementFailsafe.hwHold then
                         ms.press("w")
-                        MovementFailsafe.HardHeld = true
+                        MovementFailsafe.hwHold = true
                     end
 
                     MovementFailsafe.timer = ms.after(0.3, check)
@@ -305,7 +310,7 @@
                     MovementFailsafe.timer:stop()
                     MovementFailsafe.timer = nil
                 end
-                releaseSynthW()
+                synthRel()
             end)
         -- END --
 
