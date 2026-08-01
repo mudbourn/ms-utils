@@ -214,148 +214,171 @@
 
 -- Combat Warriors Macros --
     -- Helper Variables & Functions --
-        local QuickSlideSound    = SoundMacroDir .. "m_QuickSlide.wav"
-        local JumpLowSound       = SoundMacroDir .. "m_JumpLow.wav"
-        local JumpHighSound      = SoundMacroDir .. "m_JumpHigh.wav"
-        local SlideSetupSound    = SoundMacroDir .. "m_SlideSetup.wav"
-        local JumpNormalSound    = SoundMacroDir .. "m_JumpNormal.wav"
-        local ThrowTrickSound    = SoundMacroDir .. "m_ThrowTrick.wav"
-        local SpawnAltSound      = SoundMacroDir .. "m_SpawnAlt.wav"
-        local ThrowTrickEndSound = SoundMacroDir .. "m_ThrowTrickEnd.wav"
-        local ActionSpammerSound = SoundMacroDir .. "m_TimeSlower.wav"
-        local Running = 0
-        local _movementTimer = nil
+        -- Vars & Var Logic --
+            local QuickSlideSound    = SoundMacroDir .. "QuickSlide.wav"
+            local JumpLowSound       = SoundMacroDir .. "JumpLow.wav"
+            local JumpHighSound      = SoundMacroDir .. "JumpHigh.wav"
+            local SlideSetupSound    = SoundMacroDir .. "SlideSetup.wav"
+            local JumpNormalSound    = SoundMacroDir .. "JumpNormal.wav"
+            local ThrowTrickSound    = SoundMacroDir .. "ThrowTrick.wav"
+            local SpawnAltSound      = SoundMacroDir .. "SpawnAlt.wav"
+            local ThrowTrickEndSound = SoundMacroDir .. "ThrowTrickEnd.wav"
+            local ActionSpammerSound = SoundMacroDir .. "TimeSlower.wav"
+            local Running = 0
+            local _movementTimer = nil
 
-        local getD1 = function()
-            local d1  = 40
-            local lvl = ms.settings.get("clickLevel")
-            if lvl     == 4 then d1 = d1 + 30
-            elseif lvl == 3 then d1 = d1 + 20
-            elseif lvl == 2 then d1 = d1 + 10
-            end
-            return d1
-        end
-
-        local getD2 = function()
-            local d2  = 50
-            local lvl = ms.settings.get("clickLevel")
-            if lvl     == 4 then d2 = d2 + 20
-            elseif lvl == 3 then d2 = d2 + 20
-            elseif lvl == 2 then d2 = d2 + 10
-            end
-            return d2
-        end
-
-        local getD3 = function()
-            local d3  = 50
-            local lvl = ms.settings.get("clickLevel")
-            if lvl     == 4 then d3 = d3 + 30
-            elseif lvl == 3 then d3 = d3 + 20
-            elseif lvl == 2 then d3 = d3 + 10
-            end
-            return d3
-        end
-
-        local JumpHigh = ms.sub("JumpHigh", function()
-            if ms.held("jumpHigh") then
-                ms.log("if", "isSub(jumpHigh)", true)
-                ms.sound(JumpHighSound, true)
-                for i = 1, 60 do
-                    ms.cam(-3145, 0)
-                    ms.wait(1)
-                    ms.cam(-3145, 0)
-                    ms.wait(.5)
+            local getD1 = function()
+                local d1  = 40
+                local lvl = ms.settings.get("clickLevel")
+                if lvl     == 4 then d1 = d1 + 30
+                elseif lvl == 3 then d1 = d1 + 20
+                elseif lvl == 2 then d1 = d1 + 10
                 end
-                ms.cam.rebalance(8)
-                ms.log("for", "i=1,60", 60)
-                return true
+                return d1
             end
-            return false
-        end)
 
-        local JumpLow = ms.sub("JumpLow", function()
-            if ms.held("jumpLow") then
-                ms.log("if", "isSub(jumpLow)", true)
-                ms.sound(JumpLowSound, true)
+            local getD2 = function()
+                local d2  = 50
+                local lvl = ms.settings.get("clickLevel")
+                if lvl     == 4 then d2 = d2 + 20
+                elseif lvl == 3 then d2 = d2 + 20
+                elseif lvl == 2 then d2 = d2 + 10
+                end
+                return d2
+            end
+
+            local getD3 = function()
+                local d3  = 50
+                local lvl = ms.settings.get("clickLevel")
+                if lvl     == 4 then d3 = d3 + 30
+                elseif lvl == 3 then d3 = d3 + 20
+                elseif lvl == 2 then d3 = d3 + 10
+                end
+                return d3
+            end
+        -- END --
+
+        -- Movement Checking --
+            local MovementChecker = ms.sub("MovementChecker", function()
+                if Running == 0 then
+                    Running = 1
+                    local function check()
+                        local moving = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
+                        if Running == 0 then
+                            return
+                        end
+                        if not moving then
+                            ms.press("w")
+                        end
+                        _movementTimer = ms.after(0.3, check)
+                    end
+                    check()
+                end
+            end)
+
+            local EndMovementChecker = ms.sub("EndMovementChecker", function()
+                Running = 0
+                if _movementTimer then
+                    _movementTimer:stop()
+                    _movementTimer = nil
+                end
+                local moving = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
+                if not moving then
+                    ms.release("w")
+                end
+            end)
+        -- END --
+
+        -- High Leap --
+            local JumpHigh = ms.sub("JumpHigh", function()
+                if ms.held("jumpHigh") then
+                    ms.sound(JumpHighSound, true)
+                    for i = 1, 60 do
+                        ms.wait(.8)
+                        ms.cam(-3145, 0)
+                        ms.wait(.8)
+                        ms.cam(-3145, 0)
+                    end
+                    ms.wait(45)
+                    ms.cam(-1700, 0)
+                    return true
+                end
+                return false
+            end)
+
+            local JumpLow = ms.sub("JumpLow", function()
+                if ms.held("jumpLow") then
+                    ms.sound(JumpLowSound, true)
+                    for i = 1, 14 do
+                        ms.wait(.8)
+                        ms.cam(-370, 0)
+                        ms.wait(.8)
+                        ms.cam(-370, 0)
+                    end
+                    ms.wait(45)
+                    ms.cam(-200, 0)
+                    return true
+                end
+                return false
+            end)
+
+            local JumpDefault = ms.sub("JumpDefault", function()
+                ms.sound(JumpNormalSound, true)
                 for i = 1, 14 do
-                    ms.cam(-370 * 0.6, 0)
-                    ms.wait(1)
-                    ms.cam(-370 * 0.6, 0)
-                    ms.wait(.5)
+                    ms.wait(2)
+                    ms.cam(-185, 0)
+                    ms.wait(1.3)
+                    ms.cam(-185, 0)
                 end
-                ms.cam.rebalance(8)
-                ms.log("for", "i=1,14", 14)
-                return true
-            end
-            return false
-        end)
+                ms.wait(45)
+                ms.cam(-100, 0)
+            end)
+        -- END --
 
-        local JumpDefault = ms.sub("JumpDefault", function()
-            ms.sound(JumpNormalSound, true)
-            for i = 1, 14 do
-                ms.cam(-185 * 0.75, 0)
-                ms.wait(1)
-                ms.cam(-185 * 0.75, 0)
-                ms.wait(.5)
-            end
-            ms.cam.rebalance(4)
-            ms.log("for", "i=1,14", 14)
-        end)
-
-        local MovementChecker = ms.sub("MovementChecker", function()
-            if Running == 0 then
-                Running = 1
-                local function check()
-                    local moving = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
-                    if Running == 0 then
-                        return
+        -- Throw Trick --
+            local ThrowLow = ms.sub("ThrowLow", function()
+                if ms.held("throwLow") then
+                    for i = 1, 22 do
+                        ms.cam(-400, 0)
+                        ms.wait(.8)
+                        ms.cam(-400, 0)
+                        ms.wait(.8)
                     end
-                    if not moving then
-                        ms.press("w")
+                    ms.wait(3)
+                    for i = 1, 170 do
+                        ms.cam(10, 0)
+                        ms.wait(.8)
+                        ms.cam(10, 0)
+                        ms.wait(.8)
+                        ms.release("x")
                     end
-                    _movementTimer = ms.after(5, check)
+                    ms.wait(5)
+                    ms.release("space")
+                    EndMovementChecker()
+                    ms.wait(20)
+                    ms.scroll("down", 2000)
+                    ms.sound(ThrowTrickEndSound, true)
+                    ms.wait(3000)
+                    return true
                 end
-                check()
-            end
-        end)
+                return false
+            end)
 
-        local EndMovementChecker = ms.sub("EndMovementChecker", function()
-            Running = 0
-            if _movementTimer then
-                _movementTimer:stop()
-                _movementTimer = nil
-            end
-            local moving = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
-            if not moving then
-                ms.release("w")
-            end
-        end)
-
-        local ThrowLow = ms.sub("ThrowLow", function()
-            if ms.held("throwLow") then
-                ms.log("if", "isSub(throwLow)", true)
-                for i = 1, 15 do
-                    ms.cam(-400, 0)
-                    ms.wait(1)
-                    ms.cam(-400, 0)
-                    ms.wait(1)
+            local ThrowDefault = ms.sub("ThrowDefault", function()
+                for i = 1, 75 do
+                    ms.cam(-3145, 0)
+                    ms.wait(.8)
+                    ms.cam(-3145, 0)
+                    ms.wait(.8)
                 end
-                ms.log("for", "i=1,15", 15)
-                for i2 = 1, 30 do
-                    ms.cam(9, 0)
-                    ms.wait(1)
-                    ms.cam(8, 0)
-                    ms.wait(.5)
-                end
-                ms.log("for", "i2=1,30", 30)
-                for i2 = 1, 180 do
+                ms.wait(3)
+                for i = 1, 170 do
+                    ms.cam(10, 0)
+                    ms.wait(.8)
+                    ms.cam(10, 0)
+                    ms.wait(.8)
                     ms.release("x")
-                    ms.cam(9, 0)
-                    ms.wait(1)
-                    ms.cam(8, 0)
-                    ms.wait(1)
                 end
-                ms.log("for", "i2=1,180", 180)
                 ms.wait(5)
                 ms.release("space")
                 EndMovementChecker()
@@ -363,71 +386,30 @@
                 ms.scroll("down", 2000)
                 ms.sound(ThrowTrickEndSound, true)
                 ms.wait(3000)
-                return true
-            end
-            return false
-        end)
-
-        local ThrowDefault = ms.sub("ThrowDefault", function()
-            for i = 1, 60 do
-                ms.cam(-3145, 0)
-                ms.wait(2)
-                ms.cam(-3145, 0)
-                ms.wait(2)
-            end
-            ms.log("for", "i=1,60", 60)
-            for i2 = 1, 150 do
-                ms.cam(9, 0)
-                ms.wait(1)
-                ms.cam(8, 0)
-                ms.wait(.5)
-            end
-            ms.log("for", "i2=1,150", 150)
-            for i2 = 1, 150 do
-                ms.release("x")
-                ms.cam(9, 0)
-                ms.wait(1)
-                ms.cam(8, 0)
-                ms.wait(1)
-            end
-            ms.log("for", "i2=1,150", 150)
-            ms.wait(5)
-            ms.release("space")
-            EndMovementChecker()
-            ms.wait(20)
-            ms.scroll("down", 2000)
-            ms.sound(ThrowTrickEndSound, true)
-            ms.wait(3000)
-        end)
-
+            end)
+        -- END --
     -- END Helper Variables & Functions --
 
     -- Macro Functions --
         -- High Leap Assist --
             local HighLeapAssistFunction = ms.fn(function()
                 MovementChecker()
-                ms.cam.reset()
-                for i = 1, 5 do
-                    ms.type("e", nil, nil, 7)
-                    ms.wait(1)
+                ms.wait(5)
+                for i = 1, 3 do
+                    ms.type("e", nil, nil, 5)
                 end
-                ms.log("for", "i=1,5", 5)
-                ms.wait(30)
-                for i = 1, 2 do
-                    ms.type("space", nil, nil, 10)
+                ms.wait(20)
+                for i = 1, 3 do
+                    ms.type("space", nil, nil, 5)
                 end
-                ms.log("for", "i=1,2", 2)
-                ms.wait(10)
+                ms.wait(2)
 
                 if not JumpHigh() then
                     if not JumpLow() then
-                        ms.log("if", "jumpLow", false)
                         JumpDefault()
                     else
-                        ms.log("if", "jumpLow", true)
                     end
                 else
-                    ms.log("if", "jumpHigh", true)
                 end
 
                 ms.release("space")
@@ -437,20 +419,11 @@
                 EndMovementChecker()
             end)
 
-            -- Cooldown covers HighLeapAssistFunction's worst-case run time
-            -- (preamble + longest jump loop + trailing wait(3000) ≈ 3.3s).
-            -- All three variants share group G_superJump and the same
-            -- ms.cam accumulator, so a shorter cooldown lets a second click
-            -- start an overlapping run that corrupts the in-flight camera
-            -- rotation totals of the first (inconsistent/missing jumps).
-            local SUPER_JUMP_COOLDOWN = 4000
-
             ms.bind.define("superJump", function()
                 HighLeapAssistFunction()
             end, {
                 group    = "main",
                 label    = "High Leap Assist",
-                cooldown = SUPER_JUMP_COOLDOWN,
                 default  = {
                     type   = "mouse",
                     button = 3,
@@ -458,52 +431,44 @@
             })
 
             ms.bind.define("jumpHigh", HighLeapAssistFunction, {
-                default  = { type = "superJump", mods = {"v"} },
-                label    = "Jump High",
-                cooldown = SUPER_JUMP_COOLDOWN,
+                default = { type = "superJump", mods = {"v"} },
+                label   = "Jump High",
             })
 
             ms.bind.define("jumpLow",  HighLeapAssistFunction, {
-                default  = { type = "superJump", mods = {"x"} },
-                label    = "Jump Low",
-                cooldown = SUPER_JUMP_COOLDOWN,
+                default = { type = "superJump", mods = {"x"} },
+                label   = "Jump Low",
             })
         -- END High Leap Assist --
 
         -- Throw Trick --
             local ThrowTrickFunction = ms.fn(function()
-                ms.sound(ThrowTrickSound, true)
                 ms.press("x")
+                ms.sound(ThrowTrickSound, true)
                 for i = 1, 5 do
                     ms.cam(0, -100)
                     ms.wait(1)
                 end
-                ms.log("for", "i=1,5", 5)
                 ms.wait(50)
                 for i = 1, 4 do
                     ms.cam(0, 13)
                     ms.wait(1)
                 end
-                ms.log("for", "i=1,4", 4)
                 ms.scroll("up", 2000)
                 MovementChecker()
                 for i = 1, 5 do
                     ms.type("e")
                     ms.wait(1)
                 end
-                ms.log("for", "i=1,5", 5)
                 ms.wait(30)
                 for i = 1, 2 do
                     ms.type("space")
                 end
-                ms.log("for", "i=1,2", 2)
                 ms.wait(50)
 
                 if not ThrowLow() then
-                    ms.log("if", "throwLow", false)
                     ThrowDefault()
                 else
-                    ms.log("if", "throwLow", true)
                 end
             end)
 
@@ -530,10 +495,8 @@
 
             ms.bind.define("fakeSwing", function()
                 if string.find(ms.app(), "Roblox") then
-                    ms.log("if", "app=Roblox", true)
                     FakeSwingFunction()
                 else
-                    ms.log("if", "app=Roblox", false)
                 end
             end, {
                 group    = "main",
@@ -565,7 +528,6 @@
                     ms.press("space")
                     ms.wait(100)
                 end
-                ms.log("for", "i=1,20", 20)
                 ms.release("space")
             end)
 
@@ -600,7 +562,6 @@
                     ms.Mouse(Click, Left, Mouse, 0, 0)
                     ms.wait(15)
                 end
-                ms.log("while", "keystate(998)", _spamCount)
                 ms.wait(150)
                 ms.type("z")
                 ms.wait(60)
@@ -661,10 +622,8 @@
         -- Delta Test --
             local DeltaTestFunction = ms.fn(function()
                 local deltas = ms.settings.get("deltaTestDeltas") or 5
-                ms.cam.reset()
                 ms.cam(deltas, 0)
                 ms.wait(50)
-                ms.cam.rebalance()
             end)
 
             ms.bind.define("deltaTest", DeltaTestFunction, {
