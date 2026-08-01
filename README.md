@@ -48,7 +48,7 @@ I'm not interested in building a tool that hides what it does. If you can't unde
 
 ## Video Preview
 
-[Video Preview](https://save.mudbourn.info/s/yZx7GsQ6DQHF3Zb/download)
+[mudscript utilities 1.3 UI preview](https://share.mudbourn.info/s/5ZYMkZPYyFAiPtg)
 
 ---
 
