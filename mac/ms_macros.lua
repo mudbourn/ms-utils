@@ -259,33 +259,53 @@
         -- END --
 
         -- Movement Checking --
-            local MovementChecker = ms.sub("MovementChecker", function()
-                if Running == 0 then
-                    Running = 1
-                    local function check()
-                        local moving = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
-                        if Running == 0 then
-                            return
-                        end
-                        if not moving then
-                            ms.press("w")
-                        end
-                        _movementTimer = ms.after(0.3, check)
-                    end
-                    check()
+            local MovementFailsafe = {
+                running = false,
+                timer = nil,
+                HardHeld = false,
+            }
+
+            local function isRealMovementKeyDown()
+                return ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
+            end
+
+            local function releaseSynthW()
+                if MovementFailsafe.HardHeld then
+                    ms.release("w")
+                    MovementFailsafe.HardHeld = false
                 end
+            end
+
+            local MovementChecker = ms.sub("MovementChecker", function()
+                if MovementFailsafe.running then
+                    return
+                end
+                MovementFailsafe.running = true
+
+                local function check()
+                    if not MovementFailsafe.running then
+                        return
+                    end
+
+                    if isRealMovementKeyDown() then
+                        releaseSynthW()
+                    elseif not MovementFailsafe.HardHeld then
+                        ms.press("w")
+                        MovementFailsafe.HardHeld = true
+                    end
+
+                    MovementFailsafe.timer = ms.after(0.3, check)
+                end
+                check()
             end)
 
             local EndMovementChecker = ms.sub("EndMovementChecker", function()
-                Running = 0
-                if _movementTimer then
-                    _movementTimer:stop()
-                    _movementTimer = nil
+                MovementFailsafe.running = false
+                if MovementFailsafe.timer then
+                    MovementFailsafe.timer:stop()
+                    MovementFailsafe.timer = nil
                 end
-                local moving = ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
-                if not moving then
-                    ms.release("w")
-                end
+                releaseSynthW()
             end)
         -- END --
 
