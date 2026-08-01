@@ -46,6 +46,10 @@ There are a lot of macro tools out there that are either too complicated, too li
 
 I'm not interested in building a tool that hides what it does. If you can't understand what a macro tool is doing, you shouldn't trust it.
 
+## Video Preview
+
+[mudscript utilities 1.3 UI preview](https://share.mudbourn.info/s/5ZYMkZPYyFAiPtg)
+
 ---
 
 ## Getting started
