@@ -7,17 +7,6 @@
             if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
 
             -- Safe webview show --
-                --- webview:show() can raise an ObjC exception out of AppKit when a
-                --- remote view service (e.g. Safari's autofill completion list,
-                --- which any WebKit text field can spawn) is still registered
-                --- against a different window:
-                ---   NSInternalInconsistencyException ...
-                ---   -[NSRemoteView containingWindowWillOrderOnScreen:]
-                --- LuaSkin turns that into a Lua error, which aborts the whole
-                --- enclosing callback — so a boot/animation timer dies partway
-                --- through and the panel is left invisible. Swallow it and retry
-                --- once on the next runloop turn, by which point the stale remote
-                --- view has been torn down.
                 ms.safeShow = function(view)
                     if not view then return false end
                     local ok = pcall(function() view:show() end)
@@ -898,6 +887,15 @@
                     ev:post()
                 end
 
+                ms.forgetHeld = function(key)
+                    local keyCode = getCode(key)
+                    if not keyCode then return false end
+                    if ms._macroHeldKeys[keyCode] == nil then return false end
+                    ms._macroHeldKeys[keyCode] = nil
+                    if ms._keyHoldStarts then ms._keyHoldStarts[keyCode] = nil end
+                    return true
+                end
+
                 ms.type = function(key, mods, hidinject, holdMs)
                     if ms.dev then ms.devtools:flushAll(); _keyFlush() end
                     local _hold = holdMs or 15
@@ -1759,6 +1757,28 @@
             -- Does NOT swallow key inputs
             local _hotkeyCooldowns = {}
             local _hotkeyDown = {}
+            local _hotkeyDownAt = {}
+            local _hotkeyTapSet = {}
+            local _HOTKEY_LATCH_MAX = 10
+
+            local function _clearStaleLatch(id, isRepeat)
+                if not _hotkeyDown[id] then return end
+
+                local since = _hotkeyDownAt[id]
+                local aged  = (not since) or (hs.timer.secondsSinceEpoch() - since) > _HOTKEY_LATCH_MAX
+
+                if (not isRepeat) or aged then
+                    _hotkeyDown[id]      = false
+                    _hotkeyCooldowns[id] = false
+                    _hotkeyDownAt[id]    = nil
+                end
+            end
+
+            local function _resetHotkeyLatches()
+                _hotkeyDown      = {}
+                _hotkeyCooldowns = {}
+                _hotkeyDownAt    = {}
+            end
 
             ms._makeKeyWatcher = function(mods, key, onDown)
                 local keyCode = hs.keycodes.map[key]
@@ -1805,19 +1825,27 @@
                         if not modsAny and not modsMatch(flags) then
                             _hotkeyDown[id] = false
                             _hotkeyCooldowns[id] = false
+                            _hotkeyDownAt[id] = nil
                         end
                         return false
                     end
                     if type == hs.eventtap.event.types.keyDown then
-                        if kc == keyCode and modsExact(flags) and not _hotkeyDown[id] and not _hotkeyCooldowns[id] then
-                            _hotkeyDown[id] = true
-                            onDown()
+                        if kc == keyCode then
+                            local isRepeat = (e:getProperty(
+                                hs.eventtap.event.properties.keyboardEventAutorepeat) or 0) ~= 0
+                            _clearStaleLatch(id, isRepeat)
+                            if modsExact(flags) and not _hotkeyDown[id] and not _hotkeyCooldowns[id] then
+                                _hotkeyDown[id]   = true
+                                _hotkeyDownAt[id] = hs.timer.secondsSinceEpoch()
+                                hs.timer.doAfter(0, onDown)
+                            end
                         end
                         return ms._swallowHotkeys and true or false
                     end
                     if type == hs.eventtap.event.types.keyUp then
                         if kc == keyCode then
-                            _hotkeyDown[id] = false
+                            _hotkeyDown[id]   = false
+                            _hotkeyDownAt[id] = nil
                             -- Cooldown: wait 0.15s after key up before allowing re-fire
                             _hotkeyCooldowns[id] = true
                             hs.timer.doAfter(0.15, function()
@@ -1838,8 +1866,21 @@
                     if h and h.stop then h:stop() end
                 end
                 ms._hotkeyHandles = {}
-                _hotkeyCooldowns = {}
-                _hotkeyDown = {}
+                _resetHotkeyLatches()
+
+                local kept = {}
+                for _, t in ipairs(ms._resilientTaps) do
+                    if not _hotkeyTapSet[t] then kept[#kept+1] = t end
+                end
+                ms._resilientTaps = kept
+                _hotkeyTapSet = {}
+
+                local function _register(name, t)
+                    ms._hotkeyHandles[name] = t
+                    _hotkeyTapSet[t] = true
+                    ms._resilientTaps[#ms._resilientTaps+1] = t
+                    t:start()
+                end
 
                 -- Panic
                 local hk = ms._hotkeys.panic
@@ -1848,7 +1889,7 @@
                     if not ms._robloxActive and not ms._isSafeZone() then return end
                     ms.setMacros(0)
                 end)
-                if tap then ms._hotkeyHandles.panic = tap; tap:start() end
+                if tap then _register("panic", tap) end
 
                 -- Quick Reload
                 hk = ms._hotkeys.quickReload
@@ -1860,7 +1901,7 @@
                     hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
                     pcall(ms.reload)
                 end)
-                if tap then ms._hotkeyHandles.quickReload = tap; tap:start() end
+                if tap then _register("quickReload", tap) end
 
                 -- Full Reload
                 hk = ms._hotkeys.fullReload
@@ -1868,7 +1909,7 @@
                     if not ms._loadComplete then return end
                     hs.reload()
                 end)
-                if tap then ms._hotkeyHandles.fullReload = tap; tap:start() end
+                if tap then _register("fullReload", tap) end
 
                 -- Open Menu
                 hk = ms._hotkeys.openMenu
@@ -1883,7 +1924,7 @@
                         ms.ui.toggle()
                     end
                 end)
-                if tap then ms._hotkeyHandles.openMenu = tap; tap:start() end
+                if tap then _register("openMenu", tap) end
 
                 -- Octane Mode
                 hk = ms._hotkeys.octane
@@ -1892,22 +1933,22 @@
                     if not ms._robloxActive and not ms._isSafeZone() then return end
                     ms.octane.toggle()
                 end)
-                if tap then ms._hotkeyHandles.octane = tap; tap:start() end
-            end
-
-            -- Register all hotkey taps with the resilience watchdog
-            for _, tap in pairs(ms._hotkeyHandles) do
-                if tap then ms._resilientTaps[#ms._resilientTaps+1] = tap end
+                if tap then _register("octane", tap) end
             end
 
             -- Start the tap watchdog (2s poll)
             ms._tapWatchdog = hs.timer.doEvery(2, function()
+                local revivedHotkey = false
+
                 for _, tap in ipairs(ms._resilientTaps) do
                     if tap and not tap:isEnabled() then
                         tap:start()
+                        if _hotkeyTapSet[tap] then revivedHotkey = true end
                         if ms.dev then print("ms: revived a disabled eventtap") end
                     end
                 end
+
+                if revivedHotkey then _resetHotkeyLatches() end
             end)
 
             ms._bindHotkeys()

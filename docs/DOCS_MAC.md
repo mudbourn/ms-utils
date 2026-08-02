@@ -236,6 +236,28 @@ Same parameters as `ms.press`.
 
 ---
 
+### `ms.forgetHeld(key)`
+
+Drops a key from the macro-held ledger **without** sending a key-up. Returns `true` if an entry was cleared, `false` if the key was not being held by a macro.
+
+```lua
+ms.forgetHeld("w")
+```
+
+Every `ms.press` records the key so `ms.cancelMacros()` can release it later. That ledger normally clears itself on `ms.release`, but there is one case where you must not send the key-up: the player has physically pressed the same key you are holding. Sending it would cut their own input mid-game, while their hardware key-up releases the key for you anyway.
+
+Leaving the entry in place instead is not an option — the next panic or disable would fire a stray key-up into the game long after your macro ended. `ms.forgetHeld` is the way out: surrender the key without touching the event stream.
+
+```lua
+if ms.keystate("w") then
+    ms.forgetHeld("w")   -- player took over; their key-up will do the work
+else
+    ms.release("w")
+end
+```
+
+---
+
 ### `ms.type(key, mods [, hidinject])`
 
 Press + 15 ms wait + release. Use for single keystrokes.
@@ -513,6 +535,65 @@ ms.wait(2000)  -- 2 seconds
 Must be called from a coroutine context (i.e. inside an `ms.fn`-wrapped function). Outside a coroutine it falls back to a blocking `usleep`.
 
 > **Macro Monitor integration.** When the Macro Monitor panel is open, every `ms.wait` call produces a dim step trace entry in the log regardless of duration — there is no minimum threshold. See **Section 24** for the full list of functions that generate step traces.
+
+### `ms.after(milliseconds, fn)`
+
+Runs `fn` once after the given delay and returns the timer handle. Does not yield, so unlike `ms.wait` it is safe outside a coroutine — use it for background loops and deferred cleanup.
+
+```lua
+local t = ms.after(300, function() ms.release("w") end)
+t:stop()   -- cancel before it fires
+```
+
+> **Units.** `ms.after` takes **milliseconds**, matching `ms.wait`. `hs.timer.doAfter` underneath it takes seconds, so a value copied from Hammerspoon examples is off by a factor of 1000. `ms.after(0.3, fn)` is not "300 ms" — it is a third of a millisecond, and in a self-rearming loop that means thousands of timers a second.
+
+### Background loops
+
+A loop built from `ms.after` outlives the macro that started it. It is not an `ms.fn` coroutine, so `ms.cancelMacros()` cannot reach it and `ms.setMacros(0)` will not stop it. Anything long-running needs three guards:
+
+```lua
+local Loop = {
+    running = false,
+    timer   = nil,
+    gen     = 0,
+}
+
+local function start()
+    if Loop.running then
+        return
+    end
+
+    Loop.running = true
+    Loop.gen     = Loop.gen + 1
+
+    local myGen = Loop.gen
+
+    local function tick()
+        if not Loop.running or Loop.gen ~= myGen then
+            return
+        end
+
+        if BindValidity ~= 1 or not ms._robloxActive then
+            Loop.running = false
+            Loop.timer   = nil
+            stop()
+            return
+        end
+
+        Loop.timer = ms.after(300, tick)
+    end
+
+    tick()
+end
+```
+
+| Guard | Prevents |
+|-------|----------|
+| Generation counter | A timer still in flight from a previous run ticking into the current one |
+| `BindValidity` / focus check | A cancelled or disabled macro leaving the loop running forever |
+| Idempotent stop | Double-stops and stops with no matching start, both common when several macros share one loop |
+
+Release any keys the loop is holding on every exit path, including the self-stop path — see `ms.forgetHeld` in **Section 5** for the case where the player has taken the key over.
 
 ### `ms.randWait(min, max)`
 
@@ -1168,6 +1249,28 @@ These hotkeys only fire when the **target application** is focused (set via `ms.
 | `alt+]` | Reload settings from disk and rebind |
 | `alt+p` | Toggle the Settings panel |
 | `alt+F10` | Emergency reset — disables macros immediately |
+
+### Tap resilience
+
+Every hotkey runs on its own `hs.eventtap`. macOS disables an event tap whose callback overruns its time budget (`kCGEventTapDisabledByTimeout`), and a disabled tap is silent — the bind simply stops working, with no error, until Hammerspoon reloads.
+
+Two mechanisms keep that from happening:
+
+- **Handlers run off the tap callback.** A hotkey action is deferred to the next runloop turn rather than called inline, so the callback returns immediately no matter how much work the action does. The enable/disable/toggle actions play a sound, raise an alert and refresh the UI, which is more than enough to trip the timeout.
+- **The watchdog revives disabled taps.** `ms._tapWatchdog` polls every 2 seconds and restarts any tap in `ms._resilientTaps` that has been disabled. Hotkey taps register themselves as they are created in `ms._bindHotkeys`, and rebinding drops the previous generation from the list.
+
+### Latch recovery
+
+A hotkey fires on key-down and arms again on key-up. If that key-up never arrives the bind stays latched down and never fires again — the failure mode behind "the macro toggles stopped re-enabling my macros."
+
+A key-up can go missing when the tap is disabled mid-hold, when focus moves to an app that swallows it, or when `ms.setMacros(0)` clears `ms.keytrack` underneath the hold.
+
+Two recoveries cover it:
+
+- A key-down that is **not** an autorepeat proves the key came back up at some point, so any latch still standing is stale and gets cleared before the fire check. A 10-second age ceiling backstops anything the autorepeat flag misses.
+- When the watchdog revives a hotkey tap, all latches and cooldowns are cleared — every event during the dead window was dropped, so none of that state can be trusted.
+
+Neither recovery can double-fire a bind: a genuine held key produces autorepeat key-downs, which are left latched.
 
 ---
 

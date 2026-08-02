@@ -259,58 +259,79 @@
         -- END --
 
         -- Movement Checking --
+            local MOVEMENT_POLL_MS = 300
+
             local MovementFailsafe = {
                 running = false,
-                timer = nil,
-                hwHold = false,
+                timer   = nil,
+                ownsW   = false,
+                gen     = 0,
             }
 
             local function hwKeyDown()
                 return ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
             end
 
-            local function synthRel()
-                if not MovementFailsafe.hwHold then
+            local function releaseW()
+                if not MovementFailsafe.ownsW then
                     return
                 end
+
+                MovementFailsafe.ownsW = false
+
                 if ms.keystate("w") then
-                    MovementFailsafe.hwHold = false
+                    ms.forgetHeld("w")
                     return
                 end
+
                 ms.release("w")
-                MovementFailsafe.hwHold = false
             end
 
             local MovementChecker = ms.sub("MovementChecker", function()
                 if MovementFailsafe.running then
                     return
                 end
+
                 MovementFailsafe.running = true
+                MovementFailsafe.gen     = MovementFailsafe.gen + 1
+
+                local myGen = MovementFailsafe.gen
 
                 local function check()
-                    if not MovementFailsafe.running then
+                    if not MovementFailsafe.running or MovementFailsafe.gen ~= myGen then
+                        return
+                    end
+
+                    if BindValidity ~= 1 or not ms._robloxActive then
+                        MovementFailsafe.running = false
+                        MovementFailsafe.timer   = nil
+                        releaseW()
                         return
                     end
 
                     if hwKeyDown() then
-                        synthRel()
-                    elseif not MovementFailsafe.hwHold then
+                        releaseW()
+                    elseif not MovementFailsafe.ownsW then
                         ms.press("w")
-                        MovementFailsafe.hwHold = true
+                        MovementFailsafe.ownsW = true
                     end
 
-                    MovementFailsafe.timer = ms.after(0.3, check)
+                    MovementFailsafe.timer = ms.after(MOVEMENT_POLL_MS, check)
                 end
+
                 check()
             end)
 
             local EndMovementChecker = ms.sub("EndMovementChecker", function()
                 MovementFailsafe.running = false
+                MovementFailsafe.gen     = MovementFailsafe.gen + 1
+
                 if MovementFailsafe.timer then
                     MovementFailsafe.timer:stop()
                     MovementFailsafe.timer = nil
                 end
-                synthRel()
+
+                releaseW()
             end)
         -- END --
 
