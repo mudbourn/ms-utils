@@ -2904,11 +2904,20 @@
                 -- No wire here — having both would double-fire toggle().
             end
 
+            local function modsMatch(bindMods, eventMods)
+                if bindMods == "any" then
+                    return true
+                end
+                return ms.util.modsEqual(bindMods, eventMods)
+            end
+
             ms.systemBinds._defs = {
-                enable  = { label = "Enable Macros",  default = { type = "key", mods = {}, key = "return" } },
-                disable = { label = "Disable Macros", default = { type = "key", mods = {}, key = "/" } },
-                toggle  = { label = "Toggle Macros",  default = { type = "key", mods = {}, key = "escape" } },
+                enable  = { label = "Enable Macros",  default = { type = "key", mods = "any", key = "return" } },
+                disable = { label = "Disable Macros", default = { type = "key", mods = "any", key = "/" } },
+                toggle  = { label = "Toggle Macros",  default = { type = "key", mods = "any", key = "escape" } },
             }
+
+
             ms.systemBinds._actions = {
                 enable  = function() ms.setMacros(1) end,
                 disable = function() ms.setMacros(0) end,
