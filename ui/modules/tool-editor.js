@@ -901,29 +901,19 @@ class ToolEditor {
      * Dropdown select for enum values.
      */
     _createSelectInput(key, value, options, sid) {
-        const sel = document.createElement("select");
-        sel.className = "tool-ed-select";
-
         if (!options || options.length === 0) {
             options = [String(value || "")];
         }
 
-        for (const opt of options) {
-            const o = document.createElement("option");
-            o.value = opt;
-            o.textContent = opt;
-            sel.appendChild(o);
-        }
-
-        // Set current value
-        if (value !== undefined && value !== null) {
-            sel.value = String(value);
-        }
-
-        sel.addEventListener("change", () => {
-            this._updateParam(sid, key, sel.value);
+        // createSelect, not <select>: an open native popup is drawn by macOS
+        // and ignores the shell's theme. It keeps .value and "change", so the
+        // swap is confined to this function.
+        const sel = createSelect({
+            options: options,
+            value: (value !== undefined && value !== null) ? String(value) : undefined,
+            className: "tool-ed-select",
+            onChange: (v) => this._updateParam(sid, key, v),
         });
-        sel.addEventListener("keydown", (e) => e.stopPropagation());
 
         return sel;
     }

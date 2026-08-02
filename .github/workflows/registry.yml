@@ -39,7 +39,7 @@ jobs:
       # the PR head for a pull_request (pinning main would validate the wrong
       # bytes), and the selected branch for a dispatch, which is what gets the
       # signature commit pushed back to it.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 

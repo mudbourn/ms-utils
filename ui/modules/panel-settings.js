@@ -1021,6 +1021,17 @@
                         ),
                     ),
                 );
+                // A profile carries everything; this is the narrow one — just
+                // ms_macros.lua / ms_macros_visual.json and sounds/macro/. Both
+                // macro formats travel if both are present; the manifest's
+                // macroFormat records which.
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Export Macros…", "", () =>
+                            sendToHost({ action: "exportPackage", type: "macro" }),
+                        ),
+                    ),
+                );
                 if (hasOthers)
                     body.appendChild(
                         btnRow(

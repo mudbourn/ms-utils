@@ -255,25 +255,12 @@
                 color: var(--text2);
                 flex: 1;
             }
-            #coord-select {
-                background: var(--surface2);
-                border: 1px solid var(--border);
-                color: var(--text2);
-                border-radius: var(--radius-s);
+            /* The control itself is styled by modules/ui-select.js; only the
+               fit into this row belongs here. */
+            #coord-select-mount .macro-select {
                 padding: 2px 6px;
-                font-size: 11px;
-                outline: none;
-                cursor: pointer;
-                -webkit-appearance: none;
+                min-width: 0;
                 flex-shrink: 0;
-            }
-            #coord-select:hover {
-                border-color: var(--accent);
-                color: var(--text);
-            }
-            #coord-select option {
-                background: var(--surface2);
-                color: var(--text);
             }
 
             /* ── Section divider ────────────────────────────────────────────── */
@@ -536,19 +523,11 @@
                         x:&nbsp;<span id="mx-display">—</span
                         >&nbsp;&nbsp;y:&nbsp;<span id="my-display">—</span>
                     </div>
-                    <select
-                        id="coord-select"
-                        onchange="onCoordModeChange(this.value)"
-                    >
-                        <option value="screen">Screen</option>
-                        <option value="window">Window TL</option>
-                        <option value="windowTR">Window TR</option>
-                        <option value="windowBL">Window BL</option>
-                        <option value="windowBR">Window BR</option>
-                        <option value="windowCenter">Window Center</option>
-                        <option value="ref">REF 1680×1044</option>
-                        <option value="screenCenter">Screen center</option>
-                    </select>
+                    <!-- Built by createSelect (modules/ui-select.js), mounted
+                         from the script below. The native dropdown this
+                         replaced drew its open popup as an unthemeable macOS
+                         menu. -->
+                    <span id="coord-select-mount"></span>
                 </div>
                 <div id="mouse-pills"></div>
             </div>
@@ -558,6 +537,7 @@
 
         <div id="ctx-menu"></div>
 
+        <script src="./modules/ui-select.js"></script>
         <script src="./modules/ui-tabs.js"></script>
         <script src="./modules/log-panel.js"></script>
         <script>
@@ -833,6 +813,27 @@
             function onCoordModeChange(mode) {
                 lp.sendToHost({ action: "setCoordMode", mode: mode });
             }
+
+            // ── Coordinate-mode dropdown ────────────────────────────────────
+            // Options live here rather than in markup because the control is
+            // built, not parsed. "screen" matches _coordMode's default in
+            // ms_devtools.lua — the host is not asked on load, so the two
+            // defaults have to agree.
+            var coordSelect = createSelect({
+                options: [
+                    { value: "screen",       label: "Screen" },
+                    { value: "window",       label: "Window TL" },
+                    { value: "windowTR",     label: "Window TR" },
+                    { value: "windowBL",     label: "Window BL" },
+                    { value: "windowBR",     label: "Window BR" },
+                    { value: "windowCenter", label: "Window Center" },
+                    { value: "ref",          label: "REF 1680×1044" },
+                    { value: "screenCenter", label: "Screen center" },
+                ],
+                value: "screen",
+                onChange: onCoordModeChange,
+            });
+            document.getElementById("coord-select-mount").appendChild(coordSelect);
 
             // ── Expose for Lua evaluateJavaScript ───────────────────────────
             window.appendEntry      = appendEntry;
