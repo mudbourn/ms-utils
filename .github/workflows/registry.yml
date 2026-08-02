@@ -1,0 +1,86 @@
+name: Sign Registry
+
+# The registry index is published by signing it, not by merging it. An edit to
+# registry/index.json lands on main unsigned; the client discards an unsigned
+# index whole, so nothing is served until this workflow runs and commits the
+# signature back.
+#
+# Every push validates. Only a manual dispatch signs — MS_SIGNING_KEY is the
+# same RSA-2048 key Guardian verifies MANIFEST.json against, and an automatic
+# signature on push would let any merged edit publish itself.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "registry/index.json"
+      - "mac/bin/registry_sign.sh"
+      - ".github/workflows/registry.yml"
+  pull_request:
+    paths:
+      - "registry/index.json"
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: "Sign and commit the index (unchecked = validate only)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+
+    steps:
+      # No explicit ref: the triggering one is what we want in all three cases —
+      # the PR head for a pull_request (pinning main would validate the wrong
+      # bytes), and the selected branch for a dispatch, which is what gets the
+      # signature commit pushed back to it.
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate index
+        run: bash mac/bin/registry_sign.sh
+
+      - name: Sign and commit index
+        if: github.event_name == 'workflow_dispatch' && inputs.sign
+        env:
+          MS_SIGNING_KEY: ${{ secrets.MS_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MS_SIGNING_KEY:-}" ]; then
+            echo "ERROR: MS_SIGNING_KEY is not set — refusing to publish an unsigned index."
+            exit 1
+          fi
+
+          bash mac/bin/registry_sign.sh --sign
+
+          # Verify against the same public key the client carries, before the
+          # signature is committed. A signature that does not verify here would
+          # empty the library for every install on the next refresh.
+          #
+          # The key is read out of ms_registry.lua rather than kept alongside
+          # it: a rotation that updated a second copy and not the client would
+          # let CI bless an index no install can read. There is one copy, so
+          # there is nothing to drift. (*.pem is gitignored here anyway.)
+          sed -n '/PUBLIC_KEY = \[\[/,/^\]\]/p' mac/lib/ms_registry.lua \
+            | grep -E '^(-----|[A-Za-z0-9+/=]+$)' > /tmp/registry_pub.pem
+          openssl rsa -pubin -in /tmp/registry_pub.pem -noout \
+            || { echo "ERROR: could not extract PUBLIC_KEY from mac/lib/ms_registry.lua"; exit 1; }
+
+          jq -c -S '{formatVersion, generated, entries}' registry/index.json > /tmp/idx_msg.bin
+          jq -r '.signature' registry/index.json | base64 -d > /tmp/idx_sig.bin
+          openssl dgst -sha256 -verify /tmp/registry_pub.pem \
+            -signature /tmp/idx_sig.bin /tmp/idx_msg.bin
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add registry/index.json
+          N=$(jq '.entries | length' registry/index.json)
+          git commit -m "registry: sign index ($N $([ "$N" = 1 ] && echo entry || echo entries))" \
+            || { echo "Nothing to commit."; exit 0; }
+          git push

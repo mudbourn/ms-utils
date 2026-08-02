@@ -132,6 +132,15 @@ YQIDAQAB
                 return false
             end
 
+            -- `generated` must be present and non-empty in any document that
+            -- claims a signature. A nil here is dropped by hs.json.encode,
+            -- where the signer's `jq -c -S '{formatVersion, generated,
+            -- entries}'` writes an explicit null — two different byte
+            -- sequences over the same document, so the signature fails to
+            -- verify and the index is discarded whole. That reads as a bad
+            -- signature and sends you looking for a key problem that is not
+            -- there. bin/registry_sign.sh refuses to produce such a document;
+            -- this is the other half of that contract.
             local payload = {
                 formatVersion = doc.formatVersion,
                 generated     = doc.generated,

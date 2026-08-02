@@ -13,7 +13,12 @@ ignore/
 # macOS
 .DS_Store
 
-# Key files — never commit
+# Key files — never commit.
+# Deliberately blanket: this catches a stray private key before it is staged,
+# and the cost is that a *public* key file is swallowed just as silently.
+# Public keys therefore live in source, not in .pem files — PUBLIC_KEY in
+# lib/ms_registry.lua and lib/ms_guardian.lua is the only copy, and CI reads
+# it out of there. Add no exception here; add no second copy.
 *.pem
 
 # Compiled AHK binary — not tracked

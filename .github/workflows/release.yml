@@ -52,6 +52,14 @@ jobs:
           for f in data/ms_settings.json data/ms_settings_default.json; do
             [ -f "$f" ] && cp "$f" "$DIST/data/"
           done
+          # Bundled registry index: the fallback ms_registry.lua reads when
+          # there is no cache and the network is unavailable. Only the index
+          # travels — .mspkg binaries stay release assets and are fetched on
+          # demand. It carries its own signature, so a stale bundled copy is
+          # safe: the client verifies it exactly as it verifies a fetched one.
+          if [ -f "registry/index.json" ]; then
+            cp registry/index.json "$DIST/data/registry_index.json"
+          fi
           # Include default sounds so fresh installs have audio feedback.
           if [ -d "sounds" ]; then
             cp sounds/*.wav "$DIST/sounds/defaults/" 2>/dev/null || true
