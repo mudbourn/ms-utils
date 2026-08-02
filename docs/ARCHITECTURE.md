@@ -26,12 +26,23 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 │   ├── ms_core.lua             Main library. Protected by the Guardian.
 │   ├── ms_macros.lua           Macro pack — the file you edit.
 │   ├── lib/                    Extracted Lua modules (require'd by ms_core). Guardian-tracked.
-│   │   └── ms_compiler.lua     Visual Macro Compiler (JSON macro defs → sandbox Lua).
+│   │   ├── ms_guardian.lua     Pre-load tamper check. The one module ms_core does
+│   │   │                       NOT require: init.lua calls it, it hashes ms_core.lua
+│   │   │                       and only then dofile's it. Runs before `ms` exists.
+│   │   ├── ms_loading.lua      Boot loading screen (webview).
+│   │   ├── ms_devtools.lua     Logging, tracing and the dev panels.
+│   │   ├── ms_alert.lua        Toast notifications (ms.alert).
+│   │   ├── ms_settings.lua     Settings menu, profiles, integrity surface.
+│   │   ├── ms_ui.lua           Webview settings panel.
+│   │   ├── ms_shell.lua        Panel shell host.
+│   │   ├── ms_compiler.lua     Visual Macro Compiler (JSON macro defs → sandbox Lua).
+│   │   ├── ms_package.lua      Typed .mspkg format — pack, inspect, verify, install.
+│   │   └── ms_registry.lua     Signed package index client.
 │   ├── templates/
 │   │   └── ms_macros.lua       Barebones macro template for new packs.
-│   ├── Spoons/
-│   │   └── MsGuardian.spoon/
-│   │       └── init.lua        Pre-load tamper check. Hashes ms_core.lua before loading.
+│   ├── Spoons/                 Not shipped. Created in ~/.hammerspoon at install time
+│   │                           and reserved entirely for third-party plugins — nothing
+│   │                           first-party lives here.
 │   └── bin/
 │       ├── ms_guardian_agent.sh   OS-level Guardian — kills Hammerspoon on mismatch.
 │       ├── com.mudscript.guardian.plist  Launch Agent plist template.
@@ -88,6 +99,8 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 │   ├── ms_dev_logs/            Archived developer logs (auto-pruned to last 20).
 │   ├── .ms_trusted_hash        SHA-256 baseline for tamper detection.
 │   ├── .ms_file_manifest.json  Per-file manifest (Guardian hardening).
+│   ├── .ms_plugin_ledger.json  Plugins that passed the import gate — Guardian's
+│   │                           allowlist for Spoons/. Written by ms.package.install.
 │   └── guardian_agent.log      Guardian agent output log.
 │
 ├── profiles/                   Saved macro profiles — gitignored.
@@ -113,8 +126,11 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 
 ## Extracting a Lua module (`mac/lib/*.lua`)
 
-The lightweight alternative to authoring a full Spoon, for pure logic/codegen/helpers
-that have no `:start()` lifecycle. `ms_compiler.lua` is the reference example.
+How all first-party code is structured. mudscript ships no Spoons of its own — the
+former MsAlert, MsSettings, MsUI, MsDevTools and MsGuardian all live here, and
+`~/.hammerspoon/Spoons` is reserved for third-party plugins. `ms_compiler.lua` is the
+reference example for pure logic; `ms_ui.lua` is the reference for a module that keeps
+a `:start()` lifecycle (return the object, let `ms_core.lua` start it).
 
 **Recipe:**
 1. Create `mac/lib/ms_<name>.lua` that returns an initializer taking the shared table:
@@ -126,13 +142,18 @@ that have no `:start()` lifecycle. `ms_compiler.lua` is the reference example.
    The cache-clear makes a re-`dofile` (deploy + reload without a full Lua reset)
    pick up an edited module instead of the cached copy. Runtime deps on `ms.*`
    resolve at call time, so load order only needs `ms` to exist (it does, early).
-3. No stub-completeness rule (that's Spoons only) — nothing calls the module before
-   it's `require`d.
+3. If the module has a lifecycle, return its object and keep the stub-completeness
+   rule: `ms_core.lua`'s fallback branch must define every method the rest of core
+   calls, so a failed load degrades instead of crashing. `ms_devtools.lua` is the
+   strictest case — core calls it on nearly every macro path.
+4. `ms_guardian.lua` is the one exception to step 2: it runs *before* `ms_core.lua`
+   and is what `dofile`s it, so `mac/init.lua` requires it directly and it takes no
+   `ms` argument.
 
 **⚠️ Integrity is two-sided — update BOTH or a released build breaks:** the `mac/lib`
 tree is tamper-tracked exactly like `ms_core.lua`. Coverage is defined in
 `mac/guardian_patterns.json` (`include: "mac/lib/**/*.lua"`, CI-side, drives the
-signed per-file manifest) **and** `MsGuardian.spoon` `_trackedFiles()` (runtime walk
+signed per-file manifest) **and** `lib/ms_guardian.lua` `_trackedFiles()` (runtime walk
 of `~/.hammerspoon/lib/`). `mac/bin/deploy.sh` and the release workflow both copy the
 tree. Adding a new `lib/` file is covered automatically; adding a *new tracked
 directory* is the thing that needs both sides taught about it.
@@ -143,12 +164,13 @@ directory* is the thing that needs both sides taught about it.
 
 | Layer | macOS | Windows |
 |---|---|---|
-| **Load-time check** | `MsGuardian.spoon` hashes `ms_core.lua` at load. Mismatch → blocking dialog, nothing loads. | `init.ahk` hashes `ms_core_v2.ahk` at load. Mismatch → blocking WebView2 dialog, script exits. |
+| **Load-time check** | `lib/ms_guardian.lua` hashes `ms_core.lua` at load. Mismatch → blocking dialog, nothing loads. | `init.ahk` hashes `ms_core_v2.ahk` at load. Mismatch → blocking WebView2 dialog, script exits. |
 | **OS-level watcher** | Launch Agent watches `ms_core.lua`. Kills Hammerspoon independently. | Scheduled Task watches `ms_core_v2.ahk`. Kills AutoHotkey independently. |
 | **Stub lock** | `init.lua` — `chmod 444` makes silent edits observable. | `init.ahk` — `attrib +r` makes silent edits observable. |
 | **Signed MANIFEST** | GitHub Actions signs every release with RSA-2048. Invalid signature → hard abort. | Same key, separate `windows_*` fields in `MANIFEST.json`. |
 | **Macro sandbox** | `ms_macros.lua` runs in restricted env — no `hs`, `os`, `io`, shell, or `_G`. | `ms_macros.ahk` runs with no special restrictions (AHKv2 no sandbox). Audit scanner blocks dangerous patterns. |
 | **Per-file manifest** | Guardian verifies all shipped files (Lua, HTML, scripts) against signed manifest. | Same approach. |
+| **Added-file check** | Scoped to `Spoons/`, the only dir holding third-party code. Any `*.spoon` missing from `data/.ms_plugin_ledger.json`, or whose tree hash has drifted from its record, blocks startup. A missing ledger blocks too rather than seeding from disk — otherwise deleting one file would launder any plugin into a trusted state — so installs predating the check must re-import their plugins once. Every other check is an allowlist and cannot see added files; not widened further because a stray `.DS_Store` or `.bak` would then block boot. | None — no plugin surface. |
 
 ---
 

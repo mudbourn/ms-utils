@@ -1,3 +1,7 @@
+-- MsGuardian — pre-load integrity check. A lib module, but not one ms_core
+-- requires: mac/init.lua calls this, it verifies hashes, and only then does it
+-- dofile ms_core.lua. It runs before `ms` exists and is what loads core.
+return function()
 -- mudscript pre-load integrity check — see DOCS_MAC.md § 20 for the full security model.
 
 local _obj = {
@@ -309,6 +313,176 @@ YQIDAQAB
         return "ok"
     end
 
+    -- Added-file check, scoped to Spoons/ --
+    -- Every other check here is an allowlist: it hashes the files it expects
+    -- and says nothing about files it has never heard of. That is fine for the
+    -- dirs mudscript itself ships, because deploy replaces those wholesale and
+    -- a stray there is inert. Spoons/ is the exception — it is the one dir
+    -- whose contents are third-party code that Hammerspoon will happily load,
+    -- so an *added* .spoon is the entire threat, and no hash of known files
+    -- will ever see it.
+    --
+    -- Deliberately not widened to all tracked dirs: a .DS_Store or an editor
+    -- .bak would then hard-block boot, and a Guardian that cries wolf over
+    -- Finder detritus is a Guardian people switch off.
+    local _ledgerPath = _dataPath .. ".ms_plugin_ledger.json"
+    local _spoonsDir  = _home .. "/.hammerspoon/Spoons"
+
+    -- Deterministic hash of a .spoon tree: every file's hash, path-sorted, so
+    -- the digest is stable across machines and insensitive to readdir order.
+    local function _hashSpoonTree(absDir)
+        local out, ok = hs.execute(
+            "cd '" .. absDir .. "' && find . -type f ! -name '.DS_Store' " ..
+            "-exec shasum -a 256 {} + 2>/dev/null | sort -k2 | shasum -a 256"
+        )
+        if not ok or not out then return nil end
+        return out:match("^(%x+)")
+    end
+
+    -- Installed .spoon bundles, by directory name. Dotfiles and loose files
+    -- are skipped: only a `*.spoon` directory is something Hammerspoon loads,
+    -- and narrowing the candidate set here is what keeps strays from blocking.
+    local function _installedSpoons()
+        local found = {}
+        if not hs.fs.attributes(_spoonsDir) then return found end
+        for name in hs.fs.dir(_spoonsDir) do
+            if name:sub(1, 1) ~= "." and name:match("%.spoon$") then
+                local abs = _spoonsDir .. "/" .. name
+                local attr = hs.fs.attributes(abs)
+                if attr and attr.mode == "directory" then
+                    found[name] = _hashSpoonTree(abs)
+                end
+            end
+        end
+        return found
+    end
+
+    local function _readLedger()
+        local f = io.open(_ledgerPath, "r")
+        if not f then return nil end
+        local raw = f:read("*all"); f:close()
+        if not raw or raw == "" then return nil end
+        local ok, tbl = pcall(hs.json.decode, raw)
+        if ok and type(tbl) == "table" and type(tbl.plugins) == "table" then
+            return tbl
+        end
+        return nil
+    end
+
+    local function _writeLedger(tbl)
+        local ok, json = pcall(hs.json.encode, tbl)
+        if not ok then return false end
+        local f = io.open(_ledgerPath, "w")
+        if not f then return false end
+        f:write(json .. "\n"); f:close()
+        return true
+    end
+
+    -- Returns 'ok', or 'unknown'/'noledger' + spoon name.
+    --
+    -- The ledger is written by ms.package.install when a plugin passes the
+    -- trust gate, so "in the ledger" means "arrived through the front door".
+    --
+    -- A missing ledger with plugins on disk blocks. It deliberately does not
+    -- seed from what is already installed: that would make deleting one file
+    -- the way to launder any .spoon into a trusted state, which is exactly the
+    -- hole the trusted-hash manifest has and not one worth reproducing. The
+    -- cost is that installs predating this check must re-import their plugins
+    -- once — a real cost, paid once, in exchange for the check meaning
+    -- something. With no plugins installed there is nothing to vouch for, so
+    -- an empty ledger is written and boot continues.
+    local function _checkSpoons()
+        local installed = _installedSpoons()
+        local ledger    = _readLedger()
+
+        if not ledger then
+            local first = nil
+            for name in pairs(installed) do
+                if not first or name < first then first = name end
+            end
+            if first then return "noledger", first end
+
+            _writeLedger({
+                version   = 1,
+                createdAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+                plugins   = {},
+            })
+            return "ok"
+        end
+
+        for name, hash in pairs(installed) do
+            local rec = ledger.plugins[name]
+            if type(rec) ~= "table" or type(rec.hash) ~= "string" then
+                return "unknown", name
+            end
+            -- A tree that no longer hashes to its record was edited in place:
+            -- same front door, different code, so it gets the same answer.
+            if hash and hash:lower() ~= rec.hash:lower() then
+                return "unknown", name
+            end
+        end
+
+        return "ok"
+    end
+
+    -- The failure spec handed to the block screen for an unrecognized plugin.
+    -- Deliberately not the integrity spec: Update & Repair re-downloads the
+    -- signed bundle and Delete Hash clears the core baseline, and neither has
+    -- anything to say about a Spoon that simply should not be there.
+    local function _unknownSpoonSpec(name)
+        return {
+            titlebar = "mudscript: Unrecognized Plugin",
+            height   = 430,
+            title    = "Unrecognized plugin",
+            lead     = "A plugin in Spoons/ was not installed through mudscript, "
+                    .. "or has changed since it was. Because of this, mudscript did "
+                    .. "not load, so no macros or key bindings are active.",
+            rows     = {
+                { label = "Plugin", value = "Spoons/" .. tostring(name) },
+            },
+            warning  = {
+                "Plugins run as code, so an unrecognized one blocks startup "
+                .. "instead of loading unchecked.",
+                "If you added it yourself, re-import it through the plugin "
+                .. "library. Otherwise remove it from ~/.hammerspoon/Spoons/ "
+                .. "and reload.",
+            },
+            actions  = {
+                { label = "Reveal in Finder", action = "revealSpoons", style = "accent" },
+                { label = "Keep Blocked",     action = "keepBlocked" },
+            },
+        }
+    end
+
+    -- Plugins on disk but no ledger at all. Distinct copy from the above: the
+    -- likeliest cause is an install that predates the ledger, not tampering,
+    -- and telling someone their own plugin is "unrecognized" when the real
+    -- answer is "re-import it once" sends them looking for the wrong problem.
+    local function _noLedgerSpec(name)
+        return {
+            titlebar = "mudscript: Plugins Not Verified",
+            height   = 430,
+            title    = "No plugin record",
+            lead     = "Plugins are installed, but mudscript has no record of "
+                    .. "where they came from. Because of this, mudscript did not load, "
+                    .. "so no macros or key bindings are active.",
+            rows     = {
+                { label = "Found", value = "Spoons/" .. tostring(name) },
+            },
+            warning  = {
+                "Expected once, on an install that predates plugin verification. "
+                .. "Re-import each plugin through the library to record it.",
+                "The record is not rebuilt from disk on purpose: if it were, "
+                .. "deleting one file would make any plugin look trusted.",
+            },
+            actions  = {
+                { label = "Reveal in Finder", action = "revealSpoons", style = "accent" },
+                { label = "Keep Blocked",     action = "keepBlocked" },
+            },
+        }
+    end
+    -- END Added-file check --
+
     -- Update & Repair pipeline — downloads latest signed bundle, verifies, applies, reloads.
     -- Runs with no ms.* namespace; uses only raw hs.* and existing guardian helpers.
     local function _repairViaUpdate(onProgress, onDone)
@@ -404,7 +578,10 @@ YQIDAQAB
 
                 local hsDir = _home .. "/.hammerspoon/"
                 local timestamp = os.date("%Y-%m-%d_%H%M")
-                local replaceList = { "ms_core.lua", "init.lua", "ui", "bin", "Spoons" }
+                -- lib/ was missing here: every extracted module, Guardian
+                -- included, lives there now, so an update that skipped it left
+                -- the install half-old with no sign anything had gone wrong.
+                local replaceList = { "ms_core.lua", "init.lua", "ui", "bin", "lib", "Spoons" }
                 local templateList = { "ms_macros.lua", "profiles/Default" }
 
                 os.execute("mkdir -p '" .. _archivePath .. "'")
@@ -475,7 +652,11 @@ YQIDAQAB
 
     -- Show the Guardian blocking UI (webview or dialog fallback).
     -- Called when integrity check fails and we need to block loading.
-    local function _showGuardianBlock(expectedHash, currentHash)
+    -- `spec`, when given, retitles the screen and replaces its detail rows,
+    -- warning copy and buttons — the same window, told what it is showing.
+    -- Omitted, it stays the integrity screen it has always been, driven by the
+    -- two hashes.
+    local function _showGuardianBlock(expectedHash, currentHash, spec)
         -- Read settings to gate custom theming (default: disabled if file missing/corrupt)
         local _customThemeDisabled = true
         pcall(function()
@@ -514,6 +695,9 @@ YQIDAQAB
 
             elseif body == "keepBlocked" then
                 pcall(function() if _guardianView then _guardianView:delete() end end)
+
+            elseif body == "revealSpoons" then
+                hs.execute("/usr/bin/open '" .. _spoonsDir .. "'")
 
             else
                 local ok, data = pcall(hs.json.decode, body) -- JSON move delta from the drag handler
@@ -554,7 +738,11 @@ YQIDAQAB
         local _ok, _screen = pcall(function() return hs.screen.mainScreen():frame() end)
 
         if _ok and _screen then
-            local _gw, _gh = 480, 360 -- 4:3
+            -- 480x360 (4:3) is what the integrity screen was built around. A
+            -- spec carrying more copy than that holds says so rather than
+            -- having its last line clipped: #warning scrolls, but a warning
+            -- you have to scroll to finish is one people stop reading.
+            local _gw, _gh = 480, (spec and spec.height) or 360
 
             local _gx = _screen.x + math.floor((_screen.w - _gw) / 2)
             local _gy = _screen.y + math.floor((_screen.h - _gh) / 2)
@@ -610,12 +798,18 @@ YQIDAQAB
 
                 _guardianView:navigationCallback(function(action)
                     pcall(function()
-                        local _t = (expectedHash or "unknown"):sub(1, 16) .. "\xe2\x80\xa6"
-                        local _c = (currentHash or "unknown"):sub(1, 16)  .. "\xe2\x80\xa6"
+                        if spec then
+                            _guardianView:evaluateJavaScript(
+                                "setFailure(" .. hs.json.encode(spec) .. ")"
+                            )
+                        else
+                            local _t = (expectedHash or "unknown"):sub(1, 16) .. "\xe2\x80\xa6"
+                            local _c = (currentHash or "unknown"):sub(1, 16)  .. "\xe2\x80\xa6"
 
-                        _guardianView:evaluateJavaScript(
-                            "setHashes('" .. _t .. "', '" .. _c .. "')"
-                        )
+                            _guardianView:evaluateJavaScript(
+                                "setHashes('" .. _t .. "', '" .. _c .. "')"
+                            )
+                        end
 
                         if _guardianTheme then
                             local _tj = hs.json.encode(_guardianTheme)
@@ -646,7 +840,7 @@ YQIDAQAB
                 hs.focus()
 
                 local _choice = hs.dialog.blockAlert(
-                    "\u{26a0} Integrity Error \u{2014} mudscript Did Not Load",
+                    "\u{26a0} Integrity Error: mudscript Did Not Load",
                     "File hash mismatch detected. Delete trusted manifest and reload?",
                     "Keep Blocked",
                     "Delete Manifest & Reload"
@@ -662,7 +856,7 @@ YQIDAQAB
             hs.focus()
 
             local _choice = hs.dialog.blockAlert(
-                "\u{26a0} Integrity Error \u{2014} mudscript Did Not Load",
+                "\u{26a0} Integrity Error: mudscript Did Not Load",
                 "File hash mismatch detected. Delete trusted manifest and reload?",
                 "Keep Blocked",
                 "Delete Manifest & Reload"
@@ -790,6 +984,23 @@ YQIDAQAB
             print("Guardian: per-file hash mismatch for " .. (_fmFailedFile or "unknown") .. " — blocking.")
         end
     end
+
+    -- Spoons/ is checked independently of the file manifests above: those
+    -- cover the files mudscript ships, and by design no longer include any
+    -- Spoon at all, so a clean 'ok' from them says nothing about what is
+    -- sitting in the plugin dir.
+    if not _blocked then
+        local _spResult, _spName = _checkSpoons()
+        if _spResult == "noledger" then
+            _blocked = true
+            _showGuardianBlock(nil, nil, _noLedgerSpec(_spName))
+            print("Guardian: plugins installed but no plugin ledger — blocking. Re-import them to record.")
+        elseif _spResult == "unknown" then
+            _blocked = true
+            _showGuardianBlock(nil, nil, _unknownSpoonSpec(_spName))
+            print("Guardian: unrecognized plugin Spoons/" .. tostring(_spName) .. " — blocking.")
+        end
+    end
 -- END Integrity Check --
 
 -- Set guardian tether flag — all spoons check for this
@@ -804,3 +1015,4 @@ YQIDAQAB
 -- END Load Core --
 
 return _obj
+end

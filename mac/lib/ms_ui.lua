@@ -1,3 +1,5 @@
+-- MsUI — converted from a Spoon; Spoons/ is reserved for plugins.
+return function(ms)
 -- MsUI --
     local MsUI = {}
 
@@ -1340,8 +1342,12 @@
 
                 local result, err = ms.package.install(path)
                 -- An unsigned package is the normal case until the validated
-                -- library lands; confirm rather than refuse.
-                if not result and tostring(err):find("validated library") then
+                -- library lands; confirm rather than refuse. Plugins are the
+                -- exception — they run as code, so install refuses them
+                -- outright and there is no prompt to offer.
+                local _peek = ms.package.inspect(path)
+                local _isPlugin = type(_peek) == "table" and _peek.type == "plugin"
+                if not result and not _isPlugin and tostring(err):find("validated library") then
                     local answer = hs.dialog.blockAlert(
                         "This package is not in the validated library.",
                         "Import " .. path:match("([^/]+)$") .. " anyway?",
@@ -2115,3 +2121,5 @@
 -- END Webview Panel --
 
 return MsUI
+
+end

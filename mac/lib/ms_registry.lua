@@ -40,7 +40,7 @@ return function(ms)
     local CACHE_TTL      = 6 * 60 * 60   -- seconds before refresh() refetches
 
     -- RSA-2048 public key for index signature verification.
-    -- Must match _publicKey in MsGuardian.spoon and ms._updatePublicKey.
+    -- Must match _publicKey in lib/ms_guardian.lua and ms._updatePublicKey.
     local PUBLIC_KEY = [[
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pyxWISHUScKsmK0fyqA

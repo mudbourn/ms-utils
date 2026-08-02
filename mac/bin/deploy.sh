@@ -16,6 +16,14 @@ touch "$SENTINEL"
 # Copy core file.
 cp "$REPO/mac/ms_core.lua" "$HS/ms_core.lua"
 
+# Copy the bootstrap stub. install.sh locks it 444, so unlock, copy, relock.
+# Deploy used to skip it entirely: bootstrap changes (e.g. loadSpoon -> require)
+# only landed on a fresh install, and a deploy left the stub pointing at files
+# this script had just removed.
+chmod u+w "$HS/init.lua" 2>/dev/null || true
+cp "$REPO/mac/init.lua" "$HS/init.lua"
+chmod 444 "$HS/init.lua"
+
 # Copy all UI HTML files.
 mkdir -p "$HS/ui"
 for f in "$REPO/ui/"*.html; do
@@ -51,12 +59,15 @@ if [ -d "$REPO/mac/lib" ]; then
     cp -R "$REPO/mac/lib/"* "$HS/lib/" 2>/dev/null || true
 fi
 
-# Copy all spoons (rm first — cp -R into existing dir nests instead of overwriting).
-for spoon in "$REPO/mac/Spoons/"*.spoon; do
-    dest="$HS/Spoons/$(basename "$spoon")"
-    rm -rf "$dest"
-    cp -R "$spoon" "$dest" 2>/dev/null || true
-done
+# mudscript no longer ships any Spoon — everything first-party is a lib module,
+# and ~/.hammerspoon/Spoons is now purely the installed-plugin directory. Sweep
+# out the spoons we used to ship so they stop hashing into Guardian's view of
+# the install. Scoped to Ms*.spoon: anything else there is user content.
+if [ -d "$HS/Spoons" ]; then
+    for dest in "$HS/Spoons/"Ms*.spoon; do
+        [ -e "$dest" ] && rm -rf "$dest"
+    done
+fi
 
 # Copy guardian agent script.
 cp "$REPO/mac/bin/ms_guardian_agent.sh" "$HS/bin/ms_guardian_agent.sh" 2>/dev/null || true

@@ -10,7 +10,7 @@
 --   macro    ms_macros.lua and/or ms_macros_visual.json, plus sounds/macro/
 --   theme    ms_theme.json, plus ui/fonts/
 --   sound    sounds/active/ and sounds/Default/, plus the slot assignment map
---   plugin   plugin.json plus the plugin's own lib/ Lua modules
+--   plugin   a Spoon under Spoons/<Name>.spoon/ — the third-party surface
 --   profile  the whole set — macros, settings, theme and sounds together
 --
 -- `profile` is the legacy monolithic shape: an archive with no manifest is read
@@ -126,10 +126,15 @@ return function(ms)
                 paths    = { "sounds/active/", "sounds/Default/", "sound_assign.json" },
                 required = { "sounds/active/", "sounds/Default/" },
             },
+            -- Spoons/ is the third-party surface: lib/ is first-party only, so
+            -- a plugin can no longer land beside core modules. Everything is
+            -- nested under Spoons/<Name>.spoon/ rather than sitting at the
+            -- install root — a flat plugin.json would mean the second plugin
+            -- installed overwrites the first one's manifest.
             plugin = {
                 label    = "Plugin",
-                paths    = { "plugin.json", "lib/" },
-                required = { "plugin.json" },
+                paths    = { "Spoons/" },
+                required = { "Spoons/" },
             },
             -- No sounds/ here. Audio travels with the theme; a profile that
             -- also carried it would give two types a claim on the same files
@@ -147,6 +152,63 @@ return function(ms)
         ms.package.TYPES = { "macro", "theme", "sound", "plugin", "profile" }
 
         ms.package.spec = function(kind) return TYPE_SPECS[kind] end
+
+        -- A verify report's declared type, or nil. A legacy archive has no
+        -- declared type and can never be a plugin, so it reads as nil here.
+        local function manifestType(report)
+            local m = type(report) == "table" and report.manifest
+            if type(m) ~= "table" or m.legacy then return nil end
+            return m.type
+        end
+
+        -- The single seam the "disable security protections" control wires
+        -- into. Defaults closed: with nothing wired up, no unvalidated plugin
+        -- can install. Anything replacing this must be sticky and visible —
+        -- a per-import prompt is exactly what this exists to prevent.
+        ms.package.protectionDisabled = function() return false end
+
+        -- Guardian's plugin ledger. Guardian reads this before ms exists, so
+        -- the two sides share only a file format and a hash recipe — keep
+        -- _hashSpoonTree in ms_guardian.lua byte-identical to spoonTreeHash
+        -- here or every install will read as tampered on the next boot.
+        local _ledgerPath = _dataDir .. "/.ms_plugin_ledger.json"
+
+        local function spoonTreeHash(absDir)
+            local out, ok = hs.execute(
+                "cd " .. sq(absDir) .. " && find . -type f ! -name '.DS_Store' " ..
+                "-exec shasum -a 256 {} + 2>/dev/null | sort -k2 | shasum -a 256"
+            )
+            if not ok or not out then return nil end
+            return out:match("^(%x+)")
+        end
+
+        ms.package.recordPlugins = function(names, manifest)
+            local ledger
+            local raw = readFile(_ledgerPath)
+            if raw then
+                local ok, tbl = pcall(hs.json.decode, raw)
+                if ok and type(tbl) == "table" and type(tbl.plugins) == "table" then
+                    ledger = tbl
+                end
+            end
+            ledger = ledger or { version = 1, plugins = {} }
+
+            for name in pairs(names) do
+                local hash = spoonTreeHash(_hsDir .. "/Spoons/" .. name)
+                if hash then
+                    ledger.plugins[name] = {
+                        hash        = hash,
+                        id          = manifest and manifest.id or nil,
+                        version     = manifest and manifest.version or nil,
+                        installedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+                    }
+                end
+            end
+
+            local ok, json = pcall(hs.json.encode, ledger)
+            if not ok then return false end
+            return writeFile(_ledgerPath, json .. "\n")
+        end
 
         -- True when `rel` sits under one of the type's allowed prefixes.
         local function pathAllowed(kind, rel)
@@ -474,7 +536,21 @@ return function(ms)
             if not report.ok then
                 return nil, table.concat(report.issues, "\n")
             end
-            if report.trust == "unsigned" and not opts.force then
+
+            -- Plugins are inside the trust boundary and `force` does not reach
+            -- them. Every other type is data the app interprets; a plugin is
+            -- code that runs with the app's own privileges, so "import anyway"
+            -- — one confirmation dialog — is far too cheap a bypass. The only
+            -- way to run an unvalidated plugin is to turn protection off
+            -- wholesale, which is a deliberate, visible, sticky act.
+            if manifestType(report) == "plugin" and report.trust ~= "trusted" then
+                if not ms.package.protectionDisabled() then
+                    return nil,
+                        "This plugin is not in the validated library.\n" ..
+                        "Plugins run as code, so they cannot be imported one-off. " ..
+                        "Disable security protections entirely to run unvalidated plugins."
+                end
+            elseif report.trust == "unsigned" and not opts.force then
                 return nil, "Package is not in the validated library. Import anyway to continue."
             end
 
@@ -548,6 +624,22 @@ return function(ms)
                     end
                     os.remove(dropped)
                     break
+                end
+            end
+
+            -- Record the plugin in Guardian's ledger. Guardian blocks boot on
+            -- any Spoons/ entry it has no record of, and this write is the
+            -- only thing that creates one — which is the point: passing the
+            -- trust gate above is what earns a Spoon the right to load, and a
+            -- .spoon hand-dropped into the dir never gets here.
+            if manifest.type == "plugin" then
+                local names = {}
+                for _, rel in ipairs(installed) do
+                    local spoon = rel:match("^Spoons/([^/]+%.spoon)")
+                    if spoon then names[spoon] = true end
+                end
+                if next(names) then
+                    pcall(function() ms.package.recordPlugins(names, manifest) end)
                 end
             end
 

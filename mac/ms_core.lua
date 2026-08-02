@@ -39,7 +39,7 @@
                 require("lib.ms_loading")(ms)
             -- END Loading Screen --
 
-            -- Guardian (moved to MsGuardian.spoon) --
+            -- Guardian (lives in lib/ms_guardian.lua; runs before this file) --
             -- END Guardian --
 
             -- One-time migration (move settings/hash to data/) --
@@ -95,11 +95,15 @@
 
             -- MsGuardian (integrity check) --
                 ms.loading.update(3, "Configuring Guardian\u{2026}")
-                pcall(function() hs.loadSpoon("MsGuardian"); spoon.MsGuardian:check() end)
-                -- Guardian tether: all spoons check this flag
+                -- Guardian has already run: mac/init.lua loads it, it verifies
+                -- hashes, sets _guardianPassed and only then dofile's this file.
+                -- There is nothing to invoke here — the old call was to a
+                -- :check() method MsGuardian never defined, swallowed by pcall,
+                -- and its hs.loadSpoon re-entered the module that loads core.
+                -- Guardian tether: every module checks this flag
                 ms.checkGuardian = function(name)
                     if _G._guardianPassed then return true end
-                    print("INTEGRITY ERROR: " .. (name or "spoon") .. " halted — Guardian did not pass.")
+                    print("INTEGRITY ERROR: " .. (name or "module") .. " halted — Guardian did not pass.")
                     ms.alert("\u{26a0} Integrity Error\n" .. (name or "Module") .. " refused to start.\nGuardian check did not pass.", 10)
                     return false
                 end
@@ -162,16 +166,18 @@
             -- MsDevTools (logging & dev panels) --
                 ms.loading.update(6, "Configuring Dev Tools\u{2026}")
                 local _msDevOk, _msDevErr = pcall(function()
-                    hs.loadSpoon("MsDevTools")
-                    spoon.MsDevTools:init()
+                    package.loaded["lib.ms_devtools"] = nil
+                    ms.devtools = require("lib.ms_devtools")(ms)
+                    ms.devtools:init()
                 end)
 
                 if not _msDevOk then
                     print("MsDevTools: load failed — " .. tostring(_msDevErr))
+                    ms.devtools = nil
                 end
 
-                if spoon.MsDevTools then
-                    spoon.MsDevTools:start()
+                if ms.devtools then
+                    ms.devtools:start()
                 else
                     ms.dev = {
                         _consolePanel    = nil,
@@ -208,7 +214,7 @@
                     ms.dev.step        = function() end
                     ms.dev._pushMouseState = function() end
 
-                    spoon.MsDevTools = {
+                    ms.devtools = {
                         flushAll         = function() end,
                         flushCam         = function() end,
                         flushWait        = function() end,
@@ -227,22 +233,24 @@
                         restartPollersIfActive = function() end,
                     }
 
-                    print("MsDevTools: running without dev panels (spoon not loaded)")
+                    print("MsDevTools: running without dev panels (module not loaded)")
                 end
             -- END MsDevTools (logging & dev panels) --
 
             -- MsAlert (toast notifications) --
                 ms.loading.update(9, "Configuring Alerts\u{2026}")
+                local _msAlert
                 local _msAlertOk, _msAlertErr = pcall(function()
-                    hs.loadSpoon("MsAlert")
+                    package.loaded["lib.ms_alert"] = nil
+                    _msAlert = require("lib.ms_alert")(ms)
                 end)
 
                 if not _msAlertOk then
                     print("MsAlert: load failed — " .. tostring(_msAlertErr))
                 end
 
-                if spoon.MsAlert then
-                    ms.alert = spoon.MsAlert
+                if _msAlert then
+                    ms.alert = _msAlert
                 else
                     ms.alert = setmetatable({
                         dismissAll   = function() end,
@@ -251,7 +259,7 @@
                         __call = function(_, msg) print("MsAlert stub: " .. tostring(msg)) end,
                     })
 
-                    print("MsAlert: running without toast system (spoon not loaded)")
+                    print("MsAlert: running without toast system (module not loaded)")
                 end
             -- END MsAlert (toast notifications) --
 
@@ -259,20 +267,22 @@
 
             -- MsSettings (settings menu & profiles) --
                 ms.loading.update(15, "Configuring Settings\u{2026}")
+                local _msSettings
                 local _msSettingsOk, _msSettingsErr = pcall(function()
-                    hs.loadSpoon("MsSettings")
+                    package.loaded["lib.ms_settings"] = nil
+                    _msSettings = require("lib.ms_settings")(ms)
                 end)
 
                 if not _msSettingsOk then
                     print("MsSettings: load failed — " .. tostring(_msSettingsErr))
                 end
 
-                if spoon.MsSettings then
+                if _msSettings then
                     ms.settings = ms.settings or {}
                     ms.menu     = ms.menu or {}
                     ms.features = ms.features or {}
                     ms.tools    = ms.tools or {}
-                    spoon.MsSettings:start()
+                    _msSettings:start()
                 else
                     ms.settings = ms.settings or {}
                     ms.menu     = ms.menu or {}
@@ -326,22 +336,24 @@
 
                     ms._menubar = nil
 
-                    print("MsSettings: running without settings menu (spoon not loaded)")
+                    print("MsSettings: running without settings menu (module not loaded)")
                 end
             -- END MsSettings (settings menu & profiles) --
 
             -- MsUI (webview settings panel) --
                 ms.loading.update(18, "Configuring UI\u{2026}")
+                local _msUI
                 local _msUIOk, _msUIErr = pcall(function()
-                    hs.loadSpoon("MsUI")
+                    package.loaded["lib.ms_ui"] = nil
+                    _msUI = require("lib.ms_ui")(ms)
                 end)
 
                 if not _msUIOk then
                     print("MsUI: load failed — " .. tostring(_msUIErr))
                 end
 
-                if spoon.MsUI then
-                    spoon.MsUI:start()
+                if _msUI then
+                    _msUI:start()
                 else
                     ms.ui = {
                         _panel     = nil,
@@ -369,7 +381,7 @@
                         resize       = function() end,
                     }
 
-                    print("MsUI: running without webview panel (spoon not loaded)")
+                    print("MsUI: running without webview panel (module not loaded)")
                 end
             -- END MsUI (webview settings panel) --
         -- END 0. Bootstrap & Spoons --
@@ -815,11 +827,11 @@
 
             -- Key logging: immediate, one line each (bunching removed).
             local function _keyLog(msg)
-                if ms.dev and spoon.MsDevTools then
+                if ms.dev and ms.devtools then
                     local label = ms._getCallChain()
-                    spoon.MsDevTools:macroLog(msg, label)
+                    ms.devtools:macroLog(msg, label)
                     if ms.dev._watcherPanel then
-                        spoon.MsDevTools:watcherStep(msg, label)
+                        ms.devtools:watcherStep(msg, label)
                     end
                 end
             end
@@ -827,7 +839,7 @@
             -- END Key logging --
 
                 ms.press = function(key, mods, hidinject)
-                    if ms.dev then spoon.MsDevTools:flushAll(); _keyFlush() end
+                    if ms.dev then ms.devtools:flushAll(); _keyFlush() end
                     local keyCode = getCode(key)
                     if not keyCode then
                         print("Error: Could not find keyCode for " .. tostring(key))
@@ -838,7 +850,7 @@
                     local alreadyHeld = ms._macroHeldKeys[keyCode]
                     if not alreadyHeld then
                         ms._keyHoldStarts[keyCode] = hs.timer.absoluteTime()
-                        if ms.dev and not spoon.MsDevTools:getTraceSuppress() then
+                        if ms.dev and not ms.devtools:getTraceSuppress() then
                             local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                             local msg = "↓ " .. tostring(key) .. modsStr
                             _keyLog(msg)
@@ -855,7 +867,7 @@
                 end
 
                 ms.release = function(key, mods, hidinject)
-                    if ms.dev then spoon.MsDevTools:flushAll(); _keyFlush() end
+                    if ms.dev then ms.devtools:flushAll(); _keyFlush() end
                     local keyCode = getCode(key)
                     if not keyCode then return end
                     -- Calculate hold duration
@@ -872,7 +884,7 @@
                         end
                         ms._keyHoldStarts[keyCode] = nil
                     end
-                    if ms.dev and not spoon.MsDevTools:getTraceSuppress() then
+                    if ms.dev and not ms.devtools:getTraceSuppress() then
                         local msg = "↑ " .. tostring(key) .. durationStr
                         _keyLog(msg)
                     end
@@ -887,19 +899,19 @@
                 end
 
                 ms.type = function(key, mods, hidinject, holdMs)
-                    if ms.dev then spoon.MsDevTools:flushAll(); _keyFlush() end
+                    if ms.dev then ms.devtools:flushAll(); _keyFlush() end
                     local _hold = holdMs or 15
                     if ms.dev then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
                         local msg = "type " .. tostring(key) .. modsStr .. " (" .. _hold .. "ms)"
                         _keyLog(msg)
                     end
-                    local _saved = spoon.MsDevTools:getTraceSuppress()
-                    spoon.MsDevTools:setTraceSuppress(true)
+                    local _saved = ms.devtools:getTraceSuppress()
+                    ms.devtools:setTraceSuppress(true)
                     ms.press(key, mods, hidinject)
                     ms.wait(_hold)
                     ms.release(key, mods, hidinject)
-                    spoon.MsDevTools:setTraceSuppress(_saved)  -- restore rather than reset; safe across cancellation
+                    ms.devtools:setTraceSuppress(_saved)  -- restore rather than reset; safe across cancellation
                 end
 
                 ms.key = function(mods, key, swallow, pressFn, releaseFn, isSystem)
@@ -951,9 +963,9 @@
         -- 4. Mouse Actions --
             ms.scroll = function(direction, clicks)
                 if ms.dev._watcherPanel then
-                    spoon.MsDevTools:flushCam()
+                    ms.devtools:flushCam()
                     _keyFlush()
-                    spoon.MsDevTools:watcherStep("scroll " .. tostring(direction)
+                    ms.devtools:watcherStep("scroll " .. tostring(direction)
                         .. (clicks and clicks > 1 and " \xc3\x97" .. clicks or ""))
                 end
                 clicks = clicks or 1
@@ -1083,7 +1095,7 @@
                     if ev.e == "connect" then
                         ms._gamepadConnected = true
                         if ms.dev and ms.dev._watcherPanel then
-                            spoon.MsDevTools:watcherStep("gamepad connected: " .. (ev.c or "?"))
+                            ms.devtools:watcherStep("gamepad connected: " .. (ev.c or "?"))
                         end
                     elseif ev.e == "disconnect" then
                         ms._gamepadConnected = false
@@ -1141,7 +1153,7 @@
                     ScreenTL=true,   ScreenTR=true,  ScreenBL=true,
                     ScreenBR=true,   ScreenCenter=true,
                 }
-                if ms.dev then spoon.MsDevTools:flushAll() end
+                if ms.dev then ms.devtools:flushAll() end
                 assert(OPS[operation],     "ms.Mouse: unknown operation '"  .. tostring(operation)  .. "'")
                 assert(BTNS[button] ~= nil, "ms.Mouse: unknown button '"      .. tostring(button)     .. "'")
                 assert(REFS[reference],    "ms.Mouse: unknown reference '"   .. tostring(reference)  .. "'")
@@ -1163,10 +1175,10 @@
                     if x2 then parts[#parts + 1] = " → " .. tostring(x2) .. "," .. tostring(y2) end
                     local msg = table.concat(parts)
                     if ms.dev and ms.dev._watcherPanel then
-                        spoon.MsDevTools:watcherStep(msg)
+                        ms.devtools:watcherStep(msg)
                     end
                     if ms.dev then
-                        spoon.MsDevTools:macroLog(msg)
+                        ms.devtools:macroLog(msg)
                     end
                 end
 
@@ -1344,13 +1356,13 @@
                 dx = math.floor(dx + 0.5)
                 dy = math.floor(dy + 0.5)
                 -- Suppress internal wait logging
-                local saved = ms.dev and spoon.MsDevTools and spoon.MsDevTools:getTraceSuppress()
-                if saved ~= nil then spoon.MsDevTools:setTraceSuppress(true) end
+                local saved = ms.dev and ms.devtools and ms.devtools:getTraceSuppress()
+                if saved ~= nil then ms.devtools:setTraceSuppress(true) end
                 _origCamCall(self, dx, dy)
-                if saved ~= nil then spoon.MsDevTools:setTraceSuppress(saved) end
+                if saved ~= nil then ms.devtools:setTraceSuppress(saved) end
                 -- Accumulate (flushes on value change or before scroll/wait)
-                if ms.dev and spoon.MsDevTools then
-                    spoon.MsDevTools:accCamMove(dx, dy, ms._getCallChain())
+                if ms.dev and ms.devtools then
+                    ms.devtools:accCamMove(dx, dy, ms._getCallChain())
                 end
             end
 
@@ -1469,13 +1481,13 @@
                 local co = coroutine.running()
                 if co then
                     local ctx = ms._coroContext[co]
-                    if ms.dev and not spoon.MsDevTools:getTraceSuppress() then
-                        spoon.MsDevTools:flushCam()
+                    if ms.dev and not ms.devtools:getTraceSuppress() then
+                        ms.devtools:flushCam()
                         _keyFlush()
                     end
 
                     if ms.dev then
-                        spoon.MsDevTools:accWait(tonumber(ms_time) or 0, ms._getCallChain())
+                        ms.devtools:accWait(tonumber(ms_time) or 0, ms._getCallChain())
                     end
                     hs.timer.doAfter(ms_time / 1000, function()
                         if ctx and (ctx.cancelled or ctx.paused) then return end
@@ -1486,14 +1498,14 @@
                         if coroutine.status(co) == "dead" then
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
-                            if ms.dev then spoon.MsDevTools:stopTrace(co) end
+                            if ms.dev then ms.devtools:stopTrace(co) end
                             if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
                             _keyFlush()
                             local flushLabel = ctx and ctx.callStack and ctx.callStack[1]
-                            if ms.dev then spoon.MsDevTools:flushAll(flushLabel) end
+                            if ms.dev then ms.devtools:flushAll(flushLabel) end
                         end
                     end)
-                    if ms._branchTrace then spoon.MsDevTools:flushTraceBuffer(co) end
+                    if ms._branchTrace then ms.devtools:flushTraceBuffer(co) end
                     coroutine.yield()
                 else
                     hs.timer.usleep(ms_time * 1000)
@@ -1704,8 +1716,8 @@
                     pcall(ms.dev.log.pauseAll)
                 end
                 -- Stop all idle pollers (mouse, shell mouse, window spy)
-                if spoon.MsDevTools and spoon.MsDevTools.stopAllPollers then
-                    pcall(function() spoon.MsDevTools:stopAllPollers() end)
+                if ms.devtools and ms.devtools.stopAllPollers then
+                    pcall(function() ms.devtools:stopAllPollers() end)
                 end
                 -- Stop menu hover watcher entirely under octane
                 if ms._menuHoverWatcher then
@@ -1713,8 +1725,8 @@
                     ms._menuHoverWatcher = nil
                 end
                 -- Force Window Monitor element-inspect off (expensive pixel + AX)
-                if spoon.MsDevTools and spoon.MsDevTools.setWinElementInspect then
-                    pcall(function() spoon.MsDevTools:setWinElementInspect(false) end)
+                if ms.devtools and ms.devtools.setWinElementInspect then
+                    pcall(function() ms.devtools:setWinElementInspect(false) end)
                 end
             end
             -- Internal: remove octane state (called on toggle off)
@@ -1724,8 +1736,8 @@
                     pcall(ms.dev.log.resumeAll)
                 end
                 -- Restart pollers for panels that are currently active
-                if spoon.MsDevTools and spoon.MsDevTools.restartPollersIfActive then
-                    pcall(function() spoon.MsDevTools:restartPollersIfActive() end)
+                if ms.devtools and ms.devtools.restartPollersIfActive then
+                    pcall(function() ms.devtools:restartPollersIfActive() end)
                 end
                 -- Restart menu hover watcher if menu is visible
                 if ms._menuVisible and ms._menuHoverStart then
@@ -1924,8 +1936,8 @@
                 else
                     msg = tostring(kind) .. (a and (" " .. tostring(a)) or "")
                 end
-                if spoon and spoon.MsDevTools then
-                    spoon.MsDevTools:macroLog(msg)
+                if spoon and ms.devtools then
+                    ms.devtools:macroLog(msg)
                 end
             end
 
@@ -1999,7 +2011,7 @@
                     ms._coroContext[co]    = ctx
                     ms._activeContexts[ctx] = true
 
-                    if ms.dev and ms._branchTrace then spoon.MsDevTools:startTrace(co, label) end
+                    if ms.dev and ms._branchTrace then ms.devtools:startTrace(co, label) end
 
                     local ok, err = coroutine.resume(co, ...)
                     if not ok then
@@ -2007,12 +2019,12 @@
                     end
 
                     if coroutine.status(co) == "dead" then
-                        if ms.dev then spoon.MsDevTools:stopTrace(co) end
+                        if ms.dev then ms.devtools:stopTrace(co) end
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
                         if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
                         _keyFlush()
-                        if ms.dev then spoon.MsDevTools:flushAll(ctx and ctx.callStack and ctx.callStack[1]) end
+                        if ms.dev then ms.devtools:flushAll(ctx and ctx.callStack and ctx.callStack[1]) end
                     end
                 end
             end
@@ -2154,12 +2166,12 @@
                         print("═══ ms.resume error [" .. (ctx.callStack and ctx.callStack[1] or "?") .. "] ═══\n" .. tostring(err))
                     end
                     if coroutine.status(co) == "dead" then
-                        if ms.dev then spoon.MsDevTools:stopTrace(co) end
+                        if ms.dev then ms.devtools:stopTrace(co) end
                         ms._coroContext[co] = nil
                         ms._activeContexts[ctx] = nil
                         if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
                         _keyFlush()
-                        if ms.dev then spoon.MsDevTools:flushAll(ctx.callStack and ctx.callStack[1]) end
+                        if ms.dev then ms.devtools:flushAll(ctx.callStack and ctx.callStack[1]) end
                     end
                 end
                 if not id then
@@ -2172,12 +2184,12 @@
             end
 
             ms.copy = function(text)
-                if ms.dev then spoon.MsDevTools:flushAll() end
+                if ms.dev then ms.devtools:flushAll() end
                 if ms.dev._watcherPanel then
-                    spoon.MsDevTools:watcherStep("copy")
+                    ms.devtools:watcherStep("copy")
                 end
                 if ms.dev then
-                    spoon.MsDevTools:macroLog("copy")
+                    ms.devtools:macroLog("copy")
                 end
                 hs.pasteboard.setContents(text)
             end
@@ -2185,13 +2197,13 @@
             ms.cancelMacros = function()
                 for co, ctx in pairs(ms._coroContext) do
                     ctx.cancelled = true
-                    if ms.dev then spoon.MsDevTools:stopTrace(co) end
+                    if ms.dev then ms.devtools:stopTrace(co) end
                 end
 
                 ms._activeContexts = {}
                 ms._coroContext     = {}
 
-                if ms.dev then spoon.MsDevTools:flushAll() end
+                if ms.dev then ms.devtools:flushAll() end
 
                 for keyCode, entry in pairs(ms._macroHeldKeys) do
                     local ev = hs.eventtap.event.newKeyEvent(entry.mods, keyCode, false)
@@ -2313,7 +2325,7 @@
             end
 
             ms.sound = function(path, async, device)
-                if ms.dev then spoon.MsDevTools:flushAll() end
+                if ms.dev then ms.devtools:flushAll() end
                 -- Resolve name to path if not a file path
                 if path and not path:match("[/\\]") then
                     path = ms.sounds[path] or ms.macroSounds[path] or path
@@ -2363,12 +2375,12 @@
                                     print("ms.sound resume error: " .. tostring(err))
                                 end
                                 if coroutine.status(co) == "dead" then
-                                    if ms.dev then spoon.MsDevTools:stopTrace(co) end
+                                    if ms.dev then ms.devtools:stopTrace(co) end
                                     ms._coroContext[co] = nil
                                     if ctx then ms._activeContexts[ctx] = nil end
                                     if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
                                     _keyFlush()
-                                    if ms.dev then spoon.MsDevTools:flushAll() end
+                                    if ms.dev then ms.devtools:flushAll() end
                                 end
                             end
                         end)
@@ -3805,7 +3817,7 @@
                     __index    = function(t, k)
                         if k == "integrity" or k == "dev" or k == "showGuardian" or k == "_systemActions"
                        or k == "bus" or k == "docs" or k == "shell" or k == "compiler"
-                       or k == "registry" then
+                       or k == "registry" or k == "devtools" then
                             error("ms_macros.lua: ms." .. k .. " is not accessible from macros.", 2)
                         end
                         if k == "key" then

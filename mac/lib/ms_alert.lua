@@ -1,3 +1,5 @@
+-- MsAlert — converted from a Spoon; Spoons/ is reserved for plugins.
+return function(ms)
 -- MsAlert --
     local MsAlert = {}
 
@@ -416,3 +418,4 @@
 -- END Make callable --
 
 return MsAlert
+end

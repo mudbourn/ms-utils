@@ -1,3 +1,5 @@
+-- MsSettings — converted from a Spoon; Spoons/ is reserved for plugins.
+return function(ms)
 -- MsSettings --
     local MsSettings = {}
 
@@ -4537,3 +4539,5 @@
 end
 
 return MsSettings
+
+end

@@ -3,4 +3,5 @@
 
 if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
 
-hs.loadSpoon("MsGuardian")
+-- Guardian verifies hashes, then dofile's ms_core.lua itself.
+require("lib.ms_guardian")()

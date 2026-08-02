@@ -1,3 +1,5 @@
+-- MsDevTools — converted from a Spoon; Spoons/ is reserved for plugins.
+return function(ms)
 -- MsDevTools --
     local MsDevTools = {}
 
@@ -2390,3 +2392,5 @@
 -- END Public Accessors --
 
 return MsDevTools
+
+end

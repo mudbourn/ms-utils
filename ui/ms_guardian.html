@@ -131,6 +131,24 @@
                 flex: 1;
                 overflow-y: auto;
                 min-height: 0;
+                scrollbar-width: thin;
+                scrollbar-color: var(--border) transparent;
+            }
+
+            /* Left unstyled, WebKit draws its stock light scrollbar here, which
+               is the one thing on this window that ignores the theme. Matches
+               the log panes in ms_console / ms_shell. */
+            #warning::-webkit-scrollbar {
+                width: 5px;
+            }
+
+            #warning::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            #warning::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: var(--radius);
             }
 
             #warning strong {
@@ -221,7 +239,7 @@
     </head>
     <body>
         <div id="titlebar">
-            <span id="titlebar-text">mudscript — Integrity Error</span>
+            <span id="titlebar-text">mudscript: Integrity Error</span>
             <span id="preview-badge">preview</span>
         </div>
         <div id="wrap">
@@ -232,9 +250,9 @@
                     <div id="heading-text">
                         <h1>Integrity check failed</h1>
                         <p>
-                            One or more tracked files have been modified.
-                            mudscript did not load. No macros or key bindings
-                            are active.
+                            One or more system files have been modified.
+                            Because of this, mudscript did not load, so no
+                            macros or key bindings are active.
                         </p>
                     </div>
                 </div>
@@ -251,8 +269,8 @@
                 </div>
 
                 <div id="warning">
-                    If you did <strong>not</strong> make this change, stop —
-                    your files may have been tampered with.<br /><br />
+                    If you did <strong>not</strong> make this change, stop.
+                    Your files may have been tampered with.<br /><br />
                     If you made this change yourself, click
                     <strong>Delete Hash &amp; Reload</strong> to clear the
                     baseline. mudscript will reload
@@ -281,7 +299,7 @@
 
                 <div id="warning" style="flex: 1">
                     From this point on mudscript will load
-                    <strong>any version</strong> of its code without warning —
+                    <strong>any version</strong> of its code without warning,
                     including maliciously modified files.<br /><br />
                     You are on your own. Proceed only if you know what you are
                     doing.
@@ -290,7 +308,7 @@
                 <div id="buttons">
                     <button onclick="cancelConfirm()">Cancel</button>
                     <button class="danger" onclick="confirmDelete()">
-                        Delete — I understand the risk
+                        Delete. I understand the risk
                     </button>
                 </div>
             </div>
@@ -363,9 +381,99 @@
                 _drag = null;
             });
 
+            // Guarded because setFailure below may have replaced the hash rows
+            // with a different failure's detail list. Only one of the two ever
+            // drives a given window, but an unguarded lookup here would throw
+            // inside a navigationCallback, where nothing surfaces the error.
             function setHashes(trusted, current) {
-                document.getElementById("hash-trusted").textContent = trusted;
-                document.getElementById("hash-current").textContent = current;
+                const t = document.getElementById("hash-trusted");
+                const c = document.getElementById("hash-current");
+                if (t) t.textContent = trusted;
+                if (c) c.textContent = current;
+            }
+
+            // ── Dynamic failure copy ──────────────────────────────────────────
+            // This window started as the integrity screen and its markup is
+            // still that screen's default, so a host that says nothing gets
+            // exactly what it always got. setFailure retargets it: same frame,
+            // same theming, different failure. Everything below writes through
+            // textContent — the copy is host-supplied, so it is never markup.
+            function setFailure(spec) {
+                if (typeof spec === "string") {
+                    try {
+                        spec = JSON.parse(spec);
+                    } catch (e) {
+                        return;
+                    }
+                }
+                if (!spec || typeof spec !== "object") return;
+
+                // #warning, #buttons and #heading each appear in both steps;
+                // scope every lookup to step 1 so the confirm step is untouched.
+                const step1 = document.getElementById("step1");
+
+                if (spec.titlebar)
+                    document.getElementById("titlebar-text").textContent =
+                        spec.titlebar;
+                if (spec.icon)
+                    step1.querySelector("#icon").textContent = spec.icon;
+                if (spec.title)
+                    step1.querySelector("h1").textContent = spec.title;
+                if (spec.lead)
+                    step1.querySelector("#heading-text p").textContent =
+                        spec.lead;
+
+                if (Array.isArray(spec.rows)) {
+                    const host = document.getElementById("hashes");
+                    host.textContent = "";
+                    host.style.display = spec.rows.length ? "" : "none";
+                    spec.rows.forEach((r) => {
+                        const row = document.createElement("div");
+                        const label = document.createElement("span");
+                        label.className = "label";
+                        label.textContent = r.label || "";
+                        const value = document.createElement("span");
+                        // Hashes want the mono treatment; a file path does not.
+                        if (r.mono !== false) value.className = "hash";
+                        value.textContent =
+                            r.value === undefined || r.value === null
+                                ? "—"
+                                : String(r.value);
+                        row.appendChild(label);
+                        row.appendChild(value);
+                        host.appendChild(row);
+                    });
+                }
+
+                if (Array.isArray(spec.warning)) {
+                    const w = step1.querySelector("#warning");
+                    w.textContent = "";
+                    spec.warning.forEach((para, i) => {
+                        if (i > 0) {
+                            w.appendChild(document.createElement("br"));
+                            w.appendChild(document.createElement("br"));
+                        }
+                        w.appendChild(document.createTextNode(para));
+                    });
+                }
+
+                if (Array.isArray(spec.actions)) {
+                    const bar = step1.querySelector("#buttons");
+                    bar.textContent = "";
+                    spec.actions.forEach((a) => {
+                        const btn = document.createElement("button");
+                        if (a.style) btn.className = a.style;
+                        btn.textContent = a.label || "";
+                        // "confirm" and "repair" drive this page's own steps;
+                        // anything else is a bare message for the host.
+                        btn.onclick = () => {
+                            if (a.action === "confirm") showConfirm();
+                            else if (a.action === "repair") repair();
+                            else if (a.action) sendToHost(a.action);
+                        };
+                        bar.appendChild(btn);
+                    });
+                }
             }
 
             function setPreviewMode() {

@@ -6,7 +6,7 @@ on:
     paths:
       - mac/ms_core.lua
       - mac/init.lua
-      - mac/Spoons/**/init.lua
+      - mac/lib/*.lua
       - ui/*.html
       - win/ms_core_v2.ahk
   workflow_dispatch:
@@ -105,7 +105,7 @@ jobs:
           for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua MANIFEST.json README.md; do
             [ -f "$f" ] && cp "$f" "$DIST/"
           done
-          for d in mac/Spoons ui mac/bin; do
+          for d in mac/lib ui mac/bin; do
             [ -d "$d" ] && cp -R "$d" "$DIST/"
           done
           [ -d mac/templates ] && cp -R mac/templates "$DIST/"
@@ -172,7 +172,7 @@ jobs:
           for f in mac/install.sh mac/init.lua mac/ms_core.lua mac/ms_macros.lua MANIFEST.json README.md; do
             [ -f "$f" ] && cp "$f" "$DIST/"
           done
-          for d in mac/Spoons ui mac/bin; do
+          for d in mac/lib ui mac/bin; do
             [ -d "$d" ] && cp -R "$d" "$DIST/"
           done
           [ -d mac/templates ] && cp -R mac/templates "$DIST/"
