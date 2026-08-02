@@ -370,6 +370,12 @@
                         ms.wait(.8)
                     end
                     ms.wait(3)
+                    for i = 1, 50 do
+                        ms.cam(10, 0)
+                        ms.wait(.8)
+                        ms.cam(10, 0)
+                        ms.wait(.8)
+                    end
                     for i = 1, 170 do
                         ms.cam(10, 0)
                         ms.wait(.8)
@@ -397,6 +403,12 @@
                     ms.wait(.8)
                 end
                 ms.wait(3)
+                for i = 1, 50 do
+                    ms.cam(10, 0)
+                    ms.wait(.8)
+                    ms.cam(10, 0)
+                    ms.wait(.8)
+                end
                 for i = 1, 170 do
                     ms.cam(10, 0)
                     ms.wait(.8)
