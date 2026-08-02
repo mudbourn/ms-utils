@@ -1752,22 +1752,26 @@
                 local keyCode = hs.keycodes.map[key]
                 if not keyCode then return nil end
 
+                local modsAny = (mods == "any")
                 local modSet = {}
-                for _, m in ipairs(mods or {}) do modSet[m] = true end
+                if not modsAny then
+                    for _, m in ipairs(mods or {}) do modSet[m] = true end
+                end
 
                 local function modsMatch(flags)
+                    if modsAny then return true end
                     for m, _ in pairs(modSet) do
                         if not flags[m] then return false end
                     end
                     return true
                 end
-
                 -- Exact-match for the fire gate: required mods held AND no extras,
                 -- so bare-key watchers don't swallow modified combos (alt+esc).
                 -- flagsChanged reset below stays subset-match on purpose: exact
                 -- there would clear the cooldown when an extra mod is pressed
                 -- mid-hold and re-fire on key repeat.
                 local function modsExact(flags)
+                    if modsAny then return true end
                     if not modsMatch(flags) then return false end
                     if flags.cmd   and not modSet.cmd   then return false end
                     if flags.alt   and not modSet.alt   then return false end
@@ -1775,9 +1779,7 @@
                     if flags.shift and not modSet.shift then return false end
                     return true
                 end
-
-                local id = table.concat(mods or {}, ",") .. ":" .. key
-
+                local id = (modsAny and "any" or table.concat(mods or {}, ",")) .. ":" .. key
                 local tap = hs.eventtap.new({
                     hs.eventtap.event.types.keyDown,
                     hs.eventtap.event.types.keyUp,
@@ -1786,16 +1788,14 @@
                     local type = e:getType()
                     local flags = e:getFlags()
                     local kc = e:getKeyCode()
-
                     if type == hs.eventtap.event.types.flagsChanged then
                         -- Modifier released: reset state
-                        if not modsMatch(flags) then
+                        if not modsAny and not modsMatch(flags) then
                             _hotkeyDown[id] = false
                             _hotkeyCooldowns[id] = false
                         end
                         return false
                     end
-
                     if type == hs.eventtap.event.types.keyDown then
                         if kc == keyCode and modsExact(flags) and not _hotkeyDown[id] and not _hotkeyCooldowns[id] then
                             _hotkeyDown[id] = true
@@ -1803,7 +1803,6 @@
                         end
                         return ms._swallowHotkeys and true or false
                     end
-
                     if type == hs.eventtap.event.types.keyUp then
                         if kc == keyCode then
                             _hotkeyDown[id] = false
@@ -1816,10 +1815,8 @@
                         end
                         return false
                     end
-
                     return false
                 end)
-
                 return tap
             end
 
@@ -2916,7 +2913,6 @@
                 disable = { label = "Disable Macros", default = { type = "key", mods = "any", key = "/" } },
                 toggle  = { label = "Toggle Macros",  default = { type = "key", mods = "any", key = "escape" } },
             }
-
 
             ms.systemBinds._actions = {
                 enable  = function() ms.setMacros(1) end,
