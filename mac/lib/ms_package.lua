@@ -74,6 +74,21 @@ return function(ms)
             return dir
         end
 
+        -- Component-wise, not lexicographic: "1.10.0" < "1.9.0" is true as a
+        -- string compare, which read every double-digit version as older than
+        -- its single-digit predecessor. Unparseable input compares as equal so
+        -- a malformed `requires` warns about nothing rather than everything.
+        local function versionLess(a, b)
+            local am = { tostring(a):match("^(%d+)%.(%d+)%.(%d+)$") }
+            local bm = { tostring(b):match("^(%d+)%.(%d+)%.(%d+)$") }
+            if #am < 3 or #bm < 3 then return false end
+            for i = 1, 3 do
+                local x, y = tonumber(am[i]), tonumber(bm[i])
+                if x ~= y then return x < y end
+            end
+            return false
+        end
+
         local function rmrf(dir)
             if dir and dir:find("mspkg%-") then hs.execute("/bin/rm -rf " .. sq(dir)) end
         end
@@ -147,7 +162,25 @@ return function(ms)
             return false
         end
 
+        -- At least one of the type's required paths must be present. `rels` is
+        -- a flat list of archive-relative paths. Enforced on both sides: pack
+        -- refuses to build one, verify refuses to trust one built elsewhere.
+        local function requiredSatisfied(kind, rels)
+            local spec = TYPE_SPECS[kind]
+            if not spec then return false end
+            if #spec.required == 0 then return true end
+            for _, req in ipairs(spec.required) do
+                for _, rel in ipairs(rels) do
+                    if rel == req or (req:find("/$") and rel:sub(1, #req) == req) then
+                        return true
+                    end
+                end
+            end
+            return false
+        end
+
         ms.package.pathAllowed = pathAllowed
+        ms.package.requiredSatisfied = requiredSatisfied
     -- END Type Specs --
 
     -- Fingerprint --
@@ -162,6 +195,17 @@ return function(ms)
             }
         end
 
+        -- Display name for the OS a package was built on. Falls back to the
+        -- raw value rather than "unknown" so a package from a platform this
+        -- build has never heard of still reads as something specific.
+        local OS_LABELS = { macos = "macOS", windows = "Windows" }
+
+        ms.package.osLabel = function(manifest)
+            local os_ = type(manifest) == "table" and (manifest.platform or {}).os
+            if type(os_) ~= "string" or os_ == "" then return "an unknown platform" end
+            return OS_LABELS[os_] or os_
+        end
+
         -- Returns a list of human-readable warnings; empty means clean.
         ms.package.compatWarnings = function(manifest)
             local warnings = {}
@@ -172,7 +216,8 @@ return function(ms)
 
             if fp.os and fp.os ~= "" and fp.os ~= here.os then
                 warnings[#warnings + 1] =
-                    "Built on " .. tostring(fp.os) .. ", importing on " .. here.os ..
+                    "Built on " .. ms.package.osLabel(manifest) .. ", importing on " ..
+                    (OS_LABELS[here.os] or here.os) ..
                     ". Key names, modifiers and camera behaviour differ between platforms."
                 if manifest.type == "macro" and manifest.macroFormat == "lua" then
                     warnings[#warnings + 1] =
@@ -187,11 +232,16 @@ return function(ms)
                     ". Only matters for plugins shipping native code."
             end
 
-            local req = (manifest.requires or {}).mudscript
+            -- Two shapes in the wild: the manifest nests it under `mudscript`,
+            -- the registry index carries it as a bare string. Accept both.
+            local rq  = manifest.requires
+            local req = (type(rq) == "table" and rq.mudscript)
+                     or (type(rq) == "string" and rq)
+                     or nil
             if type(req) == "string" and req ~= "" then
                 local want = req:match("(%d+%.%d+%.%d+)")
                 local have = tostring(ms.version or ""):match("(%d+%.%d+%.%d+)")
-                if want and have and have < want then
+                if want and have and versionLess(have, want) then
                     warnings[#warnings + 1] =
                         "Needs mudscript " .. req .. "; this install is " .. tostring(ms.version) .. "."
                 end
@@ -270,13 +320,25 @@ return function(ms)
             end
 
             -- Every member must be legal for the declared type.
-            for _, rel in ipairs(ms.package.contents(path)) do
+            local members = ms.package.contents(path)
+            for _, rel in ipairs(members) do
                 if not safeRelPath(rel) then
                     result.issues[#result.issues + 1] = "Unsafe path in package: " .. rel
                 elseif not manifest.legacy and not pathAllowed(manifest.type, rel) then
                     result.issues[#result.issues + 1] =
                         "File not permitted in a " .. manifest.type .. " package: " .. rel
                 end
+            end
+
+            -- ...and the type's own minimum must be met. pack enforces this on
+            -- the way out, but a package built by anything other than this
+            -- packer has never been through that gate, which is exactly the
+            -- case the registry exists to handle.
+            if not manifest.legacy and not requiredSatisfied(manifest.type, members) then
+                local spec = TYPE_SPECS[manifest.type]
+                result.issues[#result.issues + 1] =
+                    "A " .. tostring(manifest.type) .. " package needs " ..
+                    table.concat(spec and spec.required or {}, " or ") .. "."
             end
 
             -- Recorded hashes must match the archive's actual bytes.
@@ -364,22 +426,12 @@ return function(ms)
 
             if staged == 0 then rmrf(staging); return nil, "No readable source files." end
 
-            -- At least one of the type's required paths must be present.
-            if #spec.required > 0 then
-                local satisfied = false
-                for _, req in ipairs(spec.required) do
-                    for rel in pairs(manifest.contents) do
-                        if rel == req or (req:find("/$") and rel:sub(1, #req) == req) then
-                            satisfied = true; break
-                        end
-                    end
-                    if satisfied then break end
-                end
-                if not satisfied then
-                    rmrf(staging)
-                    return nil, "A " .. kind .. " package needs " ..
-                        table.concat(spec.required, " or ") .. "."
-                end
+            local packed = {}
+            for rel in pairs(manifest.contents) do packed[#packed + 1] = rel end
+            if not requiredSatisfied(kind, packed) then
+                rmrf(staging)
+                return nil, "A " .. kind .. " package needs " ..
+                    table.concat(spec.required, " or ") .. "."
             end
 
             if kind == "macro" then

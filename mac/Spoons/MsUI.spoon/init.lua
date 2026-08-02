@@ -1312,7 +1312,12 @@
                 hs.timer.doAfter(0.15, function()
                     if manifest then
                         ms.playSlot("update")
-                        ms.alert("Exported " .. out:match("([^/]+)$") .. ".", 3, true)
+                        -- Name the build OS on the way out. The manifest has
+                        -- carried it since packages were typed, and import
+                        -- warns on a mismatch, but the person sharing the file
+                        -- is the one who needs to know who it will work for.
+                        ms.alert("Exported " .. out:match("([^/]+)$") ..
+                            "\nBuilt on " .. ms.package.osLabel(manifest) .. ".", 3, true)
                     else
                         ms.alert("Export failed:\n" .. tostring(err), 5)
                     end
