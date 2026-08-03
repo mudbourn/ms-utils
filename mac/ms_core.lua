@@ -4188,7 +4188,7 @@
                 if _loadAnnounced then return end
                 _loadAnnounced = true
                 pcall(function() ms.playSlot("load") end)
-                _G._loadTimers.announceBody = hs.timer.doAfter(0.4, function()
+                _G._loadTimers.announceBody = hs.timer.doAfter(1.4, function()
                     ms._startupSoundDone = true
                     pcall(function() ms.playSlot("launch") end)
                     ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true, { priority = "low" })
