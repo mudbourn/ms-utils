@@ -386,6 +386,32 @@
         .panel-profiles .ptab-section.active { display: flex; }
         .panel-profiles .psec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0 20px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
 
+        /* ── Plugins panel ───────────────────────────────────────────────── */
+        /* No tab strip: the panel is one list. The Browse half of this lands
+           when the registry has plugins to browse, and an empty second tab in
+           the meantime is a promise the UI cannot keep. */
+        .panel-plugins .plsec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0 20px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
+
+        /* A card, not a row: a plugin carries an author, a version and a
+           status alongside its name, and squeezing that into the row-label
+           <small> makes every plugin read as a settings toggle. */
+        .plugin-card { margin: 6px 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-s); background: var(--surface); transition: border-color 0.15s; }
+        .plugin-card:hover { border-color: var(--border-dim); }
+        .plugin-card.off { opacity: 0.6; }
+        /* A plugin Guardian will refuse next boot is the one thing on this
+           screen that cannot wait to be noticed. */
+        .plugin-card.flagged { border-color: var(--danger-border); background: var(--danger-bg); }
+        .plugin-card-top { display: flex; align-items: flex-start; gap: 8px; }
+        .plugin-card-id { flex: 1; min-width: 0; }
+        .plugin-name { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .plugin-meta { font-size: 11px; color: var(--text3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .plugin-desc { font-size: 11px; color: var(--text2); margin-top: 6px; line-height: 1.45; }
+        .plugin-note { font-size: 11px; margin-top: 6px; line-height: 1.45; color: var(--warning); }
+        .plugin-note.danger { color: var(--danger); }
+        .plugin-actions { display: flex; gap: 6px; margin-top: 9px; }
+        .plugin-actions .btn-action { flex: 0 0 auto; min-width: 0; padding: 5px 10px; font-size: 11px; }
+        .plugins-empty { padding: 40px 24px; text-align: center; color: var(--text3); font-size: 12px; line-height: 1.6; }
+
         /* Colour field: swatch + hex box editing the same value. */
         .panel-theme .color-field { display: flex; align-items: center; gap: 6px; }
         .panel-theme .color-swatch { width: 26px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-s); background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
@@ -441,47 +467,57 @@
         #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex-shrink: 0; transition: background 0.2s; }
         #status-dot.off { background: var(--danger); box-shadow: 0 0 4px var(--danger-glow); }
 
-        #quick-row { display: flex; gap: 6px; padding: 7px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        .reload-dropdown { position: relative; display: flex; }
-        .reload-dd-menu { display: none; position: absolute; top: calc(100% + 3px); right: 0; min-width: 180px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); z-index: 100; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
-        .reload-dropdown.open .reload-dd-menu { display: block; }
-        .reload-dd-item { display: block; width: 100%; padding: 6px 12px; font-size: 11px; font-weight: 500; color: var(--text2); text-align: left; transition: background 0.12s, color 0.12s; }
-        .reload-dd-item:hover { background: var(--hover); color: var(--text); }
-        .reload-dd-full { color: var(--accent); }
-        .reload-dd-full:hover { color: var(--accent-hi); }
-        .reload-dd-sep { height: 1px; background: var(--border); margin: 2px 0; }
-        .reload-dd-row { display: flex; align-items: center; gap: 6px; padding: 0 8px; }
-        .reload-dd-row:hover { background: var(--hover); }
-        .reload-dd-row .reload-dd-item { flex: 1; padding: 6px 4px; }
-        .reload-dd-row .reload-dd-item:hover { background: transparent; }
-        .qr-check { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--text2); font-size: 10px; line-height: 1; color: transparent; cursor: pointer; flex-shrink: 0; transition: border-color 0.12s, background 0.12s, color 0.12s; }
-        .qr-check.checked { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+        /* The power button is the one destructive control in the title bar,
+           so it reads neutral until you reach for it. */
+        .btn-power { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: none; border-radius: var(--radius); background: transparent; color: var(--text3); cursor: pointer; transition: color 0.15s, background 0.15s; }
+        .btn-power .icon { width: 15px; height: 15px; }
+        .btn-power:hover { color: var(--danger); background: var(--danger-bg); }
 
-        #scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0 20px; }
+        #shutdown-overlay { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg); opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
+        #shutdown-overlay.open { opacity: 1; pointer-events: all; }
+        .shutdown-mark { color: var(--text3); animation: shutdown-fade 1.4s ease-in-out infinite; }
+        .shutdown-mark svg { width: 34px; height: 34px; }
+        .shutdown-text { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); }
+        @keyframes shutdown-fade { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.3; } }
+
+        #scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; }
         #scroll::-webkit-scrollbar { width: 4px; }
         #scroll::-webkit-scrollbar-track { background: transparent; }
         #scroll::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
 
-        .section { margin: 0 8px 4px; border-radius: var(--radius); overflow: hidden; }
-        .section-head { display: flex; align-items: center; gap: 6px; padding: 9px 12px; background: var(--surface); cursor: pointer; box-shadow: inset 2px 0 0 transparent; transition: background 0.15s, box-shadow 0.15s; }
-        .section-head:hover { background: var(--surface2); box-shadow: inset 2px 0 0 var(--accent-glow); }
-        .section-chevron { font-size: 9px; color: var(--text3); transition: transform 0.2s; flex-shrink: 0; }
-        .section-head.open .section-chevron { transform: rotate(90deg); color: var(--accent); }
-        .section-head.always-open { cursor: default; }
-        .section-head.always-open .section-chevron { opacity: 0; }
-        .section-head.always-open:hover { box-shadow: none; }
-        .section-head.always-open .section-title { color: var(--text3); }
-        .section-title { font-weight: 700; font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 1.5px; flex: 1; }
-        .section-body { background: var(--surface); border-top: 1px solid var(--border); max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
-        .section-body.open { max-height: 2000px; }
+        /* ── Settings groups ──────────────────────────────────────────────────
+           Groups used to be accordions because settings was one narrow panel
+           competing for space. It owns a window now, so every group is open
+           and its heading is a heading: it sticks to the top of the scroll so
+           whatever you are reading stays named. */
+        .section { margin: 0; }
+        .section-head {
+            position: sticky; top: 0; z-index: 3;
+            display: flex; align-items: baseline; gap: 10px;
+            padding: 20px 18px 8px 18px;
+            background: var(--bg);
+            box-shadow: 0 1px 0 var(--border-dim);
+            cursor: default;
+        }
+        .section:first-child .section-head { padding-top: 14px; }
+        .section-title { font-weight: 700; font-size: 12px; color: var(--text); text-transform: uppercase; letter-spacing: 1.4px; flex-shrink: 0; }
+        .section-desc { font-size: 11px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+        .section-body { margin: 10px 14px 6px; background: var(--surface); border: 1px solid var(--border-dim); border-radius: var(--radius); overflow: hidden; }
 
-        .row { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); transition: background 0.12s; min-height: 38px; }
+        .row { display: flex; align-items: center; gap: 14px; padding: 11px 14px; border-bottom: 1px solid var(--border-faint); transition: background 0.12s; min-height: 44px; }
         .row:last-child { border-bottom: none; }
-        .row:hover { background: var(--surface2); box-shadow: inset 2px 0 0 var(--accent-glow); }
+        .row:hover { background: var(--surface2); }
         .row.disabled { opacity: 0.35; pointer-events: none; }
-        .row-label { flex: 1; font-size: 13px; }
-        .row-label small { display: block; color: var(--text3); font-size: 11px; margin-top: 1px; }
-        .row-sub { padding-left: 24px; }
+        .row-label { flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; color: var(--text); }
+        .row-label small { display: block; color: var(--text3); font-size: 11px; line-height: 1.45; margin-top: 3px; }
+        /* A sub-row belongs to the row above it: indented, and visually joined
+           by dropping the parent's separator. */
+        .row-sub { padding-left: 30px; }
+        /* For rows whose label needs no explanation — they sit under a group
+           label that already gave it. */
+        .row-compact { min-height: 34px; padding-top: 6px; padding-bottom: 6px; }
+        .group-hint { padding: 0 14px 8px; font-size: 11px; line-height: 1.45; color: var(--text3); }
+        .row:has(+ .row-sub) { border-bottom-color: transparent; }
         .row-subsubs { display: flex; flex-wrap: wrap; gap: 3px; width: 100%; padding: 3px 0 1px 0; }
         .pill-subsub { font-size: 10px; padding: 1px 6px; opacity: 0.65; border: 1px solid var(--border); background: transparent; }
 
@@ -531,8 +567,10 @@
         .sound-filter-btn:hover { color: var(--text2); background: var(--hover); }
         .sound-filter-btn.active { color: var(--accent); background: var(--surface3); }
 
-        .divider { height: 1px; background: var(--border); margin: 4px 0; }
-        .group-label { padding: 6px 12px 2px; font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+        /* Inside a group card the divider only separates sub-groups, so it
+           stays dimmer than the card's own border. */
+        .divider { height: 1px; background: var(--border-dim); margin: 6px 0; }
+        .group-label { padding: 10px 14px 4px; font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.09em; }
 
         #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--surface2); color: var(--text); padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,0.5); pointer-events: none; transition: transform 0.25s ease, opacity 0.25s ease; opacity: 0; z-index: 200; white-space: pre-line; max-width: 280px; text-align: center; line-height: 1.5; }
         #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
@@ -1230,7 +1268,7 @@
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
-        <div style="display:flex;align-items:center;justify-content:center;flex:1;color:var(--text3);font-size:13px;">Coming soon</div>
+        <div id="plugins-scroll" class="plsec-scroll"></div>
 </div>
 <div class="panel-profiles" style="display:none">
         <div id="header">
@@ -1334,47 +1372,12 @@
                 <span id="panel-title">mudscript — settings</span>
                 <div class="header-btns">
                     <button
-                        id="btn-toggle-macros"
-                        class="btn-ghost"
+                        id="btn-power"
+                        class="btn-power"
+                        title="Quit mudscript"
                         onmouseenter="playSlot('hover')"
-                        onclick="
-                            var s = document.getElementById('btn-toggle-macros');
-                            var on = s.dataset.on === '1';
-                            sendToHost({ action: 'setMacros', value: on ? 0 : 1 });
-                        "
-                    >Macros: ON</button>
-                    <div class="reload-dropdown" id="reloadDropdown">
-                        <button
-                            class="btn-ghost reload-dd-btn"
-                            onmouseenter="playSlot('hover')"
-                            onclick="
-                                playSlot('interact');
-                                document.getElementById('reloadDropdown').classList.toggle('open');
-                            "
-                        >
-                            Reload ▾
-                        </button>
-                        <div class="reload-dd-menu" id="reloadMenu">
-                            <div class="reload-dd-row">
-                                <span class="qr-check checked" data-qr="macros" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="sendToHost({ action: 'reloadMacros' }); document.getElementById('reloadDropdown').classList.remove('open');">Macros</button>
-                            </div>
-                            <div class="reload-dd-row">
-                                <span class="qr-check checked" data-qr="theme" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="sendToHost({ action: 'reloadTheme' }); document.getElementById('reloadDropdown').classList.remove('open');">Theme</button>
-                            </div>
-                            <div class="reload-dd-row">
-                                <span class="qr-check checked" data-qr="settings" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="sendToHost({ action: 'reloadSettings' }); document.getElementById('reloadDropdown').classList.remove('open');">Settings</button>
-                            </div>
-                            <div class="reload-dd-row">
-                                <span class="qr-check checked" data-qr="ui" onclick="event.stopPropagation(); toggleQR(this);"></span>
-                                <button class="reload-dd-item" onmouseenter="playSlot('hover')" onclick="sendToHost({ action: 'reloadUI' }); document.getElementById('reloadDropdown').classList.remove('open');">UI</button>
-                            </div>
-                            <div class="reload-dd-sep"></div>
-                            <button class="reload-dd-item reload-dd-full" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); sendToHost({ action: 'reloadAll' }); document.getElementById('reloadDropdown').classList.remove('open');">All (hs.reload)</button>
-                        </div>
-                    </div>
+                        onclick="requestShutdown()"
+                    ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
                     <button
                         class="btn-close"
                         onmouseenter="playSlot('hover')"
@@ -1390,6 +1393,16 @@
 
         <!-- Toast -->
         <div id="toast"></div>
+
+        <!-- Shutdown curtain. Covers the panel between "Quit" and the host
+             actually going away, so the last thing on screen is deliberate
+             rather than a frozen settings list. -->
+        <div id="shutdown-overlay">
+            <div class="shutdown-mark">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
+            </div>
+            <div class="shutdown-text">mudscript is shutting down</div>
+        </div>
 
         <!-- Modal -->
         <div id="modal-overlay">
@@ -1728,6 +1741,11 @@
     <!-- ═══ Panel: theme & sound ═══════════════════════════════════════════════ -->
     <!-- After panel-settings.js: builds from the window.msUI kit it publishes. -->
     <script src="./modules/panel-theme.js"></script>
+
+
+    <!-- ═══ Panel: plugins ═══════════════════════════════════════════════════ -->
+    <!-- After panel-settings.js for the same reason panel-theme.js is. -->
+    <script src="./modules/panel-plugins.js"></script>
 
 
     <!-- ═══ Panel: macros ═══════════════════════════════════════════════════════ -->

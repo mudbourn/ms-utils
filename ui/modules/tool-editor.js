@@ -15,6 +15,19 @@
  * and auto-closes on click outside or Escape key.
  */
 
+// ── Shell sounds ───────────────────────────────────────────────────────
+// Hover on enter, click sound on activate. Guarded on window.playSlot: this
+// module also loads in contexts that have no sound bus, where it must no-op.
+function _sfx(el, clickSlot) {
+    el.addEventListener("mouseenter", function() {
+        if (window.playSlot) window.playSlot("hover");
+    });
+    el.addEventListener("click", function() {
+        if (window.playSlot) window.playSlot(clickSlot || "interact");
+    });
+    return el;
+}
+
 // ── Parameter Definitions ──────────────────────────────────────────────
 // Maps action names to their parameter schemas. Unrecognized actions fall back
 // to type inference from the actual parameter values.
@@ -615,6 +628,7 @@ class ToolEditor {
         const closeBtn = document.createElement("div");
         closeBtn.className = "tool-editor-close";
         closeBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke-width="2" stroke-linecap="round"/></svg>';
+        _sfx(closeBtn, "back");
         closeBtn.addEventListener("click", (e) => { e.stopPropagation(); this.close(); });
         header.appendChild(closeBtn);
 
@@ -798,6 +812,8 @@ class ToolEditor {
             inp.value = String((parseFloat(inp.value)||0) + delta);
             emit();
         };
+        _sfx(btnMinus);
+        _sfx(btnPlus);
         btnMinus.addEventListener("click", (e) => { e.stopPropagation(); step(e.shiftKey ? -10 : -1); });
         btnPlus.addEventListener("click",  (e) => { e.stopPropagation(); step(e.shiftKey ? 10 : 1); });
 
@@ -821,6 +837,7 @@ class ToolEditor {
         hint.textContent = "press a key…";
         wrap.appendChild(hint);
 
+        _sfx(btn);
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
             this._startCapture(key, btn, sid);
@@ -883,6 +900,7 @@ class ToolEditor {
             const chip = document.createElement("button");
             chip.className = "tool-ed-mod-chip" + (currentMods.includes(mod) ? " on" : "");
             chip.textContent = mod;
+            _sfx(chip);
             chip.addEventListener("click", (e) => {
                 e.stopPropagation();
                 chip.classList.toggle("on");
@@ -984,6 +1002,7 @@ class ToolEditor {
                 const removeBtn = document.createElement("div");
                 removeBtn.className = "tool-ed-array-remove";
                 removeBtn.textContent = "×";
+                _sfx(removeBtn, "back");
                 removeBtn.addEventListener("click", (e) => {
                     e.stopPropagation();
                     items.splice(i, 1);
@@ -1001,6 +1020,7 @@ class ToolEditor {
         const addBtn = document.createElement("button");
         addBtn.className = "tool-ed-array-add";
         addBtn.textContent = "+ add item";
+        _sfx(addBtn);
         addBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             items.push("");

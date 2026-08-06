@@ -174,6 +174,21 @@ return function(ms)
                 if data.qrOptions.settings ~= nil then qr.settings = (data.qrOptions.settings == true) end
                 if data.qrOptions.ui       ~= nil then qr.ui       = (data.qrOptions.ui       == true) end
             end
+            -- Only `true` is stored, and only for a well-formed bundle name:
+            -- the file is the one place this list can be hand-edited, and a
+            -- stray key here would otherwise decide whether code runs.
+            if data.pluginsDisabled and type(data.pluginsDisabled) == "table" then
+                local off = {}
+                for k, v in pairs(data.pluginsDisabled) do
+                    if v == true and type(k) == "string"
+                        and k:match("^[%w%-%._ ]+%.spoon$")
+                        and not k:find("%.%.") and not k:find("^%.")
+                    then
+                        off[k] = true
+                    end
+                end
+                ms._pluginsDisabled = off
+            end
             if data.customThemeDisabled ~= nil then ms._customThemeDisabled = (data.customThemeDisabled == true) end
             if data.soundPreset ~= nil then ms._soundPreset = data.soundPreset end
             if data.devArchiveLimit ~= nil then
@@ -337,6 +352,7 @@ return function(ms)
                 soundPreset      = ms._soundPreset,
                 importedSounds   = ms.importedSounds or {},
                 customThemeDisabled = ms._customThemeDisabled or false,
+                pluginsDisabled  = ms._pluginsDisabled or {},
                 devArchiveLimit  = ms._devArchiveLimit or 15,
                 updateChannel    = ms._updateChannel or "stable",
                 testingSource    = ms._testingSource or "release",
@@ -599,6 +615,94 @@ return function(ms)
                 ms.playSlot("update")
                 ms.alert("UI reloaded.", 4, true)
             end
+        end
+
+        -- ── Shutdown ──────────────────────────────────────────────────────
+        -- The power button's back end. Every step is pcall'd on its own: a
+        -- shutdown that aborts halfway is worse than one that skips a step,
+        -- because it leaves taps and timers live with no UI left to reach
+        -- them from.
+        --
+        -- The last step quits Hammerspoon. mudscript is not a process of its
+        -- own — it is what Hammerspoon is running — so tearing its state down
+        -- in place would leave an idle Hammerspoon that the user still has to
+        -- quit by hand, and any handle missed below would keep running inside
+        -- it. Quitting is the only exit that is actually an exit.
+        ms.shutdown = function()
+            if ms._shuttingDown then return end
+            ms._shuttingDown = true
+            ms.dev.log({ type = "system", event = "shutdown_start" })
+
+            -- Suppress the toasts and sounds every teardown step would
+            -- otherwise fire on the way out.
+            ms._quickReloading = true
+
+            local function step(name, fn)
+                local ok, err = pcall(fn)
+                if not ok then
+                    ms.dev.log({
+                        type = "error",
+                        event = "shutdown_step_error",
+                        step = name,
+                        msg = tostring(err),
+                    })
+                end
+            end
+
+            -- 1. Stop macros first: cancels running macros and releases any
+            --    key or button still held down. Nothing below should be able
+            --    to leave a modifier stuck.
+            step("macros", function() ms.setMacros(0, true) end)
+            step("binds", function() ms.bind.teardown() end)
+
+            -- 2. Persist before anything that could fault takes the process.
+            step("save", function() ms.saveSettings() end)
+
+            -- 3. Drop the input taps and pollers ms owns. Named individually
+            --    rather than swept, so a handle added later shows up here as
+            --    a deliberate omission instead of silently surviving.
+            local handles = {
+                "_keyListener", "_mouseListener", "_scrollListener",
+                "_trackpadLeftListener", "_trackpadRightListener",
+                "_appWatcher", "_tapWatchdog", "_menuHoverWatcher",
+            }
+            -- _gamepadTask is an hs.task, which has neither :stop nor
+            -- :delete; ms.bind.teardown above already ran ms.gamepadStop().
+            for _, key in ipairs(handles) do
+                step(key, function()
+                    local h = ms[key]
+                    if not h then return end
+                    if h.stop then h:stop() end
+                    if h.delete then h:delete() end
+                    ms[key] = nil
+                end)
+            end
+            step("systemBinds", function()
+                for _, tap in pairs((ms.systemBinds or {})._handles or {}) do
+                    if tap and tap.stop then tap:stop() end
+                end
+            end)
+
+            -- 4. Close every window so the desktop is clear before the quit.
+            step("windows", function()
+                if ms.shell and ms.shell.hide then ms.shell.hide() end
+                if ms.ui and ms.ui.hide then ms.ui.hide() end
+                pcall(function() ms.dev.console.hide() end)
+                pcall(function() ms.dev.watcher.hide() end)
+                pcall(function() ms.dev.keys.hide() end)
+                pcall(function() ms.dev.window.hide() end)
+            end)
+
+            -- 5. Flush the log handles last, so the steps above are on disk.
+            step("logs", function() ms.dev:closeLogHandles() end)
+
+            -- The UI already played the shutdown slot and is showing its
+            -- curtain; this delay is only so the window teardown above is
+            -- on screen before the app goes.
+            hs.timer.doAfter(0.25, function()
+                local app = hs.application.get("Hammerspoon")
+                if app then app:kill() else os.exit(0) end
+            end)
         end
 
         ms.reload = function(opts)

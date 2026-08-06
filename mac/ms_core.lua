@@ -479,6 +479,10 @@
             roblox = ms._targetHandle
             ms._robloxActive  = false
             ms._qrOptions = { macros = true, theme = true, settings = true, ui = true }
+            -- Plugins the user has switched off, by bundle dir name. Empty is
+            -- the normal state: install is the decision point, so this only
+            -- ever holds names someone deliberately turned off.
+            ms._pluginsDisabled = {}
             ms.getTargetWin = function()
                 local app = hs.application.get(ms._targetApp)
                 if not app then return nil end
@@ -665,6 +669,30 @@
                 return hskeymap[k] or hs.keycodes.map[k]
             end
 
+            -- Reverse lookup (code -> name) for the dev key feed.
+            -- hs.keycodes.map logs a console warning for any code absent from
+            -- the active keymap, and it is indexed on every key event — so the
+            -- globe/Fn key (179) warned on every press. Memoized: an unknown
+            -- code is resolved (and warns) at most once per session.
+            local _KEY_NAME_EXTRA = { [179] = "fn" }
+            local _keyNameCache   = {}
+            local function keyName(code)
+                if code == nil then return nil end
+                local hit = _keyNameCache[code]
+                if hit ~= nil then
+                    if hit == false then return nil end
+                    return hit
+                end
+                local name = _KEY_NAME_EXTRA[code]
+                if name == nil then
+                    local ok, v = pcall(function() return hs.keycodes.map[code] end)
+                    name = ok and v or nil
+                end
+                _keyNameCache[code] = (name == nil) and false or name
+                return name
+            end
+            ms._keyName = keyName
+
             ms.keystate = function(...)
                 local args = { ... }
                 if args[2] == true then
@@ -741,7 +769,7 @@
                     local isRepeat = ms.keytrack[keyCode] == true
                     ms.keytrack[keyCode] = true
                     if not isRepeat and ms.dev and ms.dev._wantsKeyEvents and ms.dev._wantsKeyEvents() then
-                        pcall(ms.dev._onKeyEvent, keyCode, hs.keycodes.map[keyCode], true)
+                        pcall(ms.dev._onKeyEvent, keyCode, keyName(keyCode), true)
                     end
                     if not isRepeat and ms._keyBindingsByCode then
                         ms._currentFlags = flags
@@ -775,7 +803,7 @@
                 elseif type == hs.eventtap.event.types.keyUp then
                     ms.keytrack[keyCode] = false
                     if ms.dev and ms.dev._wantsKeyEvents and ms.dev._wantsKeyEvents() then
-                        pcall(ms.dev._onKeyEvent, keyCode, hs.keycodes.map[keyCode], false)
+                        pcall(ms.dev._onKeyEvent, keyCode, keyName(keyCode), false)
                     end
                     local bucketUp = ms._keyBindingsByCode and ms._keyBindingsByCode[keyCode]
                     if bucketUp then
@@ -3850,6 +3878,21 @@
             require("lib.ms_registry")(ms)
         -- END 13d. Package Registry --
 
+        -- 13e. Plugins (Spoons/) --
+            -- The one place third-party code enters the process. Loading is
+            -- last on purpose: a plugin sees a finished `ms`, so it can bind,
+            -- subscribe and define settings without ordering against the
+            -- modules it depends on.
+            --
+            -- Nothing is verified here. Guardian has already refused to reach
+            -- this file if Spoons/ holds anything the ledger does not vouch
+            -- for, so by now every bundle on disk arrived through install.
+            -- This section only decides which of them the user wants running.
+            package.loaded["lib.ms_plugins"] = nil
+            require("lib.ms_plugins")(ms)
+            ms.plugins.loadAll()
+        -- END 13e. Plugins --
+
         -- 14. Safety Nets --
             do
                 local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
@@ -4188,14 +4231,23 @@
                 if _loadAnnounced then return end
                 _loadAnnounced = true
                 pcall(function() ms.playSlot("load") end)
-                _G._loadTimers.announceBody = hs.timer.doAfter(1.4, function()
+                -- Toast lead-in. This delays ONLY the announcement toasts/sound;
+                -- it must not delay the unblocking below, which gates macros,
+                -- all sound, and all alerts. Raise this freely; do NOT raise the
+                -- 0.4s body delay, which must stay under the 1.0s hard-guarantee
+                -- timer near the end of startup — otherwise, on the 7.0s fallback
+                -- path, the guarantee fires first and the body replays everything.
+                local _TOAST_LEAD = 1.0
+                _G._loadTimers.announceBody = hs.timer.doAfter(0.4, function()
                     ms._startupSoundDone = true
-                    pcall(function() ms.playSlot("launch") end)
-                    ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true, { priority = "low" })
-                    _G._loadTimers.announce3 = hs.timer.doAfter(3, function()
+                    _G._loadTimers.announce0 = hs.timer.doAfter(_TOAST_LEAD, function()
+                        pcall(function() ms.playSlot("launch") end)
+                        ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true, { priority = "low" })
+                    end)
+                    _G._loadTimers.announce3 = hs.timer.doAfter(_TOAST_LEAD + 3, function()
                         ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 3, true, { priority = "low" })
                     end)
-                    _G._loadTimers.announce6 = hs.timer.doAfter(6, function()
+                    _G._loadTimers.announce6 = hs.timer.doAfter(_TOAST_LEAD + 6, function()
                         if ms.macroMeta then
                             local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
                             if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end

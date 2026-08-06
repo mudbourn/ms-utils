@@ -259,19 +259,28 @@
         -- END --
 
         -- Movement Checking --
+            -- One entry point, state passed in: MovementCheck(1) arms the
+            -- failsafe, MovementCheck(0) disarms it — same shape as ms.setMacros.
+            -- Disarming is idempotent; several macros call it twice on the way out.
+            --
+            -- ms.after is MILLISECONDS (it divides by 1000 internally). Passing
+            -- 0.3 here does not poll every 0.3s, it re-arms every 0.3ms and spins.
             local MOVEMENT_POLL_MS = 300
 
             local MovementFailsafe = {
                 running = false,
                 timer   = nil,
-                ownsW   = false,
-                gen     = 0,
+                ownsW   = false,  -- true only while OUR synthetic W hold is out
+                gen     = 0,      -- invalidates timers still in flight from a prior run
             }
 
             local function hwKeyDown()
                 return ms.keystate("w") or ms.keystate("a") or ms.keystate("s") or ms.keystate("d")
             end
 
+            -- Drop our synthetic W. If the user is physically holding W we must
+            -- not send a release — that would kill their real hold. Forget the
+            -- key instead, so ms stops tracking a hold it no longer owns.
             local function releaseW()
                 if not MovementFailsafe.ownsW then
                     return
@@ -287,42 +296,50 @@
                 ms.release("w")
             end
 
-            local MovementChecker = ms.sub("MovementChecker", function()
-                if MovementFailsafe.running then
+            local MovementCheck = ms.sub("MovementCheck", function(on)
+                local want = on and on ~= 0
+
+                if want then
+                    -- Already armed: leave the live loop alone rather than
+                    -- restarting it and orphaning the in-flight timer.
+                    if MovementFailsafe.running then
+                        return
+                    end
+
+                    MovementFailsafe.running = true
+                    MovementFailsafe.gen     = MovementFailsafe.gen + 1
+
+                    local myGen = MovementFailsafe.gen
+
+                    local function check()
+                        if not MovementFailsafe.running or MovementFailsafe.gen ~= myGen then
+                            return
+                        end
+
+                        -- Stand down if macros were disabled or the target lost
+                        -- focus; otherwise the loop keeps pressing W into whatever
+                        -- window the user switched to.
+                        if BindValidity ~= 1 or not ms._robloxActive then
+                            MovementFailsafe.running = false
+                            MovementFailsafe.timer   = nil
+                            releaseW()
+                            return
+                        end
+
+                        if hwKeyDown() then
+                            releaseW()
+                        elseif not MovementFailsafe.ownsW then
+                            ms.press("w")
+                            MovementFailsafe.ownsW = true
+                        end
+
+                        MovementFailsafe.timer = ms.after(MOVEMENT_POLL_MS, check)
+                    end
+
+                    check()
                     return
                 end
 
-                MovementFailsafe.running = true
-                MovementFailsafe.gen     = MovementFailsafe.gen + 1
-
-                local myGen = MovementFailsafe.gen
-
-                local function check()
-                    if not MovementFailsafe.running or MovementFailsafe.gen ~= myGen then
-                        return
-                    end
-
-                    if BindValidity ~= 1 or not ms._robloxActive then
-                        MovementFailsafe.running = false
-                        MovementFailsafe.timer   = nil
-                        releaseW()
-                        return
-                    end
-
-                    if hwKeyDown() then
-                        releaseW()
-                    elseif not MovementFailsafe.ownsW then
-                        ms.press("w")
-                        MovementFailsafe.ownsW = true
-                    end
-
-                    MovementFailsafe.timer = ms.after(MOVEMENT_POLL_MS, check)
-                end
-
-                check()
-            end)
-
-            local EndMovementChecker = ms.sub("EndMovementChecker", function()
                 MovementFailsafe.running = false
                 MovementFailsafe.gen     = MovementFailsafe.gen + 1
 
@@ -340,9 +357,9 @@
                 if ms.held("jumpHigh") then
                     ms.sound(JumpHighSound, true)
                     for i = 1, 60 do
-                        ms.wait(.8)
+                        ms.wait(1.2)
                         ms.cam(-3145, 0)
-                        ms.wait(.8)
+                        ms.wait(1.2)
                         ms.cam(-3145, 0)
                     end
                     ms.wait(45)
@@ -356,9 +373,9 @@
                 if ms.held("jumpLow") then
                     ms.sound(JumpLowSound, true)
                     for i = 1, 14 do
-                        ms.wait(.8)
+                        ms.wait(1.2)
                         ms.cam(-370, 0)
-                        ms.wait(.8)
+                        ms.wait(1.2)
                         ms.cam(-370, 0)
                     end
                     ms.wait(45)
@@ -371,9 +388,9 @@
             local JumpDefault = ms.sub("JumpDefault", function()
                 ms.sound(JumpNormalSound, true)
                 for i = 1, 14 do
-                    ms.wait(2)
+                    ms.wait(1.2)
                     ms.cam(-185, 0)
-                    ms.wait(1.3)
+                    ms.wait(1.2)
                     ms.cam(-185, 0)
                 end
                 ms.wait(45)
@@ -384,29 +401,29 @@
         -- Throw Trick --
             local ThrowLow = ms.sub("ThrowLow", function()
                 if ms.held("throwLow") then
-                    for i = 1, 22 do
-                        ms.cam(-400, 0)
-                        ms.wait(.8)
-                        ms.cam(-400, 0)
-                        ms.wait(.8)
+                    for i = 1, 14 do
+                        ms.wait(1.2)
+                        ms.cam(-463, 0)
+                        ms.wait(1.2)
+                        ms.cam(-370, 0)
                     end
                     ms.wait(3)
                     for i = 1, 50 do
                         ms.cam(10, 0)
-                        ms.wait(.8)
+                        ms.wait(1.2)
                         ms.cam(10, 0)
-                        ms.wait(.8)
+                        ms.wait(1.2)
                     end
                     for i = 1, 170 do
                         ms.cam(10, 0)
-                        ms.wait(.8)
+                        ms.wait(1.2)
                         ms.cam(10, 0)
-                        ms.wait(.8)
+                        ms.wait(1.2)
                         ms.release("x")
                     end
                     ms.wait(5)
                     ms.release("space")
-                    EndMovementChecker()
+                    MovementCheck(0)
                     ms.wait(20)
                     ms.scroll("down", 2000)
                     ms.sound(ThrowTrickEndSound, true)
@@ -426,20 +443,20 @@
                 ms.wait(3)
                 for i = 1, 50 do
                     ms.cam(10, 0)
-                    ms.wait(.8)
+                    ms.wait(1.2)
                     ms.cam(10, 0)
-                    ms.wait(.8)
+                    ms.wait(1.2)
                 end
                 for i = 1, 170 do
                     ms.cam(10, 0)
-                    ms.wait(.8)
+                    ms.wait(1.2)
                     ms.cam(10, 0)
-                    ms.wait(.8)
+                    ms.wait(1.2)
                     ms.release("x")
                 end
                 ms.wait(5)
                 ms.release("space")
-                EndMovementChecker()
+                MovementCheck(0)
                 ms.wait(20)
                 ms.scroll("down", 2000)
                 ms.sound(ThrowTrickEndSound, true)
@@ -451,7 +468,7 @@
     -- Macro Functions --
         -- High Leap Assist --
             local HighLeapAssistFunction = ms.fn(function()
-                MovementChecker()
+                MovementCheck(1)
                 ms.wait(5)
                 for i = 1, 3 do
                     ms.type("e", nil, nil, 5)
@@ -472,9 +489,9 @@
 
                 ms.release("space")
                 ms.wait(100)
-                EndMovementChecker()
+                MovementCheck(0)
                 ms.wait(3000)
-                EndMovementChecker()
+                MovementCheck(0)
             end)
 
             ms.bind.define("superJump", function()
@@ -513,7 +530,7 @@
                     ms.wait(1)
                 end
                 ms.scroll("up", 2000)
-                MovementChecker()
+                MovementCheck(1)
                 for i = 1, 5 do
                     ms.type("e")
                     ms.wait(1)

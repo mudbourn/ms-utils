@@ -3,7 +3,6 @@
     "use strict";
 // ── State ──────────────────────────────────────────────────────────
             let S = {};
-            let _openSections = new Set();
             let _modalResolve = null;
             let _toastTimer = null;
             let _ctxTarget = null; // { macro: m } — what was right-clicked
@@ -75,45 +74,19 @@
                 el.style.maxHeight = maxH + "px";
             }
 
-            // Close ctx menu and reload dropdown on any left-click or Escape.
-            // preventDefault on contextmenu suppresses the native WebKit menu everywhere.
-            function closeReloadDropdown() {
-                const el = document.getElementById("reloadDropdown");
-                if (el) el.classList.remove("open");
-            }
-            document.addEventListener("click", (e) => {
-                closeCtxMenu();
-                if (!e.target.closest(".reload-dropdown")) closeReloadDropdown();
-            });
+            // Close ctx menu on any left-click or Escape. preventDefault on
+            // contextmenu suppresses the native WebKit menu everywhere.
+            document.addEventListener("click", () => closeCtxMenu());
             const _settingsPanel = document.querySelector('.panel-settings');
             document.addEventListener("contextmenu", (e) => {
                 if (!_settingsPanel || getComputedStyle(_settingsPanel).display === "none") return;
                 e.preventDefault();
                 closeCtxMenu();
-                closeReloadDropdown();
             });
             document.addEventListener("keydown", (e) => {
                 if (!_settingsPanel || getComputedStyle(_settingsPanel).display === "none") return;
-                if (e.key === "Escape") { closeCtxMenu(); closeReloadDropdown(); }
+                if (e.key === "Escape") closeCtxMenu();
             });
-
-            // ── Quick-Reload option checkboxes ──────────────────────────────
-            function toggleQR(el) {
-                const key = el.dataset.qr;
-                if (!key) return;
-                const now = !el.classList.contains("checked");
-                el.classList.toggle("checked", now);
-                sendToHost({ action: "setQROption", key: key, value: now });
-            }
-            // Sync checkbox states from the Lua state object.
-            function syncQRChecks(qr) {
-                if (!qr) return;
-                document.querySelectorAll(".qr-check[data-qr]").forEach(el => {
-                    const key = el.dataset.qr;
-                    const on = qr[key] !== false;
-                    el.classList.toggle("checked", on);
-                });
-            }
 
             // ── Bridge ─────────────────────────────────────────────────────────
             function sendToHost(msg) {
@@ -309,6 +282,39 @@
                     }
                 });
 
+            // ── Shutdown ───────────────────────────────────────────────────────
+            // The power button is the only destructive control in the title
+            // bar, so it confirms first. Once confirmed the UI stops being
+            // interactive: the overlay covers the panel, the shutdown slot
+            // plays, and the host is told to quit only after the sound has had
+            // time to start — quitting immediately cuts it off mid-sample.
+            const SHUTDOWN_HOLD_MS = 900;
+            let _shuttingDown = false;
+
+            async function requestShutdown() {
+                if (_shuttingDown) return;
+                playSlot("interact");
+                const r = await openModal(
+                    "Quit mudscript",
+                    "Stop all macros and quit mudscript?\n\nThis quits Hammerspoon — mudscript runs inside it, so there is no way to leave one without the other.",
+                    "Quit",
+                );
+                if (!r.confirmed) return;
+                beginShutdown();
+            }
+            window.requestShutdown = requestShutdown;
+
+            function beginShutdown() {
+                _shuttingDown = true;
+                const ov = document.getElementById("shutdown-overlay");
+                if (ov) ov.classList.add("open");
+                playSlot("shutdown");
+                setTimeout(
+                    () => sendToHost({ action: "shutdown" }),
+                    SHUTDOWN_HOLD_MS,
+                );
+            }
+
             // ── Helpers ────────────────────────────────────────────────────────
             function h(tag, attrs = {}, ...children) {
                 const el = document.createElement(tag);
@@ -330,8 +336,11 @@
             function toggle(checked, onchange) {
                 const label = h(
                     "label",
-                    { cls: "toggle" },
-                    h("input", { type: "checkbox", onchange }),
+                    { cls: "toggle", onmouseenter: () => playSlot("hover") },
+                    h("input", {
+                        type: "checkbox",
+                        onchange: (e) => { playSlot("interact"); if (onchange) onchange(e); },
+                    }),
                     h("div", { cls: "toggle-track" }),
                     h("div", { cls: "toggle-thumb" }),
                 );
@@ -361,41 +370,22 @@
                 return wrap;
             }
 
-            function section(id, title, buildFn, defaultOpen = false, collapsible = true) {
-                const isOpen = !collapsible || _openSections.has(id);
+            // A settings group: a sticky heading and its rows, always open.
+            // Groups used to collapse because settings was one narrow panel
+            // sharing space with everything else; it has its own window and a
+            // nav rail now, so a chevron only hides content for no gain.
+            // `desc` is an optional one-line explanation of the group.
+            function section(id, title, buildFn, desc) {
                 const head = h(
                     "div",
-                    { cls: "section-head" + (isOpen ? " open" : "") + (collapsible ? "" : " always-open") },
-                    h("span", { cls: "section-chevron" }, "▶"),
+                    { cls: "section-head" },
                     h("span", { cls: "section-title" }, title),
+                    desc ? h("span", { cls: "section-desc" }, desc) : null,
                 );
-                const body = h("div", {
-                    cls: "section-body" + (isOpen ? " open" : ""),
-                });
+                const body = h("div", { cls: "section-body" });
                 buildFn(body);
-                if (collapsible) {
-                    head.addEventListener("mouseenter", () => playSlot("hover"));
-                    head.addEventListener("click", () => {
-                        playSlot("interact");
-                        const open = !_openSections.has(id);
-                        if (open) _openSections.add(id);
-                        else _openSections.delete(id);
-                        head.classList.toggle("open", open);
-                        body.classList.toggle("open", open);
-                        if (open) {
-                            // Wait for the CSS max-height transition (250ms) then scroll
-                            // the bottom of the newly-expanded section into view.
-                            setTimeout(() => {
-                                const wrap = head.parentElement;
-                                wrap.scrollIntoView({
-                                    block: "nearest",
-                                    behavior: "smooth",
-                                });
-                            }, 260);
-                        }
-                    });
-                }
                 const wrap = h("div", { cls: "section" });
+                wrap.setAttribute("data-section", id);
                 wrap.appendChild(head);
                 wrap.appendChild(body);
                 return wrap;
@@ -541,6 +531,92 @@
                 });
                 wrap.appendChild(slider);
                 return wrap;
+            }
+
+            // ── buildRuntime — macro engine + reload ───────────────────────────
+            // The macros switch and the reload menu used to live in the title
+            // bar as compact ghost buttons, back when the title bar was the
+            // only chrome settings had. They are settings, so they read as
+            // settings rows now; the title bar keeps only window controls.
+            function buildRuntime(body) {
+                body.appendChild(
+                    row(
+                        "Macros",
+                        "Master switch for the macro engine",
+                        toggle(S.macrosEnabled ?? false, (e) =>
+                            sendToHost({
+                                action: "setMacros",
+                                value: e.target.checked ? 1 : 0,
+                            }),
+                        ),
+                    ),
+                );
+
+                body.appendChild(divider());
+                body.appendChild(groupLabel("Reload"));
+                body.appendChild(
+                    h("div", { cls: "group-hint" },
+                        "Pick what a reload rebuilds. Anything left off keeps "
+                        + "its current state."),
+                );
+
+                // Which subsystems the Reload button rebuilds. Same qrOptions
+                // the old dropdown's checkboxes wrote to. Four short labels
+                // sharing one explanation, rather than four rows each
+                // restating what its own name already says.
+                const qr = S.qrOptions || {};
+                const targets = [
+                    ["macros", "Macro pack"],
+                    ["theme", "Theme and sounds"],
+                    ["settings", "Settings file"],
+                    ["ui", "Shell windows"],
+                ];
+                for (const [key, label] of targets) {
+                    body.appendChild(
+                        row(
+                            label,
+                            null,
+                            toggle(qr[key] !== false, (e) =>
+                                sendToHost({
+                                    action: "setQROption",
+                                    key: key,
+                                    value: e.target.checked,
+                                }),
+                            ),
+                            "row-sub row-compact",
+                        ),
+                    );
+                }
+
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Reload Selected", "accent", () => {
+                            const q = S.qrOptions || {};
+                            const acts = {
+                                macros: "reloadMacros",
+                                theme: "reloadTheme",
+                                settings: "reloadSettings",
+                                ui: "reloadUI",
+                            };
+                            let sent = false;
+                            for (const [key, action] of Object.entries(acts)) {
+                                if (q[key] !== false) {
+                                    sendToHost({ action: action });
+                                    sent = true;
+                                }
+                            }
+                            if (!sent) showAlert("Nothing selected to reload.");
+                        }),
+                        actionBtn("Reload Everything", "", async () => {
+                            const r = await openModal(
+                                "Reload Everything",
+                                "Restart Hammerspoon and reload mudscript from disk?",
+                                "Reload",
+                            );
+                            if (r.confirmed) sendToHost({ action: "reloadAll" });
+                        }),
+                    ),
+                );
             }
 
             // ── buildAccessibility — input and motion settings ─────────────────────
@@ -1369,9 +1445,17 @@
                 // user-defined settings). Settings keeps only what has no
                 // panel of its own.
                 scroll.appendChild(
-                    section("settings", "Settings", buildSettings),
+                    section("runtime", "Runtime", buildRuntime,
+                        "Macro engine and what a reload touches"),
                 );
-                scroll.appendChild(section("accessibility", "Accessibility", buildAccessibility));
+                scroll.appendChild(
+                    section("settings", "Settings", buildSettings,
+                        "Defined by your macro pack"),
+                );
+                scroll.appendChild(
+                    section("accessibility", "Accessibility", buildAccessibility,
+                        "Input handling and performance"),
+                );
                 for (const menu of S.userMenus || []) {
                     const title = menu.icon
                         ? menu.icon + " " + menu.title
@@ -1383,9 +1467,12 @@
                     );
                 }
                 scroll.appendChild(
-                    section("developer", "Developer", buildDeveloper, false, false),
+                    section("developer", "Developer", buildDeveloper,
+                        "Editing, logs, updates, and integrity"),
                 );
-                scroll.appendChild(section("help", "Help", buildHelp, false, false));
+                scroll.appendChild(
+                    section("help", "Help", buildHelp, "Version and documentation"),
+                );
 
                 scroll.scrollTop = scrollTop;
             }
@@ -1547,21 +1634,14 @@
             function receiveState(state) {
                 S = state;
                 applyTheme(S.theme);
-                const btn = document.getElementById("btn-toggle-macros");
-                const enabled = S.macrosEnabled ?? false;
-                if (btn) {
-                    btn.textContent = enabled ? "Macros: ON" : "Macros: OFF";
-                    btn.dataset.on = enabled ? "1" : "0";
-                    btn.style.color = enabled ? "var(--success)" : "var(--danger)";
-                }
                 const verEl = document.getElementById("rail-version");
                 if (verEl && S.msVersion) verEl.textContent = "v" + S.msVersion;
-                syncQRChecks(S.qrOptions);
                 render();
                 renderProfilesPanel();
                 // Theme & sound live in panel-theme.js — it gets the state it
                 // needs handed to it rather than reaching back for S.
                 if (window.renderThemePanel) window.renderThemePanel(state);
+                if (window.renderPluginsPanel) window.renderPluginsPanel(state);
             }
 
             // ── Init ───────────────────────────────────────────────────────────
@@ -1585,5 +1665,4 @@
             window.sendToHost = sendToHost;
             window.playSlot = playSlot;
             window.closePanel = function() { sendToHost({ action: 'close' }); };
-            window.toggleQR = toggleQR;
     })();

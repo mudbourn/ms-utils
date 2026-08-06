@@ -1774,6 +1774,12 @@
     function bindRow(m, isSub) {
         var r = document.createElement("div");
         r.className = "bind-row" + (isSub ? " bind-row-sub" : "");
+        // Row-level hover, matching the log-panel list rows. mouseenter does not
+        // bubble, so moving onto a pill/toggle inside the row fires only that
+        // child's hover — no double-trigger.
+        r.addEventListener("mouseenter", function() {
+            if (window.playSlot) playSlot("hover");
+        });
 
         var lbl = document.createElement("div");
         lbl.className = "bind-label";
@@ -1805,10 +1811,14 @@
             // shared .toggle track/thumb styling rather than a native checkbox.
             var lbl = document.createElement("label");
             lbl.className = "toggle bind-toggle";
+            lbl.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
             var t = document.createElement("input");
             t.type = "checkbox";
             t.checked = !!m.enabled;
             t.addEventListener("change", function() {
+                if (window.playSlot) playSlot("interact");
                 shellPost("macros", "setMacroEnabled", {
                     action: "setMacroEnabled",
                     id:     m.id,

@@ -111,9 +111,14 @@ return function(ms)
 
     -- Write-time log capping: periodically trim log files to _HIST_MAX lines
     -- to prevent unbounded growth (the root cause of the Inputs Panel hang).
+    -- Module scope: both the history loader (inside :start()) and the write-time
+    -- cap (inside :_devWrite()) need this, and they are sibling functions — a
+    -- local inside :start() reads as a nil global from _devWrite.
+    local _HIST_MAX            = 500
     local _WRITE_TRIM_INTERVAL = 200
     local _writeCounter        = 0
     local function _trimLogFile(path, keep)
+        keep = tonumber(keep) or _HIST_MAX
         local lines = {}
         local f = io.open(path, "r")
         if not f then return end
@@ -421,7 +426,6 @@ return function(ms)
         -- then only decodes the last _HIST_MAX entries. The log is append-only
         -- (entries written in chronological order), so no sort is needed. This
         -- replaces the old full-file decode + sort + trim approach.
-        local _HIST_MAX = 500
         local function _loadDevHistory(panel, categories, shellPanelId, skipEvents)
             local entries = {}
             for _, cat in ipairs(categories) do
@@ -1897,6 +1901,7 @@ return function(ms)
         local f = _winG(function() return win:frame() end)
         return {
             frame      = f and { x = math.floor(f.x), y = math.floor(f.y), w = math.floor(f.w), h = math.floor(f.h) } or nil,
+            standard   = _winG(function() return win:isStandard() end),
             minimized  = _winG(function() return win:isMinimized() end),
             fullscreen = _winG(function() return win:isFullscreen() end),
             visible    = _winG(function() return win:isVisible() end),

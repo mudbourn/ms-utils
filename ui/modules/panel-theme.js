@@ -417,6 +417,7 @@
         { id: "back", label: "Menu Back" },
         { id: "settingsOpen", label: "Settings Open" },
         { id: "settingsClose", label: "Settings Close" },
+        { id: "shutdown", label: "Shutdown" },
     ];
 
     const LOAD_SLOTS = [
@@ -433,6 +434,7 @@
         update: "d_Update", updateAvailable: "d_UpdateAvailable",
         reset: "d_Reset", interact: "d_Interact", hover: "d_Hover",
         back: "d_Back", settingsOpen: "d_SettingsOpen", settingsClose: "d_SettingsClose",
+        shutdown: "d_Shutdown",
     };
 
     // Preview and import used to be right-click-only. They are the two things

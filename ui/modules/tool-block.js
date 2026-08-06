@@ -22,6 +22,19 @@
  *   ...
  */
 
+// ── Shell sounds ────────────────────────────────────────────────────────
+// Hover on enter, click sound on activate. Guarded on window.playSlot: this
+// module also loads in contexts that have no sound bus, where it must no-op.
+function _sfx(el, clickSlot) {
+    el.addEventListener("mouseenter", function() {
+        if (window.playSlot) window.playSlot("hover");
+    });
+    el.addEventListener("click", function() {
+        if (window.playSlot) window.playSlot(clickSlot || "interact");
+    });
+    return el;
+}
+
 // ── SVG icon cache ──────────────────────────────────────────────────────
 const _svgCache = {};
 
@@ -585,11 +598,13 @@ export class ToolCanvas {
         const del = document.createElement("div");
         del.className = "step-action-btn del";
         del.innerHTML = _svgCache["trash"] || "×";
+        _sfx(del, "back");
         del.addEventListener("click", e => { e.stopPropagation(); this.removeTool(tool._sid); });
         acts.appendChild(del);
         const editBtn = document.createElement("div");
         editBtn.className = "step-action-btn edit";
         editBtn.innerHTML = _svgCache["edit"] || "✎";
+        _sfx(editBtn);
         editBtn.addEventListener("click", e => { e.stopPropagation(); this._selectTool(tool._sid); });
         acts.appendChild(editBtn);
         el.appendChild(acts);
@@ -620,6 +635,7 @@ export class ToolCanvas {
         const toggle = document.createElement("div");
         toggle.className = "tool-nest-toggle";
         toggle.innerHTML = _svgCache["chevdown"] || "▾";
+        _sfx(toggle);
         toggle.addEventListener("click", e => {
             e.stopPropagation();
             toggle.classList.toggle("collapsed");
@@ -648,11 +664,13 @@ export class ToolCanvas {
         const del = document.createElement("div");
         del.className = "step-action-btn del";
         del.innerHTML = _svgCache["trash"] || "×";
+        _sfx(del, "back");
         del.addEventListener("click", e => { e.stopPropagation(); this.removeTool(tool._sid); });
         acts.appendChild(del);
         const editBtn = document.createElement("div");
         editBtn.className = "step-action-btn edit";
         editBtn.innerHTML = _svgCache["edit"] || "✎";
+        _sfx(editBtn);
         editBtn.addEventListener("click", e => { e.stopPropagation(); this._selectTool(tool._sid); });
         acts.appendChild(editBtn);
         header.appendChild(acts);

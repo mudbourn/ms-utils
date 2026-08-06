@@ -46,6 +46,32 @@ tell whether that was intended. Validate before signing:
 `ms.registry.status().error` names the offending row, so a rejected index says
 which entry broke it.
 
+## The plugin contract
+
+Plugins are the only package type that is code, and the only one that cannot be
+undone by rewriting a file. Two rules, both checked at review, both load-bearing
+for the Plugins panel's off switch:
+
+**1. Register through `ms`, not through `hs`.** Binds, bus subscriptions, key
+and mouse callbacks, settings and tools definitions all go through the `ms`
+handed to the plugin. That `ms` is a per-plugin proxy (`mac/lib/ms_plugins.lua`)
+that records how to undo every registration it sees, which is what lets the
+panel switch a plugin off without a reload. A plugin calling `hs.hotkey.bind`,
+`hs.timer.new` or `hs.eventtap.new` directly registers with Hammerspoon instead,
+where nothing can reach it — it will keep firing after the user switches it off,
+and the off switch will have lied. Nothing in-process can detect this; review is
+the only gate.
+
+**2. Implement `:stop()`.** Anything a plugin holds that mudscript never saw —
+its own state, tasks, watchers, anything created before it reached `ms` — is
+only reachable through the Spoon's own teardown. `unload` calls `:stop()` first,
+before replaying the recorded undo list, precisely because it is the only step
+that knows about the parts this system does not.
+
+A plugin that satisfies both can be enabled and disabled freely at runtime. One
+that satisfies neither is not a plugin that can be turned off, whatever the
+toggle says.
+
 ## Publishing
 
 Merging an edit does not publish it. An index that lands on `main` still

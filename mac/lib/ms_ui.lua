@@ -193,6 +193,7 @@ return function(ms)
                 { id = "back",            d = "d_Back",            a = "a_Back" },
                 { id = "settingsOpen",    d = "d_SettingsOpen",    a = "a_SettingsOpen" },
                 { id = "settingsClose",   d = "d_SettingsClose",   a = "a_SettingsClose" },
+                { id = "shutdown",        d = "d_Shutdown",        a = "a_Shutdown" },
             }
 
             -- Scan for available numbered variants
@@ -394,6 +395,22 @@ return function(ms)
                 profiles                = ms.getProfiles(),
                 integrityStatus         = status,
                 integrityHash           = curHash,
+                -- Installed plugins, with this session's load outcome folded
+                -- in. `enabled` is what the user asked for and `loadError` is
+                -- what happened — a plugin can be on and still not running,
+                -- and the panel has to be able to tell those apart.
+                plugins                 = (function()
+                    if not (ms.package and ms.package.listPlugins) then return {} end
+                    local ok, list = pcall(ms.package.listPlugins)
+                    if not ok or type(list) ~= "table" then return {} end
+                    local failed = (ms.plugins and ms.plugins.failed) or {}
+                    local loaded = (ms.plugins and ms.plugins.loaded) or {}
+                    for _, p in ipairs(list) do
+                        p.loadError = failed[p.dir]
+                        p.running   = loaded[p.dir] == true
+                    end
+                    return list
+                end)(),
                 macroMeta               = {
                     name    = meta.name,
                     author  = meta.author,
@@ -663,6 +680,8 @@ return function(ms)
 
             reloadAll = function() hs.reload() end,
 
+            shutdown = function() ms.shutdown() end,
+
             quickReload = function()
                 ms.reload()
             end,
@@ -737,6 +756,7 @@ return function(ms)
                             { id = "back",            d = "d_Back",            a = "a_Back" },
                             { id = "settingsOpen",    d = "d_SettingsOpen",    a = "a_SettingsOpen" },
                             { id = "settingsClose",   d = "d_SettingsClose",   a = "a_SettingsClose" },
+                            { id = "shutdown",        d = "d_Shutdown",        a = "a_Shutdown" },
                         }
                         if savedPreset == "default" then
                             -- Default: all d_* sounds
@@ -1371,6 +1391,59 @@ return function(ms)
                     )
                     ms.ui.refresh()
                 end)
+            end,
+
+            -- Plugins --
+            -- The flag decides, ms.plugins.apply() enforces: it loads what is
+            -- newly enabled and tears down what is newly off, so the switch
+            -- takes effect on the keystroke after you flip it rather than at
+            -- the next reload.
+            setPluginEnabled = function(data)
+                if not (data and data.dir and ms.package and ms.package.setPluginEnabled) then return end
+                ms.package.setPluginEnabled(data.dir, data.value == true)
+                if ms.plugins and ms.plugins.apply then
+                    local ok, err = pcall(ms.plugins.apply)
+                    if not ok then print("[MsUI] plugin apply failed: " .. tostring(err)) end
+                end
+                ms.ui.markDirty()
+                ms.ui.refresh()
+            end,
+
+            removePlugin = function(data)
+                if not (data and data.dir and ms.package and ms.package.removePlugin) then return end
+                local dir = data.dir
+
+                ms.playSlot("alert")
+                local answer = hs.dialog.blockAlert(
+                    "Remove " .. (data.label or dir) .. "?",
+                    "The plugin's files are deleted from Spoons/. This cannot be undone.",
+                    "Remove", "Cancel"
+                )
+                if answer ~= "Remove" then return end
+
+                -- Teardown first, delete second. The undo list is only good
+                -- while the plugin is still loaded, and running it after the
+                -- files are gone would mean stopping a plugin that can no
+                -- longer be asked to stop itself.
+                if ms.plugins and ms.plugins.unload then
+                    pcall(ms.plugins.unload, dir)
+                end
+
+                local ok, err = ms.package.removePlugin(dir)
+                if not ok then
+                    ms.alert("Could not remove plugin:\n" .. tostring(err), 5)
+                    return
+                end
+
+                ms.ui.markDirty()
+                ms.ui.refresh()
+                ms.alert((data.label or dir) .. " removed.", 4, true)
+            end,
+
+            openPluginsFolder = function()
+                local dir = os.getenv("HOME") .. "/.hammerspoon/Spoons"
+                hs.fs.mkdir(dir)
+                os.execute("open '" .. dir .. "'")
             end,
 
             openDevLogs = function()
@@ -2047,6 +2120,9 @@ return function(ms)
             -- fall through untouched to their own handlers in ms_core.
             ms.bus.on("ui:macros:*", _routeAction)
             ms.bus.on("ui:tools:*",  _routeAction)
+            -- The plugins panel sends on its own channel so its actions read
+            -- as plugin actions in the log, but they resolve in the same set.
+            ms.bus.on("ui:plugins:*", _routeAction)
         end
 
         -- ms.ui window methods are a thin adapter over the shell — the legacy

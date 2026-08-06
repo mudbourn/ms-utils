@@ -182,32 +182,49 @@ return function(ms)
             return out:match("^(%x+)")
         end
 
-        ms.package.recordPlugins = function(names, manifest)
-            local ledger
+        local function readLedger()
             local raw = readFile(_ledgerPath)
-            if raw then
-                local ok, tbl = pcall(hs.json.decode, raw)
-                if ok and type(tbl) == "table" and type(tbl.plugins) == "table" then
-                    ledger = tbl
-                end
+            if not raw then return nil end
+            local ok, tbl = pcall(hs.json.decode, raw)
+            if ok and type(tbl) == "table" and type(tbl.plugins) == "table" then
+                return tbl
             end
-            ledger = ledger or { version = 1, plugins = {} }
+            return nil
+        end
+
+        local function writeLedger(ledger)
+            local ok, json = pcall(hs.json.encode, ledger)
+            if not ok then return false end
+            return writeFile(_ledgerPath, json .. "\n")
+        end
+
+        ms.package.recordPlugins = function(names, manifest)
+            local ledger = readLedger() or { version = 1, plugins = {} }
 
             for name in pairs(names) do
                 local hash = spoonTreeHash(_hsDir .. "/Spoons/" .. name)
                 if hash then
+                    -- The display fields are recorded here because this is the
+                    -- only moment they exist: install copies the Spoons/ tree
+                    -- verbatim, so nothing on disk afterwards remembers what
+                    -- the package called itself. The alternative — reading a
+                    -- name out of the Spoon's own init.lua — means parsing
+                    -- third-party code to draw a list, which is not a trade
+                    -- worth making for a subtitle.
                     ledger.plugins[name] = {
                         hash        = hash,
                         id          = manifest and manifest.id or nil,
+                        name        = manifest and manifest.name or nil,
                         version     = manifest and manifest.version or nil,
+                        author      = manifest and manifest.author or nil,
+                        website     = manifest and manifest.website or nil,
+                        description = manifest and manifest.description or nil,
                         installedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
                     }
                 end
             end
 
-            local ok, json = pcall(hs.json.encode, ledger)
-            if not ok then return false end
-            return writeFile(_ledgerPath, json .. "\n")
+            return writeLedger(ledger)
         end
 
         -- True when `rel` sits under one of the type's allowed prefixes.
@@ -660,6 +677,131 @@ return function(ms)
             }
         end
     -- END Install --
+
+    -- Plugin Inventory --
+        -- What is installed, whether it is allowed to load, and taking it back
+        -- out again. The ledger is the source for everything except the tree
+        -- hash: a .spoon on disk carries no manifest of its own, so the record
+        -- written at install time is the only thing that knows what a plugin
+        -- is called or who wrote it.
+
+        local function validSpoonName(name)
+            if type(name) ~= "string" then return nil end
+            if not name:match("^[%w%-%._ ]+%.spoon$") then return nil end
+            if name:find("%.%.") or name:find("^%.") then return nil end
+            return name
+        end
+
+        ms.package.validSpoonName = validSpoonName
+
+        -- Disabled rather than enabled, deliberately. A freshly installed
+        -- plugin should run without a second opt-in — the trust gate on the
+        -- way in is the decision point — and a name this list has never heard
+        -- of can never read as "off".
+        ms.package.pluginEnabled = function(name)
+            local off = ms._pluginsDisabled
+            return not (type(off) == "table" and off[name] == true)
+        end
+
+        -- Every .spoon on disk, joined against the ledger. `status` is:
+        --   ok           recorded, and the tree still hashes to its record
+        --   modified     recorded, but the tree changed underneath it
+        --   unrecorded   no ledger row — it did not come through install
+        --
+        -- The last two normally block boot in Guardian, so seeing one here
+        -- means Guardian is off or the tree changed after it ran. The panel
+        -- shows them either way: a list that quietly omitted the plugin that
+        -- is about to stop the next boot would be the worst kind of correct.
+        ms.package.listPlugins = function()
+            local out = {}
+            local spoonsDir = _hsDir .. "/Spoons"
+            if not hs.fs.attributes(spoonsDir) then return out end
+
+            local ledger = readLedger()
+            local rows   = (ledger and ledger.plugins) or {}
+
+            for entry in hs.fs.dir(spoonsDir) do
+                local name = validSpoonName(entry)
+                local abs  = spoonsDir .. "/" .. tostring(entry)
+                local attr = name and hs.fs.attributes(abs)
+                if name and attr and attr.mode == "directory" then
+                    local rec    = rows[name]
+                    local status = "unrecorded"
+                    if type(rec) == "table" and type(rec.hash) == "string" then
+                        local live = spoonTreeHash(abs)
+                        status = (live and live:lower() == rec.hash:lower())
+                            and "ok" or "modified"
+                    end
+                    rec = type(rec) == "table" and rec or {}
+
+                    out[#out + 1] = {
+                        dir         = name,
+                        -- The bundle name minus ".spoon" is the fallback, so an
+                        -- unrecorded plugin still reads as something.
+                        name        = rec.name or name:gsub("%.spoon$", ""),
+                        id          = rec.id,
+                        version     = rec.version,
+                        author      = rec.author,
+                        website     = rec.website,
+                        description = rec.description,
+                        installedAt = rec.installedAt,
+                        status      = status,
+                        enabled     = ms.package.pluginEnabled(name),
+                    }
+                end
+            end
+
+            table.sort(out, function(a, b)
+                return a.name:lower() < b.name:lower()
+            end)
+            return out
+        end
+
+        -- Disabling leaves the bundle exactly where it is. Moving or renaming
+        -- it would change what Guardian sees in Spoons/ and turn an off switch
+        -- into a blocked boot, so the flag is the only thing that moves.
+        ms.package.setPluginEnabled = function(name, on)
+            if not validSpoonName(name) then return false end
+            ms._pluginsDisabled = ms._pluginsDisabled or {}
+            ms._pluginsDisabled[name] = (on == false) or nil
+            if ms.saveSettings then pcall(ms.saveSettings) end
+            return true
+        end
+
+        -- Deletes the bundle and its ledger row together. Both or neither: a
+        -- dir with no row blocks the next boot, and a row with no dir is a
+        -- stale claim that would vouch for whatever lands under that name
+        -- later. The disabled flag goes too, so reinstalling gives a plugin
+        -- that is on rather than mysteriously off.
+        ms.package.removePlugin = function(name)
+            if not validSpoonName(name) then return false, "Invalid plugin name." end
+
+            local abs  = _hsDir .. "/Spoons/" .. name
+            local attr = hs.fs.attributes(abs)
+            if not attr or attr.mode ~= "directory" then
+                return false, "No such plugin."
+            end
+
+            hs.execute("/bin/rm -rf " .. sq(abs))
+            if hs.fs.attributes(abs) then
+                return false, "Could not remove " .. name .. "."
+            end
+
+            local ledger = readLedger()
+            if ledger and ledger.plugins[name] then
+                ledger.plugins[name] = nil
+                writeLedger(ledger)
+            end
+
+            if ms._pluginsDisabled then ms._pluginsDisabled[name] = nil end
+            if ms.saveSettings then pcall(ms.saveSettings) end
+
+            -- The Spoon is already loaded into this session. Hammerspoon has
+            -- no unload, so the files are gone but the code is not — say so
+            -- rather than letting a still-running plugin look removed.
+            return true
+        end
+    -- END Plugin Inventory --
 
     -- Export Helpers --
         -- Collects the live install's files for a given type, ready for pack().
