@@ -695,20 +695,18 @@ return function(ms)
         -- How long to hold before the exit, so a send-off sample is not cut
         -- off mid-note. 0.25s floor so the window teardown is on screen.
         --
-        -- This used to have no upper bound, on the reasoning that a send-off
-        -- is a send-off and the sample's own length is the only honest limit.
-        -- The shipped sample is 2.7s, which made every exit a little over
-        -- three seconds — measured, after a long detour spent assuming the
-        -- curtain was late when it was in fact up and correct 78ms in. Nothing
-        -- was slow to appear; the exit simply stood still waiting for audio.
+        -- This used to have no upper bound at all, on the reasoning that a
+        -- send-off is a send-off and the sample's own length is the only
+        -- honest limit. The bound exists now only as a backstop: it is not
+        -- here to shorten the exit, it is here so a sample that is absurdly
+        -- long — or a duration that lies — cannot leave a torn-down app
+        -- sitting behind a curtain indefinitely.
         --
-        -- So the bound is back, and it is a judgement about the exit rather
-        -- than about the audio: past about a second of a static screen the
-        -- send-off stops reading as an outro and starts reading as a hang.
-        -- A sample longer than this is still heard, just not to its end —
-        -- which is already what happens to anyone whose sample outlasts the
-        -- process, since the handle dies with it.
-        local SLOT_HOLD_MAX = 1.2
+        -- Set above the shipped 2.7s sample on purpose, so in normal use it
+        -- never binds and the sample still plays to its end. Anything at or
+        -- below the sample length is a decision to truncate the send-off, so
+        -- move it with that in mind rather than as a latency knob.
+        local SLOT_HOLD_MAX = 4.0
 
         local function _waitForSlot(slotId)
             local wait  = 0.25
