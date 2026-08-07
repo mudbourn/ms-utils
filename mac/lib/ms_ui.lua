@@ -2137,7 +2137,20 @@ return function(ms)
         end
 
         ms.ui.prewarm = function()
-            -- No-op: the shell webview is built by ms.shell.init() at boot.
+            -- Build the shell webview during boot rather than on the first
+            -- open, so its page is loaded and already sitting on the default
+            -- panel by the time the hotkey is pressed. This used to be a
+            -- no-op whose comment claimed the boot build happened elsewhere;
+            -- nothing did it, so the page only loaded on first show.
+            --
+            -- init() leaves the window at alpha 0 and never shows it, so this
+            -- is invisible — it only warms the page.
+            if not (ms.shell and ms.shell.init) then return end
+
+            pcall(function()
+                if ms.shell.webview and ms.shell.webview() then return end
+                ms.shell.init()
+            end)
         end
     -- END UI State Cache --
 

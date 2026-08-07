@@ -1609,12 +1609,14 @@
     var mtabs = document.createElement("div");
     mtabs.className = "mtabs";
 
+    // Binds is the landing tab: it is the panel people open the shell to
+    // read, where Builder is a thing you go to deliberately.
     var builderSection = document.createElement("div");
-    builderSection.className = "mtab-section active";
+    builderSection.className = "mtab-section";
     builderSection.setAttribute("data-msec", "builder");
 
     var bindsSection = document.createElement("div");
-    bindsSection.className = "mtab-section";
+    bindsSection.className = "mtab-section active";
     bindsSection.setAttribute("data-msec", "binds");
 
     var bindsScroll = document.createElement("div");
@@ -1623,7 +1625,7 @@
 
     ["builder", "binds"].forEach(function(id) {
         var b = document.createElement("button");
-        b.className = "mtab" + (id === "builder" ? " active" : "");
+        b.className = "mtab" + (id === "binds" ? " active" : "");
         b.setAttribute("data-mtab", id);
         b.textContent = id === "builder" ? "Builder" : "Binds";
         b.addEventListener("mouseenter", function() {
