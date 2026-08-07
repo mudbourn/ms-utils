@@ -735,6 +735,17 @@ return function(ms)
         -- screen's CSS is exactly how the two drifted apart in the first
         -- place. Same page, same theme payload, same tokens.
         --
+        -- The curtain's entrance and exit, in milliseconds. Both mirror the
+        -- page's own CSS — a duration here and a duration there are two clocks
+        -- describing one fade, so they are wrong the moment either moves
+        -- alone. Change both or neither.
+        --
+        -- IN covers the sheet's 0.35s fade plus the mark and wording arriving
+        -- 0.12s behind it: "fully visible" means all of it, not just the
+        -- background, because the shell is still showing through until then.
+        local CURTAIN_IN_MS   = 600
+        local CURTAIN_FADE_MS = 350
+
         -- It takes the shell's frame rather than the screen's: this is the
         -- shell going quiet, not the desktop being covered. The shell's own
         -- window is the thing being replaced, so standing exactly in its
@@ -782,14 +793,29 @@ return function(ms)
             -- fails to build still lets the exit run. Reassigned rather than
             -- branched so both the handshake and the fallback below reach
             -- whichever version is current.
+            --
+            -- `reveal` returns whether it actually put a curtain up, which is
+            -- what decides whether the teardown waits for the fade-in. With no
+            -- page there is nothing to wait for, and stalling the exit on a
+            -- fade nobody can see is the one thing worse than no curtain.
             local fired = false
-            local reveal = function() end
+            local reveal = function() return false end
             local ready
             ready = function()
                 if fired then return end
                 fired = true
-                reveal()
-                pcall(onReady)
+                if reveal() then
+                    -- The teardown closes the shell. Holding it until the
+                    -- curtain is fully opaque is what makes this read as a
+                    -- takeover: the shell stays lit underneath and the curtain
+                    -- comes down over it, instead of the shell blinking out
+                    -- and the curtain fading up over bare desktop.
+                    hs.timer.doAfter(CURTAIN_IN_MS / 1000, function()
+                        pcall(onReady)
+                    end)
+                else
+                    pcall(onReady)
+                end
             end
 
             local ok, view = pcall(function()
@@ -812,10 +838,16 @@ return function(ms)
                     { x = sf.x, y = sf.y, w = sf.w, h = sf.h }, {}, uc
                 )
                 pcall(function() v:windowStyle(0) end)
+                -- Transparent, and it stays transparent through the fade —
+                -- that is the whole takeover: the shell is still lit
+                -- underneath and shows through the curtain until the curtain
+                -- is opaque.
                 pcall(function() v:transparent(true) end)
-                -- Shell's own level and shadow: it is standing in for that
-                -- window, so it has to sit where that window sat.
-                pcall(function() v:level(hs.canvas.windowLevels.popUpMenu or 101) end)
+                -- One level above the shell rather than level with it. Two
+                -- windows on the same level are ordered by whatever AppKit
+                -- feels like, and a curtain that comes up *behind* the window
+                -- it is covering for is not a curtain.
+                pcall(function() v:level((hs.canvas.windowLevels.popUpMenu or 101) + 1) end)
                 pcall(function() v:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
                 pcall(function() v:allowTextEntry(false) end)
                 pcall(function() v:shadow(true) end)
@@ -852,10 +884,12 @@ return function(ms)
             local octane = ms._octaneMode and "true" or "false"
             local theme  = hs.json.encode(ms._theme or {})
             reveal = function()
-                pcall(function()
+                local shown = pcall(function()
                     view:evaluateJavaScript("applyTheme(" .. theme .. ");"
                         .. string.format("showCurtain(%q, %s);", mode, octane))
                 end)
+                -- Octane has no fade to wait out.
+                return shown and ms._exitCurtainLive and not ms._octaneMode
             end
 
             -- WKWebView's html() is async and the handshake can be lost if the
@@ -866,11 +900,6 @@ return function(ms)
 
             return view
         end
-
-        -- Matches the curtain's own opacity transition. A CSS duration and a
-        -- Lua timer are two clocks describing one fade, so they are wrong the
-        -- moment either moves alone — change both or neither.
-        local CURTAIN_FADE_MS = 350
 
         -- Take the curtain back down, then do the thing. The exit has to wait
         -- out the fade: `hs.reload()` and `app:kill()` both take the process
