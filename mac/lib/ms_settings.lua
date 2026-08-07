@@ -756,7 +756,16 @@ return function(ms)
         -- the fade starts; this only fires if that message never comes, so it
         -- is long enough to lose every race against a page that is merely slow
         -- and still short enough that the exit is not silent.
-        local CURTAIN_SOUND_FALLBACK_MS = 500
+        --
+        -- It was 500ms, and that was not long enough. The curtain's webview is
+        -- prewarmed but hidden, so its rendering is suspended and showing it
+        -- has to resume the compositor before anything can fade — routinely
+        -- longer than half a second on a cold view. This fired first, the
+        -- send-off started against a curtain that was not on screen yet, and
+        -- the two came apart. A backstop that wins a race it was never meant
+        -- to enter is indistinguishable from no sync at all. Sits above the
+        -- page's own 1000ms floor so the page is what gives up first.
+        local CURTAIN_SOUND_FALLBACK_MS = 1400
 
         -- It takes the shell's frame rather than the screen's: this is the
         -- shell going quiet, not the desktop being covered. The shell's own
@@ -939,18 +948,35 @@ return function(ms)
             local function present()
                 -- Armed before the JS is dispatched, because the page can
                 -- report back before evaluateJavaScript has even returned.
-                _onFading = onShow
+                --
+                -- Everything timed off the entrance hangs off this, not off
+                -- present(): the fade is what the send-off is syncing to, and
+                -- the gap between showing the window and the fade actually
+                -- starting is the whole problem this code exists to absorb.
+                -- Timed from here, the hold used to expire mid-fade and the
+                -- teardown pulled the shell out from under a curtain that was
+                -- still coming up.
+                _onFading = function()
+                    pcall(onShow)
+
+                    if ms._exitCurtainLive then
+                        -- The teardown closes the shell. Holding it until the
+                        -- curtain is fully opaque is what makes this read as a
+                        -- takeover: the shell stays lit underneath and the
+                        -- curtain comes down over it, instead of the shell
+                        -- blinking out and the curtain fading up over bare
+                        -- desktop.
+                        hs.timer.doAfter(CURTAIN_IN_MS / 1000, finishReady)
+                    else
+                        finishReady()
+                    end
+                end
 
                 ms.safeShow(view)
                 local shown = pcall(function()
                     view:evaluateJavaScript("applyTheme(" .. theme .. ");"
                         .. string.format("showCurtain(%q, %s);", mode, octane))
                 end)
-
-                -- If the page never reports the fade — dead page, or an
-                -- octane run where there is no fade to report — the send-off
-                -- still has to happen. Silence is not the fallback.
-                hs.timer.doAfter(CURTAIN_SOUND_FALLBACK_MS / 1000, _fading)
 
                 -- Whether there is a fade to wait for at all. A page that
                 -- never handshook is a window with nothing running in it;
@@ -959,14 +985,14 @@ return function(ms)
                 ms._exitCurtainLive = shown and _warmLive and not ms._octaneMode
 
                 if ms._exitCurtainLive then
-                    -- The teardown closes the shell. Holding it until the
-                    -- curtain is fully opaque is what makes this read as a
-                    -- takeover: the shell stays lit underneath and the curtain
-                    -- comes down over it, instead of the shell blinking out
-                    -- and the curtain fading up over bare desktop.
-                    hs.timer.doAfter(CURTAIN_IN_MS / 1000, finishReady)
+                    -- If the page never reports the fade, the send-off still
+                    -- has to happen. Silence is not the fallback.
+                    hs.timer.doAfter(CURTAIN_SOUND_FALLBACK_MS / 1000, _fading)
                 else
-                    finishReady()
+                    -- Nothing to sync to: a dead page, or octane, which snaps.
+                    -- Waiting out the backstop here would only make the exit
+                    -- sit silent for over a second before starting.
+                    _fading()
                 end
             end
 
