@@ -799,6 +799,11 @@ return function(ms)
                 uc:setCallback(function(message)
                     local decoded, data = pcall(hs.json.decode, message.body)
                     if decoded and type(data) == "table" and data.action == "ready" then
+                        -- Only a real handshake proves there is a page to
+                        -- fade. The fallback below fires whether or not the
+                        -- page ever came up, and waiting out a fade-out that
+                        -- nothing is running just delays the exit.
+                        ms._exitCurtainLive = true
                         ready()
                     end
                 end)
@@ -862,14 +867,42 @@ return function(ms)
             return view
         end
 
-        -- Shared tail for both exits: hold the screen for the send-off, then
-        -- do the thing. `_waitForSlot` measures from when the sample started,
-        -- so time spent waiting on the curtain handshake comes out of the
-        -- hold rather than being added to it.
+        -- Matches the curtain's own opacity transition. A CSS duration and a
+        -- Lua timer are two clocks describing one fade, so they are wrong the
+        -- moment either moves alone — change both or neither.
+        local CURTAIN_FADE_MS = 350
+
+        -- Take the curtain back down, then do the thing. The exit has to wait
+        -- out the fade: `hs.reload()` and `app:kill()` both take the process
+        -- with them, so a fade-out started but not waited for is a fade-out
+        -- nobody ever sees.
+        local function _dropCurtain(finish)
+            local view = ms._exitCurtainView
+
+            -- Nothing to fade: no curtain, no live page, or octane, which
+            -- snaps as it does everywhere.
+            if not view or not ms._exitCurtainLive or ms._octaneMode then
+                return finish()
+            end
+
+            local ok = pcall(function()
+                view:evaluateJavaScript("hideCurtain();")
+            end)
+            if not ok then return finish() end
+
+            hs.timer.doAfter(CURTAIN_FADE_MS / 1000, finish)
+        end
+
+        -- Shared tail for both exits: hold the screen for the send-off, fade
+        -- the curtain, then do the thing. `_waitForSlot` measures from when
+        -- the sample started, so time spent waiting on the curtain handshake
+        -- comes out of the hold rather than being added to it.
         local function _exit(mode, slot, finish)
             _exitCurtain(mode, function()
                 _teardown(mode)
-                hs.timer.doAfter(_waitForSlot(slot), finish)
+                hs.timer.doAfter(_waitForSlot(slot), function()
+                    _dropCurtain(finish)
+                end)
             end)
         end
 

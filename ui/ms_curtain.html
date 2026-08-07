@@ -100,6 +100,16 @@
                     opacity 0.45s ease 0.12s,
                     transform 0.45s cubic-bezier(0.4, 0, 0.2, 1) 0.12s;
             }
+
+            /* Going out, everything leaves together and immediately: the
+               staggered delays above are an entrance, and replaying them in
+               reverse would hold the mark on screen after the sheet beneath it
+               had already gone. */
+            #curtain.leaving,
+            #curtain.leaving #block,
+            #curtain.leaving #brand {
+                transition-delay: 0s;
+            }
             #curtain.visible #block {
                 opacity: 1;
                 transform: scale(1);
@@ -250,13 +260,25 @@
                 cu.classList.remove("shutdown", "restart");
                 cu.classList.add(MODES[mode] ? mode : "shutdown");
                 if (octane) cu.classList.add("octane");
-                /* Next frame, so the transition has a 0 state to run from —
-                   adding both classes in one paint skips the fade entirely. */
-                requestAnimationFrame(function () {
-                    requestAnimationFrame(function () {
-                        cu.classList.add("visible");
-                    });
-                });
+                /* Force a reflow so the transition has a settled 0 state to
+                   run from — setting both states in one go skips the fade.
+                   Deliberately not requestAnimationFrame: a webview that is
+                   not foregrounded throttles rAF, and a curtain that waits for
+                   a frame that never comes is a curtain that never appears. */
+                void cu.offsetWidth;
+                cu.classList.add("visible");
+            }
+
+            /* ── Hide ───────────────────────────────────────────────────────── */
+            /* The host calls this and then waits out the fade before it kills
+               or reloads. Reversing .visible is enough — every transition here
+               is symmetric, so the sheet, the block and the brand all wind
+               back down the way they came up. */
+            function hideCurtain() {
+                const cu = document.getElementById("curtain");
+                cu.classList.add("leaving");
+                void cu.offsetWidth;
+                cu.classList.remove("visible");
             }
 
             /* ── Suppress context menu ──────────────────────────────────────── */
