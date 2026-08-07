@@ -77,30 +77,12 @@
                 local action = data.action or "unknown"
                 local body   = data.body
 
-                -- The exit curtain runs as an iframe inside this page, so it
-                -- has no channel of its own — it posts up to the shell and the
-                -- shell relays it here. See § the curtain, embedded, in
-                -- ms_settings.
-                if panel == "_shell" and action == "curtainReady" then
-                    if ms._shellCurtainReady then pcall(ms._shellCurtainReady) end
-                    return
-                end
-                if panel == "_shell" and action == "curtainFading" then
-                    if ms._exitCurtainFading then pcall(ms._exitCurtainFading) end
-                    return
-                end
-
                 if panel == "_shell" and action == "ready" then
                     _shellReady = true
                     for _, js in ipairs(_shellEvalQ) do
                         pcall(function() _shellView:evaluateJavaScript(js) end)
                     end
                     _shellEvalQ = {}
-                    -- Mount the exit curtain now, while nothing is waiting on
-                    -- it. Mounted at exit time instead, it would be loading a
-                    -- page during the exit — which is the latency the whole
-                    -- curtain design exists to get rid of.
-                    if ms.installShellCurtain then pcall(ms.installShellCurtain) end
                     hs.timer.doAfter(0.1, function()
                         if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
                     end)
@@ -497,9 +479,6 @@
             -- After the restore, not before: opening is the other way the
             -- shell's frame changes without passing through saveState.
             if ms.syncExitCurtainFrame then pcall(ms.syncExitCurtainFrame) end
-            -- Idempotent, and cheap when it is a no-op: covers a shell that
-            -- became ready before the settings module was loaded.
-            if ms.installShellCurtain then pcall(ms.installShellCurtain) end
             pcall(function() ms.playSlot("settingsOpen") end)
             _shellView:alpha(0)
             ms.safeShow(_shellView)

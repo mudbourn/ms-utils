@@ -679,16 +679,8 @@ return function(ms)
             end)
 
             -- 4. Close every window so the desktop is clear before the exit.
-            --
-            -- Except the shell, when the shell is the one holding the curtain.
-            -- Hiding it there would take the curtain down with it — the exact
-            -- failure the standalone window was built to avoid — and its hide
-            -- fades the window out and plays the close sound on top. The kill
-            -- or the reload clears it a moment later anyway.
             step("windows", function()
-                if ms.shell and ms.shell.hide and not ms._exitCurtainInShell then
-                    ms.shell.hide()
-                end
+                if ms.shell and ms.shell.hide then ms.shell.hide() end
                 if ms.ui and ms.ui.hide then ms.ui.hide() end
                 pcall(function() ms.dev.console.hide() end)
                 pcall(function() ms.dev.watcher.hide() end)
@@ -703,12 +695,21 @@ return function(ms)
         -- How long to hold before the exit, so a send-off sample is not cut
         -- off mid-note. 0.25s floor so the window teardown is on screen.
         --
-        -- There is deliberately no upper bound: a send-off is a send-off, and
-        -- capping it would silently truncate anyone whose sample is longer
-        -- than a number picked here. The sample's own length is the limit.
-        -- The only rejected durations are the ones that are not lengths at
-        -- all — inf and nan would schedule a timer that never fires and leave
-        -- a torn-down app running.
+        -- This used to have no upper bound, on the reasoning that a send-off
+        -- is a send-off and the sample's own length is the only honest limit.
+        -- The shipped sample is 2.7s, which made every exit a little over
+        -- three seconds — measured, after a long detour spent assuming the
+        -- curtain was late when it was in fact up and correct 78ms in. Nothing
+        -- was slow to appear; the exit simply stood still waiting for audio.
+        --
+        -- So the bound is back, and it is a judgement about the exit rather
+        -- than about the audio: past about a second of a static screen the
+        -- send-off stops reading as an outro and starts reading as a hang.
+        -- A sample longer than this is still heard, just not to its end —
+        -- which is already what happens to anyone whose sample outlasts the
+        -- process, since the handle dies with it.
+        local SLOT_HOLD_MAX = 1.2
+
         local function _waitForSlot(slotId)
             local wait  = 0.25
             local sound = (ms._slotHandles or {})[slotId]
@@ -717,6 +718,9 @@ return function(ms)
             if sound and began then
                 local ok, dur = pcall(function() return sound:duration() end)
                 -- dur ~= dur is the nan test; nan compares false to everything.
+                -- inf and nan would schedule a timer that never fires and
+                -- leave a torn-down app running; the cap below would now catch
+                -- inf as well, but the test stays — a nan slips past a cap.
                 if ok and type(dur) == "number" and dur == dur
                     and dur > 0 and dur < math.huge then
                     local left = dur - (hs.timer.secondsSinceEpoch() - began)
@@ -724,7 +728,7 @@ return function(ms)
                 end
             end
 
-            return wait
+            return math.min(wait, SLOT_HOLD_MAX)
         end
 
         -- ── Exit curtain ──────────────────────────────────────────────────
@@ -841,9 +845,6 @@ return function(ms)
             if fn then pcall(fn) end
         end
 
-        -- Same signal, arriving from the shell's channel instead of the
-        -- curtain window's, when the curtain is running embedded.
-        ms._exitCurtainFading = _fading
 
         local function _buildCurtain()
             local uc = hs.webview.usercontent.new("curtain")
@@ -938,147 +939,6 @@ return function(ms)
             _matchShellFrame(_warmView)
         end
 
-        -- ── The curtain, embedded in the shell ────────────────────────────
-        -- The standalone window above fixed everything a frame can explain and
-        -- shutdown was still slow. What is left is the part a prewarm cannot
-        -- reach: a hidden WKWebView does not composite, so showing one has to
-        -- restart its rendering before anything can fade, and no amount of
-        -- warming the *page* warms that.
-        --
-        -- An open shell is already compositing. So when there is one, the
-        -- curtain runs inside it — same ms_curtain.html, in an iframe, sized to
-        -- the window it is already standing in front of. Nothing to show, no
-        -- frame to move, no resume to wait for: the fade starts on the next
-        -- frame the shell was going to draw anyway.
-        --
-        -- It is an iframe of the same file rather than markup copied into the
-        -- shell, because two curtains that must look identical and are edited
-        -- separately are two curtains that will not. There is one curtain; this
-        -- is the second place it can be mounted.
-        --
-        -- Restart still needs the standalone window — the hotkey fires whether
-        -- or not the shell is open, and with no shell there is nothing to
-        -- embed in. Both paths stay.
-        local _embedLive = false
-
-        -- The curtain page, with its fonts folded in.
-        --
-        -- It goes in as srcdoc rather than `src="ms_curtain.html"`, because the
-        -- shell is loaded with html() and WKWebView refuses file:// subresources
-        -- from a string-loaded page — an iframe src is one of those, so it
-        -- silently never loads and the embed silently never runs. Same reason
-        -- ms_shell.lua inlines the shell's own module scripts.
-        --
-        -- The @font-face urls are subresources of that same blocked kind, so
-        -- they are rewritten to data: URIs on the way in. ~92KB of TTF, read
-        -- and encoded once at mount and cached, so the exit itself pays
-        -- nothing. Without it the embedded curtain silently drops to Arial
-        -- while the standalone one keeps Almendra — the two mounts have to be
-        -- the same curtain or there is no point mounting it twice.
-        local _curtainHTMLCache
-        local function _curtainHTML()
-            if _curtainHTMLCache then return _curtainHTMLCache end
-
-            local f = io.open(hs.configdir .. "/ui/ms_curtain.html", "r")
-            if not f then return nil end
-            local html = f:read("*all"); f:close()
-
-            html = html:gsub('url%("%./fonts/([%w%-%._]+)"%)', function(name)
-                local ff = io.open(hs.configdir .. "/ui/fonts/" .. name, "rb")
-                if not ff then return nil end
-                local bytes = ff:read("*all"); ff:close()
-                local ok, b64 = pcall(hs.base64.encode, bytes)
-                if not ok or not b64 then return nil end
-                -- Returned nil above leaves the original url in place, which
-                -- degrades to the fallback font rather than to no curtain.
-                return 'url("data:font/ttf;base64,' .. b64 .. '")'
-            end)
-
-            _curtainHTMLCache = html
-            return html
-        end
-
-        -- Injected rather than written into ms_shell.html: the shell page has
-        -- no other reason to know the curtain exists, and `ms.shell.eval`
-        -- already queues until the page is ready, so this can be called before
-        -- there is a page to receive it.
-        --
-        -- pointer-events stays off until the curtain is actually up, so an
-        -- always-mounted full-window overlay does not swallow every click in
-        -- the shell for the entire session.
-        local _EMBED_JS = [[
-(function (doc) {
-    if (window.__msCurtain) return;
-    var f = document.createElement("iframe");
-    f.id = "ms-exit-curtain";
-    f.srcdoc = doc;
-    f.setAttribute("scrolling", "no");
-    f.style.cssText =
-        "position:fixed;inset:0;width:100%;height:100%;border:0;margin:0;" +
-        "padding:0;background:transparent;z-index:2147483647;" +
-        "pointer-events:none;";
-    document.body.appendChild(f);
-    window.__msCurtain = f;
-
-    /* The curtain cannot reach the host from in here, so its messages come
-       up as window messages and go back out on the shell's own channel. */
-    window.addEventListener("message", function (e) {
-        if (e.source !== f.contentWindow) return;
-        var d;
-        try { d = JSON.parse(e.data); } catch (_) { return; }
-        if (!d || !d.action) return;
-        if (d.action === "ready") shellDispatch("_shell", "curtainReady");
-        else if (d.action === "fading") shellDispatch("_shell", "curtainFading");
-    });
-
-    window.msShowExitCurtain = function (mode, octane, theme) {
-        var w = f.contentWindow;
-        if (!w || !w.showCurtain) return;
-        f.style.pointerEvents = "auto";
-        try { w.applyTheme(theme); } catch (_) {}
-        w.showCurtain(mode, octane);
-    };
-    window.msHideExitCurtain = function () {
-        var w = f.contentWindow;
-        if (w && w.hideCurtain) w.hideCurtain();
-    };
-})(]]
-
-        ms.installShellCurtain = function()
-            if not (ms.shell and ms.shell.eval) then return end
-            local html = _curtainHTML()
-            if not html then
-                ms.dev.log({
-                    type  = "error",
-                    event = "shell_curtain_read_error",
-                })
-                return
-            end
-            -- JSON strings are valid JS string literals, which is the whole
-            -- escaping story for a document going in as an argument.
-            pcall(function()
-                ms.shell.eval(_EMBED_JS .. hs.json.encode(html) .. ");")
-            end)
-        end
-
-        -- The shell relays the iframe's handshake here. Only a real one proves
-        -- there is a page in there to fade, exactly as with the standalone.
-        ms._shellCurtainReady = function()
-            _embedLive = true
-        end
-
-        -- Usable only with a shell that is open, loaded, and holding a curtain
-        -- that has handshaked. Any of those missing and the exit takes the
-        -- standalone window — a slow curtain beats no curtain.
-        local function _embedReady()
-            return _embedLive
-                and ms.shell ~= nil
-                and ms.shell.isReady ~= nil
-                and ms.shell.isReady()
-                and ms._shellState ~= nil
-                and ms._shellState.visible == true
-        end
-
         -- `onShow` fires at the exact moment the curtain is told to fade
         -- in. The send-off sound is started from there rather than before the
         -- exit, so the sample and the fade begin together no matter how long
@@ -1089,22 +949,13 @@ return function(ms)
                 pcall(onReady)
             end
 
-            -- Which mount the exit took, and how long the curtain took to
-            -- report its fade. This is the one number that says whether a slow
-            -- exit is the curtain being slow to appear or the send-off being
-            -- early, and there is no way to tell them apart by watching.
+            -- How long the curtain took to report its fade. Kept because it is
+            -- the one number that distinguishes a curtain that is slow to
+            -- appear from a send-off that is early, and the two are
+            -- indistinguishable by watching — assuming it was the former cost
+            -- three changes before this said otherwise.
             local _t0 = hs.timer.secondsSinceEpoch()
-            ms.dev.log({
-                type          = "system",
-                event         = mode .. "_curtain_path",
-                embedded      = _embedReady(),
-                embedLive     = _embedLive,
-                shellReady    = (ms.shell and ms.shell.isReady and ms.shell.isReady()) or false,
-                shellVisible  = (ms._shellState and ms._shellState.visible) or false,
-            })
 
-            -- The hold and the send-off hang off the fade either way; only
-            -- where the curtain lives differs.
             local function armFading()
                 _onFading = function()
                     ms.dev.log({
@@ -1121,34 +972,6 @@ return function(ms)
                         finishReady()
                     end
                 end
-            end
-
-            -- Shell-embedded first: it is already on screen and already
-            -- compositing, which is the entire reason it exists.
-            if _embedReady() then
-                ms._exitCurtainInShell = true
-                ms._exitCurtainLive    = not ms._octaneMode
-
-                armFading()
-
-                local ok = pcall(function()
-                    ms.shell.eval(string.format(
-                        "msShowExitCurtain(%q, %s, %s);",
-                        mode,
-                        ms._octaneMode and "true" or "false",
-                        hs.json.encode(ms._theme or {})
-                    ))
-                end)
-
-                if ok and ms._exitCurtainLive then
-                    hs.timer.doAfter(CURTAIN_SOUND_FALLBACK_MS / 1000, _fading)
-                else
-                    -- Octane, or the eval never landed. Nothing to sync to.
-                    ms._exitCurtainLive = ms._exitCurtainLive and ok
-                    _fading()
-                end
-
-                return nil
             end
 
             local view    = _warmView
@@ -1273,19 +1096,12 @@ return function(ms)
 
             -- Nothing to fade: no curtain, no live page, or octane, which
             -- snaps as it does everywhere.
-            if not ms._exitCurtainLive or ms._octaneMode then
-                return finish()
-            end
-            if not view and not ms._exitCurtainInShell then
+            if not view or not ms._exitCurtainLive or ms._octaneMode then
                 return finish()
             end
 
             local ok = pcall(function()
-                if ms._exitCurtainInShell then
-                    ms.shell.eval("msHideExitCurtain();")
-                else
-                    view:evaluateJavaScript("hideCurtain();")
-                end
+                view:evaluateJavaScript("hideCurtain();")
             end)
             if not ok then return finish() end
 
