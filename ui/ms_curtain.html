@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>mudscript — Exit</title>
+        <style>
+            /* ── Font ───────────────────────────────────────────────────────── */
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Regular.ttf") format("truetype");
+                font-weight: 400;
+                font-style: normal;
+                font-display: swap;
+            }
+            @font-face {
+                font-family: "Almendra";
+                src: url("./fonts/Almendra-Bold.ttf") format("truetype");
+                font-weight: 700;
+                font-style: normal;
+                font-display: swap;
+            }
+
+            /* ── Tokens ─────────────────────────────────────────────────────── */
+            /* Same names and same defaults as ms_loading.html, so a theme that
+               dresses the boot screen dresses the exit without a second pass.
+               applyTheme() below takes the same payload as the loading screen's. */
+            :root {
+                --bg: #0d0f09;
+                --surface: #141810;
+                --surface2: #1c2116;
+                --hover: #2d3523;
+                --accent: #6b8c3a;
+                --accent-hi: #8db84e;
+                --warning: #c4a030;
+                --text: #d4cfb6;
+                --radius: 8px;
+                --ms-window-radius: 8px;
+                --font: Arial, "Almendra", sans-serif;
+            }
+
+            /* ── Reset ──────────────────────────────────────────────────────── */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+            html,
+            body {
+                height: 100%;
+                overflow: hidden;
+                background: transparent;
+                font-family: var(--font);
+                font-size: 13px;
+                color: var(--text);
+                -webkit-font-smoothing: antialiased;
+                cursor: none;
+            }
+
+            /* ── Curtain ────────────────────────────────────────────────────── */
+            /* Full bleed and no radius: this covers the screen, not a window.
+               The whole sheet fades as one so the desktop is never revealed
+               between the shell closing and the exit landing. */
+            #curtain {
+                position: fixed;
+                inset: 0;
+                background: var(--bg);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 16px;
+                opacity: 0;
+                transition: opacity 0.35s ease;
+            }
+            #curtain.visible {
+                opacity: 1;
+            }
+
+            /* The mark and wording ride in together, slightly behind the sheet,
+               so the curtain reads as arriving rather than cutting. */
+            #block {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 14px;
+                opacity: 0;
+                transform: scale(0.96);
+                transition:
+                    opacity 0.45s ease 0.12s,
+                    transform 0.45s cubic-bezier(0.4, 0, 0.2, 1) 0.12s;
+            }
+            #curtain.visible #block {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            /* ── Mark ───────────────────────────────────────────────────────── */
+            #mark {
+                color: var(--accent);
+                animation: mark-pulse 1.4s ease-in-out infinite;
+            }
+            #mark svg {
+                width: 44px;
+                height: 44px;
+                display: block;
+            }
+            @keyframes mark-pulse {
+                0%,
+                100% {
+                    opacity: 0.9;
+                }
+                50% {
+                    opacity: 0.35;
+                }
+            }
+
+            /* Restart's mark turns once on the way in — the one place the two
+               modes differ beyond wording, because a reload is a cycle and a
+               shutdown is not. */
+            #curtain.restart.visible #mark svg {
+                animation: mark-turn 0.9s cubic-bezier(0.4, 0, 0.2, 1) 0.12s 1;
+            }
+            @keyframes mark-turn {
+                from {
+                    transform: rotate(-180deg);
+                }
+                to {
+                    transform: rotate(0deg);
+                }
+            }
+
+            /* ── Wording ────────────────────────────────────────────────────── */
+            #text {
+                font-size: 12px;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: var(--text);
+                opacity: 0.72;
+            }
+
+            /* ── Brand ──────────────────────────────────────────────────────── */
+            /* The loading screen opens on this word; the exit closes on it. */
+            #brand {
+                position: absolute;
+                bottom: 26px;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-family: "Almendra", var(--font);
+                font-size: 15px;
+                font-weight: 700;
+                color: var(--text);
+                opacity: 0;
+                transition: opacity 0.5s ease 0.3s;
+            }
+            #curtain.visible #brand {
+                opacity: 0.28;
+            }
+
+            /* ── Octane ─────────────────────────────────────────────────────── */
+            /* Octane snaps, as everywhere. Host adds this before .visible. */
+            #curtain.octane,
+            #curtain.octane #block,
+            #curtain.octane #brand {
+                transition: none;
+            }
+            #curtain.octane #mark,
+            #curtain.octane #mark svg {
+                animation: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="curtain">
+            <div id="block">
+                <div id="mark"></div>
+                <div id="text">mudscript is shutting down</div>
+            </div>
+            <div id="brand">mudscript</div>
+        </div>
+
+        <script>
+            /* ── Host communication ─────────────────────────────────────────── */
+            function sendToHost(msg) {
+                const s = JSON.stringify(msg);
+                if (window.chrome && window.chrome.webview)
+                    window.chrome.webview.postMessage(s);
+                else if (
+                    window.webkit &&
+                    window.webkit.messageHandlers &&
+                    window.webkit.messageHandlers.curtain
+                )
+                    window.webkit.messageHandlers.curtain.postMessage(s);
+            }
+
+            /* ── Theme injection ─────────────────────────────────────────────── */
+            /* Byte-for-byte the loading screen's applyTheme, on purpose: the two
+               screens drift the moment they read the theme differently. */
+            function applyTheme(t) {
+                if (!t) return;
+                const r = document.documentElement.style;
+                if (t.bg) r.setProperty("--bg", t.bg);
+                if (t.surface) r.setProperty("--surface", t.surface);
+                if (t.surface2) r.setProperty("--surface2", t.surface2);
+                if (t.hover) r.setProperty("--hover", t.hover);
+                if (t.accent) r.setProperty("--accent", t.accent);
+                if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
+                if (t.warning) r.setProperty("--warning", t.warning);
+                if (t.text) r.setProperty("--text", t.text);
+                if (t.radius !== undefined)
+                    r.setProperty("--radius", t.radius + "px");
+                if (t.windowRadius !== undefined)
+                    r.setProperty("--ms-window-radius", t.windowRadius + "px");
+                if (t.font)
+                    r.setProperty(
+                        "--font",
+                        t.font + ', "Almendra", Arial, sans-serif',
+                    );
+            }
+
+            /* ── Modes ──────────────────────────────────────────────────────── */
+            const MODES = {
+                shutdown: {
+                    text: "mudscript is shutting down",
+                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>',
+                },
+                restart: {
+                    text: "mudscript is restarting",
+                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>',
+                },
+            };
+
+            /* ── Show ───────────────────────────────────────────────────────── */
+            function showCurtain(mode, octane) {
+                const spec = MODES[mode] || MODES.shutdown;
+                const cu = document.getElementById("curtain");
+                document.getElementById("mark").innerHTML = spec.icon;
+                document.getElementById("text").textContent = spec.text;
+                cu.classList.remove("shutdown", "restart");
+                cu.classList.add(MODES[mode] ? mode : "shutdown");
+                if (octane) cu.classList.add("octane");
+                /* Next frame, so the transition has a 0 state to run from —
+                   adding both classes in one paint skips the fade entirely. */
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(function () {
+                        cu.classList.add("visible");
+                    });
+                });
+            }
+
+            /* ── Suppress context menu ──────────────────────────────────────── */
+            document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+            /* ── Page-ready handshake ───────────────────────────────────────── */
+            /* The host holds the teardown until this lands. Without it the
+               shell closes before this page has painted and the desktop shows
+               through for as long as WKWebView took to load. */
+            document.addEventListener("DOMContentLoaded", function () {
+                sendToHost({ action: "ready" });
+            });
+        </script>
+    </body>
+</html>

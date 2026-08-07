@@ -473,12 +473,6 @@
         .btn-power .icon { width: 15px; height: 15px; }
         .btn-power:hover { color: var(--danger); background: var(--danger-bg); }
 
-        #shutdown-overlay { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg); opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
-        #shutdown-overlay.open { opacity: 1; pointer-events: all; }
-        .shutdown-mark { color: var(--text3); animation: shutdown-fade 1.4s ease-in-out infinite; }
-        .shutdown-mark svg { width: 34px; height: 34px; }
-        .shutdown-text { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); }
-        @keyframes shutdown-fade { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.3; } }
 
         #scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; }
         #scroll::-webkit-scrollbar { width: 4px; }
@@ -1394,19 +1388,10 @@
         <!-- Toast -->
         <div id="toast"></div>
 
-        <!-- Shutdown curtain. Covers the panel between "Quit" and the host
-             actually going away, so the last thing on screen is deliberate
-             rather than a frozen settings list. -->
-        <!-- Curtain for both exits. showShutdownCurtain() swaps the mark and
-             the text for the restart wording; the markup here is the shutdown
-             case so the overlay still reads correctly if it is ever opened
-             without going through that function. -->
-        <div id="shutdown-overlay">
-            <div class="shutdown-mark" id="shutdown-mark">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
-            </div>
-            <div class="shutdown-text" id="shutdown-text">mudscript is shutting down</div>
-        </div>
+        <!-- The exit curtain is not here. It is a host-owned full-screen
+             webview (ui/ms_curtain.html), because this window is the one the
+             host's teardown closes — a curtain inside it cannot outlive the
+             thing it is covering for. -->
 
         <!-- Modal -->
         <div id="modal-overlay">

@@ -719,6 +719,121 @@ return function(ms)
             return wait
         end
 
+        -- ── Exit curtain ──────────────────────────────────────────────────
+        -- One curtain for both exits, owned by the host rather than by the
+        -- shell's page.
+        --
+        -- It cannot live in the shell for two reasons. The restart hotkey
+        -- fires whether or not the shell is open, so a curtain inside that
+        -- page shows nothing most of the time; and on both paths the shell is
+        -- the very window `_teardown` closes, so a curtain inside it went
+        -- dark long before the send-off ended. That was the shutdown bug —
+        -- the curtain and the hold sat on opposite sides of the teardown.
+        --
+        -- It is a webview rather than a canvas because a canvas cannot do
+        -- the fades, and a hand-rolled alpha timer next to the loading
+        -- screen's CSS is exactly how the two drifted apart in the first
+        -- place. Same page, same theme payload, same tokens.
+        --
+        -- Full screen, covering the menu bar: this is the app leaving, not a
+        -- window closing, and a curtain that leaves the desktop showing
+        -- around its edges reads as a crash.
+        local function _exitCurtain(mode, onReady)
+            -- Dressing the page is added to `ready` once there is a page to
+            -- dress; until then it is just the teardown, so a curtain that
+            -- fails to build still lets the exit run. Reassigned rather than
+            -- branched so both the handshake and the fallback below reach
+            -- whichever version is current.
+            local fired = false
+            local reveal = function() end
+            local ready
+            ready = function()
+                if fired then return end
+                fired = true
+                reveal()
+                pcall(onReady)
+            end
+
+            local ok, view = pcall(function()
+                local sf = hs.screen.mainScreen():fullFrame()
+
+                local uc = hs.webview.usercontent.new("curtain")
+                uc:setCallback(function(message)
+                    local decoded, data = pcall(hs.json.decode, message.body)
+                    if decoded and type(data) == "table" and data.action == "ready" then
+                        ready()
+                    end
+                end)
+
+                local v = hs.webview.new(
+                    { x = sf.x, y = sf.y, w = sf.w, h = sf.h }, {}, uc
+                )
+                pcall(function() v:windowStyle(0) end)
+                pcall(function() v:transparent(true) end)
+                pcall(function() v:level(hs.canvas.windowLevels.screenSaver
+                    or hs.canvas.windowLevels.popUpMenu or 25) end)
+                pcall(function() v:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+                pcall(function() v:allowTextEntry(false) end)
+                pcall(function() v:shadow(false) end)
+
+                local htmlPath = hs.configdir .. "/ui/ms_curtain.html"
+                local baseURL  = "file://" .. hs.configdir .. "/ui/"
+                local f = io.open(htmlPath, "r")
+                if not f then return nil end
+                local html = f:read("*all"); f:close()
+                v:html(html, baseURL)
+
+                ms.safeShow(v)
+                return v
+            end)
+
+            if not ok or not view then
+                -- No curtain is survivable; a teardown that never runs
+                -- because the curtain failed to build is not.
+                ms.dev.log({
+                    type  = "error",
+                    event = mode .. "_curtain_error",
+                    msg   = tostring(view),
+                })
+                ready()
+                return nil
+            end
+
+            -- Held on ms so nothing is collected mid-exit; the kill or the
+            -- reload takes it with everything else.
+            ms._exitCurtainView = view
+
+            -- Dress and reveal once the page is alive. `ready` runs at most
+            -- once, so the fallback below can race the handshake safely.
+            local octane = ms._octaneMode and "true" or "false"
+            local theme  = hs.json.encode(ms._theme or {})
+            reveal = function()
+                pcall(function()
+                    view:evaluateJavaScript("applyTheme(" .. theme .. ");"
+                        .. string.format("showCurtain(%q, %s);", mode, octane))
+                end)
+            end
+
+            -- WKWebView's html() is async and the handshake can be lost if the
+            -- page faults before its listener runs. Proceed regardless after a
+            -- beat: a curtain that never appears must not strand a live app
+            -- with its exit pending forever.
+            hs.timer.doAfter(0.6, ready)
+
+            return view
+        end
+
+        -- Shared tail for both exits: hold the screen for the send-off, then
+        -- do the thing. `_waitForSlot` measures from when the sample started,
+        -- so time spent waiting on the curtain handshake comes out of the
+        -- hold rather than being added to it.
+        local function _exit(mode, slot, finish)
+            _exitCurtain(mode, function()
+                _teardown(mode)
+                hs.timer.doAfter(_waitForSlot(slot), finish)
+            end)
+        end
+
         -- ── Shutdown ──────────────────────────────────────────────────────
         -- The power button's back end.
         --
@@ -727,114 +842,23 @@ return function(ms)
         -- in place would leave an idle Hammerspoon that the user still has to
         -- quit by hand, and any handle missed below would keep running inside
         -- it. Quitting is the only exit that is actually an exit.
+        --
+        -- The send-off is started here, not by the panel: the panel's copy
+        -- died with its window, and `ms.shutdown` is also reachable from the
+        -- legacy UI, which never had a curtain or a sound at all.
         ms.shutdown = function()
             if ms._shuttingDown or ms._restarting then return end
             ms._shuttingDown = true
             ms.dev.log({ type = "system", event = "shutdown_start" })
 
-            _teardown("shutdown")
+            -- Played before _teardown, which sets _quickReloading and mutes
+            -- everything after it.
+            ms.playSlot("shutdown")
 
-            -- The UI already played the shutdown slot and is showing its
-            -- curtain; the shell's own hold only covers the start of it.
-            hs.timer.doAfter(_waitForSlot("shutdown"), function()
+            _exit("shutdown", "shutdown", function()
                 local app = hs.application.get("Hammerspoon")
                 if app then app:kill() else os.exit(0) end
             end)
-        end
-
-        -- The restart curtain, deliberately a canvas rather than the shell's
-        -- overlay. The hotkey fires whether or not the shell is open, so a
-        -- curtain that lives in the shell's page shows nothing most of the
-        -- time — and when the shell *is* open it lives inside the very window
-        -- _teardown closes, so it went dark long before the send-off ended.
-        -- A canvas has no page to load, no readiness to gate on, and nothing
-        -- tears it down until the reload does.
-        --
-        -- Sized and centred like the loading screen, so a restart reads as
-        -- the bookend to a boot rather than as a new kind of window.
-        local function _restartCurtain()
-            local ok, cv = pcall(function()
-                local sf = hs.screen.mainScreen():frame()
-                local t  = ms._theme or {}
-
-                local function hex(v, d)
-                    if type(v) ~= "string" then return d end
-                    local x = v:match("^#?(%x%x%x%x%x%x)")
-                    if not x then return d end
-                    return {
-                        red   = tonumber(x:sub(1, 2), 16) / 255,
-                        green = tonumber(x:sub(3, 4), 16) / 255,
-                        blue  = tonumber(x:sub(5, 6), 16) / 255,
-                        alpha = 1,
-                    }
-                end
-
-                local bg     = hex(t.bg,     { red = 0.05, green = 0.04, blue = 0.03, alpha = 1 })
-                local txt    = hex(t.text,   { red = 0.94, green = 0.87, blue = 0.69, alpha = 1 })
-                local accent = hex(t.accent, { red = 0.77, green = 0.10, blue = 0.10, alpha = 1 })
-                local radius = type(t.radius) == "number" and math.max(0, t.radius) or 3
-
-                local font = "Helvetica"
-                if type(t.font) == "string" and #t.font > 0
-                    and not t.font:find("[/\\]") then
-                    font = t.font
-                end
-
-                local w, h = 360, 140
-                local c = hs.canvas.new({
-                    x = sf.x + math.floor((sf.w - w) / 2),
-                    y = sf.y + math.floor((sf.h - h) / 2),
-                    w = w, h = h,
-                })
-
-                c:level(hs.canvas.windowLevels.popUpMenu or 25)
-                c:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
-                c:appendElements(
-                    {
-                        type             = "rectangle",
-                        action           = "strokeAndFill",
-                        fillColor        = bg,
-                        strokeColor      = accent,
-                        strokeWidth      = 1,
-                        roundedRectRadii = { xRadius = radius, yRadius = radius },
-                    },
-                    {
-                        type          = "text",
-                        text          = "mudscript is restarting",
-                        textFont      = font,
-                        textSize      = 13,
-                        textColor     = txt,
-                        textAlignment = "center",
-                        frame         = { x = 0, y = h / 2 - 10, w = w, h = 24 },
-                    }
-                )
-                c:alpha(0)
-                c:show()
-                return c
-            end)
-
-            if not ok or not cv then return nil end
-
-            -- Fade in on the theme's own timing. Octane snaps, as everywhere.
-            if ms._octaneMode then
-                pcall(function() cv:alpha(1) end)
-                return cv
-            end
-
-            -- Held on ms so the timer is not collected mid-fade; the reload
-            -- takes it with everything else.
-            local step, steps = 0, 20
-            local fadeMs = (ms._theme and ms._theme.fadeMs) or 250
-            ms._restartFadeTimer = hs.timer.doEvery(fadeMs / 1000 / steps, function()
-                step = step + 1
-                pcall(function() cv:alpha(step / steps) end)
-                if step >= steps and ms._restartFadeTimer then
-                    ms._restartFadeTimer:stop()
-                    ms._restartFadeTimer = nil
-                end
-            end)
-
-            return cv
         end
 
         -- ── Restart ───────────────────────────────────────────────────────
@@ -843,10 +867,6 @@ return function(ms)
         -- Lua state, so a bare call to it dropped taps mid-macro with keys
         -- possibly still held and, worse, never saved settings on the way
         -- out. The difference is only the last step and the send-off.
-        --
-        -- Unlike shutdown there is no UI ahead of this: the hotkey fires with
-        -- no confirm and no curtain, and the shell may not even be open, so
-        -- the sound is started here rather than by the panel.
         ms.restart = function()
             if ms._restarting or ms._shuttingDown then return end
             ms._restarting = true
@@ -854,28 +874,18 @@ return function(ms)
 
             -- A restart is not a goodbye, so it gets its own slot — but that
             -- slot ships unassigned, and falling back to the shutdown sound
-            -- is better than silence. Played before _teardown, which sets
-            -- _quickReloading and mutes everything after it.
+            -- is better than silence.
             local slot = "restart"
             if not ms.playSlot(slot) then
                 slot = "shutdown"
                 ms.playSlot(slot)
             end
 
-            -- Up before the teardown, and it stays up: it is what the screen
-            -- shows for the whole send-off, so the windows closing underneath
-            -- it is invisible instead of being the show.
-            ms._restartCurtainView = _restartCurtain()
-
-            _teardown("restart")
-
             -- hs.reload() tears down the Lua state, and the sound handle goes
             -- with it — so the wait is what makes the send-off audible at all,
             -- not just a courtesy. The curtain holds the screen for exactly
             -- that long, then the reload replaces it with the loading screen.
-            hs.timer.doAfter(_waitForSlot(slot), function()
-                hs.reload()
-            end)
+            _exit("restart", slot, function() hs.reload() end)
         end
 
         ms.reload = function(opts)

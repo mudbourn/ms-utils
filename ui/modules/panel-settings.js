@@ -284,11 +284,16 @@
 
             // ── Shutdown ───────────────────────────────────────────────────────
             // The power button is the only destructive control in the title
-            // bar, so it confirms first. Once confirmed the UI stops being
-            // interactive: the overlay covers the panel, the shutdown slot
-            // plays, and the host is told to quit only after the sound has had
-            // time to start — quitting immediately cuts it off mid-sample.
-            const SHUTDOWN_HOLD_MS = 900;
+            // bar, so it confirms first. Once confirmed the panel's job is
+            // over: it hands off to the host and goes quiet.
+            //
+            // Deliberately no curtain and no send-off sound here. Both used to
+            // live in this page, and both were wrong for the same reason —
+            // this window is what the host's teardown closes, so the curtain
+            // went dark while the sample was still playing, leaving the
+            // desktop on screen for the rest of the send-off. The host puts up
+            // a full-screen curtain that outlives this window, and starts the
+            // sound itself so the legacy UI's power button gets one too.
             let _shuttingDown = false;
 
             async function requestShutdown() {
@@ -304,42 +309,9 @@
             }
             window.requestShutdown = requestShutdown;
 
-            // The curtain covers both exits. Restart gets its own wording and
-            // mark because the two look identical otherwise, and "shutting
-            // down" during a reload reads as a crash — the window vanishing a
-            // moment later makes that worse, not better.
-            const CURTAIN = {
-                shutdown: {
-                    text: "mudscript is shutting down",
-                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>',
-                },
-                restart: {
-                    text: "mudscript is restarting",
-                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>',
-                },
-            };
-
-            // Called by the host for the restart path too, which has no UI in
-            // front of it — hence the global.
-            function showShutdownCurtain(mode) {
-                const spec = CURTAIN[mode] || CURTAIN.shutdown;
-                const ov = document.getElementById("shutdown-overlay");
-                const mark = document.getElementById("shutdown-mark");
-                const text = document.getElementById("shutdown-text");
-                if (mark) mark.innerHTML = spec.icon;
-                if (text) text.textContent = spec.text;
-                if (ov) ov.classList.add("open");
-            }
-            window.showShutdownCurtain = showShutdownCurtain;
-
             function beginShutdown() {
                 _shuttingDown = true;
-                showShutdownCurtain("shutdown");
-                playSlot("shutdown");
-                setTimeout(
-                    () => sendToHost({ action: "shutdown" }),
-                    SHUTDOWN_HOLD_MS,
-                );
+                sendToHost({ action: "shutdown" });
             }
 
             // ── Helpers ────────────────────────────────────────────────────────
