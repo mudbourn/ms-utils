@@ -807,7 +807,6 @@ return function(ms)
                 if decoded and type(data) == "table" and data.action == "ready" then
                     -- Only a real handshake proves there is a page to fade.
                     _warmLive = true
-                    ms.dev.log({ type = "system", event = "curtain_handshake" })
                 end
             end)
 
@@ -848,22 +847,13 @@ return function(ms)
             if ok and v then _warmView = v end
         end
 
-        local function _exitCurtain(mode, onReady)
-            -- Timing instrumentation. The curtain reads as late and the cause
-            -- is not obvious from the code, so each stage records how far into
-            -- the exit it happened, in milliseconds. Remove once the latency
-            -- is understood and fixed.
-            local t0 = hs.timer.secondsSinceEpoch()
-            local function mark(event, extra)
-                local e = extra or {}
-                e.type  = "system"
-                e.event = event
-                e.atMs  = math.floor((hs.timer.secondsSinceEpoch() - t0) * 1000)
-                ms.dev.log(e)
-            end
-
+        -- `onShow` fires at the exact moment the curtain is told to fade
+        -- in. The send-off sound is started from there rather than before the
+        -- exit, so the sample and the fade begin together no matter how long
+        -- the window and the page took to get ready — the sound follows the
+        -- curtain instead of the curtain chasing the sound.
+        local function _exitCurtain(mode, onShow, onReady)
             local function finishReady()
-                mark("curtain_teardown_begins")
                 pcall(onReady)
             end
 
@@ -879,6 +869,9 @@ return function(ms)
                         event = mode .. "_curtain_error",
                         msg   = tostring(v),
                     })
+                    -- No curtain to sync to, so the send-off still has to
+                    -- start — silence is not the fallback.
+                    pcall(onShow)
                     finishReady()
                     return nil
                 end
@@ -901,24 +894,16 @@ return function(ms)
             local theme  = hs.json.encode(ms._theme or {})
 
             local function present()
-                mark("curtain_show_called", { warm = wasWarm, live = _warmLive })
                 ms.safeShow(view)
-                mark("curtain_shown")
                 local shown = pcall(function()
                     view:evaluateJavaScript("applyTheme(" .. theme .. ");"
                         .. string.format("showCurtain(%q, %s);", mode, octane))
                 end)
-                mark("curtain_js_sent", { ok = shown })
 
-                -- Round trip from the page, so the log distinguishes "the JS
-                -- was sent" from "the JS actually ran". Those are the same
-                -- moment only if nothing is queueing behind a page load.
-                pcall(function()
-                    view:evaluateJavaScript(
-                        "sendToHost({action:'shown'});",
-                        function() mark("curtain_js_ran") end
-                    )
-                end)
+                -- Immediately after the fade is told to start, and before
+                -- anything that can block: this is the whole point of the
+                -- callback.
+                pcall(onShow)
 
                 -- Whether there is a fade to wait for at all. A page that
                 -- never handshook is a window with nothing running in it;
@@ -988,23 +973,28 @@ return function(ms)
         -- the curtain, then do the thing. `_waitForSlot` measures from when
         -- the sample started, so time spent waiting on the curtain handshake
         -- comes out of the hold rather than being added to it.
-        local function _exit(mode, slot, finish)
-            local t0 = hs.timer.secondsSinceEpoch()
-            local function mark(event, extra)
-                local e = extra or {}
-                e.type  = "system"
-                e.event = event
-                e.atMs  = math.floor((hs.timer.secondsSinceEpoch() - t0) * 1000)
-                ms.dev.log(e)
-            end
+        -- Shared tail for both exits.
+        --
+        -- `slots` is tried in order and the first one that actually plays wins
+        -- — restart ships with its own slot unassigned, and falling back to
+        -- the shutdown sound is better than silence.
+        --
+        -- The send-off starts inside the curtain's onShow, so `_waitForSlot`
+        -- is measuring from a sample that began with the fade rather than
+        -- before it. Everything downstream stays correct for free.
+        local function _exit(mode, slots, finish)
+            local slot = slots[#slots]
 
-            mark("exit_begins", { mode = mode, slot = slot })
             _exitCurtain(mode, function()
+                for _, s in ipairs(slots) do
+                    if ms.playSlot(s) then
+                        slot = s
+                        break
+                    end
+                end
+            end, function()
                 _teardown(mode)
-                local hold = _waitForSlot(slot)
-                mark("exit_teardown_done", { holdMs = math.floor(hold * 1000) })
-                hs.timer.doAfter(hold, function()
-                    mark("exit_hold_done")
+                hs.timer.doAfter(_waitForSlot(slot), function()
                     _dropCurtain(finish)
                 end)
             end)
@@ -1019,25 +1009,15 @@ return function(ms)
         -- quit by hand, and any handle missed below would keep running inside
         -- it. Quitting is the only exit that is actually an exit.
         --
-        -- The send-off is started here, not by the panel: the panel's copy
-        -- died with its window, and `ms.shutdown` is also reachable from the
-        -- legacy UI, which never had a curtain or a sound at all.
+        -- The send-off is owned by `_exit`, not by the panel and not by this
+        -- function: the panel's copy died with its window, and the sample has
+        -- to start with the curtain's fade rather than ahead of it.
         ms.shutdown = function()
             if ms._shuttingDown or ms._restarting then return end
             ms._shuttingDown = true
             ms.dev.log({ type = "system", event = "shutdown_start" })
 
-            -- Played before _teardown, which sets _quickReloading and mutes
-            -- everything after it. Timed for the same reason as restart's.
-            local _t = hs.timer.secondsSinceEpoch()
-            ms.playSlot("shutdown")
-            ms.dev.log({
-                type  = "system",
-                event = "shutdown_sound_started",
-                atMs  = math.floor((hs.timer.secondsSinceEpoch() - _t) * 1000),
-            })
-
-            _exit("shutdown", "shutdown", function()
+            _exit("shutdown", { "shutdown" }, function()
                 local app = hs.application.get("Hammerspoon")
                 if app then app:kill() else os.exit(0) end
             end)
@@ -1054,29 +1034,15 @@ return function(ms)
             ms._restarting = true
             ms.dev.log({ type = "system", event = "restart_start" })
 
-            -- A restart is not a goodbye, so it gets its own slot — but that
-            -- slot ships unassigned, and falling back to the shutdown sound
-            -- is better than silence.
-            -- Timed: hs.sound loads the sample on the main thread, so a slow
-            -- load here delays everything after it, curtain included.
-            local _t = hs.timer.secondsSinceEpoch()
-            local slot = "restart"
-            if not ms.playSlot(slot) then
-                slot = "shutdown"
-                ms.playSlot(slot)
-            end
-            ms.dev.log({
-                type  = "system",
-                event = "restart_sound_started",
-                slot  = slot,
-                atMs  = math.floor((hs.timer.secondsSinceEpoch() - _t) * 1000),
-            })
-
+            -- A restart is not a goodbye, so it gets its own slot first — but
+            -- that slot ships unassigned, so `_exit` falls through to the
+            -- shutdown sound rather than to silence.
+            --
             -- hs.reload() tears down the Lua state, and the sound handle goes
-            -- with it — so the wait is what makes the send-off audible at all,
+            -- with it — so the hold is what makes the send-off audible at all,
             -- not just a courtesy. The curtain holds the screen for exactly
             -- that long, then the reload replaces it with the loading screen.
-            _exit("restart", slot, function() hs.reload() end)
+            _exit("restart", { "restart", "shutdown" }, function() hs.reload() end)
         end
 
         ms.reload = function(opts)
