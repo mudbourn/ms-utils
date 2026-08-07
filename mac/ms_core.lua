@@ -4272,6 +4272,11 @@
                     end)
                     ms.loading.applyTheme()
                     ms._loadComplete = true
+                    -- Load the exit curtain's page now, while nothing is
+                    -- waiting on it. Built at exit time instead, the async
+                    -- html() load is dead air between the send-off starting
+                    -- and the curtain appearing.
+                    pcall(function() ms.prewarmExitCurtain() end)
                     ms.dev.log({ type = "system", event = "startup_complete" })
                     -- Apply Octane Mode if persisted as on
                     if ms._octaneMode and ms.octane and ms.octane._apply then

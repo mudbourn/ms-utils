@@ -787,116 +787,150 @@ return function(ms)
             return { x = x, y = y, w = w, h = h }
         end
 
-        local function _exitCurtain(mode, onReady)
-            -- Dressing the page is added to `ready` once there is a page to
-            -- dress; until then it is just the teardown, so a curtain that
-            -- fails to build still lets the exit run. Reassigned rather than
-            -- branched so both the handshake and the fallback below reach
-            -- whichever version is current.
-            --
-            -- `reveal` returns whether it actually put a curtain up, which is
-            -- what decides whether the teardown waits for the fade-in. With no
-            -- page there is nothing to wait for, and stalling the exit on a
-            -- fade nobody can see is the one thing worse than no curtain.
-            local fired = false
-            local reveal = function() return false end
-            local ready
-            ready = function()
-                if fired then return end
-                fired = true
-                if reveal() then
-                    -- The teardown closes the shell. Holding it until the
-                    -- curtain is fully opaque is what makes this read as a
-                    -- takeover: the shell stays lit underneath and the curtain
-                    -- comes down over it, instead of the shell blinking out
-                    -- and the curtain fading up over bare desktop.
-                    hs.timer.doAfter(CURTAIN_IN_MS / 1000, function()
-                        pcall(onReady)
-                    end)
-                else
-                    pcall(onReady)
+        -- The curtain page, built once and kept loaded.
+        --
+        -- It used to be built at exit time, and that was the whole latency:
+        -- WKWebView's html() is async, so the send-off started, and then the
+        -- screen sat there doing nothing while the page loaded and handshook
+        -- before the fade could even begin. Loading it during boot means the
+        -- exit path only has to move a window and set a class, so the curtain
+        -- starts arriving with the sound rather than well after it.
+        --
+        -- Not shown until it is needed: an unshown webview still loads its
+        -- page, which is the only part that was ever slow.
+        local _warmView, _warmLive
+
+        local function _buildCurtain()
+            local uc = hs.webview.usercontent.new("curtain")
+            uc:setCallback(function(message)
+                local decoded, data = pcall(hs.json.decode, message.body)
+                if decoded and type(data) == "table" and data.action == "ready" then
+                    -- Only a real handshake proves there is a page to fade.
+                    _warmLive = true
                 end
-            end
-
-            local ok, view = pcall(function()
-                local sf = _shellFrame()
-
-                local uc = hs.webview.usercontent.new("curtain")
-                uc:setCallback(function(message)
-                    local decoded, data = pcall(hs.json.decode, message.body)
-                    if decoded and type(data) == "table" and data.action == "ready" then
-                        -- Only a real handshake proves there is a page to
-                        -- fade. The fallback below fires whether or not the
-                        -- page ever came up, and waiting out a fade-out that
-                        -- nothing is running just delays the exit.
-                        ms._exitCurtainLive = true
-                        ready()
-                    end
-                end)
-
-                local v = hs.webview.new(
-                    { x = sf.x, y = sf.y, w = sf.w, h = sf.h }, {}, uc
-                )
-                pcall(function() v:windowStyle(0) end)
-                -- Transparent, and it stays transparent through the fade —
-                -- that is the whole takeover: the shell is still lit
-                -- underneath and shows through the curtain until the curtain
-                -- is opaque.
-                pcall(function() v:transparent(true) end)
-                -- One level above the shell rather than level with it. Two
-                -- windows on the same level are ordered by whatever AppKit
-                -- feels like, and a curtain that comes up *behind* the window
-                -- it is covering for is not a curtain.
-                pcall(function() v:level((hs.canvas.windowLevels.popUpMenu or 101) + 1) end)
-                pcall(function() v:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
-                pcall(function() v:allowTextEntry(false) end)
-                pcall(function() v:shadow(true) end)
-
-                local htmlPath = hs.configdir .. "/ui/ms_curtain.html"
-                local baseURL  = "file://" .. hs.configdir .. "/ui/"
-                local f = io.open(htmlPath, "r")
-                if not f then return nil end
-                local html = f:read("*all"); f:close()
-                v:html(html, baseURL)
-
-                ms.safeShow(v)
-                return v
             end)
 
-            if not ok or not view then
-                -- No curtain is survivable; a teardown that never runs
-                -- because the curtain failed to build is not.
-                ms.dev.log({
-                    type  = "error",
-                    event = mode .. "_curtain_error",
-                    msg   = tostring(view),
-                })
-                ready()
-                return nil
+            local sf = _shellFrame()
+            local v = hs.webview.new(
+                { x = sf.x, y = sf.y, w = sf.w, h = sf.h }, {}, uc
+            )
+            pcall(function() v:windowStyle(0) end)
+            -- Transparent, and it stays transparent through the fade — that is
+            -- the whole takeover: the shell is still lit underneath and shows
+            -- through the curtain until the curtain is opaque.
+            pcall(function() v:transparent(true) end)
+            -- One level above the shell rather than level with it. Two windows
+            -- on the same level are ordered by whatever AppKit feels like, and
+            -- a curtain that comes up *behind* the window it is covering for
+            -- is not a curtain.
+            pcall(function() v:level((hs.canvas.windowLevels.popUpMenu or 101) + 1) end)
+            pcall(function() v:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
+            pcall(function() v:allowTextEntry(false) end)
+            pcall(function() v:shadow(true) end)
+
+            local htmlPath = hs.configdir .. "/ui/ms_curtain.html"
+            local baseURL  = "file://" .. hs.configdir .. "/ui/"
+            local f = io.open(htmlPath, "r")
+            if not f then return nil end
+            local html = f:read("*all"); f:close()
+            v:html(html, baseURL)
+
+            return v
+        end
+
+        -- Called once from the tail of boot. Failing here costs nothing but
+        -- the latency it was meant to save — the exit path still builds one
+        -- on demand — so it never propagates.
+        ms.prewarmExitCurtain = function()
+            if _warmView then return end
+            local ok, v = pcall(_buildCurtain)
+            if ok and v then _warmView = v end
+        end
+
+        local function _exitCurtain(mode, onReady)
+            local function finishReady()
+                pcall(onReady)
+            end
+
+            local view    = _warmView
+            local wasWarm = view ~= nil
+            if not view then
+                -- Prewarm never ran, or failed. Build one now and take the
+                -- load latency — a late curtain still beats none.
+                local ok, v = pcall(_buildCurtain)
+                if not ok or not v then
+                    ms.dev.log({
+                        type  = "error",
+                        event = mode .. "_curtain_error",
+                        msg   = tostring(v),
+                    })
+                    finishReady()
+                    return nil
+                end
+                view = v
             end
 
             -- Held on ms so nothing is collected mid-exit; the kill or the
             -- reload takes it with everything else.
             ms._exitCurtainView = view
+            _warmView = nil
 
-            -- Dress and reveal once the page is alive. `ready` runs at most
-            -- once, so the fallback below can race the handshake safely.
+            -- The shell may have been moved or resized since the prewarm, so
+            -- the frame is taken now rather than trusted from build time.
+            pcall(function()
+                local sf = _shellFrame()
+                view:frame({ x = sf.x, y = sf.y, w = sf.w, h = sf.h })
+            end)
+
             local octane = ms._octaneMode and "true" or "false"
             local theme  = hs.json.encode(ms._theme or {})
-            reveal = function()
+
+            local function present()
+                ms.safeShow(view)
                 local shown = pcall(function()
                     view:evaluateJavaScript("applyTheme(" .. theme .. ");"
                         .. string.format("showCurtain(%q, %s);", mode, octane))
                 end)
-                -- Octane has no fade to wait out.
-                return shown and ms._exitCurtainLive and not ms._octaneMode
+
+                -- Whether there is a fade to wait for at all. A page that
+                -- never handshook is a window with nothing running in it;
+                -- octane has no fade by design. Recorded on ms so the
+                -- fade-out reads the same answer.
+                ms._exitCurtainLive = shown and _warmLive and not ms._octaneMode
+
+                if ms._exitCurtainLive then
+                    -- The teardown closes the shell. Holding it until the
+                    -- curtain is fully opaque is what makes this read as a
+                    -- takeover: the shell stays lit underneath and the curtain
+                    -- comes down over it, instead of the shell blinking out
+                    -- and the curtain fading up over bare desktop.
+                    hs.timer.doAfter(CURTAIN_IN_MS / 1000, finishReady)
+                else
+                    finishReady()
+                end
             end
 
-            -- WKWebView's html() is async and the handshake can be lost if the
-            -- page faults before its listener runs. Proceed regardless after a
-            -- beat: a curtain that never appears must not strand a live app
-            -- with its exit pending forever.
-            hs.timer.doAfter(0.6, ready)
+            -- A prewarmed page is already loaded, so it is shown on the spot —
+            -- that immediacy is the entire point of the prewarm. A page built
+            -- just now is not, and revealing it before its html() has landed
+            -- shows nothing at all, so that path waits for the handshake.
+            if wasWarm then
+                present()
+                return view
+            end
+
+            local waited = 0
+            local poll
+            poll = hs.timer.doEvery(0.05, function()
+                waited = waited + 0.05
+                -- Capped rather than open-ended: a page that faults before its
+                -- listener runs never handshakes, and an exit that waits
+                -- forever on it strands a torn-down app running.
+                if _warmLive or waited >= 0.6 then
+                    poll:stop()
+                    present()
+                end
+            end)
 
             return view
         end
