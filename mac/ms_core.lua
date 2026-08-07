@@ -1913,7 +1913,7 @@
                 -- Panic
                 local hk = ms._hotkeys.panic
                 local tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    if not ms._loadComplete then return end
+                    if not ms._hotkeysReady then return end
                     if not ms._robloxActive and not ms._isSafeZone() then return end
                     ms.setMacros(0)
                 end)
@@ -1922,7 +1922,7 @@
                 -- Quick Reload
                 hk = ms._hotkeys.quickReload
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    if not ms._loadComplete then return end
+                    if not ms._hotkeysReady then return end
                     if not ms._robloxActive and not ms._isSafeZone() then return end
                     if ms._qrCooldown then return end
                     ms._qrCooldown = true
@@ -1934,7 +1934,7 @@
                 -- Full Reload
                 hk = ms._hotkeys.fullReload
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    if not ms._loadComplete then return end
+                    if not ms._hotkeysReady then return end
                     -- ms.restart tears down the way shutdown does and then
                     -- reloads; bare hs.reload() dropped the state on the floor.
                     if ms.restart then ms.restart() else hs.reload() end
@@ -1944,7 +1944,7 @@
                 -- Open Menu
                 hk = ms._hotkeys.openMenu
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    if not ms._loadComplete then return end
+                    if not ms._hotkeysReady then return end
                     -- No _robloxActive / _isSafeZone guard: the menu is a
                     -- Hammerspoon UI, not a game action. It should open
                     -- regardless of target-app focus.
@@ -1959,7 +1959,7 @@
                 -- Octane Mode
                 hk = ms._hotkeys.octane
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    if not ms._loadComplete then return end
+                    if not ms._hotkeysReady then return end
                     if not ms._robloxActive and not ms._isSafeZone() then return end
                     ms.octane.toggle()
                 end)
@@ -4175,6 +4175,13 @@
         end
         ms._devArchiveLimit   = 15     -- overridden by loadSettings() if previously saved
         ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
+        -- Gates the hotkeys, and deliberately not the same flag as above.
+        -- _loadComplete lands at the end of the boot body; the toast that tells
+        -- the user macros are loaded lands a second and a half later, and in
+        -- between the hotkeys worked with nothing on screen saying they would.
+        -- The toast is the promise, so the toast is the gate — one flag for
+        -- what the user has been told, one for what is actually wired up.
+        ms._hotkeysReady   = false
         _G._bootChoreographyStarted = false  -- reset guard for loading screen ready handshake
         ms.loadSettings()            -- load first so importedSounds/soundAssign are available
         -- If custom themes disabled, reset loading sound presets to defaults
@@ -4256,6 +4263,10 @@
                 _G._loadTimers.announceBody = hs.timer.doAfter(0.4, function()
                     ms._startupSoundDone = true
                     _G._loadTimers.announce0 = hs.timer.doAfter(_TOAST_LEAD, function()
+                        -- Set here rather than a line later, so the hotkeys
+                        -- open in the same tick the toast is sent rather than
+                        -- after it has faded in.
+                        ms._hotkeysReady = true
                         pcall(function() ms.playSlot("launch") end)
                         ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", _TOAST_HOLD, true, { priority = "low" })
                     end)
@@ -4482,6 +4493,14 @@
                     _G._announceGuardTimer = hs.timer.doAfter(1, function()
                         _G._announceGuardTimer = nil
                         ms._startupSoundDone = true
+                        -- Unconditional, unlike _loadComplete below: the toast
+                        -- that normally opens the hotkeys rides on
+                        -- _announceLoad, so a boot that got here because
+                        -- _announceLoad faulted or returned early is exactly
+                        -- the boot where the toast never came. Gating on a
+                        -- promise that was never made would leave the hotkeys
+                        -- shut for the rest of the session.
+                        ms._hotkeysReady = true
                         if not ms._loadComplete then
                             ms._loadComplete = true
                             if ms._robloxActive then pcall(function() ms.setMacros(1, true) end) end
