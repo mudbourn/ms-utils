@@ -961,6 +961,43 @@ return function(ms)
         -- embed in. Both paths stay.
         local _embedLive = false
 
+        -- The curtain page, with its fonts folded in.
+        --
+        -- It goes in as srcdoc rather than `src="ms_curtain.html"`, because the
+        -- shell is loaded with html() and WKWebView refuses file:// subresources
+        -- from a string-loaded page — an iframe src is one of those, so it
+        -- silently never loads and the embed silently never runs. Same reason
+        -- ms_shell.lua inlines the shell's own module scripts.
+        --
+        -- The @font-face urls are subresources of that same blocked kind, so
+        -- they are rewritten to data: URIs on the way in. ~92KB of TTF, read
+        -- and encoded once at mount and cached, so the exit itself pays
+        -- nothing. Without it the embedded curtain silently drops to Arial
+        -- while the standalone one keeps Almendra — the two mounts have to be
+        -- the same curtain or there is no point mounting it twice.
+        local _curtainHTMLCache
+        local function _curtainHTML()
+            if _curtainHTMLCache then return _curtainHTMLCache end
+
+            local f = io.open(hs.configdir .. "/ui/ms_curtain.html", "r")
+            if not f then return nil end
+            local html = f:read("*all"); f:close()
+
+            html = html:gsub('url%("%./fonts/([%w%-%._]+)"%)', function(name)
+                local ff = io.open(hs.configdir .. "/ui/fonts/" .. name, "rb")
+                if not ff then return nil end
+                local bytes = ff:read("*all"); ff:close()
+                local ok, b64 = pcall(hs.base64.encode, bytes)
+                if not ok or not b64 then return nil end
+                -- Returned nil above leaves the original url in place, which
+                -- degrades to the fallback font rather than to no curtain.
+                return 'url("data:font/ttf;base64,' .. b64 .. '")'
+            end)
+
+            _curtainHTMLCache = html
+            return html
+        end
+
         -- Injected rather than written into ms_shell.html: the shell page has
         -- no other reason to know the curtain exists, and `ms.shell.eval`
         -- already queues until the page is ready, so this can be called before
@@ -970,11 +1007,11 @@ return function(ms)
         -- always-mounted full-window overlay does not swallow every click in
         -- the shell for the entire session.
         local _EMBED_JS = [[
-(function () {
+(function (doc) {
     if (window.__msCurtain) return;
     var f = document.createElement("iframe");
     f.id = "ms-exit-curtain";
-    f.src = "ms_curtain.html";
+    f.srcdoc = doc;
     f.setAttribute("scrolling", "no");
     f.style.cssText =
         "position:fixed;inset:0;width:100%;height:100%;border:0;margin:0;" +
@@ -1005,12 +1042,23 @@ return function(ms)
         var w = f.contentWindow;
         if (w && w.hideCurtain) w.hideCurtain();
     };
-})();
-]]
+})(]]
 
         ms.installShellCurtain = function()
             if not (ms.shell and ms.shell.eval) then return end
-            pcall(function() ms.shell.eval(_EMBED_JS) end)
+            local html = _curtainHTML()
+            if not html then
+                ms.dev.log({
+                    type  = "error",
+                    event = "shell_curtain_read_error",
+                })
+                return
+            end
+            -- JSON strings are valid JS string literals, which is the whole
+            -- escaping story for a document going in as an argument.
+            pcall(function()
+                ms.shell.eval(_EMBED_JS .. hs.json.encode(html) .. ");")
+            end)
         end
 
         -- The shell relays the iframe's handshake here. Only a real one proves
@@ -1041,10 +1089,31 @@ return function(ms)
                 pcall(onReady)
             end
 
+            -- Which mount the exit took, and how long the curtain took to
+            -- report its fade. This is the one number that says whether a slow
+            -- exit is the curtain being slow to appear or the send-off being
+            -- early, and there is no way to tell them apart by watching.
+            local _t0 = hs.timer.secondsSinceEpoch()
+            ms.dev.log({
+                type          = "system",
+                event         = mode .. "_curtain_path",
+                embedded      = _embedReady(),
+                embedLive     = _embedLive,
+                shellReady    = (ms.shell and ms.shell.isReady and ms.shell.isReady()) or false,
+                shellVisible  = (ms._shellState and ms._shellState.visible) or false,
+            })
+
             -- The hold and the send-off hang off the fade either way; only
             -- where the curtain lives differs.
             local function armFading()
                 _onFading = function()
+                    ms.dev.log({
+                        type    = "system",
+                        event   = mode .. "_curtain_fading",
+                        afterMs = math.floor(
+                            (hs.timer.secondsSinceEpoch() - _t0) * 1000
+                        ),
+                    })
                     pcall(onShow)
                     if ms._exitCurtainLive then
                         hs.timer.doAfter(CURTAIN_IN_MS / 1000, finishReady)
