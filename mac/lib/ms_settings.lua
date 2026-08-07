@@ -818,6 +818,22 @@ return function(ms)
             return { x = x, y = y, w = w, h = h }
         end
 
+        -- Above everything, not one step above the shell.
+        --
+        -- It used to be popUpMenu + 1, which is exactly one level of headroom
+        -- over the shell — and the shell does not stay in its level: its show
+        -- calls bringToFront(true), the above-everything variant, which
+        -- promotes it past that margin. So the curtain came up *behind* the
+        -- visible shell and faded in where nobody could see it, becoming
+        -- visible only when the teardown hid the shell at the end of the hold.
+        --
+        -- That is the whole reason the exit looked slow whenever the shell was
+        -- open, in both exits, and looked fine whenever it was closed. The
+        -- curtain was never late — the log has it fading 78ms in — it was
+        -- occluded. A curtain that something else can get in front of is not a
+        -- curtain, so this stops negotiating for one level and takes the top.
+        local _CURTAIN_LEVEL = (hs.canvas.windowLevels.screenSaver or 1000) + 1
+
         -- The curtain page, built once and kept loaded.
         --
         -- It used to be built at exit time, and that was the whole latency:
@@ -870,7 +886,7 @@ return function(ms)
             -- on the same level are ordered by whatever AppKit feels like, and
             -- a curtain that comes up *behind* the window it is covering for
             -- is not a curtain.
-            pcall(function() v:level((hs.canvas.windowLevels.popUpMenu or 101) + 1) end)
+            pcall(function() v:level(_CURTAIN_LEVEL) end)
             pcall(function() v:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
             pcall(function() v:allowTextEntry(false) end)
             pcall(function() v:shadow(true) end)
@@ -1029,6 +1045,17 @@ return function(ms)
                 armFading()
 
                 ms.safeShow(view)
+
+                -- Re-asserted at show time rather than trusted from build
+                -- time. Ordering is not a property the curtain can set once
+                -- and keep: every window shown between the prewarm and the
+                -- exit gets its own say, and the shell in particular promotes
+                -- itself on every open. Cheap, and the failure it prevents is
+                -- invisible — a curtain behind another window looks exactly
+                -- like a curtain that never came.
+                pcall(function() view:level(_CURTAIN_LEVEL) end)
+                pcall(function() view:bringToFront(true) end)
+
                 local shown = pcall(function()
                     view:evaluateJavaScript("applyTheme(" .. theme .. ");"
                         .. string.format("showCurtain(%q, %s);", mode, octane))
