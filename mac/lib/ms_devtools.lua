@@ -2048,10 +2048,30 @@ return function(ms)
         _winElementTab = true  -- engine starts with element tab active
         local _winLastFullState = nil  -- cached full read for merging light reads
 
+        -- The window the readout is *about*, held separately from focus.
+        --
+        -- Minimizing takes focus with it, so focusedWindow() at tick time is
+        -- either a different window or nil — and the flags the Data tab shows
+        -- are precisely the ones that only turn on once the window is no
+        -- longer focused. Read from focus alone, `minimized` can never be
+        -- true: either another window answers (false) or nothing does (no
+        -- push at all). The log was right because it comes from the watcher
+        -- event, which fires on the right window.
+        local _winLastWin = nil
+
+        -- Focus first, the tracked window second. Not the reverse: focus
+        -- moving to a new window is the normal case and must retarget.
+        local function _winSubject()
+            local w = hs.window.focusedWindow()
+            if w then _winLastWin = w; return w end
+            return _winLastWin
+        end
+
         local function pushState(win, light)
             local st
+            if win then _winLastWin = win end
             if light then
-                st = _winReadLight(win or hs.window.focusedWindow())
+                st = _winReadLight(win or _winSubject())
                 -- Merge light read into the cached full state so the UI
                 -- doesn't blank out app/title/etc during dirty ticks.
                 if st and _winLastFullState then
@@ -2060,7 +2080,7 @@ return function(ms)
                     end
                 end
             else
-                st = _winRead(win or hs.window.focusedWindow())
+                st = _winRead(win or _winSubject())
                 _winLastFullState = st
             end
             if st then _winPush("updateCurrentWindow", st) end
@@ -2074,14 +2094,21 @@ return function(ms)
             -- already left, so focusedWindow() no longer names this app.
             _winWatchedAppName = _winG(function() return app:name() end)
             _winUiWatcher = _winG(function()
-                local w = app:newWatcher(function(_, ev)
+                local w = app:newWatcher(function(el, ev)
                     -- Trivial callback (fires hundreds of times per drag): no AX,
                     -- no JSON, no push here — just tally and flag; tick does the work.
                     if _G.ms and _G.ms._shellDragging then return end
                     if ev == hs.uielement.watcher.windowMinimized then
-                        _winPendingEvent = { type = "minimize", app = _winWatchedAppName }
+                        -- The element that fired, not focus. Minimizing hands
+                        -- focus to whatever window is behind, so by tick time
+                        -- focusedWindow() names a different window and the
+                        -- flags would describe that one instead — reading
+                        -- `minimized = false` for a window nobody minimized.
+                        _winPendingEvent = { type = "minimize", app = _winWatchedAppName,
+                            win = _winG(function() return el:asHSWindow() end) }
                     elseif ev == hs.uielement.watcher.windowUnminimized then
-                        _winPendingEvent = { type = "unminimize", app = _winWatchedAppName }
+                        _winPendingEvent = { type = "unminimize", app = _winWatchedAppName,
+                            win = _winG(function() return el:asHSWindow() end) }
                     elseif ev == hs.uielement.watcher.windowResized then
                         _winResizeN = _winResizeN + 1
                     else
@@ -2118,7 +2145,11 @@ return function(ms)
                     type = ev == hs.application.watcher.hidden and "hide" or "show",
                     ts = os.date("%H:%M:%S"), app = nm,
                 })
-                pushState()
+                -- Same trap as minimize: hiding an app takes focus with it,
+                -- so a bare pushState() reads whichever window inherited
+                -- focus and reports it visible. The hidden app's own window
+                -- is the subject here, and it is still readable while hidden.
+                pushState(_winG(function() return app:mainWindow() end))
             end
         end)
         pcall(function() _winAppWatcher:start() end)
@@ -2135,7 +2166,11 @@ return function(ms)
             -- ── Window state (dirty-flag logic) ───────────────────────────
             if _winDirty then
                 _winDirty = false
-                local st = _winReadLight(hs.window.focusedWindow())
+                -- A pending minimize/unminimize names its own window, and
+                -- that window is the one the flags are about for this tick.
+                local st = _winReadLight(
+                    (_winPendingEvent and _winPendingEvent.win) or _winSubject()
+                )
                 if st and _winLastFullState then
                     for k, v in pairs(_winLastFullState) do
                         if st[k] == nil then st[k] = v end

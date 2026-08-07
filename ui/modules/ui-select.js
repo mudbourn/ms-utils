@@ -114,7 +114,51 @@ function createSelect(opts) {
         return _opts.length ? _opts[0].label : (opts.placeholder || "");
     }
 
-    function close() { root.classList.remove("open"); }
+    function close() {
+        root.classList.remove("open");
+        // Inline geometry is only meaningful while open; clearing it puts the
+        // menu back to the stylesheet's absolute positioning so a closed
+        // control carries no stale coordinates.
+        menu.style.position = "";
+        menu.style.left = "";
+        menu.style.top = "";
+        menu.style.bottom = "";
+        menu.style.minWidth = "";
+        menu.style.maxHeight = "";
+    }
+
+    // The menu is positioned in viewport coordinates while open, not inside
+    // the control.
+    //
+    // Absolute positioning keeps it in the panel's scrolling body, and that
+    // body clips — so a dropdown near the bottom of a panel had its list cut
+    // off by the panel edge rather than overlapping it. Nothing in the panel
+    // stack can be given `overflow: visible` to fix that: the scroll is the
+    // point. `fixed` takes the menu out of the clip entirely.
+    //
+    // It flips above the control when there is more room up than down, which
+    // is what a native popup does and the only reason the bottom-most rows
+    // are usable at all.
+    function place() {
+        const r   = root.getBoundingClientRect();
+        const vh  = doc.documentElement.clientHeight;
+        const gap = 3;
+        const below = vh - r.bottom - gap;
+        const above = r.top - gap;
+        const flip  = below < Math.min(260, menu.scrollHeight) && above > below;
+
+        menu.style.position = "fixed";
+        menu.style.left     = r.left + "px";
+        menu.style.minWidth = r.width + "px";
+        menu.style.maxHeight = Math.max(80, Math.min(260, flip ? above : below)) + "px";
+        if (flip) {
+            menu.style.top    = "auto";
+            menu.style.bottom = (vh - r.top + gap) + "px";
+        } else {
+            menu.style.bottom = "auto";
+            menu.style.top    = (r.bottom + gap) + "px";
+        }
+    }
 
     function render() {
         label.textContent = labelFor(_value);
@@ -163,9 +207,20 @@ function createSelect(opts) {
     root.addEventListener("mouseenter", () => play("hover"));
     root.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (!root.classList.contains("open")) play("interact");
-        root.classList.toggle("open");
+        if (root.classList.contains("open")) { close(); return; }
+        play("interact");
+        root.classList.add("open");
+        // After the class, so the menu has been laid out and scrollHeight is
+        // real — measuring a display:none element gives zero and every menu
+        // would open downward.
+        place();
     });
+    // A viewport-positioned menu does not travel with the panel it came from,
+    // so anything that moves the control closes it rather than leaving the
+    // list floating over the wrong row. Capture phase: the scroll happens on
+    // the panel body, which does not bubble.
+    doc.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
     root.addEventListener("keydown", (e) => {
         if (e.key === "Escape") close();
         // The shell binds single keys globally; an open dropdown must not feed

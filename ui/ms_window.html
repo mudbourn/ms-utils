@@ -282,7 +282,20 @@
                 el.textContent = has ? text : "—";
                 el.classList.toggle("empty", !has);
             }
-            function setFlag(id, on) { const el = document.getElementById(id); if (el) el.classList.toggle("on", !!on); }
+            // Visibility is the one flag whose "off" is a state of its own
+            // rather than the absence of one, so the chip says which state it
+            // is in. Dimming a chip that still reads "Visible" is how a
+            // hidden window ended up looking like a visible one.
+            const FLAG_OFF_LABEL = { "w-visible": "Hidden" };
+            const FLAG_ON_LABEL  = { "w-visible": "Visible" };
+
+            function setFlag(id, on) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.classList.toggle("on", !!on);
+                const txt = on ? FLAG_ON_LABEL[id] : FLAG_OFF_LABEL[id];
+                if (txt) el.textContent = txt;
+            }
             function frameStr(f) { return f ? `${f.x}, ${f.y}  ·  ${f.w} × ${f.h}` : ""; }
 
             // ── Event log row builder ───────────────────────────────────────

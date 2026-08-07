@@ -1147,7 +1147,47 @@ return function(ms)
         -- The send-off starts inside the curtain's onShow, so `_waitForSlot`
         -- is measuring from a sample that began with the fade rather than
         -- before it. Everything downstream stays correct for free.
+        -- Hard ceiling on an exit, measured from the click.
+        --
+        -- Everything below it is bounded by timers, so in normal use this
+        -- never fires. It exists because the normal path is not the only
+        -- path: `finishReady` runs `onReady` inside a pcall, and `onReady`
+        -- tears down and *then* schedules the exit — so anything that throws
+        -- between those two swallows the error and leaves a torn-down app
+        -- behind a curtain with nothing left to fire. That hang has no other
+        -- way out; `ms._shuttingDown` is already set, so the power button
+        -- cannot even be clicked again.
+        -- The whole exit, from click to gone, is meant to land near 5s: the
+        -- curtain's 600ms entrance, this hold, then the 350ms fade-out.
+        local EXIT_HOLD_S     = 4.0
+
+        -- Sits above that total so it only ever fires on the fault path.
+        local EXIT_WATCHDOG_S = 6.0
+
         local function _exit(mode, slot, finish)
+            -- Armed before anything else, so it covers the whole exit rather
+            -- than just the part after the curtain. Fires once: `finish` is a
+            -- kill or a reload, and the first one to land takes the process.
+            local _finished = false
+            local function finishOnce()
+                if _finished then return end
+                _finished = true
+                finish()
+            end
+
+            hs.timer.doAfter(EXIT_WATCHDOG_S, function()
+                if _finished then return end
+                pcall(function()
+                    ms.dev.log({
+                        type  = "error",
+                        event = mode .. "_watchdog",
+                        msg   = "exit did not complete in "
+                            .. EXIT_WATCHDOG_S .. "s; forcing",
+                    })
+                end)
+                finishOnce()
+            end)
+
             _exitCurtain(mode, function()
                 ms.playSlot(slot)
 
@@ -1159,10 +1199,20 @@ return function(ms)
                 -- curtain's, not after it.
                 pcall(function() ms.alert:expireAll() end)
             end, function()
-                _teardown(mode)
-                hs.timer.doAfter(_waitForSlot(slot), function()
-                    _dropCurtain(finish)
+                -- Scheduled before the teardown, not after it. The teardown
+                -- is the step most able to throw, and the pcall around this
+                -- closure would eat the error along with the exit that was
+                -- still waiting to be scheduled behind it.
+                -- Fixed, not measured. This used to be `_waitForSlot(slot)`,
+                -- which held for however long the send-off sample ran — an
+                -- honest rule that made the exit's length a property of
+                -- whatever sound happened to be assigned. A constant is the
+                -- exit taking a known amount of time.
+                local hold = EXIT_HOLD_S
+                hs.timer.doAfter(hold, function()
+                    _dropCurtain(finishOnce)
                 end)
+                _teardown(mode)
             end)
         end
 
@@ -1184,8 +1234,16 @@ return function(ms)
             ms.dev.log({ type = "system", event = "shutdown_start" })
 
             _exit("shutdown", "shutdown", function()
-                local app = hs.application.get("Hammerspoon")
-                if app then app:kill() else os.exit(0) end
+                -- kill() is a *request* to terminate, and a request can be
+                -- refused or simply never answered — which is an exit that
+                -- hangs with no timer left to rescue it, because this is the
+                -- last thing that runs. So it is asked politely once and then
+                -- taken: os.exit is unconditional and cannot be declined.
+                pcall(function()
+                    local app = hs.application.get("Hammerspoon")
+                    if app then app:kill() end
+                end)
+                hs.timer.doAfter(0.5, function() os.exit(0) end)
             end)
         end
 

@@ -45,7 +45,19 @@
                 el.textContent = has ? text : "\u2014";
                 el.classList.toggle("empty", !has);
             }
-            function setFlag(name, on) { const el = _q('[data-flag="' + name + '"]'); if (el) el.classList.toggle("on", !!on); }
+            // Mirrors ms_window.html's copy: visibility's "off" is a state of
+            // its own, so the chip says which one it is in rather than
+            // dimming a chip that still reads "Visible".
+            const FLAG_OFF_LABEL = { visible: "Hidden" };
+            const FLAG_ON_LABEL  = { visible: "Visible" };
+
+            function setFlag(name, on) {
+                const el = _q('[data-flag="' + name + '"]');
+                if (!el) return;
+                el.classList.toggle("on", !!on);
+                const txt = on ? FLAG_ON_LABEL[name] : FLAG_OFF_LABEL[name];
+                if (txt) el.textContent = txt;
+            }
             function frameStr(f) { return f ? (f.x + ", " + f.y + "  \u00b7  " + f.w + " \u00d7 " + f.h) : ""; }
 
             function updateCurrentWindow(s) {

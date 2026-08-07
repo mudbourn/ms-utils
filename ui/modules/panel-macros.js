@@ -1491,7 +1491,7 @@
 
         // Seed the placeholder so the control reads correctly before the macro
         // list arrives from Lua.
-        root.setOptions([{ value: "", label: "— Select —" }]);
+        root.setOptions([{ value: "", label: "Select" }]);
         return root;
     })();
     toolbar.appendChild(macroSelect);
@@ -1929,7 +1929,7 @@
     }
 
     function setMacroList(ids) {
-        var opts = [{ value: "", label: "— Select —" }];
+        var opts = [{ value: "", label: "Select" }];
         for (var i = 0; i < ids.length; i++) {
             opts.push({ value: ids[i], label: ids[i] });
         }
