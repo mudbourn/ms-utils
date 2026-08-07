@@ -1935,7 +1935,9 @@
                 hk = ms._hotkeys.fullReload
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
                     if not ms._loadComplete then return end
-                    hs.reload()
+                    -- ms.restart tears down the way shutdown does and then
+                    -- reloads; bare hs.reload() dropped the state on the floor.
+                    if ms.restart then ms.restart() else hs.reload() end
                 end)
                 if tap then _register("fullReload", tap) end
 
@@ -2503,7 +2505,13 @@
                 end
                 if not path then return false end
                 local handle = ms.sound(path) or false
-                if handle then ms._slotHandles[slotId] = handle end
+                if handle then
+                    ms._slotHandles[slotId] = handle
+                    -- Start time, so a caller that needs to outlive the sample
+                    -- (shutdown) can work out what is left of it.
+                    ms._slotStartedAt = ms._slotStartedAt or {}
+                    ms._slotStartedAt[slotId] = hs.timer.secondsSinceEpoch()
+                end
                 return handle
             end
 
@@ -2976,7 +2984,7 @@
                     if ms.reload then ms.reload() end
                 end
                 ms.bind._wires["__fullReload"] = function()
-                    hs.reload()
+                    if ms.restart then ms.restart() else hs.reload() end
                 end
                 -- __openMenu is handled by _bindHotkeys() via _makeKeyWatcher.
                 -- No wire here — having both would double-fire toggle().
@@ -4238,21 +4246,28 @@
                 -- timer near the end of startup — otherwise, on the 7.0s fallback
                 -- path, the guarantee fires first and the body replays everything.
                 local _TOAST_LEAD = 1.0
+                -- Each announcement toast must be fully gone before the next is
+                -- sent, or their timers land on the same deadline and fire in
+                -- undefined order — the toast either overlaps the one fading out
+                -- of its slot, or briefly pushes it up a row. The toasts are 3s
+                -- apart and fadeOut runs after the hold expires, so the hold has
+                -- to leave room for it. Keep _TOAST_HOLD + fade under 3s.
+                local _TOAST_HOLD = 2.5
                 _G._loadTimers.announceBody = hs.timer.doAfter(0.4, function()
                     ms._startupSoundDone = true
                     _G._loadTimers.announce0 = hs.timer.doAfter(_TOAST_LEAD, function()
                         pcall(function() ms.playSlot("launch") end)
-                        ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", 3, true, { priority = "low" })
+                        ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", _TOAST_HOLD, true, { priority = "low" })
                     end)
                     _G._loadTimers.announce3 = hs.timer.doAfter(_TOAST_LEAD + 3, function()
-                        ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", 3, true, { priority = "low" })
+                        ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn \xe2\x80\x94 https://mudbourn.info", _TOAST_HOLD, true, { priority = "low" })
                     end)
                     _G._loadTimers.announce6 = hs.timer.doAfter(_TOAST_LEAD + 6, function()
                         if ms.macroMeta then
                             local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
                             if ms.macroMeta.author  then msg = msg .. "By: " .. ms.macroMeta.author end
                             if ms.macroMeta.website then msg = msg .. " \xe2\x80\x94 " .. ms.macroMeta.website end
-                            ms.alert(msg, 3, true, { priority = "low" })
+                            ms.alert(msg, _TOAST_HOLD, true, { priority = "low" })
                         end
                     end)
                     ms.loading.applyTheme()

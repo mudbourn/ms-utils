@@ -1397,11 +1397,15 @@
         <!-- Shutdown curtain. Covers the panel between "Quit" and the host
              actually going away, so the last thing on screen is deliberate
              rather than a frozen settings list. -->
+        <!-- Curtain for both exits. showShutdownCurtain() swaps the mark and
+             the text for the restart wording; the markup here is the shutdown
+             case so the overlay still reads correctly if it is ever opened
+             without going through that function. -->
         <div id="shutdown-overlay">
-            <div class="shutdown-mark">
+            <div class="shutdown-mark" id="shutdown-mark">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
             </div>
-            <div class="shutdown-text">mudscript is shutting down</div>
+            <div class="shutdown-text" id="shutdown-text">mudscript is shutting down</div>
         </div>
 
         <!-- Modal -->
@@ -1547,6 +1551,19 @@
     window.registerPanel = function(name, handler) {
         _panelHandlers[name] = handler;
     };
+
+    // Shell-wide native context menu suppression. Panels install their own
+    // contextmenu handlers to build custom menus, but each is gated on that
+    // panel being visible, so the WebKit menu leaked through everywhere else:
+    // the tab strip, the title bar, gutters, and panels with no handler at all.
+    // This does not stopPropagation, so panel handlers still run and still
+    // build their menus. Text fields are exempt so right-click copy/paste
+    // keeps working there.
+    document.addEventListener("contextmenu", function(e) {
+        var t = e.target;
+        if (t && t.closest && t.closest("input, textarea, [contenteditable=''], [contenteditable='true']")) return;
+        e.preventDefault();
+    });
 
     window.shellReceive = function(panel, action, body) {
         // Global popout state management

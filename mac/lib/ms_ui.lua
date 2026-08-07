@@ -5,6 +5,13 @@ return function(ms)
 
     MsUI.name    = "MsUI"
     MsUI.version = "1.0"
+
+    -- Shell-quote a path for hs.execute/os.execute. Defined once at file
+    -- scope: it used to be re-declared as a local inside five separate
+    -- handlers, and the sound-import handler grew two calls above its own
+    -- copy — so `sq` was a nil global there and the handler died before it
+    -- copied anything.
+    local function sq(s) return "'" .. tostring(s):gsub("'", "'\\''") .. "'" end
 -- END MsUI --
 
 -- Init --
@@ -848,7 +855,6 @@ return function(ms)
                     os.remove(plistDst)
                 end
                 ms.saveSettings()
-                ms.playSlot(enabled and "toggleOn" or "toggleOff")
                 ms.ui.refresh()
             end,
 
@@ -860,14 +866,12 @@ return function(ms)
                 if ms.octane then
                     if enabled then ms.octane._apply() else ms.octane._remove() end
                 end
-                ms.playSlot(enabled and "toggleOn" or "toggleOff")
                 ms.ui.refresh()
             end,
 
             setOctaneMuteSounds = function(data)
                 ms._octaneMuteSounds = data.value and true or false
                 ms.saveSettings()
-                ms.playSlot(ms._octaneMuteSounds and "toggleOn" or "toggleOff")
                 ms.ui.refresh()
             end,
 
@@ -876,7 +880,6 @@ return function(ms)
                 ms._macroLabEnabled = enabled
                 if ms._userSettingVals then ms._userSettingVals["macroLabEnabled"] = enabled end
                 ms.saveSettings()
-                ms.playSlot(enabled and "toggleOn" or "toggleOff")
                 -- (Legacy fallback removed 2026-07-13: the shell is the only
                 -- settings UI now; disabling Macro Lab no longer swaps windows.)
                 ms.ui.refresh()
@@ -904,7 +907,6 @@ return function(ms)
                 ms.binds[data.id] = (data.value == true)
                 ms.saveSettings()
                 ms.bind.rebind()
-                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 
@@ -912,7 +914,6 @@ return function(ms)
                 ms.trackpadMode = (data.value == true)
                 ms.saveSettings()
                 ms.bind.rebind()
-                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 
@@ -920,7 +921,6 @@ return function(ms)
                 ms.socdEnabled = (data.value == true)
                 ms.saveSettings()
                 ms.socdApply()
-                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 
@@ -946,7 +946,6 @@ return function(ms)
             setSoundEnabled = function(data)
                 ms.soundEnabled = (data.value == true)
                 ms.saveSettings()
-                ms.playSlot(data.value == true and 'toggleOn' or 'toggleOff')
                 ms.ui.refresh()
             end,
 
@@ -1010,7 +1009,6 @@ return function(ms)
                 if targetName == "" or targetName == activeName then return end
                 local dir = profilesPath .. targetName
                 if not hs.fs.attributes(dir) then return end
-                local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                 os.execute("rm -rf " .. sq(dir))
                 ms._profilesDirty = true
                 ms.ui.markDirty()
@@ -1025,7 +1023,6 @@ return function(ms)
                 local activeName = ms.macroMeta and ms.sanitizeName(ms.macroMeta.name or "") or ""
                 if activeName == "" then return end
                 if not hs.fs.attributes(profilesPath) then return end
-                local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                 local deleted = 0
                 for entry in hs.fs.dir(profilesPath) do
                     if entry ~= "." and entry ~= ".." then
@@ -1079,7 +1076,6 @@ return function(ms)
                     ms.alert("Could not create sounds folder:\n" .. SoundLib, 4)
                     return
                 end
-                local function sq(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                 local added, failed = {}, {}
                 for _, srcPath in ipairs(paths) do
                     local filename   = srcPath:match("([^/]+)$")
@@ -1155,7 +1151,6 @@ return function(ms)
                 if not hs.fs.attributes(slibDir) then
                     hs.execute("mkdir -p '" .. SoundLib .. "'")
                 end
-                local function sq(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                 local filename   = selectedPath:match("([^/]+)$")
                 local importName = filename and (filename:match("^(.+)%.[^%.]+$") or filename)
                 if not filename or not importName then
@@ -1219,7 +1214,6 @@ return function(ms)
                     return
                 end
 
-                local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
                 local ok = os.remove(path)
                 if not ok then
                     local _, st = hs.execute("/bin/rm -f " .. sq(path))

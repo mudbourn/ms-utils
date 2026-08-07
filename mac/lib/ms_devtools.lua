@@ -65,12 +65,14 @@ return function(ms)
         warn      = "error",
         print     = "console",
         result    = "console",
+        input     = "console",
     }
 
     local _typeToChannel = {
         key = "keys", mouse = "keys", scroll = "keys", mousemove = "keys",
         macro = "watcher", sound = "watcher",
         system = "console", print = "console", result = "console",
+        input = "console",
         error = "console",  -- error primary channel; also gated per-panel for watcher
     }
 
@@ -419,6 +421,96 @@ return function(ms)
                 type = "print",
                 msg  = table.concat(parts, "\t"),
             })
+        end
+
+        -- Hammerspoon console mirroring.
+        --
+        -- print() already lands in the shell console via the _G.print wrap
+        -- above — the console evaluates typed input against _G, so a print()
+        -- there resolves to it. What never arrives is the console's own echo:
+        -- runstring (Hammerspoon's _coresetup.lua) load()s the line, tostring()s
+        -- the results and *returns* the string for the ObjC console to draw, so
+        -- an expression's value never passes through print at all.
+        --
+        -- The input preparser is the only supported hook into that path, and it
+        -- only sees the source. So the source is stashed and swapped for a call
+        -- to our own evaluator, which reproduces runstring's contract exactly:
+        -- same load() order (expression, then statement), same xpcall, and the
+        -- same return values passed back — runstring tostring/tab-joins them,
+        -- so the console draws what it always drew.
+        --
+        -- Stashing rather than re-quoting the source into the replacement
+        -- string is deliberate: any quoting scheme can be broken by input that
+        -- contains its own delimiter, and this hook sits in front of every line
+        -- typed into the console. Preparse and eval are consecutive and
+        -- single-threaded, so the stash cannot interleave.
+        local _consoleSrc = nil
+
+        local function _logConsole(entry)
+            pcall(function() self:log(entry) end)
+        end
+
+        -- Global rather than reached through ms.dev: this name is baked into
+        -- the string handed back to the console, so it has to resolve even if
+        -- ms.dev is mid-reload, or a typed line would fail on a nil index
+        -- instead of running.
+        _G.__msConsoleEval = function()
+            local src = _consoleSrc
+            _consoleSrc = nil
+
+            if type(src) ~= "string" then return end
+
+            local fn, err = load("return " .. src)
+            if not fn then fn, err = load(src) end
+
+            if not fn then
+                _logConsole({ type = "error", msg = tostring(err) })
+                return tostring(err)   -- runstring returns the load error too
+            end
+
+            local res = table.pack(xpcall(fn, debug.traceback))
+
+            if not res[1] then
+                _logConsole({ type = "error", msg = tostring(res[2]) })
+                return res[2]          -- runstring draws the traceback alone
+            end
+
+            -- res[1] is xpcall's success flag; the real values start at 2.
+            -- A line with no return value (an assignment, a call returning
+            -- nothing) logs nothing rather than an empty result row.
+            if res.n > 1 then
+                local parts = {}
+
+                for i = 2, res.n do
+                    parts[#parts + 1] = tostring(res[i])
+                end
+
+                _logConsole({
+                    type = "result",
+                    msg  = table.concat(parts, "\t"):sub(1, 2000),
+                })
+            end
+
+            return table.unpack(res, 2, res.n)
+        end
+
+        -- Chain rather than clobber: the preparser is a single global slot and
+        -- something else may already own it.
+        local _prevPreparser = hs._consoleInputPreparser
+
+        hs._consoleInputPreparser = function(s)
+            if _prevPreparser then
+                local ok, s2 = pcall(_prevPreparser, s)
+                if ok and type(s2) == "string" then s = s2 end
+            end
+
+            if type(s) ~= "string" or s:match("^%s*$") then return s end
+
+            _logConsole({ type = "input", msg = s })
+
+            _consoleSrc = s
+
+            return "__msConsoleEval()"
         end
 
         -- History loader (must be before bus handlers)

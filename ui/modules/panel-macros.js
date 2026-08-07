@@ -1818,12 +1818,14 @@
             t.type = "checkbox";
             t.checked = !!m.enabled;
             t.addEventListener("change", function() {
-                if (window.playSlot) playSlot("interact");
                 shellPost("macros", "setMacroEnabled", {
                     action: "setMacroEnabled",
                     id:     m.id,
                     value:  t.checked,
                 });
+                // Matches the settings panel's toggle(): the shell sounds the
+                // toggle, the host handler does not.
+                if (window.playSlot) playSlot(t.checked ? "toggleOn" : "toggleOff");
             });
             var track = document.createElement("div");
             track.className = "toggle-track";

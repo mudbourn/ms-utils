@@ -617,24 +617,19 @@ return function(ms)
             end
         end
 
-        -- ── Shutdown ──────────────────────────────────────────────────────
-        -- The power button's back end. Every step is pcall'd on its own: a
-        -- shutdown that aborts halfway is worse than one that skips a step,
-        -- because it leaves taps and timers live with no UI left to reach
-        -- them from.
+        -- ── Teardown ──────────────────────────────────────────────────────
+        -- Shared by shutdown and restart: both are the same act of putting
+        -- mudscript down cleanly, and differ only in what happens after.
+        -- Every step is pcall'd on its own — a teardown that aborts halfway
+        -- is worse than one that skips a step, because it leaves taps and
+        -- timers live with no UI left to reach them from.
         --
-        -- The last step quits Hammerspoon. mudscript is not a process of its
-        -- own — it is what Hammerspoon is running — so tearing its state down
-        -- in place would leave an idle Hammerspoon that the user still has to
-        -- quit by hand, and any handle missed below would keep running inside
-        -- it. Quitting is the only exit that is actually an exit.
-        ms.shutdown = function()
-            if ms._shuttingDown then return end
-            ms._shuttingDown = true
-            ms.dev.log({ type = "system", event = "shutdown_start" })
-
+        -- `reason` only labels the error events, so a failure in the log is
+        -- attributable to the path that hit it.
+        local function _teardown(reason)
             -- Suppress the toasts and sounds every teardown step would
-            -- otherwise fire on the way out.
+            -- otherwise fire on the way out. Callers that want a send-off
+            -- sound must start it before calling this.
             ms._quickReloading = true
 
             local function step(name, fn)
@@ -642,7 +637,7 @@ return function(ms)
                 if not ok then
                     ms.dev.log({
                         type = "error",
-                        event = "shutdown_step_error",
+                        event = reason .. "_step_error",
                         step = name,
                         msg = tostring(err),
                     })
@@ -683,7 +678,7 @@ return function(ms)
                 end
             end)
 
-            -- 4. Close every window so the desktop is clear before the quit.
+            -- 4. Close every window so the desktop is clear before the exit.
             step("windows", function()
                 if ms.shell and ms.shell.hide then ms.shell.hide() end
                 if ms.ui and ms.ui.hide then ms.ui.hide() end
@@ -695,13 +690,112 @@ return function(ms)
 
             -- 5. Flush the log handles last, so the steps above are on disk.
             step("logs", function() ms.dev:closeLogHandles() end)
+        end
+
+        -- How long to hold before the exit, so a send-off sample is not cut
+        -- off mid-note. 0.25s floor so the window teardown is on screen.
+        --
+        -- There is deliberately no upper bound: a send-off is a send-off, and
+        -- capping it would silently truncate anyone whose sample is longer
+        -- than a number picked here. The sample's own length is the limit.
+        -- The only rejected durations are the ones that are not lengths at
+        -- all — inf and nan would schedule a timer that never fires and leave
+        -- a torn-down app running.
+        local function _waitForSlot(slotId)
+            local wait  = 0.25
+            local sound = (ms._slotHandles or {})[slotId]
+            local began = (ms._slotStartedAt or {})[slotId]
+
+            if sound and began then
+                local ok, dur = pcall(function() return sound:duration() end)
+                -- dur ~= dur is the nan test; nan compares false to everything.
+                if ok and type(dur) == "number" and dur == dur
+                    and dur > 0 and dur < math.huge then
+                    local left = dur - (hs.timer.secondsSinceEpoch() - began)
+                    if left > wait then wait = left end
+                end
+            end
+
+            return wait
+        end
+
+        -- ── Shutdown ──────────────────────────────────────────────────────
+        -- The power button's back end.
+        --
+        -- The last step quits Hammerspoon. mudscript is not a process of its
+        -- own — it is what Hammerspoon is running — so tearing its state down
+        -- in place would leave an idle Hammerspoon that the user still has to
+        -- quit by hand, and any handle missed below would keep running inside
+        -- it. Quitting is the only exit that is actually an exit.
+        ms.shutdown = function()
+            if ms._shuttingDown or ms._restarting then return end
+            ms._shuttingDown = true
+            ms.dev.log({ type = "system", event = "shutdown_start" })
+
+            _teardown("shutdown")
 
             -- The UI already played the shutdown slot and is showing its
-            -- curtain; this delay is only so the window teardown above is
-            -- on screen before the app goes.
-            hs.timer.doAfter(0.25, function()
+            -- curtain; the shell's own hold only covers the start of it.
+            hs.timer.doAfter(_waitForSlot("shutdown"), function()
                 local app = hs.application.get("Hammerspoon")
                 if app then app:kill() else os.exit(0) end
+            end)
+        end
+
+        -- ── Restart ───────────────────────────────────────────────────────
+        -- Full reload's back end (⌥]). Same teardown as shutdown, because a
+        -- reload is just as much of an exit — hs.reload() discards the whole
+        -- Lua state, so a bare call to it dropped taps mid-macro with keys
+        -- possibly still held and, worse, never saved settings on the way
+        -- out. The difference is only the last step and the send-off.
+        --
+        -- Unlike shutdown there is no UI ahead of this: the hotkey fires with
+        -- no confirm and no curtain, and the shell may not even be open, so
+        -- the sound is started here rather than by the panel.
+        ms.restart = function()
+            if ms._restarting or ms._shuttingDown then return end
+            ms._restarting = true
+            ms.dev.log({ type = "system", event = "restart_start" })
+
+            -- A restart is not a goodbye, so it gets its own slot — but that
+            -- slot ships unassigned, and falling back to the shutdown sound
+            -- is better than silence. Played before _teardown, which sets
+            -- _quickReloading and mutes everything after it.
+            local slot = "restart"
+            if not ms.playSlot(slot) then
+                slot = "shutdown"
+                ms.playSlot(slot)
+            end
+
+            -- Raise the shutdown curtain with the restart wording, but only
+            -- when there is a shell on screen to raise it in: eval() queues
+            -- JS when the webview is not ready, and a queued curtain would
+            -- both never draw and be discarded by the reload anyway.
+            local curtain = false
+            if ms.shell and ms.shell.isReady and ms.shell.isReady()
+                and ms._shellState and ms._shellState.visible then
+                pcall(function()
+                    ms.shell.eval("showShutdownCurtain('restart')")
+                end)
+                curtain = true
+            end
+
+            -- Give the curtain a beat to be read before the teardown closes
+            -- the window out from under it — the same lead the shell takes on
+            -- the shutdown path. With no curtain there is nothing to look at,
+            -- so tear down at once. _waitForSlot works off the sample's start
+            -- time, so this lead comes out of the send-off rather than adding
+            -- to it either way.
+            hs.timer.doAfter(curtain and 0.9 or 0, function()
+                _teardown("restart")
+
+                -- hs.reload() tears down the Lua state, and the sound handle
+                -- goes with it — so the wait is what makes the send-off
+                -- audible at all, not just a courtesy. The loading screen
+                -- picks up from here.
+                hs.timer.doAfter(_waitForSlot(slot), function()
+                    hs.reload()
+                end)
             end)
         end
 
@@ -4588,7 +4682,9 @@ return function(ms)
                     { title = "-" },
                     { title = "Reload Options", menu = {
                         { title = "Quick Reload ( ⌥[ )",   fn = function() ms.quickReload() end },
-                        { title = "Full Reload ( ⌥] )",    fn = function() hs.reload() end },
+                        { title = "Full Reload ( ⌥] )",    fn = function()
+                            if ms.restart then ms.restart() else hs.reload() end
+                        end },
                     }},
                     { title = "-" },
                     { title = "Profiles",  menu = buildProfilesSubmenu() },

@@ -304,10 +304,37 @@
             }
             window.requestShutdown = requestShutdown;
 
+            // The curtain covers both exits. Restart gets its own wording and
+            // mark because the two look identical otherwise, and "shutting
+            // down" during a reload reads as a crash — the window vanishing a
+            // moment later makes that worse, not better.
+            const CURTAIN = {
+                shutdown: {
+                    text: "mudscript is shutting down",
+                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>',
+                },
+                restart: {
+                    text: "mudscript is restarting",
+                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>',
+                },
+            };
+
+            // Called by the host for the restart path too, which has no UI in
+            // front of it — hence the global.
+            function showShutdownCurtain(mode) {
+                const spec = CURTAIN[mode] || CURTAIN.shutdown;
+                const ov = document.getElementById("shutdown-overlay");
+                const mark = document.getElementById("shutdown-mark");
+                const text = document.getElementById("shutdown-text");
+                if (mark) mark.innerHTML = spec.icon;
+                if (text) text.textContent = spec.text;
+                if (ov) ov.classList.add("open");
+            }
+            window.showShutdownCurtain = showShutdownCurtain;
+
             function beginShutdown() {
                 _shuttingDown = true;
-                const ov = document.getElementById("shutdown-overlay");
-                if (ov) ov.classList.add("open");
+                showShutdownCurtain("shutdown");
                 playSlot("shutdown");
                 setTimeout(
                     () => sendToHost({ action: "shutdown" }),
@@ -339,7 +366,16 @@
                     { cls: "toggle", onmouseenter: () => playSlot("hover") },
                     h("input", {
                         type: "checkbox",
-                        onchange: (e) => { playSlot("interact"); if (onchange) onchange(e); },
+                        // The shell owns the toggle sound for every toggle; host
+                        // handlers must not play one or they double up. Sounding
+                        // after onchange keeps the mute toggles honest — the host
+                        // processes messages in order, so muting silences its own
+                        // click and unmuting is audible.
+                        onchange: (e) => {
+                            const on = e.target.checked;
+                            try { if (onchange) onchange(e); }
+                            finally { playSlot(on ? "toggleOn" : "toggleOff"); }
+                        },
                     }),
                     h("div", { cls: "toggle-track" }),
                     h("div", { cls: "toggle-thumb" }),

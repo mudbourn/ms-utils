@@ -418,6 +418,10 @@
         { id: "settingsOpen", label: "Settings Open" },
         { id: "settingsClose", label: "Settings Close" },
         { id: "shutdown", label: "Shutdown" },
+        // Ships unassigned and has no d_*/a_* sample, so it is deliberately
+        // absent from D_MAP and the preset lists — leaving it empty falls the
+        // restart back to the shutdown sound rather than to silence.
+        { id: "restart", label: "Restart" },
     ];
 
     const LOAD_SLOTS = [

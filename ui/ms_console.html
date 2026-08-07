@@ -595,5 +595,16 @@
                 document.getElementById("code-input").focus();
             });
         </script>
-    </body>
+    <script>
+// Suppress the native WebKit context menu, matching ms_shell.html. This file
+// is used both by the baked popout windows and by the devtools windows, so the
+// suppression has to live here rather than in the shell. Text fields are exempt
+// so right-click copy/paste keeps working.
+document.addEventListener("contextmenu", function (e) {
+    var t = e.target;
+    if (t && t.closest && t.closest("input, textarea, [contenteditable=''], [contenteditable='true']")) return;
+    e.preventDefault();
+});
+</script>
+</body>
 </html>
