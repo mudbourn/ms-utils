@@ -62,13 +62,19 @@
             }
 
             /* ── Curtain ────────────────────────────────────────────────────── */
-            /* Full bleed and no radius: this covers the screen, not a window.
-               The whole sheet fades as one so the desktop is never revealed
-               between the shell closing and the exit landing. */
+            /* Dressed as the shell's own window — same --bg, same
+               --ms-window-radius, no border, exactly like #shell-root — because
+               it stands in that window's place. The host sizes this page to the
+               shell's frame, so the takeover looks like the shell going quiet
+               rather than a new window appearing.
+               The whole sheet fades as one, and it outlives the shell, so the
+               desktop is never revealed mid send-off. */
             #curtain {
                 position: fixed;
                 inset: 0;
                 background: var(--bg);
+                border-radius: var(--ms-window-radius, 0px);
+                overflow: hidden;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
@@ -105,8 +111,8 @@
                 animation: mark-pulse 1.4s ease-in-out infinite;
             }
             #mark svg {
-                width: 44px;
-                height: 44px;
+                width: 34px;
+                height: 34px;
                 display: block;
             }
             @keyframes mark-pulse {
@@ -147,7 +153,7 @@
             /* The loading screen opens on this word; the exit closes on it. */
             #brand {
                 position: absolute;
-                bottom: 26px;
+                bottom: 18px;
                 left: 0;
                 right: 0;
                 text-align: center;

@@ -735,9 +735,47 @@ return function(ms)
         -- screen's CSS is exactly how the two drifted apart in the first
         -- place. Same page, same theme payload, same tokens.
         --
-        -- Full screen, covering the menu bar: this is the app leaving, not a
-        -- window closing, and a curtain that leaves the desktop showing
-        -- around its edges reads as a crash.
+        -- It takes the shell's frame rather than the screen's: this is the
+        -- shell going quiet, not the desktop being covered. The shell's own
+        -- window is the thing being replaced, so standing exactly in its
+        -- place is what makes the handover invisible.
+        --
+        -- Live frame first, persisted frame second, shell defaults last. The
+        -- restart hotkey fires whether or not the shell is open, and a
+        -- restart with no shell still needs to show something — so there is
+        -- always a frame, even when there is no window to read one from.
+        local function _shellFrame()
+            local view = ms.shell and ms.shell.webview and ms.shell.webview()
+            if view then
+                local ok, f = pcall(function() return view:frame() end)
+                if ok and f and f.w and f.w > 0 and f.h and f.h > 0 then
+                    return f
+                end
+            end
+
+            -- Same numbers as ms.shell.init: 820×520, capped to 85% of the
+            -- screen for low-res displays, centred.
+            local sf = hs.screen.mainScreen():frame()
+            local w  = math.min(820, math.floor(sf.w * 0.85))
+            local h  = math.min(520, math.floor(sf.h * 0.85))
+            local st = ms._shellState
+            if st and st.w and st.h then
+                w, h = math.min(st.w, sf.w), math.min(st.h, sf.h)
+            end
+
+            local x = sf.x + math.floor((sf.w - w) / 2)
+            local y = sf.y + math.floor((sf.h - h) / 2)
+            if st and st.x and st.y then
+                -- Clamped on-screen for the same reason _restoreFrame clamps:
+                -- a frame left behind by a disconnected display must not put
+                -- the curtain somewhere nobody can see it.
+                x = math.max(sf.x, math.min(st.x, sf.x + sf.w - w))
+                y = math.max(sf.y, math.min(st.y, sf.y + sf.h - h))
+            end
+
+            return { x = x, y = y, w = w, h = h }
+        end
+
         local function _exitCurtain(mode, onReady)
             -- Dressing the page is added to `ready` once there is a page to
             -- dress; until then it is just the teardown, so a curtain that
@@ -755,7 +793,7 @@ return function(ms)
             end
 
             local ok, view = pcall(function()
-                local sf = hs.screen.mainScreen():fullFrame()
+                local sf = _shellFrame()
 
                 local uc = hs.webview.usercontent.new("curtain")
                 uc:setCallback(function(message)
@@ -770,11 +808,12 @@ return function(ms)
                 )
                 pcall(function() v:windowStyle(0) end)
                 pcall(function() v:transparent(true) end)
-                pcall(function() v:level(hs.canvas.windowLevels.screenSaver
-                    or hs.canvas.windowLevels.popUpMenu or 25) end)
+                -- Shell's own level and shadow: it is standing in for that
+                -- window, so it has to sit where that window sat.
+                pcall(function() v:level(hs.canvas.windowLevels.popUpMenu or 101) end)
                 pcall(function() v:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
                 pcall(function() v:allowTextEntry(false) end)
-                pcall(function() v:shadow(false) end)
+                pcall(function() v:shadow(true) end)
 
                 local htmlPath = hs.configdir .. "/ui/ms_curtain.html"
                 local baseURL  = "file://" .. hs.configdir .. "/ui/"
