@@ -1521,6 +1521,12 @@
         return '<svg class="' + (cls || 'icon') + '" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' + (ICONS[name] || '') + '</svg>';
     }
     window.icon = icon;
+    // ICONS is a top-level `const`, and a top-level const is not a property of
+    // window the way a var is — so `window.ICONS` was undefined everywhere,
+    // and every caller that tested for it fell through to its fallback.
+    // Exported explicitly, next to icon(), because the two are one API: icon()
+    // renders a name, and this is how a caller asks whether a name exists.
+    window.ICONS = ICONS;
 
     window.shellDispatch = function(panel, action, body) {
         try {
