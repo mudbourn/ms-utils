@@ -531,7 +531,7 @@
     }
 
     function buildSound(body, scrollEl) {
-        const { h, row, toggle, divider, groupLabel, btnRow, actionBtn, showCtxMenu } = ui();
+        const { h, row, toggle, seg, divider, groupLabel, btnRow, actionBtn, showCtxMenu } = ui();
 
         body.appendChild(
             row(
@@ -671,7 +671,22 @@
 
         const soundEntryRow = (e) => {
             const ctl = h("div", { cls: "slot-ctl" });
-            ctl.appendChild(h("span", { cls: "snd-entry-kind" }, e.kind));
+            // An imported sound gets to say what it is. Everything else is
+            // already declared by the directory it lives in, and defaults
+            // must not move at all, so those keep the plain label.
+            if (e.imported) {
+                ctl.appendChild(seg(
+                    [{ value: "active", label: "Active" },
+                     { value: "macro",  label: "Macro"  }],
+                    e.role,
+                    (v) => {
+                        if (v === e.role) return;
+                        sendToHost({ action: "setSoundKind", name: e.name, kind: v });
+                    },
+                ));
+            } else {
+                ctl.appendChild(h("span", { cls: "snd-entry-kind" }, e.kind));
+            }
             const btns = h("div", { cls: "slot-btns" });
             const play = h("button", {
                 cls: "slot-btn",

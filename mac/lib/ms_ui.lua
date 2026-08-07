@@ -156,24 +156,30 @@ return function(ms)
             -- scan found it in rather than the name prefix, because the
             -- directory is what _autoSortSounds actually guarantees.
             local soundEntries = {}
-            local function _entry(name, path, kind)
+            -- `role` is what the file *is*, from the directory it sits in.
+            -- `imported` is where it came from. These used to be the same
+            -- field, so an import was labelled "imported" and nothing else —
+            -- there was no way to see, or say, whether it was an active sound
+            -- or a macro sound. Provenance does not decide type.
+            local function _entry(name, path, role)
+                local imported = (ms.importedSounds or {})[name] ~= nil
                 soundEntries[#soundEntries + 1] = {
                     name      = name,
-                    kind      = kind,
+                    -- What the Sounds tab groups on. Imports keep their own
+                    -- group so something you brought in stays findable
+                    -- whichever role you give it.
+                    kind      = imported and "imported" or role,
+                    role      = role,
+                    imported  = imported,
                     -- Defaults are the fallback floor; removing one would
                     -- leave slots resolving to nothing.
-                    removable = (kind ~= "default"),
+                    removable = (role ~= "default"),
                 }
             end
             for _, name in ipairs(soundNames) do
                 local path = (ms.sounds or {})[name] or ""
-                local kind = "active"
-                if path:find("/sounds/defaults/") then
-                    kind = "default"
-                elseif (ms.importedSounds or {})[name] then
-                    kind = "imported"
-                end
-                _entry(name, path, kind)
+                _entry(name, path,
+                    path:find("/sounds/defaults/") and "default" or "active")
             end
             for _, name in ipairs(macroSoundNames) do
                 _entry(name, (ms.macroSounds or {})[name] or "", "macro")
@@ -1238,6 +1244,88 @@ return function(ms)
                 ms.playSlot("reset")
                 hs.timer.doAfter(0.15, function()
                     ms.alert("\"" .. name .. "\" removed.", 3, true)
+                    ms.ui.refresh()
+                end)
+            end,
+
+            -- Declare what an imported sound is. The library files sounds by
+            -- name prefix — ms._autoSortSounds moves d_/a_/m_ into defaults/,
+            -- active/ and macro/ — so an import that kept its original name
+            -- matches no prefix, is moved nowhere, and is stuck as whatever
+            -- the importer happened to drop it in. Renaming it to the
+            -- destination's prefix is how a sound says what it is, and is the
+            -- same normalisation the package importer applies on the way in.
+            setSoundKind = function(data)
+                local name = data and data.name
+                local kind = data and data.kind
+                if type(name) ~= "string" or name == "" then return end
+                if kind ~= "active" and kind ~= "macro" then return end
+
+                ms._discoverSounds()
+                local path = (ms.sounds or {})[name] or (ms.macroSounds or {})[name]
+                if not path then
+                    ms.alert("No such sound: " .. name, 3)
+                    return
+                end
+                if path:find("/sounds/defaults/") or name:sub(1, 2) == "d_" then
+                    ms.alert("Default sounds cannot be re-typed.", 3)
+                    return
+                end
+
+                local dstDir = (kind == "macro") and SoundMacroDir or SoundActiveDir
+                local prefix = (kind == "macro") and "m_" or "a_"
+                local file   = path:match("([^/]+)$") or ""
+                local stem   = file:match("^(.+)%.[^%.]+$") or file
+                local ext    = file:match("(%.[^%.]+)$") or ""
+                -- Strip the prefix it carries now, so re-typing twice cannot
+                -- stack them into m_a_Name.
+                stem = stem:gsub("^[dam]_", "")
+
+                local newName = prefix .. stem
+                local dst     = dstDir .. newName .. ext
+
+                if dst == path then
+                    ms.ui.refresh()
+                    return
+                end
+                if hs.fs.attributes(dst) then
+                    ms.alert("A sound named \"" .. newName .. "\" already exists.", 4)
+                    return
+                end
+                if not hs.fs.attributes(dstDir) then
+                    hs.execute("mkdir -p " .. sq(dstDir))
+                end
+
+                local ok = os.rename(path, dst)
+                if not ok then
+                    local _, st = hs.execute("/bin/mv " .. sq(path) .. " " .. sq(dst))
+                    ok = (st == true) or (hs.fs.attributes(dst) ~= nil)
+                end
+                if not ok then
+                    ms.alert("Could not move \"" .. name .. "\".", 4)
+                    return
+                end
+
+                -- Follow the rename. Slots point at names and the imported
+                -- flag is keyed by name, so both would dangle otherwise —
+                -- and a slot pointing at a macro sound still resolves, since
+                -- playSlot falls through ms.sounds to ms.macroSounds.
+                ms.soundAssign = ms.soundAssign or {}
+                for slot, assigned in pairs(ms.soundAssign) do
+                    if assigned == name then ms.soundAssign[slot] = newName end
+                end
+                if ms.importedSounds and ms.importedSounds[name] then
+                    ms.importedSounds[name]    = nil
+                    ms.importedSounds[newName] = newName .. ext
+                end
+
+                ms.saveSettings()
+                ms._soundsDirty = true
+                ms._discoverSounds()
+                ms.playSlot("update")
+                hs.timer.doAfter(0.15, function()
+                    ms.alert("\"" .. newName .. "\" is now a "
+                        .. kind .. " sound.", 3, true)
                     ms.ui.refresh()
                 end)
             end,
