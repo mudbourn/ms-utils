@@ -1424,7 +1424,13 @@
 
         var arrow = document.createElement("span");
         arrow.className = "macro-select-arrow";
-        arrow.textContent = "▾";
+        // chevdown from the shell's ICONS rather than a "▾" glyph: the
+        // custom dropdown exists so this control can be themed, and a
+        // typographic arrow is the one part of it that never was.
+        arrow.innerHTML = (typeof window.icon === "function" && window.ICONS
+            && window.ICONS.chevdown)
+            ? window.icon("chevdown")
+            : "";
         root.appendChild(arrow);
 
         var menu = document.createElement("div");
@@ -1757,10 +1763,20 @@
         return b;
     }
 
-    function iconBtn(label, title, onClick) {
+    // Takes an ICONS name, not a glyph. It used to take the character itself,
+    // which is how a lone "↺" ended up standing in for the refresh icon the
+    // shell already ships — a text arrow next to real SVGs reads as a
+    // different weight and does not follow --accent on hover.
+    function iconBtn(iconName, title, onClick) {
         var b = document.createElement("button");
         b.className = "bind-act";
-        b.textContent = label;
+        // Falls back to the name rather than rendering nothing, so a typo in
+        // an icon name is visible instead of an empty button.
+        b.innerHTML = (typeof window.icon === "function" && window.ICONS
+            && window.ICONS[iconName])
+            ? window.icon(iconName)
+            : "";
+        if (!b.innerHTML) b.textContent = iconName;
         b.title = title;
         b.addEventListener("mouseenter", function() {
             if (window.playSlot) playSlot("hover");
@@ -1799,7 +1815,7 @@
             });
         }, "Click to rebind"));
 
-        acts.appendChild(iconBtn("↺", "Reset to default bind", function() {
+        acts.appendChild(iconBtn("refresh", "Reset to default bind", function() {
             shellPost("macros", "resetBind", {
                 action:     "resetBind",
                 id:         m.id,
