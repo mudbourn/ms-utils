@@ -679,8 +679,16 @@ return function(ms)
             end)
 
             -- 4. Close every window so the desktop is clear before the exit.
+            --
+            -- Except the shell, when the shell is the one holding the curtain.
+            -- Hiding it there would take the curtain down with it — the exact
+            -- failure the standalone window was built to avoid — and its hide
+            -- fades the window out and plays the close sound on top. The kill
+            -- or the reload clears it a moment later anyway.
             step("windows", function()
-                if ms.shell and ms.shell.hide then ms.shell.hide() end
+                if ms.shell and ms.shell.hide and not ms._exitCurtainInShell then
+                    ms.shell.hide()
+                end
                 if ms.ui and ms.ui.hide then ms.ui.hide() end
                 pcall(function() ms.dev.console.hide() end)
                 pcall(function() ms.dev.watcher.hide() end)
@@ -833,6 +841,10 @@ return function(ms)
             if fn then pcall(fn) end
         end
 
+        -- Same signal, arriving from the shell's channel instead of the
+        -- curtain window's, when the curtain is running embedded.
+        ms._exitCurtainFading = _fading
+
         local function _buildCurtain()
             local uc = hs.webview.usercontent.new("curtain")
             uc:setCallback(function(message)
@@ -883,6 +895,142 @@ return function(ms)
             if ok and v then _warmView = v end
         end
 
+        -- Put the curtain where the shell is. Returns whether it had to move.
+        --
+        -- Moving a webview makes WKWebView lay out again, and a reveal issued
+        -- into that lands late: the page accepts the JS but does not paint
+        -- until the layout settles. So this wants to run at any time except
+        -- the one moment it used to — the exit itself.
+        local function _matchShellFrame(view)
+            local moved = false
+            pcall(function()
+                local sf  = _shellFrame()
+                local cur = view:frame()
+                if not cur
+                    or math.abs(cur.x - sf.x) > 1 or math.abs(cur.y - sf.y) > 1
+                    or math.abs(cur.w - sf.w) > 1 or math.abs(cur.h - sf.h) > 1
+                then
+                    view:frame({ x = sf.x, y = sf.y, w = sf.w, h = sf.h })
+                    moved = true
+                end
+            end)
+            return moved
+        end
+
+        -- Keep the prewarmed curtain on the shell's frame, so the exit never
+        -- has to move it.
+        --
+        -- This is the whole reason shutdown and restart behaved differently.
+        -- Shutdown is clicked in an open shell, so the shell had almost always
+        -- moved or resized since the prewarm and the exit paid a relayout at
+        -- the worst possible moment; the restart hotkey usually fires with the
+        -- shell closed and the prewarmed frame already correct, which is why
+        -- the path that never moves is the path that behaved. Doing it here
+        -- means the relayout is paid while the user is dragging a window and
+        -- both exits arrive at a curtain that is already in the right place.
+        --
+        -- Called from the shell's saveState — the single funnel for move-end,
+        -- resize-end and hide — and from its show, after the frame is
+        -- restored. Inert during an exit: _warmView is handed over and cleared
+        -- the moment one starts, so there is nothing here to move.
+        ms.syncExitCurtainFrame = function()
+            if not _warmView then return end
+            _matchShellFrame(_warmView)
+        end
+
+        -- ── The curtain, embedded in the shell ────────────────────────────
+        -- The standalone window above fixed everything a frame can explain and
+        -- shutdown was still slow. What is left is the part a prewarm cannot
+        -- reach: a hidden WKWebView does not composite, so showing one has to
+        -- restart its rendering before anything can fade, and no amount of
+        -- warming the *page* warms that.
+        --
+        -- An open shell is already compositing. So when there is one, the
+        -- curtain runs inside it — same ms_curtain.html, in an iframe, sized to
+        -- the window it is already standing in front of. Nothing to show, no
+        -- frame to move, no resume to wait for: the fade starts on the next
+        -- frame the shell was going to draw anyway.
+        --
+        -- It is an iframe of the same file rather than markup copied into the
+        -- shell, because two curtains that must look identical and are edited
+        -- separately are two curtains that will not. There is one curtain; this
+        -- is the second place it can be mounted.
+        --
+        -- Restart still needs the standalone window — the hotkey fires whether
+        -- or not the shell is open, and with no shell there is nothing to
+        -- embed in. Both paths stay.
+        local _embedLive = false
+
+        -- Injected rather than written into ms_shell.html: the shell page has
+        -- no other reason to know the curtain exists, and `ms.shell.eval`
+        -- already queues until the page is ready, so this can be called before
+        -- there is a page to receive it.
+        --
+        -- pointer-events stays off until the curtain is actually up, so an
+        -- always-mounted full-window overlay does not swallow every click in
+        -- the shell for the entire session.
+        local _EMBED_JS = [[
+(function () {
+    if (window.__msCurtain) return;
+    var f = document.createElement("iframe");
+    f.id = "ms-exit-curtain";
+    f.src = "ms_curtain.html";
+    f.setAttribute("scrolling", "no");
+    f.style.cssText =
+        "position:fixed;inset:0;width:100%;height:100%;border:0;margin:0;" +
+        "padding:0;background:transparent;z-index:2147483647;" +
+        "pointer-events:none;";
+    document.body.appendChild(f);
+    window.__msCurtain = f;
+
+    /* The curtain cannot reach the host from in here, so its messages come
+       up as window messages and go back out on the shell's own channel. */
+    window.addEventListener("message", function (e) {
+        if (e.source !== f.contentWindow) return;
+        var d;
+        try { d = JSON.parse(e.data); } catch (_) { return; }
+        if (!d || !d.action) return;
+        if (d.action === "ready") shellDispatch("_shell", "curtainReady");
+        else if (d.action === "fading") shellDispatch("_shell", "curtainFading");
+    });
+
+    window.msShowExitCurtain = function (mode, octane, theme) {
+        var w = f.contentWindow;
+        if (!w || !w.showCurtain) return;
+        f.style.pointerEvents = "auto";
+        try { w.applyTheme(theme); } catch (_) {}
+        w.showCurtain(mode, octane);
+    };
+    window.msHideExitCurtain = function () {
+        var w = f.contentWindow;
+        if (w && w.hideCurtain) w.hideCurtain();
+    };
+})();
+]]
+
+        ms.installShellCurtain = function()
+            if not (ms.shell and ms.shell.eval) then return end
+            pcall(function() ms.shell.eval(_EMBED_JS) end)
+        end
+
+        -- The shell relays the iframe's handshake here. Only a real one proves
+        -- there is a page in there to fade, exactly as with the standalone.
+        ms._shellCurtainReady = function()
+            _embedLive = true
+        end
+
+        -- Usable only with a shell that is open, loaded, and holding a curtain
+        -- that has handshaked. Any of those missing and the exit takes the
+        -- standalone window — a slow curtain beats no curtain.
+        local function _embedReady()
+            return _embedLive
+                and ms.shell ~= nil
+                and ms.shell.isReady ~= nil
+                and ms.shell.isReady()
+                and ms._shellState ~= nil
+                and ms._shellState.visible == true
+        end
+
         -- `onShow` fires at the exact moment the curtain is told to fade
         -- in. The send-off sound is started from there rather than before the
         -- exit, so the sample and the fade begin together no matter how long
@@ -891,6 +1039,47 @@ return function(ms)
         local function _exitCurtain(mode, onShow, onReady)
             local function finishReady()
                 pcall(onReady)
+            end
+
+            -- The hold and the send-off hang off the fade either way; only
+            -- where the curtain lives differs.
+            local function armFading()
+                _onFading = function()
+                    pcall(onShow)
+                    if ms._exitCurtainLive then
+                        hs.timer.doAfter(CURTAIN_IN_MS / 1000, finishReady)
+                    else
+                        finishReady()
+                    end
+                end
+            end
+
+            -- Shell-embedded first: it is already on screen and already
+            -- compositing, which is the entire reason it exists.
+            if _embedReady() then
+                ms._exitCurtainInShell = true
+                ms._exitCurtainLive    = not ms._octaneMode
+
+                armFading()
+
+                local ok = pcall(function()
+                    ms.shell.eval(string.format(
+                        "msShowExitCurtain(%q, %s, %s);",
+                        mode,
+                        ms._octaneMode and "true" or "false",
+                        hs.json.encode(ms._theme or {})
+                    ))
+                end)
+
+                if ok and ms._exitCurtainLive then
+                    hs.timer.doAfter(CURTAIN_SOUND_FALLBACK_MS / 1000, _fading)
+                else
+                    -- Octane, or the eval never landed. Nothing to sync to.
+                    ms._exitCurtainLive = ms._exitCurtainLive and ok
+                    _fading()
+                end
+
+                return nil
             end
 
             local view    = _warmView
@@ -919,28 +1108,13 @@ return function(ms)
             ms._exitCurtainView = view
             _warmView = nil
 
-            -- The shell may have been moved or resized since the prewarm, so
-            -- the frame is taken now rather than trusted from build time.
-            --
-            -- Whether it actually changed matters. A resize makes WKWebView
-            -- lay out again, and a reveal issued into that lands late — the
-            -- page accepts the JS but does not paint until the layout settles.
-            -- That is why shutdown drifted and restart did not: shutdown is
-            -- clicked in an open shell, so the frame really does change, while
-            -- the restart hotkey usually fires with the shell closed and the
-            -- prewarmed frame already correct.
-            local resized = false
-            pcall(function()
-                local sf  = _shellFrame()
-                local cur = view:frame()
-                if not cur
-                    or math.abs(cur.x - sf.x) > 1 or math.abs(cur.y - sf.y) > 1
-                    or math.abs(cur.w - sf.w) > 1 or math.abs(cur.h - sf.h) > 1
-                then
-                    view:frame({ x = sf.x, y = sf.y, w = sf.w, h = sf.h })
-                    resized = true
-                end
-            end)
+            -- Backstop, not the mechanism. `ms.syncExitCurtainFrame` keeps the
+            -- prewarmed curtain on the shell's frame as the shell moves, so on
+            -- the normal path this finds nothing to do and the exit skips the
+            -- relayout entirely. It still has to run: a curtain built here
+            -- rather than prewarmed was never synced, and a frame can always
+            -- change in a way nothing reported.
+            local resized = _matchShellFrame(view)
 
             local octane = ms._octaneMode and "true" or "false"
             local theme  = hs.json.encode(ms._theme or {})
@@ -956,21 +1130,13 @@ return function(ms)
                 -- Timed from here, the hold used to expire mid-fade and the
                 -- teardown pulled the shell out from under a curtain that was
                 -- still coming up.
-                _onFading = function()
-                    pcall(onShow)
-
-                    if ms._exitCurtainLive then
-                        -- The teardown closes the shell. Holding it until the
-                        -- curtain is fully opaque is what makes this read as a
-                        -- takeover: the shell stays lit underneath and the
-                        -- curtain comes down over it, instead of the shell
-                        -- blinking out and the curtain fading up over bare
-                        -- desktop.
-                        hs.timer.doAfter(CURTAIN_IN_MS / 1000, finishReady)
-                    else
-                        finishReady()
-                    end
-                end
+                --
+                -- The hold it starts is what makes this read as a takeover:
+                -- the teardown closes the shell, so holding it until the
+                -- curtain is fully opaque keeps the shell lit underneath with
+                -- the curtain coming down over it, instead of the shell
+                -- blinking out and the curtain fading up over bare desktop.
+                armFading()
 
                 ms.safeShow(view)
                 local shown = pcall(function()
@@ -1038,12 +1204,19 @@ return function(ms)
 
             -- Nothing to fade: no curtain, no live page, or octane, which
             -- snaps as it does everywhere.
-            if not view or not ms._exitCurtainLive or ms._octaneMode then
+            if not ms._exitCurtainLive or ms._octaneMode then
+                return finish()
+            end
+            if not view and not ms._exitCurtainInShell then
                 return finish()
             end
 
             local ok = pcall(function()
-                view:evaluateJavaScript("hideCurtain();")
+                if ms._exitCurtainInShell then
+                    ms.shell.eval("msHideExitCurtain();")
+                else
+                    view:evaluateJavaScript("hideCurtain();")
+                end
             end)
             if not ok then return finish() end
 

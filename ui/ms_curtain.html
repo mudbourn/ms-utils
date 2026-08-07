@@ -215,6 +215,13 @@
                     window.webkit.messageHandlers.curtain
                 )
                     window.webkit.messageHandlers.curtain.postMessage(s);
+                /* Embedded in the shell there is no "curtain" handler — this
+                   page is an iframe in someone else's webview — so it goes up
+                   to the shell, which relays it on its own channel. Same
+                   messages either way: the page does not know or care which of
+                   the two it is running as. */
+                else if (window.parent && window.parent !== window)
+                    window.parent.postMessage(s, "*");
             }
 
             /* ── Theme injection ─────────────────────────────────────────────── */
