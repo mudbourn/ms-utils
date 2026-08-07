@@ -270,6 +270,15 @@
                    a frame that never comes is a curtain that never appears. */
                 void cu.offsetWidth;
                 cu.classList.add("visible");
+
+                /* The send-off is started from here, not from the host side of
+                   the call that got us here. evaluateJavaScript is async: it
+                   returns the instant it is dispatched, so a sound played next
+                   to it starts while this function is still queued — which is
+                   exactly how the sound got ahead of the fade. Reporting back
+                   at the moment the class lands is the only signal that
+                   actually means "the fade is starting now". */
+                sendToHost({ action: "fading" });
             }
 
             /* ── Hide ───────────────────────────────────────────────────────── */

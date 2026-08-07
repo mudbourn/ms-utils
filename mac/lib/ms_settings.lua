@@ -752,6 +752,12 @@ return function(ms)
         -- actually moved.
         local CURTAIN_SETTLE_MS = 60
 
+        -- Backstop for the send-off. The page normally triggers it the instant
+        -- the fade starts; this only fires if that message never comes, so it
+        -- is long enough to lose every race against a page that is merely slow
+        -- and still short enough that the exit is not silent.
+        local CURTAIN_SOUND_FALLBACK_MS = 500
+
         -- It takes the shell's frame rather than the screen's: this is the
         -- shell going quiet, not the desktop being covered. The shell's own
         -- window is the thing being replaced, so standing exactly in its
@@ -806,13 +812,28 @@ return function(ms)
         -- page, which is the only part that was ever slow.
         local _warmView, _warmLive
 
+        -- Set for the duration of one exit, and consumed by the page's
+        -- "fading" message. This is what keeps the send-off honest: the sound
+        -- is started by the fade actually beginning, not by the host asking
+        -- for it. See the note in ms_curtain.html's showCurtain.
+        local _onFading
+
+        local function _fading()
+            local fn = _onFading
+            _onFading = nil
+            if fn then pcall(fn) end
+        end
+
         local function _buildCurtain()
             local uc = hs.webview.usercontent.new("curtain")
             uc:setCallback(function(message)
                 local decoded, data = pcall(hs.json.decode, message.body)
-                if decoded and type(data) == "table" and data.action == "ready" then
+                if not decoded or type(data) ~= "table" then return end
+                if data.action == "ready" then
                     -- Only a real handshake proves there is a page to fade.
                     _warmLive = true
+                elseif data.action == "fading" then
+                    _fading()
                 end
             end)
 
@@ -916,16 +937,20 @@ return function(ms)
             local theme  = hs.json.encode(ms._theme or {})
 
             local function present()
+                -- Armed before the JS is dispatched, because the page can
+                -- report back before evaluateJavaScript has even returned.
+                _onFading = onShow
+
                 ms.safeShow(view)
                 local shown = pcall(function()
                     view:evaluateJavaScript("applyTheme(" .. theme .. ");"
                         .. string.format("showCurtain(%q, %s);", mode, octane))
                 end)
 
-                -- Immediately after the fade is told to start, and before
-                -- anything that can block: this is the whole point of the
-                -- callback.
-                pcall(onShow)
+                -- If the page never reports the fade — dead page, or an
+                -- octane run where there is no fade to report — the send-off
+                -- still has to happen. Silence is not the fallback.
+                hs.timer.doAfter(CURTAIN_SOUND_FALLBACK_MS / 1000, _fading)
 
                 -- Whether there is a fade to wait for at all. A page that
                 -- never handshook is a window with nothing running in it;
