@@ -268,17 +268,42 @@
                    Deliberately not requestAnimationFrame: a webview that is
                    not foregrounded throttles rAF, and a curtain that waits for
                    a frame that never comes is a curtain that never appears. */
-                void cu.offsetWidth;
-                cu.classList.add("visible");
-
                 /* The send-off is started from here, not from the host side of
                    the call that got us here. evaluateJavaScript is async: it
                    returns the instant it is dispatched, so a sound played next
                    to it starts while this function is still queued — which is
-                   exactly how the sound got ahead of the fade. Reporting back
-                   at the moment the class lands is the only signal that
-                   actually means "the fade is starting now". */
-                sendToHost({ action: "fading" });
+                   how the sound first got ahead of the fade.
+
+                   Running is still not the same as being on screen, though.
+                   The host shows the window and calls straight into this, and
+                   the page can run before the window server has put a single
+                   pixel up — so reporting immediately just moved the gap.
+
+                   requestAnimationFrame is the fix: it does not fire until the
+                   window is actually compositing. Two of them, because the
+                   first can be the frame the window is still coming up on. So
+                   the fade and the send-off both start on a frame that is
+                   provably being drawn. */
+                let started = false;
+                const go = function () {
+                    if (started) return;
+                    started = true;
+                    void cu.offsetWidth;
+                    cu.classList.add("visible");
+                    sendToHost({ action: "fading" });
+                };
+
+                /* Octane has no fade to align to. */
+                if (octane) return go();
+
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(go);
+                });
+
+                /* A window that never composites never fires rAF at all, and a
+                   curtain that waits forever for a frame is worse than one
+                   that starts a beat early. */
+                setTimeout(go, 250);
             }
 
             /* ── Hide ───────────────────────────────────────────────────────── */

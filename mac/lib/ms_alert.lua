@@ -229,6 +229,11 @@ return function(ms)
             local e = queue[i]
             if e then pcall(function() dismissEntry(e) end) end
         end
+
+        -- Last step, after the sweep: everything already queued gets its
+        -- fade, and nothing new is accepted after it. From here the screen
+        -- only empties.
+        MsAlert._sealed = true
     end
 
     function MsAlert:dismissAll()
@@ -358,6 +363,13 @@ return function(ms)
     function MsAlert:__call(msg, duration, noDefaultSound, opts)
         -- Suppress all toasts until loading screen completes
         if not ms._startupSoundDone then return end
+
+        -- ...and once the exit has cleared the screen. Without this, anything
+        -- that toasts during teardown lands *after* expireAll and sits there
+        -- through the whole send-off, which is the one thing expireAll exists
+        -- to prevent. There is no un-gating: the only paths that set it end in
+        -- a quit or a reload, and both take this state with them.
+        if MsAlert._sealed then return end
 
         duration = duration or 5
 
