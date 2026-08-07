@@ -746,6 +746,12 @@ return function(ms)
         local CURTAIN_IN_MS   = 600
         local CURTAIN_FADE_MS = 350
 
+        -- How long to let a resized curtain settle before revealing it. Short
+        -- enough not to read as a delay, long enough for WKWebView to finish
+        -- the layout a frame change triggers. Only ever paid when the frame
+        -- actually moved.
+        local CURTAIN_SETTLE_MS = 60
+
         -- It takes the shell's frame rather than the screen's: this is the
         -- shell going quiet, not the desktop being covered. The shell's own
         -- window is the thing being replaced, so standing exactly in its
@@ -885,9 +891,25 @@ return function(ms)
 
             -- The shell may have been moved or resized since the prewarm, so
             -- the frame is taken now rather than trusted from build time.
+            --
+            -- Whether it actually changed matters. A resize makes WKWebView
+            -- lay out again, and a reveal issued into that lands late — the
+            -- page accepts the JS but does not paint until the layout settles.
+            -- That is why shutdown drifted and restart did not: shutdown is
+            -- clicked in an open shell, so the frame really does change, while
+            -- the restart hotkey usually fires with the shell closed and the
+            -- prewarmed frame already correct.
+            local resized = false
             pcall(function()
-                local sf = _shellFrame()
-                view:frame({ x = sf.x, y = sf.y, w = sf.w, h = sf.h })
+                local sf  = _shellFrame()
+                local cur = view:frame()
+                if not cur
+                    or math.abs(cur.x - sf.x) > 1 or math.abs(cur.y - sf.y) > 1
+                    or math.abs(cur.w - sf.w) > 1 or math.abs(cur.h - sf.h) > 1
+                then
+                    view:frame({ x = sf.x, y = sf.y, w = sf.w, h = sf.h })
+                    resized = true
+                end
             end)
 
             local octane = ms._octaneMode and "true" or "false"
@@ -928,7 +950,15 @@ return function(ms)
             -- just now is not, and revealing it before its html() has landed
             -- shows nothing at all, so that path waits for the handshake.
             if wasWarm then
-                present()
+                if resized then
+                    -- Let the layout land before revealing. The send-off
+                    -- starts inside present() too, so this delays the sound
+                    -- and the fade by the same tick and they stay together —
+                    -- which is the property that matters, not the tick itself.
+                    hs.timer.doAfter(CURTAIN_SETTLE_MS / 1000, present)
+                else
+                    present()
+                end
                 return view
             end
 
@@ -992,6 +1022,14 @@ return function(ms)
                         break
                     end
                 end
+
+                -- Everything on screen leaves together. Toasts hold for
+                -- several seconds and the exit does not wait for them, so
+                -- without this a toast is still sitting there when the app
+                -- goes — cut off mid-hold rather than fading the way toasts
+                -- normally do. Started here so their fade runs alongside the
+                -- curtain's, not after it.
+                pcall(function() ms.alert:expireAll() end)
             end, function()
                 _teardown(mode)
                 hs.timer.doAfter(_waitForSlot(slot), function()

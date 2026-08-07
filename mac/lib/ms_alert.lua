@@ -215,6 +215,22 @@ return function(ms)
         end
     end
 
+    -- Expire every toast on screen right now, animated.
+    --
+    -- The exit paths call this: a toast still sitting there when the curtain
+    -- comes down outlives the app that put it there, and dismissAll below
+    -- deletes canvases outright, so the toasts would vanish mid-air. This
+    -- runs each one through the same fade the hold expiring would have, so
+    -- they leave the way toasts normally leave — just now instead of later.
+    --
+    -- Backwards over the queue because dismissEntry removes as it goes.
+    function MsAlert:expireAll()
+        for i = #queue, 1, -1 do
+            local e = queue[i]
+            if e then pcall(function() dismissEntry(e) end) end
+        end
+    end
+
     function MsAlert:dismissAll()
         for i = #queue, 1, -1 do
             local e = queue[i]
