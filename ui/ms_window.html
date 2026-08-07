@@ -62,12 +62,6 @@
             /* ── Tabs ───────────────────────────────────────────────────────── */
             /* .tab / .tab-section styles come from modules/ui-tabs.js */
 
-            /* ── State section ──────────────────────────────────────────────── */
-            .state-section { padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-            .section-label { font: 700 9px "SF Mono", Menlo, monospace; letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; margin-bottom: 6px; }
-            .section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-            .section-header .section-label { margin-bottom: 0; }
-
             /* ── Key/Value grid (structured window + element data) ──────────── */
             .kv-grid { display: grid; grid-template-columns: max-content 1fr; column-gap: 12px; row-gap: 3px; align-items: baseline; }
             .kv-key { font: 700 10px "SF Mono", Menlo, monospace; letter-spacing: 0.04em; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
@@ -87,18 +81,35 @@
 
             /* ── Accessibility banner (permission state) ────────────────────── */
             .ax-banner {
-                display: none; margin: 8px 12px; padding: 8px 10px; border-radius: var(--radius);
+                display: none; margin: 10px 14px 0; padding: 8px 10px; border-radius: var(--radius);
                 background: color-mix(in srgb, var(--warning) 12%, transparent);
                 border: 1px solid var(--warning); color: var(--text2); font-size: 11px; line-height: 1.5;
             }
             .ax-banner.show { display: block; }
             .ax-banner b { color: var(--text); }
 
-            /* ── Section divider ────────────────────────────────────────────── */
-            .section-divider { height: 1px; background: var(--border); flex-shrink: 0; }
+            /* ── Settings-style sections ────────────────────────────────────── */
+            /* Same vocabulary as the shell's settings panel, kept in sync by
+               hand because this popout carries its own stylesheet: a sticky
+               heading that names the group, and its values in a card. */
+            .section { margin: 0; }
+            .section-head {
+                position: sticky; top: 0; z-index: 3;
+                display: flex; align-items: baseline; gap: 10px;
+                padding: 16px 18px 8px 18px;
+                background: var(--bg);
+                box-shadow: 0 1px 0 var(--border);
+                cursor: default;
+            }
+            .section:first-child .section-head { padding-top: 12px; }
+            .section-title { font-weight: 700; font-size: 12px; color: var(--text); text-transform: uppercase; letter-spacing: 1.4px; flex-shrink: 0; }
+            .section-desc { font-size: 11px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+            .section-head .flags-row { margin-left: auto; align-self: center; justify-content: flex-end; }
+            .section-body { margin: 10px 14px 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+            .section-body .kv-grid { padding: 11px 14px; }
 
             /* ── Data scroll container ──────────────────────────────────────── */
-            .data-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+            .data-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; padding: 0 0 32px; }
             .data-scroll::-webkit-scrollbar { width: 4px; }
             .data-scroll::-webkit-scrollbar-track { background: transparent; }
             .data-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -168,9 +179,9 @@
         <div id="window-section" class="tab-section active">
             <div class="data-scroll">
                 <!-- Focused Window -->
-                <div class="state-section">
-                    <div class="section-header">
-                        <div class="section-label">Focused Window</div>
+                <div class="section">
+                    <div class="section-head">
+                        <span class="section-title">Focused Window</span>
                         <div class="flags-row">
                             <span class="flag-chip" id="w-standard">Standard</span>
                             <span class="flag-chip" id="w-minimized">Minimized</span>
@@ -178,41 +189,51 @@
                             <span class="flag-chip" id="w-visible">Visible</span>
                         </div>
                     </div>
-                    <div class="kv-grid">
-                        <div class="kv-key">App</div>      <div class="kv-val empty" id="w-app">&mdash;</div>
-                        <div class="kv-key">PID</div>      <div class="kv-val empty" id="w-pid">&mdash;</div>
-                        <div class="kv-key">Bundle</div>   <div class="kv-val empty" id="w-bundle">&mdash;</div>
-                        <div class="kv-key">Title</div>    <div class="kv-val empty" id="w-title">&mdash;</div>
-                        <div class="kv-key">Role</div>     <div class="kv-val empty" id="w-role">&mdash;</div>
-                        <div class="kv-key">Frame</div>    <div class="kv-val empty" id="w-frame">&mdash;</div>
-                        <div class="kv-key">Screen</div>   <div class="kv-val empty" id="w-screen">&mdash;</div>
-                        <div class="kv-key">Win ID</div>   <div class="kv-val empty" id="w-id">&mdash;</div>
+                    <div class="section-body">
+                        <div class="kv-grid">
+                            <div class="kv-key">App</div>      <div class="kv-val empty" id="w-app">&mdash;</div>
+                            <div class="kv-key">PID</div>      <div class="kv-val empty" id="w-pid">&mdash;</div>
+                            <div class="kv-key">Bundle</div>   <div class="kv-val empty" id="w-bundle">&mdash;</div>
+                            <div class="kv-key">Title</div>    <div class="kv-val empty" id="w-title">&mdash;</div>
+                            <div class="kv-key">Role</div>     <div class="kv-val empty" id="w-role">&mdash;</div>
+                            <div class="kv-key">Frame</div>    <div class="kv-val empty" id="w-frame">&mdash;</div>
+                            <div class="kv-key">Screen</div>   <div class="kv-val empty" id="w-screen">&mdash;</div>
+                            <div class="kv-key">Win ID</div>   <div class="kv-val empty" id="w-id">&mdash;</div>
+                        </div>
                     </div>
                 </div>
-                <div class="section-divider"></div>
                 <!-- Element Under Cursor -->
-                <div class="ax-banner" id="ax-banner">
-                    <b>Accessibility permission required.</b><br />
-                    Grant Hammerspoon access in System Settings &rarr; Privacy &amp; Security &rarr; Accessibility, then hover over any control.
-                </div>
-                <div class="state-section">
-                    <div class="section-label">Element Under Cursor</div>
-                    <div class="kv-grid">
-                        <div class="kv-key">Role</div>    <div class="kv-val empty" id="e-role">&mdash;</div>
-                        <div class="kv-key">Desc</div>    <div class="kv-val empty" id="e-desc">&mdash;</div>
-                        <div class="kv-key">Title</div>   <div class="kv-val empty" id="e-title">&mdash;</div>
-                        <div class="kv-key">Value</div>   <div class="kv-val empty" id="e-value">&mdash;</div>
-                        <div class="kv-key">Ident</div>   <div class="kv-val empty" id="e-ident">&mdash;</div>
-                        <div class="kv-key">Frame</div>   <div class="kv-val empty" id="e-frame">&mdash;</div>
+                <div class="section">
+                    <div class="section-head">
+                        <span class="section-title">Element Under Cursor</span>
+                        <span class="section-desc">Accessibility data for whatever you are pointing at</span>
+                    </div>
+                    <div class="ax-banner" id="ax-banner">
+                        <b>Accessibility permission required.</b><br />
+                        Grant Hammerspoon access in System Settings &rarr; Privacy &amp; Security &rarr; Accessibility, then hover over any control.
+                    </div>
+                    <div class="section-body">
+                        <div class="kv-grid">
+                            <div class="kv-key">Role</div>    <div class="kv-val empty" id="e-role">&mdash;</div>
+                            <div class="kv-key">Desc</div>    <div class="kv-val empty" id="e-desc">&mdash;</div>
+                            <div class="kv-key">Title</div>   <div class="kv-val empty" id="e-title">&mdash;</div>
+                            <div class="kv-key">Value</div>   <div class="kv-val empty" id="e-value">&mdash;</div>
+                            <div class="kv-key">Ident</div>   <div class="kv-val empty" id="e-ident">&mdash;</div>
+                            <div class="kv-key">Frame</div>   <div class="kv-val empty" id="e-frame">&mdash;</div>
+                        </div>
                     </div>
                 </div>
-                <div class="section-divider"></div>
                 <!-- Cursor -->
-                <div class="state-section" style="border-bottom: none;">
-                    <div class="section-label">Cursor</div>
-                    <div class="kv-grid">
-                        <div class="kv-key">Screen</div>  <div class="kv-val empty" id="e-mouse-screen">&mdash;</div>
-                        <div class="kv-key">Window</div>  <div class="kv-val empty" id="e-mouse-win">&mdash;</div>
+                <div class="section">
+                    <div class="section-head">
+                        <span class="section-title">Cursor</span>
+                        <span class="section-desc">Pointer position</span>
+                    </div>
+                    <div class="section-body">
+                        <div class="kv-grid">
+                            <div class="kv-key">Screen</div>  <div class="kv-val empty" id="e-mouse-screen">&mdash;</div>
+                            <div class="kv-key">Window</div>  <div class="kv-val empty" id="e-mouse-win">&mdash;</div>
+                        </div>
                     </div>
                 </div>
             </div>

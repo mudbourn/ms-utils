@@ -167,7 +167,10 @@
                 left: 0;
                 right: 0;
                 text-align: center;
-                font-family: "Almendra", var(--font);
+                /* No font-family of its own: the loading screen's brand
+                   inherits --font, and pinning "Almendra" first here meant a
+                   theme font could never reach the one word both screens
+                   share. */
                 font-size: 15px;
                 font-weight: 700;
                 color: var(--text);

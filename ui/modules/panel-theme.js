@@ -143,132 +143,141 @@
         return wrap;
     }
 
+    // ── Sections ─────────────────────────────────────────────────────────
+    // Every tab in this panel is laid out the way the settings panel is: a
+    // sticky heading naming the group, and its controls in a card. The tabs
+    // used to be one flat run of rows with uppercase labels floating in it,
+    // which read as a list rather than as settings.
+    function sec(root, id, title, desc, buildFn) {
+        root.appendChild(ui().section(id, title, buildFn, desc));
+    }
+
     // ── Theme tab ────────────────────────────────────────────────────────
-    function buildTheme(body) {
-        const { h, row, toggle, divider, groupLabel, btnRow, actionBtn } = ui();
+    function buildTheme(root) {
+        const { h, row, toggle, btnRow, actionBtn } = ui();
         const theme = Object.assign({}, S.theme || {}, _pending);
         const set   = S.themeSet || {};
 
         const customTheme = S.customThemeEnabled !== false;
-        body.appendChild(
-            row(
-                "Custom theme",
-                "Off reverts every colour, the font and the sound set to stock",
-                toggle(customTheme, (e) =>
-                    sendToHost({ action: "setCustomTheme", value: e.target.checked }),
-                ),
-            ),
-        );
-
-        if (!customTheme) {
-            body.appendChild(h("div", { cls: "theme-note" },
-                "Turn custom theme on to edit colours."));
-            return;
-        }
-
-        body.appendChild(divider());
-        body.appendChild(groupLabel("Colours"));
-
-        for (const c of COLOR_KEYS) {
-            const value = theme[c.key] || "";
+        sec(root, "custom", "Theme", "Whether this pack's look is used at all", (body) => {
             body.appendChild(
                 row(
-                    c.label,
-                    set[c.key] ? c.hint : c.hint + " · default",
-                    colorField(c.key, value),
-                    "",
-                    [{
-                        icon: "",
-                        label: "Reset to default",
-                        action: () => { delete _pending[c.key]; commit(c.key, ""); },
-                    }],
+                    "Custom theme",
+                    "Off reverts every colour, the font and the sound set to stock",
+                    toggle(customTheme, (e) =>
+                        sendToHost({ action: "setCustomTheme", value: e.target.checked }),
+                    ),
                 ),
             );
-        }
+            if (!customTheme) {
+                body.appendChild(h("div", { cls: "theme-note" },
+                    "Turn custom theme on to edit colours."));
+            }
+        });
+
+        if (!customTheme) return;
+
+        sec(root, "colours", "Colours", "Everything dimmer is derived from these", (body) => {
+            for (const c of COLOR_KEYS) {
+                const value = theme[c.key] || "";
+                body.appendChild(
+                    row(
+                        c.label,
+                        set[c.key] ? c.hint : c.hint + " · default",
+                        colorField(c.key, value),
+                        "",
+                        [{
+                            icon: "",
+                            label: "Reset to default",
+                            action: () => { delete _pending[c.key]; commit(c.key, ""); },
+                        }],
+                    ),
+                );
+            }
+        });
 
         // ── Radius ───────────────────────────────────────────────────────
-        body.appendChild(divider());
-        body.appendChild(groupLabel("Shape"));
+        sec(root, "shape", "Shape", "Corner rounding across every panel", (body) => {
+            const radius = theme.radius ?? 8;
+            const radWrap = h("div", { cls: "row slider-row", onmouseenter: () => playSlot("hover") });
+            const radTop  = h("div", { cls: "slider-top" });
+            radTop.appendChild(h("div", { cls: "row-label" }, "Corner radius"));
+            const radNum = h("input", { type: "number", min: "0", max: "40", step: "1" });
+            radNum.value = radius;
+            const radVal = h("div", { cls: "slider-val" });
+            radVal.appendChild(radNum);
+            radTop.appendChild(radVal);
+            radWrap.appendChild(radTop);
 
-        const radius = theme.radius ?? 8;
-        const radWrap = h("div", { cls: "row slider-row", onmouseenter: () => playSlot("hover") });
-        const radTop  = h("div", { cls: "slider-top" });
-        radTop.appendChild(h("div", { cls: "row-label" }, "Corner radius"));
-        const radNum = h("input", { type: "number", min: "0", max: "40", step: "1" });
-        radNum.value = radius;
-        const radVal = h("div", { cls: "slider-val" });
-        radVal.appendChild(radNum);
-        radTop.appendChild(radVal);
-        radWrap.appendChild(radTop);
-
-        const radSlider = h("input", { type: "range", min: "0", max: "40", step: "1" });
-        radSlider.value = radius;
-        radSlider.addEventListener("input", () => {
-            radNum.value = radSlider.value;
-            _pending.radius = parseInt(radSlider.value, 10);
-            previewTheme();
-            touchEditing();
+            const radSlider = h("input", { type: "range", min: "0", max: "40", step: "1" });
+            radSlider.value = radius;
+            radSlider.addEventListener("input", () => {
+                radNum.value = radSlider.value;
+                _pending.radius = parseInt(radSlider.value, 10);
+                previewTheme();
+                touchEditing();
+            });
+            radSlider.addEventListener("change", () =>
+                commit("radius", parseInt(radSlider.value, 10)));
+            radNum.addEventListener("change", () => {
+                const v = Math.max(0, Math.min(40, parseInt(radNum.value, 10) || 0));
+                radNum.value = v;
+                radSlider.value = v;
+                commit("radius", v);
+            });
+            radWrap.appendChild(radSlider);
+            body.appendChild(radWrap);
         });
-        radSlider.addEventListener("change", () =>
-            commit("radius", parseInt(radSlider.value, 10)));
-        radNum.addEventListener("change", () => {
-            const v = Math.max(0, Math.min(40, parseInt(radNum.value, 10) || 0));
-            radNum.value = v;
-            radSlider.value = v;
-            commit("radius", v);
-        });
-        radWrap.appendChild(radSlider);
-        body.appendChild(radWrap);
 
         // ── Font ─────────────────────────────────────────────────────────
         // Values are what ms_theme.json stores: a path under ui/fonts/ for a
         // font file (Lua turns it into an @font-face), or a bare family name.
-        body.appendChild(divider());
-        body.appendChild(groupLabel("Type"));
+        sec(root, "type", "Type", "The face the whole shell is set in", (body) => {
+            const fonts   = S.themeFonts || [];
+            const current = S.themeFontValue || "";
 
-        const fonts   = S.themeFonts || [];
-        const current = S.themeFontValue || "";
+            // createSelect, not <select>: the closed control takes CSS but the
+            // *open* native popup is drawn by macOS and no stylesheet reaches it,
+            // so it broke out of the shell's look mid-interaction — on the one
+            // panel whose whole subject is how the shell looks.
+            const options = [];
+            // A font set by hand in ms_theme.json that is not in the folder listing
+            // still has to be selectable, and has to say why it looks different.
+            if (!fonts.some((f) => f.value === current) && current) {
+                options.push({ value: current, label: current + " (from file)" });
+            }
+            for (const f of fonts) {
+                options.push({ value: f.value, label: f.label });
+            }
 
-        // createSelect, not <select>: the closed control takes CSS but the
-        // *open* native popup is drawn by macOS and no stylesheet reaches it,
-        // so it broke out of the shell's look mid-interaction — on the one
-        // panel whose whole subject is how the shell looks.
-        const options = [];
-        // A font set by hand in ms_theme.json that is not in the folder listing
-        // still has to be selectable, and has to say why it looks different.
-        if (!fonts.some((f) => f.value === current) && current) {
-            options.push({ value: current, label: current + " (from file)" });
-        }
-        for (const f of fonts) {
-            options.push({ value: f.value, label: f.label });
-        }
-
-        const select = createSelect({
-            options: options,
-            value: current,
-            className: "theme-select",
-            onChange: (v) =>
-                sendToHost({ action: "setThemeKey", key: "font", value: v }),
+            const select = createSelect({
+                options: options,
+                value: current,
+                className: "theme-select",
+                onChange: (v) =>
+                    sendToHost({ action: "setThemeKey", key: "font", value: v }),
+            });
+            select.addEventListener("mouseenter", () => playSlot("hover"));
+            body.appendChild(
+                row("Font", "Files in ui/fonts/ travel with a theme package", select),
+            );
         });
-        select.addEventListener("mouseenter", () => playSlot("hover"));
-        body.appendChild(
-            row("Font", "Files in ui/fonts/ travel with a theme package", select),
-        );
 
         // ── Escape hatches ───────────────────────────────────────────────
-        body.appendChild(divider());
-        body.appendChild(
-            btnRow(
-                actionBtn("Edit Theme File…", "", () =>
-                    sendToHost({ action: "editTheme" })),
-                actionBtn("Reset Theme", "danger", () =>
-                    sendToHost({ action: "resetTheme" })),
-            ),
-        );
-        body.appendChild(h("div", { cls: "theme-note" },
-            "Overrides the editor doesn't offer — text2, border, the glow "
-            + "colours — can be hand-written into ms_theme.json and win over "
-            + "the values derived here."));
+        sec(root, "themefile", "Theme File", "Editing ms_theme.json by hand", (body) => {
+            body.appendChild(
+                btnRow(
+                    actionBtn("Edit Theme File…", "", () =>
+                        sendToHost({ action: "editTheme" })),
+                    actionBtn("Reset Theme", "danger", () =>
+                        sendToHost({ action: "resetTheme" })),
+                ),
+            );
+            body.appendChild(h("div", { cls: "theme-note" },
+                "Overrides the editor doesn't offer — text2, border, the glow "
+                + "colours — can be hand-written into ms_theme.json and win over "
+                + "the values derived here."));
+        });
     }
 
     // ── Sound picker ─────────────────────────────────────────────────────
@@ -277,13 +286,24 @@
     // rendered into, rather than to the settings panel's #scroll — which is
     // not the element these rows have scrolled inside since the sound section
     // moved out of the settings list.
+    // Custom theme off means the sound set is stock, same as the colours —
+    // so everything that could move a slot off its default is inert, not just
+    // ignored. Read through a function: S is replaced on every render.
+    const themeLocked = () => S.customThemeEnabled === false;
+    const LOCK_HINT = "Turn custom theme on to change sounds";
+
     function soundPicker(slotId, assigned, soundNames, scrollEl) {
         const { h } = ui();
         const display = assigned || "off";
+        const locked = themeLocked();
         const wrap = h("div", { cls: "sound-picker-wrap" });
         const btn = h(
             "div",
-            { cls: "sound-picker-btn", onmouseenter: () => playSlot("hover") },
+            {
+                cls: "sound-picker-btn" + (locked ? " locked" : ""),
+                title: locked ? LOCK_HINT : "",
+                onmouseenter: () => { if (!locked) playSlot("hover"); },
+            },
             display,
             h("span", { cls: "arrow" }, "▾"),
         );
@@ -360,6 +380,7 @@
 
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
+            if (locked) return;
             playSlot("interact");
             if (_openSoundPicker && _openSoundPicker !== list)
                 _openSoundPicker.classList.remove("open");
@@ -455,10 +476,11 @@
 
     function removeBtn(name, onRemoved) {
         const { h } = ui();
-        const can = removable(name);
+        const can = removable(name) && !themeLocked();
         const b = h("button", {
             cls: "slot-btn slot-btn-danger",
-            title: can ? "Remove “" + name + "”"
+            title: themeLocked() ? LOCK_HINT
+                 : can ? "Remove “" + name + "”"
                        : (name ? "Default sounds cannot be removed"
                                : "Nothing assigned to remove"),
             onmouseenter: () => { if (can) playSlot("hover"); },
@@ -482,22 +504,26 @@
         // h() turns a string child into a text node, so an icon has to go in
         // as markup. The glyph is kept as the fallback for the case where the
         // shell's icon map has no such name.
-        const mk = (iconName, glyph, title, action) => {
+        const mk = (iconName, glyph, title, action, locked) => {
             const b = h("button", {
                 cls: "slot-btn",
-                title: title,
-                onmouseenter: () => playSlot("hover"),
-                onclick: (e) => { e.stopPropagation(); action(); },
+                title: locked ? LOCK_HINT : title,
+                onmouseenter: () => { if (!locked) playSlot("hover"); },
+                onclick: (e) => { e.stopPropagation(); if (locked) return; action(); },
             });
+            b.disabled = !!locked;
             const svg = typeof window.icon === "function" ? window.icon(iconName) : "";
             if (svg && svg.indexOf("<path") !== -1) b.innerHTML = svg;
             else b.textContent = glyph;
             return b;
         };
+        // Preview stays live while locked: hearing the stock set is not
+        // changing it.
         wrap.appendChild(mk("play", "▶", "Preview",
             () => sendToHost({ action: "playSlot", slot: slotId })));
         wrap.appendChild(mk("download", "⤓", "Import a file for this slot",
-            () => sendToHost({ action: "importSoundForSlot", slot: slotId, label: label })));
+            () => sendToHost({ action: "importSoundForSlot", slot: slotId, label: label }),
+            themeLocked()));
         // Removes the file this slot points at, not the slot itself — the
         // slot is fixed, and afterwards it shows its default.
         wrap.appendChild(removeBtn((S.soundAssign || {})[slotId] || ""));
@@ -510,71 +536,85 @@
         const ctl = h("div", { cls: "slot-ctl" });
         ctl.appendChild(soundPicker(slotId, assigned, names, scrollEl));
         ctl.appendChild(slotButtons(slotId, label));
+        // The context menu is the same set of actions as the buttons, so it
+        // locks with them — otherwise right-click is a way around the lock.
         return row(label, null, ctl, "", [
             { icon: "", label: "Play",
               action: () => sendToHost({ action: "playSlot", slot: slotId }) },
-            { icon: "", label: "Import",
-              action: () => sendToHost({ action: "importSoundForSlot", slot: slotId, label: label }) },
-            ...(assigned ? [{
-                icon: "", label: "Clear",
-                action: () => sendToHost({ action: "setSoundAssign", slot: slotId, name: "" }),
-            }] : []),
+            ...(themeLocked() ? [] : [
+                { icon: "", label: "Import",
+                  action: () => sendToHost({ action: "importSoundForSlot", slot: slotId, label: label }) },
+                ...(assigned ? [{
+                    icon: "", label: "Clear",
+                    action: () => sendToHost({ action: "setSoundAssign", slot: slotId, name: "" }),
+                }] : []),
+            ]),
         ]);
     }
 
-    function buildSound(body, scrollEl) {
+    function buildSound(root, scrollEl) {
         const { h, row, toggle, seg, divider, groupLabel, btnRow, actionBtn, showCtxMenu } = ui();
 
-        body.appendChild(
-            row(
-                "Sound Effects",
-                null,
-                toggle(S.soundEnabled ?? true, (e) =>
-                    sendToHost({ action: "setSoundEnabled", value: e.target.checked })),
-                "",
-                [{ icon: "", label: "Reset to default",
-                   action: () => sendToHost({ action: "resetSetting", key: "soundEnabled" }) }],
-            ),
-        );
+        sec(root, "output", "Output", "Whether the shell makes sound, and how loud", (body) => {
+            body.appendChild(
+                row(
+                    "Sound Effects",
+                    null,
+                    toggle(S.soundEnabled ?? true, (e) =>
+                        sendToHost({ action: "setSoundEnabled", value: e.target.checked })),
+                    "",
+                    [{ icon: "", label: "Reset to default",
+                       action: () => sendToHost({ action: "resetSetting", key: "soundEnabled" }) }],
+                ),
+            );
 
-        // ── Volume ───────────────────────────────────────────────────────
-        const volWrap = h("div", { cls: "row slider-row", onmouseenter: () => playSlot("hover") });
-        volWrap.addEventListener("contextmenu", (e) => {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            playSlot("interact");
-            showCtxMenu(e.clientX, e.clientY, [{
-                icon: "", label: "Reset to 100",
-                action: () => sendToHost({ action: "resetSetting", key: "soundVolume" }),
-            }], "Volume");
+            // ── Volume ───────────────────────────────────────────────────
+            const volWrap = h("div", { cls: "row slider-row", onmouseenter: () => playSlot("hover") });
+            volWrap.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                playSlot("interact");
+                showCtxMenu(e.clientX, e.clientY, [{
+                    icon: "", label: "Reset to 100",
+                    action: () => sendToHost({ action: "resetSetting", key: "soundVolume" }),
+                }], "Volume");
+            });
+            const volTop = h("div", { cls: "slider-top" });
+            volTop.appendChild(h("div", { cls: "row-label" }, "Volume"));
+            const volNum = h("input", { type: "number", min: "0", max: "100", step: "1" });
+            volNum.value = S.soundVolume ?? 100;
+            const volDiv = h("div", { cls: "slider-val" });
+            volDiv.appendChild(volNum);
+            volTop.appendChild(volDiv);
+            volWrap.appendChild(volTop);
+            const volSlider = h("input", { type: "range", min: "0", max: "100", step: "1" });
+            volSlider.value = S.soundVolume ?? 100;
+            volSlider.addEventListener("input", () => { volNum.value = volSlider.value; });
+            volSlider.addEventListener("change", () =>
+                sendToHost({ action: "setSoundVolume", value: parseInt(volSlider.value, 10) }));
+            volNum.addEventListener("change", () => {
+                const v = Math.max(0, Math.min(100, parseInt(volNum.value, 10) || 0));
+                volSlider.value = v;
+                sendToHost({ action: "setSoundVolume", value: v });
+            });
+            volWrap.appendChild(volSlider);
+            body.appendChild(volWrap);
         });
-        const volTop = h("div", { cls: "slider-top" });
-        volTop.appendChild(h("div", { cls: "row-label" }, "Volume"));
-        const volNum = h("input", { type: "number", min: "0", max: "100", step: "1" });
-        volNum.value = S.soundVolume ?? 100;
-        const volDiv = h("div", { cls: "slider-val" });
-        volDiv.appendChild(volNum);
-        volTop.appendChild(volDiv);
-        volWrap.appendChild(volTop);
-        const volSlider = h("input", { type: "range", min: "0", max: "100", step: "1" });
-        volSlider.value = S.soundVolume ?? 100;
-        volSlider.addEventListener("input", () => { volNum.value = volSlider.value; });
-        volSlider.addEventListener("change", () =>
-            sendToHost({ action: "setSoundVolume", value: parseInt(volSlider.value, 10) }));
-        volNum.addEventListener("change", () => {
-            const v = Math.max(0, Math.min(100, parseInt(volNum.value, 10) || 0));
-            volSlider.value = v;
-            sendToHost({ action: "setSoundVolume", value: v });
-        });
-        volWrap.appendChild(volSlider);
-        body.appendChild(volWrap);
-
-        body.appendChild(divider());
 
         // ── Presets ──────────────────────────────────────────────────────
         const presets   = S.soundPresets || [];
         const ALL_SLOTS = S.soundSlots || [];
-        const presetSlotIds = ALL_SLOTS.map(s => s.id);
+
+        // Only the slots a preset actually speaks about — the same test
+        // buildSoundPresets() applies on the Lua side. A slot with no series
+        // of its own borrows from another slot, and a preset has nothing to
+        // say about a borrower: it cannot match the Default map (which has no
+        // entry to match against), and clearing it just drops it back to
+        // borrowing. This was every slot id, which put any such slot into
+        // both preset operations wrongly. No slot in the registry is
+        // borrow-only today, so this changes nothing now; it is the invariant
+        // that keeps the next one from re-breaking the segment.
+        const presetSlotIds = ALL_SLOTS.filter(s => s.d || s.a).map(s => s.id);
 
         const defaultAssigns = defaultAssignsFor(ALL_SLOTS);
 
@@ -599,54 +639,70 @@
             }
         }
 
-        body.appendChild(groupLabel("Sound Presets"));
-        const presetWrap = h("div", { cls: "seg" });
-        presetWrap.appendChild(h("button", {
-            cls: "seg-btn" + (activePreset === null ? " active" : ""),
-            onmouseenter: () => playSlot("hover"),
-            onclick: () => sendToHost({ action: "clearSoundPreset", slots: presetSlotIds }),
-        }, "Custom"));
-        presetWrap.appendChild(h("button", {
-            cls: "seg-btn" + (activePreset === "default" ? " active" : ""),
-            onmouseenter: () => playSlot("hover"),
-            onclick: () => sendToHost({
-                action: "setSoundPreset", assigns: defaultAssigns, preset: "default" }),
-        }, "Default"));
-        for (const p of presets) {
-            presetWrap.appendChild(h("button", {
-                cls: "seg-btn" + (activePreset === String(p.num) ? " active" : ""),
-                onmouseenter: () => playSlot("hover"),
-                onclick: () => sendToHost({
-                    action: "setSoundPreset", assigns: p.assigns, preset: String(p.num) }),
-            }, String(p.num)));
-        }
-        body.appendChild(row(
-            "Preset",
-            "Select a numbered sound set, or Custom for individual control",
-            presetWrap,
-        ));
+        // Custom theme off reverts the sound set to stock, so the segment is
+        // pinned to Default and reads as fixed rather than as a live choice
+        // that happens to agree with the setting.
+        const soundLocked = themeLocked();
+        const shown = soundLocked ? "default" : activePreset;
+
+        const segBtn = (key, labelText, action) => {
+            const b = h("button", {
+                cls: "seg-btn" + (shown === key ? " active" : ""),
+                title: soundLocked ? LOCK_HINT : "",
+                onmouseenter: () => { if (!soundLocked) playSlot("hover"); },
+                onclick: () => { if (soundLocked) return; action(); },
+            }, labelText);
+            b.disabled = soundLocked;
+            return b;
+        };
+
+        sec(root, "presets", "Presets", "A whole slot map in one click", (body) => {
+            const presetWrap = h("div", { cls: "seg" + (soundLocked ? " locked" : "") });
+            presetWrap.appendChild(segBtn(null, "Custom", () =>
+                sendToHost({ action: "clearSoundPreset", slots: presetSlotIds })));
+            presetWrap.appendChild(segBtn("default", "Default", () =>
+                sendToHost({ action: "setSoundPreset", assigns: defaultAssigns, preset: "default" })));
+            for (const p of presets) {
+                presetWrap.appendChild(segBtn(String(p.num), String(p.num), () =>
+                    sendToHost({ action: "setSoundPreset", assigns: p.assigns, preset: String(p.num) })));
+            }
+            body.appendChild(row(
+                "Preset",
+                soundLocked
+                    ? "Fixed at Default while custom theme is off"
+                    : "Select a numbered sound set, or Custom for individual control",
+                presetWrap,
+            ));
+        });
 
         // ── Slots ────────────────────────────────────────────────────────
+        // Each group of slots is its own section, so the heading naming it
+        // stays on screen while a long list of slots scrolls under it.
         const names = S.soundNames || [];
 
-        for (const slot of slotsIn("load")) {
-            body.appendChild(slotRow(slot.id, slot.label, names, scrollEl));
+        const loadSlots = slotsIn("load");
+        if (loadSlots.length > 0) {
+            sec(root, "loadslots", "Startup", "Played while mudscript starts up", (body) => {
+                for (const slot of loadSlots) {
+                    body.appendChild(slotRow(slot.id, slot.label, names, scrollEl));
+                }
+            });
         }
 
-        body.appendChild(divider());
-        body.appendChild(groupLabel("Event Slots"));
-        for (const slot of slotsIn("event")) {
-            body.appendChild(slotRow(slot.id, slot.label, names, scrollEl));
-        }
+        sec(root, "eventslots", "Event Slots", "One sound per shell interaction", (body) => {
+            for (const slot of slotsIn("event")) {
+                body.appendChild(slotRow(slot.id, slot.label, names, scrollEl));
+            }
+        });
 
         // Slots declared by the pack via ms.settings.define({ type = "soundSlot" }).
         const userSlots = S.userSoundSlots || [];
         if (userSlots.length > 0) {
-            body.appendChild(divider());
-            body.appendChild(groupLabel("Pack Slots"));
-            for (const slot of userSlots) {
-                body.appendChild(slotRow(slot.key, slot.label, names, scrollEl));
-            }
+            sec(root, "packslots", "Pack Slots", "Declared by your macro pack", (body) => {
+                for (const slot of userSlots) {
+                    body.appendChild(slotRow(slot.key, slot.label, names, scrollEl));
+                }
+            });
         }
 
         // ── Sound library ────────────────────────────────────────────────
@@ -708,53 +764,62 @@
         // through the slot pickers above. That was survivable while nothing
         // could become one, but assigning a sound "active" has to put it
         // somewhere visible or the click looks like it deleted it.
-        const activeEntries = byKind("active");
-        body.appendChild(divider());
-        body.appendChild(groupLabel("Active Sounds"));
-        if (activeEntries.length === 0) {
-            body.appendChild(h("div", { cls: "theme-note" },
-                "Sounds in sounds/active/ appear here. These are the ones the "
-                + "slots above can be assigned to."));
-        } else {
-            for (const e of activeEntries) body.appendChild(soundEntryRow(e));
-        }
+        // Active, macro and imported are groups *within* the library, not
+        // peers of the slot sections above. Every slot ships both a d_ default
+        // and an a_ active sample, so an "Active Sounds" section standing
+        // alongside "Event Slots" read as a second kind of sound when it is
+        // the pool those same slots draw from. They are sub-groups of one
+        // Sound Library section instead — which also retires a section that
+        // was called "Library" while sitting next to the actual library.
+        sec(root, "library", "Sound Library",
+            "The files themselves, whether or not a slot uses them", (body) => {
+            const activeEntries = byKind("active");
+            body.appendChild(groupLabel("Active"));
+            if (activeEntries.length === 0) {
+                body.appendChild(h("div", { cls: "theme-note" },
+                    "Sounds in sounds/active/ appear here. These are the ones the "
+                    + "slots above can be assigned to."));
+            } else {
+                for (const e of activeEntries) body.appendChild(soundEntryRow(e));
+            }
 
-        const macroEntries = byKind("macro");
-        body.appendChild(divider());
-        body.appendChild(groupLabel("Macro Sounds"));
-        if (macroEntries.length === 0) {
-            body.appendChild(h("div", { cls: "theme-note" },
-                "Sounds in sounds/macro/ appear here, one row each. Macros play "
-                + "them by name with ms.sound(\"m_Name\") — they have no slot, "
-                + "because a macro chooses its own sound at the call."));
-        } else {
-            for (const e of macroEntries) body.appendChild(soundEntryRow(e));
-        }
-
-        const importedEntries = byKind("imported");
-        if (importedEntries.length > 0) {
+            const macroEntries = byKind("macro");
             body.appendChild(divider());
-            body.appendChild(groupLabel("Imported Sounds"));
-            for (const e of importedEntries) body.appendChild(soundEntryRow(e));
-        }
+            body.appendChild(groupLabel("Macro"));
+            if (macroEntries.length === 0) {
+                body.appendChild(h("div", { cls: "theme-note" },
+                    "Sounds in sounds/macro/ appear here, one row each. Macros play "
+                    + "them by name with ms.sound(\"m_Name\") — they have no slot, "
+                    + "because a macro chooses its own sound at the call."));
+            } else {
+                for (const e of macroEntries) body.appendChild(soundEntryRow(e));
+            }
 
-        body.appendChild(divider());
-        body.appendChild(
-            btnRow(actionBtn("Import Sound Files…", "", () =>
-                sendToHost({ action: "importSounds" }))),
-        );
+            const importedEntries = byKind("imported");
+            if (importedEntries.length > 0) {
+                body.appendChild(divider());
+                body.appendChild(groupLabel("Imported"));
+                for (const e of importedEntries) body.appendChild(soundEntryRow(e));
+            }
 
-        // ── Export bundling ──────────────────────────────────────────────
-        body.appendChild(divider());
-        body.appendChild(row(
-            "Bundle Sounds With Theme",
-            "Include your sounds and their slot assignments in theme exports",
-            toggle(S.bundleSoundsWithTheme ?? true, (e) =>
-                sendToHost({ action: "setBundleSoundsWithTheme", value: e.target.checked })),
-            "",
-            [{ icon: "", label: "Reset to default",
-               action: () => sendToHost({ action: "setBundleSoundsWithTheme", value: true }) }],
-        ));
+            body.appendChild(divider());
+            body.appendChild(
+                btnRow(actionBtn("Import Sound Files…", "", () =>
+                    sendToHost({ action: "importSounds" }))),
+            );
+        });
+
+        sec(root, "bundling", "Sharing", "What travels with a theme package", (body) => {
+            body.appendChild(row(
+                "Bundle Sounds With Theme",
+                "Include your sounds and their slot assignments in theme exports",
+                toggle(S.bundleSoundsWithTheme ?? true, (e) =>
+                    sendToHost({ action: "setBundleSoundsWithTheme", value: e.target.checked })),
+                "",
+                [{ icon: "", label: "Reset to default",
+                   action: () => sendToHost({ action: "setBundleSoundsWithTheme", value: true }) }],
+            ));
+        });
     }
 
     // ── Share tab ────────────────────────────────────────────────────────
@@ -762,34 +827,34 @@
     // theme package carries its audio and the slot map that gives that audio
     // meaning. The sound package still exists for sharing a set on its own,
     // but it is the narrower thing, not the co-equal one.
-    function buildShare(body) {
-        const { h, divider, groupLabel, btnRow, actionBtn } = ui();
+    function buildShare(root) {
+        const { h, btnRow, actionBtn } = ui();
 
-        body.appendChild(groupLabel("Export"));
+        sec(root, "export", "Export", "Package what you have made", (body) => {
+            body.appendChild(h("div", { cls: "theme-note" },
+                "A theme package carries ms_theme.json, any font files in "
+                + "ui/fonts/, and — unless you turn it off under Sounds — your "
+                + "sounds and their slot assignments. Export Sounds is for "
+                + "sharing a sound set on its own, without the colours."));
 
-        body.appendChild(h("div", { cls: "theme-note" },
-            "A theme package carries ms_theme.json, any font files in "
-            + "ui/fonts/, and — unless you turn it off under Sounds — your "
-            + "sounds and their slot assignments. Export Sounds is for "
-            + "sharing a sound set on its own, without the colours."));
+            body.appendChild(btnRow(
+                actionBtn("Export Theme…", "", () =>
+                    sendToHost({ action: "exportPackage", type: "theme" })),
+                actionBtn("Export Sounds…", "", () =>
+                    sendToHost({ action: "exportPackage", type: "sound" })),
+            ));
+        });
 
-        body.appendChild(btnRow(
-            actionBtn("Export Theme…", "", () =>
-                sendToHost({ action: "exportPackage", type: "theme" })),
-            actionBtn("Export Sounds…", "", () =>
-                sendToHost({ action: "exportPackage", type: "sound" })),
-        ));
-
-        body.appendChild(divider());
-        body.appendChild(groupLabel("Import"));
-        body.appendChild(h("div", { cls: "theme-note" },
-            "Importing a package replaces the files it carries, keeping a .bak "
-            + "of anything it overwrites. A package outside the validated "
-            + "library asks before it installs."));
-        body.appendChild(btnRow(
-            actionBtn("Import Package…", "", () =>
-                sendToHost({ action: "importPackage" })),
-        ));
+        sec(root, "import", "Import", "Install a package someone shared", (body) => {
+            body.appendChild(h("div", { cls: "theme-note" },
+                "Importing a package replaces the files it carries, keeping a .bak "
+                + "of anything it overwrites. A package outside the validated "
+                + "library asks before it installs."));
+            body.appendChild(btnRow(
+                actionBtn("Import Package…", "", () =>
+                    sendToHost({ action: "importPackage" })),
+            ));
+        });
     }
 
     // ── Tabs ─────────────────────────────────────────────────────────────

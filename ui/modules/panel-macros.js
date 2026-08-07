@@ -1877,18 +1877,49 @@
             groups[g].push(m);
         });
 
+        // A group is a settings section: a sticky heading naming it, and its
+        // binds in a card. It used to be a bare uppercase label over a flat
+        // run of rows, which left nothing to tell you where one group ended.
         order.forEach(function(g) {
-            var h = document.createElement("div");
-            h.className = "binds-group";
-            h.textContent = g.charAt(0).toUpperCase() + g.slice(1);
-            bindsScroll.appendChild(h);
+            var rows = [];
             groups[g].forEach(function(m) {
-                bindsScroll.appendChild(bindRow(m, false));
+                rows.push(bindRow(m, false));
                 (m.subs || []).forEach(function(sub) {
-                    bindsScroll.appendChild(bindRow(sub, true));
+                    rows.push(bindRow(sub, true));
                 });
             });
+            bindsScroll.appendChild(bindSection(
+                g.charAt(0).toUpperCase() + g.slice(1),
+                g === "system" ? "Always live — these cannot be disabled" : null,
+                rows,
+            ));
         });
+    }
+
+    // The settings panel publishes section() through window.msUI, but it
+    // takes a build function and this list already has its rows. Same markup,
+    // built from a row array instead.
+    function bindSection(title, desc, rows) {
+        var wrap = document.createElement("div");
+        wrap.className = "section";
+        var head = document.createElement("div");
+        head.className = "section-head";
+        var t = document.createElement("span");
+        t.className = "section-title";
+        t.textContent = title;
+        head.appendChild(t);
+        if (desc) {
+            var d = document.createElement("span");
+            d.className = "section-desc";
+            d.textContent = desc;
+            head.appendChild(d);
+        }
+        var body = document.createElement("div");
+        body.className = "section-body";
+        rows.forEach(function(r) { body.appendChild(r); });
+        wrap.appendChild(head);
+        wrap.appendChild(body);
+        return wrap;
     }
 
     function setBindList(list) {

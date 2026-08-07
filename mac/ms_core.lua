@@ -559,10 +559,20 @@
                     { id = "settingsClose",   label = "Settings Close",      group = "event", d = "d_SettingsClose",   a = "a_SettingsClose" },
                     { id = "shutdown",        label = "Shutdown",            group = "event", d = "d_Shutdown",        a = "a_Shutdown" },
 
-                    -- Ships with no sample of its own, deliberately: a
-                    -- restart is not a goodbye, but silence is worse than
-                    -- borrowing the send-off, so it falls through.
-                    { id = "restart",         label = "Restart",             group = "event", fallback = "shutdown" },
+                    -- A restart is not a goodbye, so it has its own samples;
+                    -- the fallback stays for the case where they are missing,
+                    -- because silence is worse than borrowing the send-off.
+                    --
+                    -- It used to declare `fallback` and nothing else, and a
+                    -- slot with no series is invisible to every mechanism that
+                    -- iterates on one: buildSoundPresets skipped it (so no
+                    -- preset ever moved it), soundSlotDefaults skipped it (so
+                    -- Default never restored it, and "custom theme off" left
+                    -- it pointing at an un-indexed a_ name), and
+                    -- soundSlotReserved claimed nothing for it (so an import
+                    -- could take d_Restart out from under it). Naming the
+                    -- series is what puts it back under all four.
+                    { id = "restart",         label = "Restart",             group = "event", d = "d_Restart",         a = "a_Restart",        fallback = "shutdown" },
                 }
 
                 ms.soundSlot = function(id)

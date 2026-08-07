@@ -962,14 +962,29 @@
                 }
             }
 
-            function buildProfiles(body) {
+            // The profiles tab is laid out the way the settings list is: the
+            // saved profiles, what you can do to them, and what travels off
+            // the machine, each in its own named section. It used to be one
+            // undifferentiated run of rows and button pairs.
+            function buildProfiles(root) {
                 const current = S.currentProfile || "";
                 const profiles = S.profiles || [];
-                if (current)
-                    body.appendChild(
-                        h("div", { cls: "group-label" }, "Active: " + current),
-                    );
+                const hasOthers = profiles.some((n) => n !== current);
 
+                root.appendChild(section("profiles-list", "Profiles",
+                    (body) => buildProfileList(body, current, profiles),
+                    current ? "Active: " + current : "None active"));
+
+                root.appendChild(section("profiles-manage", "Manage",
+                    (body) => buildProfileManage(body, current, profiles, hasOthers),
+                    "Creating, saving and clearing profiles"));
+
+                root.appendChild(section("profiles-packages", "Packages",
+                    buildProfilePackages,
+                    "Moving a profile between machines"));
+            }
+
+            function buildProfileList(body, current, profiles) {
                 const otherProfiles = profiles.filter((n) => n !== current);
                 if (otherProfiles.length === 0) {
                     body.appendChild(
@@ -1056,9 +1071,9 @@
                     });
                     body.appendChild(r);
                 }
+            }
 
-                body.appendChild(divider());
-                const hasOthers = profiles.some((n) => n !== current);
+            function buildProfileManage(body, current, profiles, hasOthers) {
                 const nameExists = current && profiles.some((n) => n === current);
                 body.appendChild(
                     btnRow(
@@ -1095,6 +1110,29 @@
                         })(),
                     ),
                 );
+                if (hasOthers) {
+                    body.appendChild(divider());
+                    body.appendChild(
+                        btnRow(
+                            actionBtn(
+                                "Clear Saved Profiles",
+                                "danger",
+                                async () => {
+                                    const res = await openModal(
+                                        "Clear Saved Profiles",
+                                        "Delete all saved profiles except the active one?\n\nThis cannot be undone.",
+                                        "Delete All",
+                                    );
+                                    if (res.confirmed)
+                                        sendToHost({ action: "clearProfiles" });
+                                },
+                            ),
+                        ),
+                    );
+                }
+            }
+
+            function buildProfilePackages(body) {
                 body.appendChild(
                     btnRow(
                         actionBtn("Import Profile", "", () =>
@@ -1116,24 +1154,6 @@
                         ),
                     ),
                 );
-                if (hasOthers)
-                    body.appendChild(
-                        btnRow(
-                            actionBtn(
-                                "Clear Saved Profiles",
-                                "danger",
-                                async () => {
-                                    const res = await openModal(
-                                        "Clear Saved Profiles",
-                                        "Delete all saved profiles except the active one?\n\nThis cannot be undone.",
-                                        "Delete All",
-                                    );
-                                    if (res.confirmed)
-                                        sendToHost({ action: "clearProfiles" });
-                                },
-                            ),
-                        ),
-                    );
             }
 
             function buildDeveloper(body) {
