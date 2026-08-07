@@ -78,12 +78,20 @@ if command -v swiftc &>/dev/null && [ -f "$REPO/mac/bin/ms_gc_read.swift" ]; the
 fi
 
 # Copy sounds (defaults + active + macro).
+#
+# The guard used to read $REPO/sounds/Default, which is not a directory in this
+# repo — the library is sounds/defaults — so the branch never taken meant a
+# deploy created three empty folders and shipped no audio at all.
+#
+# Copied over, not synced: sounds/active and sounds/macro are also where the
+# user's own imports live, and a deploy has no business deleting those.
 if [ -d "$REPO/sounds" ]; then
     mkdir -p "$HS/sounds/defaults" "$HS/sounds/active" "$HS/sounds/macro"
-    # Default sounds — always bundled, never overwritten by profile imports.
-    if [ -d "$REPO/sounds/Default" ]; then
-        cp -R "$REPO/sounds/Default/"* "$HS/sounds/defaults/" 2>/dev/null || true
-    fi
+    for d in defaults active macro; do
+        if [ -d "$REPO/sounds/$d" ]; then
+            cp -R "$REPO/sounds/$d/." "$HS/sounds/$d/" 2>/dev/null || true
+        fi
+    done
 fi
 
 # Copy MANIFEST.json so version tracking stays in sync.

@@ -40,7 +40,8 @@ const SELECT_CSS = `
 .macro-select:hover { border-color: var(--border); }
 .macro-select:focus, .macro-select.open { border-color: var(--accent); }
 .macro-select-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.macro-select-arrow { font-size: 8px; color: var(--text3); flex-shrink: 0; }
+.macro-select-arrow { display: flex; align-items: center; font-size: 8px; color: var(--text3); flex-shrink: 0; }
+.macro-select-arrow .icon { width: 12px; height: 12px; }
 .macro-select-menu { display: none; position: absolute; top: calc(100% + 3px); left: 0; min-width: 100%; max-height: 260px; overflow-y: auto; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
 .macro-select.open .macro-select-menu { display: block; }
 .macro-select-item { padding: 5px 10px; font-size: 11px; color: var(--text2); white-space: nowrap; cursor: pointer; transition: background 0.12s, color 0.12s; }
@@ -78,7 +79,15 @@ function createSelect(opts) {
 
     const arrow = doc.createElement("span");
     arrow.className = "macro-select-arrow";
-    arrow.textContent = "▾";
+    // The shell's chevdown SVG where it is reachable, the glyph where it is
+    // not: ICONS lives in ms_shell.html, and the popout windows this module
+    // also serves never load it. Same reason SELECT_CSS travels with the
+    // module — the control has to render in both documents.
+    if (window.ICONS && window.ICONS.chevdown && typeof window.icon === "function") {
+        arrow.innerHTML = window.icon("chevdown");
+    } else {
+        arrow.textContent = "▾";
+    }
     root.appendChild(arrow);
 
     const menu = doc.createElement("div");

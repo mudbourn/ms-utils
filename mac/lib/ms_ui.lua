@@ -185,60 +185,13 @@ return function(ms)
                 _entry(name, (ms.macroSounds or {})[name] or "", "macro")
             end
 
-            -- Build sound presets from d_* (default) and a_* (active) series.
-            -- Default preset: all 14 slots → d_* sounds
-            -- Preset 1/2/3: all 14 slots → a_* sounds, with optional number suffix
-            -- Falls back to d_* if a_* variant doesn't exist.
-            local slotBaseNames = {
-                { id = "themeLoaded",     d = "d_ThemeLoaded",     a = "a_ThemeLoaded" },
-                { id = "load",            d = "d_LoadEnd",         a = "a_LoadEnd" },
-                { id = "launch",          d = "d_Launch",          a = "a_Launch" },
-                { id = "alert",           d = "d_Alert",           a = "a_Alert" },
-                { id = "enabled",         d = "d_MacrosOn",        a = "a_MacrosOn" },
-                { id = "disabled",        d = "d_MacrosOff",       a = "a_MacrosOff" },
-                { id = "toggleOn",        d = "d_ToggleOn",        a = "a_ToggleOn" },
-                { id = "toggleOff",       d = "d_ToggleOff",       a = "a_ToggleOff" },
-                { id = "update",          d = "d_Update",          a = "a_Update" },
-                { id = "updateAvailable", d = "d_UpdateAvailable", a = "a_UpdateAvailable" },
-                { id = "reset",           d = "d_Reset",           a = "a_Reset" },
-                { id = "interact",        d = "d_Interact",        a = "a_Interact" },
-                { id = "hover",           d = "d_Hover",           a = "a_Hover" },
-                { id = "back",            d = "d_Back",            a = "a_Back" },
-                { id = "settingsOpen",    d = "d_SettingsOpen",    a = "a_SettingsOpen" },
-                { id = "settingsClose",   d = "d_SettingsClose",   a = "a_SettingsClose" },
-                { id = "shutdown",        d = "d_Shutdown",        a = "a_Shutdown" },
-            }
-
-            -- Scan for available numbered variants
-            local allSounds = ms.sounds or {}
-            local function findVariant(base, num)
-                local name = num and (base .. num) or base
-                if allSounds[name] then return name end
-                return nil
-            end
-
-            -- Build presets
-            -- Preset 1: a_* (no suffix), fallback to d_*
-            -- Preset 2/3: a_*N, fallback to a_* (no suffix), fallback to d_*
-            local soundPresets = {}
-            for num = 1, 3 do
-                local assigns = {}
-                for _, slot in ipairs(slotBaseNames) do
-                    local s
-                    if num > 1 then
-                        -- Try a_*N first, then a_* (no suffix), then d_*N, then d_*
-                        s = findVariant(slot.a, tostring(num))
-                            or findVariant(slot.a, nil)
-                            or findVariant(slot.d, tostring(num))
-                            or slot.d
-                    else
-                        -- Preset 1: a_* (no suffix), fallback to d_*
-                        s = findVariant(slot.a, nil) or slot.d
-                    end
-                    assigns[slot.id] = s
-                end
-                table.insert(soundPresets, { num = num, assigns = assigns })
-            end
+            -- Build sound presets from the d_* (default) and a_* (active)
+            -- series named by ms.soundSlots. Preset 1 is the a_* sample with
+            -- no suffix; 2 and 3 are the numbered variants, each falling back
+            -- through the unsuffixed a_* to the slot's default. Slots the
+            -- registry gives no sample of their own are skipped — a preset has
+            -- nothing to say about a slot that borrows.
+            local soundPresets = ms.buildSoundPresets()
 
             local status, curHash = ms.integrity.check()
             local meta = ms.macroMeta or {}
@@ -399,6 +352,9 @@ return function(ms)
                 soundEnabled            = ms.soundEnabled,
                 soundVolume             = ms.soundVolume or 100,
                 soundAssign             = ms.soundAssign or {},
+                -- The Sounds tab builds its rows, its group headings and its
+                -- Default preset from this rather than from a list of its own.
+                soundSlots              = ms.soundSlots or {},
                 soundNames              = soundNames,
                 macroSoundNames         = macroSoundNames,
                 soundEntries            = soundEntries,
@@ -712,26 +668,11 @@ return function(ms)
                 if ms._customThemeDisabled then
                     -- Revert to defaults
                     for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
-                    -- Reset all sound slots to d_* defaults
-                    local defaultAssigns = {
-                        themeLoaded     = "d_ThemeLoaded",
-                        load            = "d_LoadEnd",
-                        launch          = "d_Launch",
-                        alert           = "d_Alert",
-                        enabled         = "d_MacrosOn",
-                        disabled        = "d_MacrosOff",
-                        toggleOn        = "d_ToggleOn",
-                        toggleOff       = "d_ToggleOff",
-                        update          = "d_Update",
-                        updateAvailable = "d_UpdateAvailable",
-                        reset           = "d_Reset",
-                        interact        = "d_Interact",
-                        hover           = "d_Hover",
-                        back            = "d_Back",
-                        settingsOpen    = "d_SettingsOpen",
-                        settingsClose   = "d_SettingsClose",
-                    }
-                    for sid, def in pairs(defaultAssigns) do
+                    -- Turning theming off un-indexes the whole a_* series, so
+                    -- every slot has to be walked back to its default in the
+                    -- same breath — one left behind points at a sample that no
+                    -- longer resolves.
+                    for sid, def in pairs(ms.soundSlotDefaults()) do
                         ms.soundAssign[sid] = def
                     end
                     -- Save + discover + recolor
@@ -745,52 +686,23 @@ return function(ms)
                     ms._soundsDirty = true
                     ms._discoverSounds()
                     -- Re-apply saved sound preset (restores user's preset after disable/enable cycle)
+                    -- The presets are rebuilt from what is on disk now that
+                    -- the a_* series is indexed again, so restoring one is
+                    -- just replaying its assignments — the same table the
+                    -- Sounds tab would have sent.
                     local savedPreset = ms._soundPreset
                     if savedPreset and savedPreset ~= "custom" then
-                        local allSounds = ms.sounds or {}
-                        local function findVariant(base, num)
-                            local name = num and (base .. num) or base
-                            return allSounds[name] and name or nil
-                        end
-                        local slotBaseNames = {
-                            { id = "themeLoaded",     d = "d_ThemeLoaded",     a = "a_ThemeLoaded" },
-                            { id = "load",            d = "d_LoadEnd",         a = "a_LoadEnd" },
-                            { id = "launch",          d = "d_Launch",          a = "a_Launch" },
-                            { id = "alert",           d = "d_Alert",           a = "a_Alert" },
-                            { id = "enabled",         d = "d_MacrosOn",        a = "a_MacrosOn" },
-                            { id = "disabled",        d = "d_MacrosOff",       a = "a_MacrosOff" },
-                            { id = "toggleOn",        d = "d_ToggleOn",        a = "a_ToggleOn" },
-                            { id = "toggleOff",       d = "d_ToggleOff",       a = "a_ToggleOff" },
-                            { id = "update",          d = "d_Update",          a = "a_Update" },
-                            { id = "updateAvailable", d = "d_UpdateAvailable", a = "a_UpdateAvailable" },
-                            { id = "reset",           d = "d_Reset",           a = "a_Reset" },
-                            { id = "interact",        d = "d_Interact",        a = "a_Interact" },
-                            { id = "hover",           d = "d_Hover",           a = "a_Hover" },
-                            { id = "back",            d = "d_Back",            a = "a_Back" },
-                            { id = "settingsOpen",    d = "d_SettingsOpen",    a = "a_SettingsOpen" },
-                            { id = "settingsClose",   d = "d_SettingsClose",   a = "a_SettingsClose" },
-                            { id = "shutdown",        d = "d_Shutdown",        a = "a_Shutdown" },
-                        }
+                        local assigns
                         if savedPreset == "default" then
-                            -- Default: all d_* sounds
-                            for _, slot in ipairs(slotBaseNames) do
-                                ms.soundAssign[slot.id] = slot.d
-                            end
-                        elseif type(tonumber(savedPreset)) == "number" then
-                            -- Numbered preset: build assigns from available sounds
+                            assigns = ms.soundSlotDefaults()
+                        else
                             local num = tonumber(savedPreset)
-                            for _, slot in ipairs(slotBaseNames) do
-                                local s
-                                if num > 1 then
-                                    s = findVariant(slot.a, tostring(num))
-                                        or findVariant(slot.a, nil)
-                                        or findVariant(slot.d, tostring(num))
-                                        or slot.d
-                                else
-                                    s = findVariant(slot.a, nil) or slot.d
-                                end
-                                ms.soundAssign[slot.id] = s
+                            for _, p in ipairs(ms.buildSoundPresets()) do
+                                if p.num == num then assigns = p.assigns; break end
                             end
+                        end
+                        for sid, name in pairs(assigns or {}) do
+                            ms.soundAssign[sid] = name
                         end
                     end
                     -- Save after preset restore
@@ -1147,7 +1059,8 @@ return function(ms)
                 local result = hs.dialog.chooseFileOrFolder(
                     "Select a sound file for \"" .. (data.label or slot) .. "\"",
                     hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
-                    true, false, false
+                    true, false, false,
+                    ms.soundExtensions
                 )
                 local selectedPath
                 for _, v in pairs(result or {}) do
@@ -1157,11 +1070,30 @@ return function(ms)
                 if not hs.fs.attributes(slibDir) then
                     hs.execute("mkdir -p '" .. SoundLib .. "'")
                 end
-                local filename   = selectedPath:match("([^/]+)$")
-                local importName = filename and (filename:match("^(.+)%.[^%.]+$") or filename)
-                if not filename or not importName then
+                local filename = selectedPath:match("([^/]+)$")
+                if not filename then
                     ms.ui.show(); ms.alert("Could not read filename.", 3); return
                 end
+
+                -- The picker is filtered, but it is a file dialog: a typed
+                -- path or a dragged alias can still get something else in
+                -- here, and the library has to hold sounds only.
+                if not ms.isSoundFile(filename) then
+                    ms.ui.show()
+                    ms.alert("Not a sound file.\nSupported: "
+                        .. table.concat(ms.soundExtensions, ", ") .. ".", 4)
+                    return
+                end
+
+                -- An import never lands on a name the theme system owns, and
+                -- never overwrites a file already in the library. What it is
+                -- called on disk follows the name it gets, so the two cannot
+                -- drift apart later.
+                local ext        = filename:match("(%.[^%.]+)$") or ""
+                local stem       = filename:match("^(.+)%.[^%.]+$") or filename
+                local importName = ms.safeSoundName(stem, "a_")
+                filename         = importName .. ext
+
                 local dst    = SoundActiveDir .. filename
                 local copied = false
                 if selectedPath ~= dst then

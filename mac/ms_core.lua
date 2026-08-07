@@ -526,6 +526,171 @@
             -- default. The Sounds tab can turn that off per install.
             ms.bundleSoundsWithTheme = true
             ms.soundAssign     = {}
+
+            -- Sound Slot Registry --
+                -- The one list of built-in sound slots. playSlot's fallback,
+                -- the custom-theme reset, the preset builder and the Sounds
+                -- tab all derive from this table and none of them keep a
+                -- copy — adding a slot is one edit here.
+                --
+                --   id        key under ms.soundAssign
+                --   label     Sounds tab row label
+                --   group     "load" or "event" — which group the tab files it under
+                --   d         default sample base; nil = ships unassigned
+                --   a         themed sample base; nil = no themed variant
+                --   fallback  slot to try when this one resolves to nothing
+                ms.soundSlots = {
+                    { id = "themeLoaded",     label = "Theme Applied",       group = "load",  d = "d_ThemeLoaded",     a = "a_ThemeLoaded" },
+                    { id = "load",            label = "Loading Screen End",  group = "load",  d = "d_LoadEnd",         a = "a_LoadEnd" },
+                    { id = "launch",          label = "Launch Announcement", group = "load",  d = "d_Launch",          a = "a_Launch" },
+
+                    { id = "updateAvailable", label = "Update Available",    group = "event", d = "d_UpdateAvailable", a = "a_UpdateAvailable" },
+                    { id = "alert",           label = "Alert / Notice",      group = "event", d = "d_Alert",           a = "a_Alert" },
+                    { id = "enabled",         label = "Macros Enabled",      group = "event", d = "d_MacrosOn",        a = "a_MacrosOn" },
+                    { id = "disabled",        label = "Macros Disabled",     group = "event", d = "d_MacrosOff",       a = "a_MacrosOff" },
+                    { id = "toggleOn",        label = "Toggle On",           group = "event", d = "d_ToggleOn",        a = "a_ToggleOn" },
+                    { id = "toggleOff",       label = "Toggle Off",          group = "event", d = "d_ToggleOff",       a = "a_ToggleOff" },
+                    { id = "update",          label = "Setting Updated",     group = "event", d = "d_Update",          a = "a_Update" },
+                    { id = "reset",           label = "Setting Reset",       group = "event", d = "d_Reset",           a = "a_Reset" },
+                    { id = "interact",        label = "Menu Interact",       group = "event", d = "d_Interact",        a = "a_Interact" },
+                    { id = "hover",           label = "Menu Hover",          group = "event", d = "d_Hover",           a = "a_Hover" },
+                    { id = "back",            label = "Menu Back",           group = "event", d = "d_Back",            a = "a_Back" },
+                    { id = "settingsOpen",    label = "Settings Open",       group = "event", d = "d_SettingsOpen",    a = "a_SettingsOpen" },
+                    { id = "settingsClose",   label = "Settings Close",      group = "event", d = "d_SettingsClose",   a = "a_SettingsClose" },
+                    { id = "shutdown",        label = "Shutdown",            group = "event", d = "d_Shutdown",        a = "a_Shutdown" },
+
+                    -- Ships with no sample of its own, deliberately: a
+                    -- restart is not a goodbye, but silence is worse than
+                    -- borrowing the send-off, so it falls through.
+                    { id = "restart",         label = "Restart",             group = "event", fallback = "shutdown" },
+                }
+
+                ms.soundSlot = function(id)
+                    for _, slot in ipairs(ms.soundSlots) do
+                        if slot.id == id then return slot end
+                    end
+                    return nil
+                end
+
+                -- The slots to try, in order, for one request. A slot with no
+                -- fallback is a one-element chain; the walk is depth-capped so
+                -- a fallback loop cannot hang the caller.
+                ms.soundSlotChain = function(id)
+                    local chain, seen = {}, {}
+                    local cur = id
+                    while cur and not seen[cur] and #chain < 8 do
+                        seen[cur] = true
+                        table.insert(chain, cur)
+                        local def = ms.soundSlot(cur)
+                        cur = def and def.fallback or nil
+                    end
+                    return chain
+                end
+
+                -- The assignment map "custom theming off" means: every slot
+                -- that has a default, pointed at it. Slots without one stay
+                -- unassigned and lean on their fallback.
+                ms.soundSlotDefaults = function()
+                    local out = {}
+                    for _, slot in ipairs(ms.soundSlots) do
+                        if slot.d then out[slot.id] = slot.d end
+                    end
+                    return out
+                end
+
+                -- Every name the registry lays claim to, numbered preset
+                -- variants included. An import is not allowed to land on one
+                -- of these: a file called a_Shutdown.wav dropped into the
+                -- library would otherwise overwrite the themed send-off, and
+                -- d_Shutdown.wav would be auto-sorted straight over the
+                -- shipped default — taking the fallback floor with it.
+                ms.soundSlotReserved = function()
+                    local out = {}
+                    for _, slot in ipairs(ms.soundSlots) do
+                        for _, base in ipairs({ slot.d, slot.a }) do
+                            if base then
+                                out[base] = true
+                                for n = 1, 9 do out[base .. n] = true end
+                            end
+                        end
+                    end
+                    return out
+                end
+
+                -- The numbered presets the Sounds tab offers, built from
+                -- whatever variants are actually on disk. Preset 1 is the
+                -- unsuffixed a_* sample; 2 and 3 prefer a_*N and fall back
+                -- through a_* to the slot's default, so a theme that only
+                -- ships one variant of a sound still gives all three presets
+                -- something to play.
+                --
+                -- A slot the registry gives no sample of its own is left out:
+                -- a preset has nothing to say about a slot that borrows.
+                ms.buildSoundPresets = function()
+                    local all = ms.sounds or {}
+                    local function variant(base, num)
+                        if not base then return nil end
+                        local name = num and (base .. num) or base
+                        return all[name] and name or nil
+                    end
+
+                    local presets = {}
+                    for num = 1, 3 do
+                        local assigns = {}
+                        for _, slot in ipairs(ms.soundSlots) do
+                            if slot.a or slot.d then
+                                if num > 1 then
+                                    assigns[slot.id] = variant(slot.a, tostring(num))
+                                        or variant(slot.a, nil)
+                                        or variant(slot.d, tostring(num))
+                                        or slot.d
+                                else
+                                    assigns[slot.id] = variant(slot.a, nil) or slot.d
+                                end
+                            end
+                        end
+                        table.insert(presets, { num = num, assigns = assigns })
+                    end
+                    return presets
+                end
+
+                -- Turn an arbitrary imported filename into a library name that
+                -- cannot collide with anything the registry owns.
+                --
+                -- An import is an a_ sound: it has not said what it is, so it
+                -- goes where user audio goes and setSoundKind can retype it
+                -- later. Whatever prefix it arrived with is stripped first, so
+                -- re-importing a_Foo.wav cannot produce a_a_Foo and importing
+                -- d_Shutdown.wav cannot land on the shipped default.
+                --
+                -- The uniquifier suffixes -2, -3 … rather than a bare digit,
+                -- because a bare digit is how the preset system spells
+                -- "variant 2 of this slot's sound" — an import called
+                -- Shutdown2 would otherwise quietly become preset 2's send-off.
+                ms.safeSoundName = function(stem, prefix)
+                    prefix = prefix or "a_"
+                    stem = (stem or ""):gsub('[/\\:*?"<>|%c]', "_")
+                    stem = stem:gsub("^%s+", ""):gsub("%s+$", "")
+                    stem = stem:gsub("^[dam]_", "")
+                    if stem == "" then stem = "Sound" end
+
+                    local reserved = ms.soundSlotReserved()
+                    local function taken(name)
+                        return reserved[name]
+                            or (ms.sounds or {})[name] ~= nil
+                            or (ms.macroSounds or {})[name] ~= nil
+                    end
+
+                    if not taken(prefix .. stem) then return prefix .. stem end
+                    for n = 2, 99 do
+                        local try = prefix .. stem .. "-" .. n
+                        if not taken(try) then return try end
+                    end
+                    return prefix .. stem .. "-"
+                        .. tostring(math.floor(hs.timer.secondsSinceEpoch()))
+                end
+            -- END Sound Slot Registry --
+
             ms._docsURL           = "https://docs-ms.mudbourn.info"
             ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
             ms._updateChannel     = "stable"
@@ -2308,40 +2473,52 @@
 
             ms._soundsDirty = true  -- force the first scan at startup
 
+            -- What counts as a sound file, in one place. hs.sound is
+            -- NSSound-backed, so this is what it can actually open.
+            --
+            -- The scanner and the auto-sorter used to disagree — the sorter
+            -- looked at .wav and the scanner at any extension at all — so an
+            -- imported .mp3 was indexed and playable but never filed, and a
+            -- .DS_Store or a stray .txt in the library was indexed as a sound.
+            ms.soundExtensions = { "wav", "aiff", "aif", "mp3", "m4a", "caf", "aac" }
+
+            ms.isSoundFile = function(file)
+                local ext = file:match("%.([^%.]+)$")
+                if not ext then return false end
+                ext = ext:lower()
+                for _, e in ipairs(ms.soundExtensions) do
+                    if e == ext then return true end
+                end
+                return false
+            end
+
             -- Auto-sort: move misplaced sounds to correct folder based on prefix.
             -- d_* → sounds/defaults/, a_* → sounds/active/, m_* → sounds/macro/
+            --
+            -- A move never overwrites. The prefix is what a file claims to be,
+            -- and a file dropped into the library gets to claim anything —
+            -- including d_Shutdown, which would land straight on top of the
+            -- shipped default and take the fallback floor with it.
             ms._autoSortSounds = function()
                 local SoundLib = hs.configdir .. "/sounds/"
                 local dirs = {
-                    { dir = SoundLib .. "defaults/", prefix = "d_", match = { "d_" } },
-                    { dir = SoundLib .. "active/",   prefix = "a_", match = { "a_" } },
-                    { dir = SoundLib .. "macro/",    prefix = "m_", match = { "m_" } },
+                    { dir = SoundLib .. "defaults/", prefix = "d_" },
+                    { dir = SoundLib .. "active/",   prefix = "a_" },
+                    { dir = SoundLib .. "macro/",    prefix = "m_" },
                 }
                 for _, info in ipairs(dirs) do
                     if hs.fs.attributes(info.dir) then
                         for file in hs.fs.dir(info.dir) do
-                            if file ~= "." and file ~= ".." and file:match("%.wav$") then
-                                local name = file:match("^(.+)%.[^%.]+$")
-                                if name then
-                                    -- Check if prefix matches this directory
-                                    local belongs = false
-                                    for _, pfx in ipairs(info.match) do
-                                        if name:sub(1, #pfx) == pfx then belongs = true; break end
-                                    end
-                                    if not belongs then
-                                        -- Find correct directory
-                                        for _, dest in ipairs(dirs) do
-                                            for _, pfx in ipairs(dest.match) do
-                                                if name:sub(1, #pfx) == pfx then
-                                                    local src = info.dir .. file
-                                                    local dst = dest.dir .. file
-                                                    if src ~= dst then
-                                                        os.rename(src, dst)
-                                                    end
-                                                    break
-                                                end
-                                            end
+                            if file ~= "." and file ~= ".." and ms.isSoundFile(file) then
+                                for _, dest in ipairs(dirs) do
+                                    if file:sub(1, #dest.prefix) == dest.prefix
+                                        and dest.dir ~= info.dir then
+                                        local src = info.dir .. file
+                                        local dst = dest.dir .. file
+                                        if not hs.fs.attributes(dst) then
+                                            os.rename(src, dst)
                                         end
+                                        break
                                     end
                                 end
                             end
@@ -2359,12 +2536,12 @@
                 -- Auto-sort misplaced sounds before scanning
                 pcall(ms._autoSortSounds)
 
-                -- Helper: scan a directory for .wav files into a target table
+                -- Helper: scan a directory for sound files into a target table
                 local function scanDir(dir, target)
                     target = target or ms.sounds
                     if not hs.fs.attributes(dir) then return end
                     for file in hs.fs.dir(dir) do
-                        if file ~= "." and file ~= ".." then
+                        if file ~= "." and file ~= ".." and ms.isSoundFile(file) then
                             local name = file:match("^(.+)%.[^%.]+$")
                             if name then
                                 target[name] = dir .. file
@@ -2464,12 +2641,38 @@
                 return s  -- return handle so callers can stop playback
             end
 
-            local _slotDefaults = {
-                load         = { "d_LoadEnd",   "d_Load End"   },
-                launch       = { "d_Launch" },
-                themeLoaded  = { "d_ThemeLoaded", "d_Theme Loaded" },
-                updateAvailable = { "d_UpdateAvailable", "d_Update Available" },
-            }
+            -- One slot's own resolution, in priority order: what the user
+            -- assigned, a library file named after the slot, then the sample
+            -- the registry names as its default.
+            --
+            -- An assignment that resolves to nothing is skipped rather than
+            -- handed to hs.sound as though the name were a path. It used to
+            -- be, and that is what turned "this slot still points at a themed
+            -- sample that custom theming has just un-indexed" into silence
+            -- instead of the default sound.
+            local function _resolveSlot(id)
+                local assigned = ms.soundAssign and ms.soundAssign[id]
+                if assigned then
+                    local p = (ms.sounds and ms.sounds[assigned])
+                        or (ms.macroSounds and ms.macroSounds[assigned])
+                    -- A pack may assign a literal path rather than a library
+                    -- name; only something shaped like one is treated as one.
+                    if not p and assigned:find("/", 1, true)
+                        and hs.fs.attributes(assigned) then
+                        p = assigned
+                    end
+                    if p then return p end
+                end
+
+                local p = (ms.sounds and ms.sounds[id])
+                    or (ms.macroSounds and ms.macroSounds[id])
+                if p then return p end
+
+                local def = ms.soundSlot(id)
+                if def and def.d then return ms.sounds and ms.sounds[def.d] end
+                return nil
+            end
+
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
                 -- Suppress all sounds during reload to avoid jarring duplicate close/open sounds
@@ -2484,24 +2687,16 @@
                     pcall(function() ms._slotHandles[slotId]:stop() end)
                     ms._slotHandles[slotId] = nil
                 end
-                local assigned = ms.soundAssign and ms.soundAssign[slotId]
+                -- Walk the registry's fallback chain: each slot is resolved in
+                -- full before the next one is tried, so a borrowed sound only
+                -- ever stands in for a slot that has nothing of its own.
+                -- Timing is recorded against the slot that was *asked* for,
+                -- which is what a caller holding the screen open (the exit
+                -- curtain) measures against.
                 local path
-                if assigned then
-                    path = (ms.sounds and ms.sounds[assigned])
-                        or (ms.macroSounds and ms.macroSounds[assigned])
-                        or assigned
-                else
-                    path = ms.sounds and ms.sounds[slotId]
-                    if not path then path = ms.macroSounds and ms.macroSounds[slotId] end
-                    if not path then
-                        local candidates = _slotDefaults[slotId]
-                        if candidates then
-                            for _, name in ipairs(candidates) do
-                                path = ms.sounds and ms.sounds[name]
-                                if path then break end
-                            end
-                        end
-                    end
+                for _, id in ipairs(ms.soundSlotChain(slotId)) do
+                    path = _resolveSlot(id)
+                    if path then break end
                 end
                 if not path then return false end
                 local handle = ms.sound(path) or false
@@ -4184,14 +4379,12 @@
         ms._hotkeysReady   = false
         _G._bootChoreographyStarted = false  -- reset guard for loading screen ready handshake
         ms.loadSettings()            -- load first so importedSounds/soundAssign are available
-        -- If custom themes disabled, reset loading sound presets to defaults
+        -- Custom theming off means every built-in slot sits on its default,
+        -- not just the three the loading screen needs. Settings written while
+        -- theming was on survive on disk, so this has to run on every boot
+        -- rather than only at the moment the toggle is flipped.
         if ms._customThemeDisabled then
-            local defaultAssigns = {
-                themeLoaded = "d_ThemeLoaded",
-                load        = "d_LoadEnd",
-                launch      = "d_Launch",
-            }
-            for sid, def in pairs(defaultAssigns) do
+            for sid, def in pairs(ms.soundSlotDefaults()) do
                 ms.soundAssign[sid] = def
             end
         end

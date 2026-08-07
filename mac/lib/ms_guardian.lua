@@ -672,8 +672,11 @@ YQIDAQAB
 
         -- Play error sound once on show
         pcall(function()
+            -- sounds/defaults/, not sounds/Default/ — the latter is not a
+            -- directory that has ever existed, so the block screen came up
+            -- silent whenever custom theming was off.
             local _soundPath = _customThemeDisabled
-                and (_home .. "/.hammerspoon/sounds/Default/d_Error.wav")
+                and (_home .. "/.hammerspoon/sounds/defaults/d_Error.wav")
                 or  (_home .. "/.hammerspoon/sounds/active/a_Error.wav")
             local _snd = hs.sound.getByFile(_soundPath)
             if _snd then _snd:play() end

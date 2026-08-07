@@ -228,17 +228,29 @@
 
         const fonts   = S.themeFonts || [];
         const current = S.themeFontValue || "";
-        const select  = h("select", { cls: "theme-select" });
+
+        // createSelect, not <select>: the closed control takes CSS but the
+        // *open* native popup is drawn by macOS and no stylesheet reaches it,
+        // so it broke out of the shell's look mid-interaction — on the one
+        // panel whose whole subject is how the shell looks.
+        const options = [];
+        // A font set by hand in ms_theme.json that is not in the folder listing
+        // still has to be selectable, and has to say why it looks different.
         if (!fonts.some((f) => f.value === current) && current) {
-            select.appendChild(h("option", { value: current }, current + " (from file)"));
+            options.push({ value: current, label: current + " (from file)" });
         }
         for (const f of fonts) {
-            select.appendChild(h("option", { value: f.value }, f.label));
+            options.push({ value: f.value, label: f.label });
         }
-        select.value = current;
+
+        const select = createSelect({
+            options: options,
+            value: current,
+            className: "theme-select",
+            onChange: (v) =>
+                sendToHost({ action: "setThemeKey", key: "font", value: v }),
+        });
         select.addEventListener("mouseenter", () => playSlot("hover"));
-        select.addEventListener("change", () =>
-            sendToHost({ action: "setThemeKey", key: "font", value: select.value }));
         body.appendChild(
             row("Font", "Files in ui/fonts/ travel with a theme package", select),
         );
@@ -403,43 +415,23 @@
     });
 
     // ── Sound tab ────────────────────────────────────────────────────────
-    const SLOTS = [
-        { id: "updateAvailable", label: "Update Available" },
-        { id: "alert", label: "Alert / Notice" },
-        { id: "enabled", label: "Macros Enabled" },
-        { id: "disabled", label: "Macros Disabled" },
-        { id: "toggleOn", label: "Toggle On" },
-        { id: "toggleOff", label: "Toggle Off" },
-        { id: "update", label: "Setting Updated" },
-        { id: "reset", label: "Setting Reset" },
-        { id: "interact", label: "Menu Interact" },
-        { id: "hover", label: "Menu Hover" },
-        { id: "back", label: "Menu Back" },
-        { id: "settingsOpen", label: "Settings Open" },
-        { id: "settingsClose", label: "Settings Close" },
-        { id: "shutdown", label: "Shutdown" },
-        // Ships unassigned and has no d_*/a_* sample, so it is deliberately
-        // absent from D_MAP and the preset lists — leaving it empty falls the
-        // restart back to the shutdown sound rather than to silence.
-        { id: "restart", label: "Restart" },
-    ];
+    // The slots, their labels, their grouping and the samples the "Default"
+    // preset restores all arrive in the state payload from ms.soundSlots.
+    // This panel keeps no list of its own: it used to, and it was one of four
+    // hand-written copies that had to agree.
+    //
+    // Read through functions rather than consts — S is replaced on every
+    // render, so a const captured at module load would freeze the first one.
+    const slotsIn = (group) => (S.soundSlots || []).filter((s) => s.group === group);
 
-    const LOAD_SLOTS = [
-        { id: "themeLoaded", label: "Theme Applied" },
-        { id: "load", label: "Loading Screen End" },
-        { id: "launch", label: "Launch Announcement" },
-    ];
-
-    // The d_* mapping the "Default" preset restores.
-    const D_MAP = {
-        themeLoaded: "d_ThemeLoaded", load: "d_LoadEnd", launch: "d_Launch",
-        alert: "d_Alert", enabled: "d_MacrosOn", disabled: "d_MacrosOff",
-        toggleOn: "d_ToggleOn", toggleOff: "d_ToggleOff",
-        update: "d_Update", updateAvailable: "d_UpdateAvailable",
-        reset: "d_Reset", interact: "d_Interact", hover: "d_Hover",
-        back: "d_Back", settingsOpen: "d_SettingsOpen", settingsClose: "d_SettingsClose",
-        shutdown: "d_Shutdown",
-    };
+    // A slot with no `d` ships unassigned (restart), so the Default preset has
+    // nothing to say about it and leaves it empty — which is what makes it
+    // fall through to the sound its registry entry points at.
+    function defaultAssignsFor(slots) {
+        const out = {};
+        for (const s of slots) if (s.d) out[s.id] = s.d;
+        return out;
+    }
 
     // Preview and import used to be right-click-only. They are the two things
     // you do most while assigning sounds, so they get their own controls.
@@ -581,13 +573,10 @@
 
         // ── Presets ──────────────────────────────────────────────────────
         const presets   = S.soundPresets || [];
-        const ALL_SLOTS = [...LOAD_SLOTS, ...SLOTS];
+        const ALL_SLOTS = S.soundSlots || [];
         const presetSlotIds = ALL_SLOTS.map(s => s.id);
 
-        const defaultAssigns = {};
-        for (const sid of presetSlotIds) {
-            if (D_MAP[sid]) defaultAssigns[sid] = D_MAP[sid];
-        }
+        const defaultAssigns = defaultAssignsFor(ALL_SLOTS);
 
         // Which preset is live is inferred from the assignments themselves —
         // any hand-edit away from a preset lands you back on "Custom".
@@ -640,13 +629,13 @@
         // ── Slots ────────────────────────────────────────────────────────
         const names = S.soundNames || [];
 
-        for (const slot of LOAD_SLOTS) {
+        for (const slot of slotsIn("load")) {
             body.appendChild(slotRow(slot.id, slot.label, names, scrollEl));
         }
 
         body.appendChild(divider());
         body.appendChild(groupLabel("Event Slots"));
-        for (const slot of SLOTS) {
+        for (const slot of slotsIn("event")) {
             body.appendChild(slotRow(slot.id, slot.label, names, scrollEl));
         }
 

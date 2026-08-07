@@ -9,7 +9,7 @@
 --
 --   macro    ms_macros.lua and/or ms_macros_visual.json, plus sounds/macro/
 --   theme    ms_theme.json, plus ui/fonts/
---   sound    sounds/active/ and sounds/Default/, plus the slot assignment map
+--   sound    sounds/active/ and sounds/macro/, plus the slot assignment map
 --   plugin   a Spoon under Spoons/<Name>.spoon/ — the third-party surface
 --   profile  the whole set — macros, settings, theme and sounds together
 --
@@ -121,10 +121,18 @@ return function(ms)
                 },
                 required = { "ms_theme.json" },
             },
+            -- Same rule as the theme above, and for the same reason: a sound
+            -- pack carries the audio a user can actually change. It used to
+            -- name sounds/Default/, which is not a directory that exists —
+            -- the library is sounds/defaults/ — so the required check could
+            -- never pass and no sound pack could be built or installed. It is
+            -- gone rather than corrected: letting a package write into
+            -- sounds/defaults/ is letting it overwrite the fallback floor
+            -- every slot lands on.
             sound = {
                 label    = "Sound Pack",
-                paths    = { "sounds/active/", "sounds/Default/", "sound_assign.json" },
-                required = { "sounds/active/", "sounds/Default/" },
+                paths    = { "sounds/active/", "sounds/macro/", "sound_assign.json" },
+                required = { "sounds/active/" },
             },
             -- Spoons/ is the third-party surface: lib/ is first-party only, so
             -- a plugin can no longer land beside core modules. Everything is
@@ -840,8 +848,14 @@ return function(ms)
                 end
 
             elseif kind == "sound" then
-                addDir("sounds/active/",  _hsDir .. "/sounds/active/")
-                addDir("sounds/Default/", _hsDir .. "/sounds/Default/")
+                addDir("sounds/active/", _hsDir .. "/sounds/active/")
+                addDir("sounds/macro/",  _hsDir .. "/sounds/macro/")
+                -- The audio without the slot map is a folder of files nobody
+                -- has pointed at anything. The theme export has always sent
+                -- both; this one used to send neither it nor a directory that
+                -- exists.
+                local assign = ms.package.exportSoundAssign()
+                if assign then files["sound_assign.json"] = assign end
 
             elseif kind == "profile" then
                 addIf("ms_macros.lua",            _hsDir .. "/ms_macros.lua")

@@ -1139,23 +1139,17 @@ return function(ms)
         -- comes out of the hold rather than being added to it.
         -- Shared tail for both exits.
         --
-        -- `slots` is tried in order and the first one that actually plays wins
-        -- — restart ships with its own slot unassigned, and falling back to
-        -- the shutdown sound is better than silence.
+        -- One slot goes in, not a list: which sound a slot borrows when it has
+        -- none of its own is the registry's business, and playSlot walks that
+        -- chain itself. Timing is still recorded against the slot asked for,
+        -- so the hold below is right whichever sample ends up playing.
         --
         -- The send-off starts inside the curtain's onShow, so `_waitForSlot`
         -- is measuring from a sample that began with the fade rather than
         -- before it. Everything downstream stays correct for free.
-        local function _exit(mode, slots, finish)
-            local slot = slots[#slots]
-
+        local function _exit(mode, slot, finish)
             _exitCurtain(mode, function()
-                for _, s in ipairs(slots) do
-                    if ms.playSlot(s) then
-                        slot = s
-                        break
-                    end
-                end
+                ms.playSlot(slot)
 
                 -- Everything on screen leaves together. Toasts hold for
                 -- several seconds and the exit does not wait for them, so
@@ -1189,7 +1183,7 @@ return function(ms)
             ms._shuttingDown = true
             ms.dev.log({ type = "system", event = "shutdown_start" })
 
-            _exit("shutdown", { "shutdown" }, function()
+            _exit("shutdown", "shutdown", function()
                 local app = hs.application.get("Hammerspoon")
                 if app then app:kill() else os.exit(0) end
             end)
@@ -1206,15 +1200,16 @@ return function(ms)
             ms._restarting = true
             ms.dev.log({ type = "system", event = "restart_start" })
 
-            -- A restart is not a goodbye, so it gets its own slot first — but
-            -- that slot ships unassigned, so `_exit` falls through to the
-            -- shutdown sound rather than to silence.
+            -- A restart is not a goodbye, so it gets its own slot — which
+            -- ships unassigned and falls through to the shutdown sound rather
+            -- than to silence. That fallback is declared on the slot itself,
+            -- in ms.soundSlots.
             --
             -- hs.reload() tears down the Lua state, and the sound handle goes
             -- with it — so the hold is what makes the send-off audible at all,
             -- not just a courtesy. The curtain holds the screen for exactly
             -- that long, then the reload replaces it with the loading screen.
-            _exit("restart", { "restart", "shutdown" }, function() hs.reload() end)
+            _exit("restart", "restart", function() hs.reload() end)
         end
 
         ms.reload = function(opts)

@@ -30,6 +30,10 @@
 
         /* Layer 2: Reset ──────────────────────────────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        /* Selection is drawn by macOS in the *system* accent unless a rule
+           says otherwise — it follows System Settings, not the theme, so it
+           was the one colour in the shell the theme did not control. */
+        ::selection { background: var(--accent); color: var(--bg); }
         html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; min-width: 200px; min-height: 150px; }
         body { margin: 0; padding: 0; }
         #shell-root { display: flex; flex-direction: row; width: 100%; height: 100%; background: var(--bg); border-radius: var(--ms-window-radius, 0px); overflow: hidden; }
@@ -419,7 +423,9 @@
         .panel-theme .color-swatch::-webkit-color-swatch { border: none; border-radius: 2px; }
         .panel-theme .color-hex { width: 74px; padding: 3px 6px; font: 11px var(--font-mono); color: var(--text); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); }
         .panel-theme .color-hex:focus { outline: none; border-color: var(--accent); }
-        .panel-theme .theme-select { padding: 3px 6px; font-size: 11px; color: var(--text); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); max-width: 150px; }
+        /* Sizing only — the control itself is .macro-select, styled once in
+           ui-select.js so every dropdown in the shell stays one control. */
+        .panel-theme .theme-select { max-width: 150px; min-width: 0; padding: 3px 6px; font-size: 11px; border-radius: var(--radius-s); }
         .panel-theme .theme-note { padding: 10px 14px 4px; font-size: 11px; line-height: 1.5; color: var(--text3); }
 
         /* Preview / import beside each sound slot. */
@@ -524,7 +530,9 @@
 
         .seg { display: flex; border-radius: var(--radius-s); background: var(--surface2); padding: 2px; gap: 2px; flex-shrink: 0; }
         .seg-btn { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; color: var(--text2); transition: background 0.15s, color 0.15s; }
-        .seg-btn.active { background: var(--accent); color: #fff; }
+        /* --bg, not #fff: the accent is a theme colour and a light theme can
+           set it light, which a hardcoded white then sits on invisibly. */
+        .seg-btn.active { background: var(--accent); color: var(--bg); }
         .seg-btn:hover:not(.active) { background: var(--hover); color: var(--text); }
 
         .slider-row { flex-direction: column; align-items: stretch; gap: 6px; }
@@ -559,6 +567,8 @@
         .sound-filter-bar { display: flex; gap: 2px; padding: 4px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface2); z-index: 1; }
         .sound-filter-btn { font-size: 10px; padding: 2px 6px; border-radius: var(--radius-s); background: transparent; color: var(--text3); cursor: pointer; border: none; transition: all 0.15s; }
         .sound-filter-btn:hover { color: var(--text2); background: var(--hover); }
+        /* Overrides .seg-btn.active on purpose: a solid accent pill is too
+           heavy for a filter bar living inside an open dropdown. */
         .sound-filter-btn.active { color: var(--accent); background: var(--surface3); }
 
         /* Inside a group card the divider only separates sub-groups, so it
@@ -1663,6 +1673,29 @@
         if (theme.surface) r.setProperty('--surface', theme.surface);
         if (theme.surface2) r.setProperty('--surface2', theme.surface2);
         if (theme.hover) r.setProperty('--hover', theme.hover);
+        // surface3 has no key in ms_theme.json — Lua derives it from surface2
+        // and hover when it builds the theme CSS. This function did not, so a
+        // live theme update moved every surface *except* this one and it kept
+        // its stock value: #24291a, a dark olive, which is why a red theme
+        // showed a green chip behind the active sound filter. Same blend as
+        // the Lua side, deliberately — two derivations of one colour drift.
+        if (theme.surface3) {
+            r.setProperty('--surface3', theme.surface3);
+        } else if (theme.surface2 && theme.hover) {
+            var _hx = function(h) {
+                h = String(h).replace('#', '');
+                if (h.length !== 6) return null;
+                var n = parseInt(h, 16);
+                if (isNaN(n)) return null;
+                return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+            };
+            var s2 = _hx(theme.surface2), hv = _hx(theme.hover);
+            if (s2 && hv) {
+                var mix = function(i) { return Math.floor((s2[i] + hv[i]) / 2); };
+                r.setProperty('--surface3', 'rgb('
+                    + mix(0) + ',' + mix(1) + ',' + mix(2) + ')');
+            }
+        }
         if (theme.accent) r.setProperty('--accent', theme.accent);
         if (theme.accentHi) r.setProperty('--accent-hi', theme.accentHi);
         if (theme.success) r.setProperty('--success', theme.success);
