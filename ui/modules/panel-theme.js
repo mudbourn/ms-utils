@@ -671,21 +671,23 @@
 
         const soundEntryRow = (e) => {
             const ctl = h("div", { cls: "slot-ctl" });
-            // An imported sound gets to say what it is. Everything else is
-            // already declared by the directory it lives in, and defaults
-            // must not move at all, so those keep the plain label.
-            if (e.imported) {
+            // Every sound you own gets to say what it is; only defaults are
+            // fixed, because they are the fallback floor. An import has no
+            // type yet, so neither option reads as selected — picking one is
+            // what moves it out of Imported and into that group.
+            const selected = e.imported ? null : e.role;
+            if (e.role === "default") {
+                ctl.appendChild(h("span", { cls: "snd-entry-kind" }, e.kind));
+            } else {
                 ctl.appendChild(seg(
                     [{ value: "active", label: "Active" },
                      { value: "macro",  label: "Macro"  }],
-                    e.role,
+                    selected,
                     (v) => {
-                        if (v === e.role) return;
+                        if (v === selected) return;
                         sendToHost({ action: "setSoundKind", name: e.name, kind: v });
                     },
                 ));
-            } else {
-                ctl.appendChild(h("span", { cls: "snd-entry-kind" }, e.kind));
             }
             const btns = h("div", { cls: "slot-btns" });
             const play = h("button", {
@@ -712,6 +714,21 @@
                 }] : []),
             ]);
         };
+
+        // Active sounds had no group of their own — they were only reachable
+        // through the slot pickers above. That was survivable while nothing
+        // could become one, but assigning a sound "active" has to put it
+        // somewhere visible or the click looks like it deleted it.
+        const activeEntries = byKind("active");
+        body.appendChild(divider());
+        body.appendChild(groupLabel("Active Sounds"));
+        if (activeEntries.length === 0) {
+            body.appendChild(h("div", { cls: "theme-note" },
+                "Sounds in sounds/active/ appear here. These are the ones the "
+                + "slots above can be assigned to."));
+        } else {
+            for (const e of activeEntries) body.appendChild(soundEntryRow(e));
+        }
 
         const macroEntries = byKind("macro");
         body.appendChild(divider());

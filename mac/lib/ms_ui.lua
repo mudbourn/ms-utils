@@ -1284,8 +1284,17 @@ return function(ms)
                 local newName = prefix .. stem
                 local dst     = dstDir .. newName .. ext
 
+                -- Already sitting where this kind belongs (an import whose
+                -- filename happened to carry the right prefix). Nothing to
+                -- move, but it still has to stop being "imported" — that is
+                -- the whole point of the click.
                 if dst == path then
-                    ms.ui.refresh()
+                    if ms.importedSounds then ms.importedSounds[name] = nil end
+                    ms.saveSettings()
+                    ms._soundsDirty = true
+                    ms._discoverSounds()
+                    ms.playSlot("update")
+                    hs.timer.doAfter(0.15, function() ms.ui.refresh() end)
                     return
                 end
                 if hs.fs.attributes(dst) then
@@ -1306,18 +1315,19 @@ return function(ms)
                     return
                 end
 
-                -- Follow the rename. Slots point at names and the imported
-                -- flag is keyed by name, so both would dangle otherwise —
-                -- and a slot pointing at a macro sound still resolves, since
-                -- playSlot falls through ms.sounds to ms.macroSounds.
+                -- Slots point at names, so they follow the rename or they
+                -- dangle. A slot pointing at a macro sound still resolves,
+                -- since playSlot falls through ms.sounds to ms.macroSounds.
                 ms.soundAssign = ms.soundAssign or {}
                 for slot, assigned in pairs(ms.soundAssign) do
                     if assigned == name then ms.soundAssign[slot] = newName end
                 end
-                if ms.importedSounds and ms.importedSounds[name] then
-                    ms.importedSounds[name]    = nil
-                    ms.importedSounds[newName] = newName .. ext
-                end
+
+                -- Drop the imported flag rather than re-keying it. "Imported"
+                -- is the staging state for a sound that has not been given a
+                -- type yet; once it has one it belongs in that type's group,
+                -- and the Imported group empties out and disappears.
+                if ms.importedSounds then ms.importedSounds[name] = nil end
 
                 ms.saveSettings()
                 ms._soundsDirty = true

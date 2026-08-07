@@ -742,6 +742,101 @@ return function(ms)
             end)
         end
 
+        -- The restart curtain, deliberately a canvas rather than the shell's
+        -- overlay. The hotkey fires whether or not the shell is open, so a
+        -- curtain that lives in the shell's page shows nothing most of the
+        -- time — and when the shell *is* open it lives inside the very window
+        -- _teardown closes, so it went dark long before the send-off ended.
+        -- A canvas has no page to load, no readiness to gate on, and nothing
+        -- tears it down until the reload does.
+        --
+        -- Sized and centred like the loading screen, so a restart reads as
+        -- the bookend to a boot rather than as a new kind of window.
+        local function _restartCurtain()
+            local ok, cv = pcall(function()
+                local sf = hs.screen.mainScreen():frame()
+                local t  = ms._theme or {}
+
+                local function hex(v, d)
+                    if type(v) ~= "string" then return d end
+                    local x = v:match("^#?(%x%x%x%x%x%x)")
+                    if not x then return d end
+                    return {
+                        red   = tonumber(x:sub(1, 2), 16) / 255,
+                        green = tonumber(x:sub(3, 4), 16) / 255,
+                        blue  = tonumber(x:sub(5, 6), 16) / 255,
+                        alpha = 1,
+                    }
+                end
+
+                local bg     = hex(t.bg,     { red = 0.05, green = 0.04, blue = 0.03, alpha = 1 })
+                local txt    = hex(t.text,   { red = 0.94, green = 0.87, blue = 0.69, alpha = 1 })
+                local accent = hex(t.accent, { red = 0.77, green = 0.10, blue = 0.10, alpha = 1 })
+                local radius = type(t.radius) == "number" and math.max(0, t.radius) or 3
+
+                local font = "Helvetica"
+                if type(t.font) == "string" and #t.font > 0
+                    and not t.font:find("[/\\]") then
+                    font = t.font
+                end
+
+                local w, h = 360, 140
+                local c = hs.canvas.new({
+                    x = sf.x + math.floor((sf.w - w) / 2),
+                    y = sf.y + math.floor((sf.h - h) / 2),
+                    w = w, h = h,
+                })
+
+                c:level(hs.canvas.windowLevels.popUpMenu or 25)
+                c:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
+                c:appendElements(
+                    {
+                        type             = "rectangle",
+                        action           = "strokeAndFill",
+                        fillColor        = bg,
+                        strokeColor      = accent,
+                        strokeWidth      = 1,
+                        roundedRectRadii = { xRadius = radius, yRadius = radius },
+                    },
+                    {
+                        type          = "text",
+                        text          = "mudscript is restarting",
+                        textFont      = font,
+                        textSize      = 13,
+                        textColor     = txt,
+                        textAlignment = "center",
+                        frame         = { x = 0, y = h / 2 - 10, w = w, h = 24 },
+                    }
+                )
+                c:alpha(0)
+                c:show()
+                return c
+            end)
+
+            if not ok or not cv then return nil end
+
+            -- Fade in on the theme's own timing. Octane snaps, as everywhere.
+            if ms._octaneMode then
+                pcall(function() cv:alpha(1) end)
+                return cv
+            end
+
+            -- Held on ms so the timer is not collected mid-fade; the reload
+            -- takes it with everything else.
+            local step, steps = 0, 20
+            local fadeMs = (ms._theme and ms._theme.fadeMs) or 250
+            ms._restartFadeTimer = hs.timer.doEvery(fadeMs / 1000 / steps, function()
+                step = step + 1
+                pcall(function() cv:alpha(step / steps) end)
+                if step >= steps and ms._restartFadeTimer then
+                    ms._restartFadeTimer:stop()
+                    ms._restartFadeTimer = nil
+                end
+            end)
+
+            return cv
+        end
+
         -- ── Restart ───────────────────────────────────────────────────────
         -- Full reload's back end (⌥]). Same teardown as shutdown, because a
         -- reload is just as much of an exit — hs.reload() discards the whole
@@ -767,35 +862,19 @@ return function(ms)
                 ms.playSlot(slot)
             end
 
-            -- Raise the shutdown curtain with the restart wording, but only
-            -- when there is a shell on screen to raise it in: eval() queues
-            -- JS when the webview is not ready, and a queued curtain would
-            -- both never draw and be discarded by the reload anyway.
-            local curtain = false
-            if ms.shell and ms.shell.isReady and ms.shell.isReady()
-                and ms._shellState and ms._shellState.visible then
-                pcall(function()
-                    ms.shell.eval("showShutdownCurtain('restart')")
-                end)
-                curtain = true
-            end
+            -- Up before the teardown, and it stays up: it is what the screen
+            -- shows for the whole send-off, so the windows closing underneath
+            -- it is invisible instead of being the show.
+            ms._restartCurtainView = _restartCurtain()
 
-            -- Give the curtain a beat to be read before the teardown closes
-            -- the window out from under it — the same lead the shell takes on
-            -- the shutdown path. With no curtain there is nothing to look at,
-            -- so tear down at once. _waitForSlot works off the sample's start
-            -- time, so this lead comes out of the send-off rather than adding
-            -- to it either way.
-            hs.timer.doAfter(curtain and 0.9 or 0, function()
-                _teardown("restart")
+            _teardown("restart")
 
-                -- hs.reload() tears down the Lua state, and the sound handle
-                -- goes with it — so the wait is what makes the send-off
-                -- audible at all, not just a courtesy. The loading screen
-                -- picks up from here.
-                hs.timer.doAfter(_waitForSlot(slot), function()
-                    hs.reload()
-                end)
+            -- hs.reload() tears down the Lua state, and the sound handle goes
+            -- with it — so the wait is what makes the send-off audible at all,
+            -- not just a courtesy. The curtain holds the screen for exactly
+            -- that long, then the reload replaces it with the loading screen.
+            hs.timer.doAfter(_waitForSlot(slot), function()
+                hs.reload()
             end)
         end
 
