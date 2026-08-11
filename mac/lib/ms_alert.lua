@@ -85,7 +85,12 @@ return function(ms)
 
         local c = hs.canvas.new({ x = cx, y = y, w = cw, h = ch })
 
-        c:level(hs.canvas.windowLevels.popUpMenu or hs.canvas.windowLevels.status or 25)
+        -- One step above the shell/popouts/Guardian, which all sit at popUpMenu.
+        -- At an equal level macOS orders by recency, so the shell can end up
+        -- drawn over a toast and hide it; +1 keeps alerts reliably on top. The
+        -- exit curtain (screenSaver+1) and the loading screen (which suppresses
+        -- toasts on its own) still outrank this.
+        c:level((hs.canvas.windowLevels.popUpMenu or hs.canvas.windowLevels.status or 25) + 1)
         c:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
         c:alpha(alpha or 0)
 

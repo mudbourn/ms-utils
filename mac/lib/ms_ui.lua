@@ -2040,7 +2040,12 @@ return function(ms)
                 if not data.id then return end
                 local def = ms.registry._defs and ms.registry._defs[data.id]
                 if not def or not def.default then return end
-                ms.bindConfig[data.id] = { type = def.default.type, mods = {} }
+                -- Reset to default: drop the override entirely so effectiveBind
+                -- falls back to def.default, which re-nests the sub under its
+                -- parent AND restores the default modifier — (MOD)+(BASE).
+                -- Writing { type = parent, mods = {} } here re-attached the sub
+                -- but stripped its default modifier, collapsing it to bare BASE.
+                ms.bindConfig[data.id] = nil
                 ms.saveSettings()
                 ms.bind.rebind()
                 ms.playSlot("reset")
