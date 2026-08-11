@@ -58,7 +58,15 @@ const PARAM_DEFS = {
     "ms.pixelScan":     { region: "string" },
     "if":               { condition: "condition" },
     "while":            { condition: "condition" },
-    "for":              { var: "string", from: "number", to: "number" },
+    "repeat":           { condition: "condition" },
+    "for":              { var: "string", from: "number", to: "number", step: "number" },
+    "var_set":          { name: "string", value: "string" },
+    "var_add":          { name: "string", amount: "number" },
+    "var_sub":          { name: "string", amount: "number" },
+    "var_mul":          { name: "string", amount: "number" },
+    "comment":          { text: "string" },
+    // Raw Lua — reuse the multiline condition/expression editor widget.
+    "code":             { source: "condition" },
 };
 
 // Keys whose values should be hidden in the editor (structural, not user params).
@@ -540,10 +548,13 @@ class ToolEditor {
         );
         if (!stepEl) return;
 
-        // Close previous
-        if (this._open && this._toolSid !== sid) {
-            this._removePanel();
-        }
+        // Tear down any existing panel synchronously first — including the
+        // same-sid case. Previously this only ran when switching to a
+        // different sid, so re-selecting the same block (or a canvas re-render
+        // re-inject) overwrote this._panelEl and orphaned the old DOM node,
+        // which close() could no longer reach — leaving stacked, un-closeable
+        // editors (see bug report). _hardClose also sweeps any strays.
+        this._hardClose();
 
         this._toolSid = sid;
         this._toolEl  = stepEl;
@@ -595,6 +606,38 @@ class ToolEditor {
         this._removePanel();
         this._toolSid = null;
         this._toolEl  = null;
+    }
+
+    /**
+     * Synchronous, unconditional teardown. Removes listeners, the tracked
+     * panel, and any stray .tool-editor-panel nodes left under the canvas root
+     * by a prior re-inject — so panels can never accumulate. Unlike close(),
+     * this does not animate; it is used when re-opening, where the old panel
+     * must be gone before the new one is built.
+     */
+    _hardClose() {
+        this._cancelCapture();
+        if (this._onClickOutside) {
+            document.removeEventListener("click", this._onClickOutside, true);
+            this._onClickOutside = null;
+        }
+        document.removeEventListener("keydown", this._onEscape, true);
+
+        // Sweep every editor panel currently in the canvas, tracked or orphaned.
+        const root = this._canvas && this._canvas._root;
+        if (root) {
+            const strays = root.querySelectorAll(".tool-editor-panel");
+            for (let i = 0; i < strays.length; i++) {
+                const el = strays[i];
+                if (el.parentNode) el.parentNode.removeChild(el);
+            }
+        }
+        if (this._panelEl && this._panelEl.parentNode) {
+            this._panelEl.parentNode.removeChild(this._panelEl);
+        }
+        this._panelEl = null;
+        this._formEl  = null;
+        this._open    = false;
     }
 
     _removePanel() {

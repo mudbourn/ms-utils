@@ -38,6 +38,14 @@
                 return tostring(val)
             end
 
+            -- An unset identifier arrives from the builder as "" (not nil),
+            -- which is truthy in Lua — `p.name or "v"` would keep the empty
+            -- string and emit invalid code (`local  = 1`). Fall back explicitly.
+            local function ident(v, default)
+                if v == nil or v == "" then return default end
+                return v
+            end
+
             local function buildArgs(params, argOrder)
                 if not params or not argOrder then return "" end
                 local parts = {}
@@ -158,48 +166,67 @@
 
             emitters["var_set"] = function(step, lvl)
                 local p = step.params or {}
-                local name  = p.name or "v"
+                local name  = ident(p.name, "v")
                 local value = serialize(p.value)
                 return indent(lvl) .. "local " .. name .. " = " .. value
             end
 
             emitters["var_add"] = function(step, lvl)
                 local p = step.params or {}
-                local name   = p.name or "v"
+                local name   = ident(p.name, "v")
                 local amount = p.amount or 1
                 return indent(lvl) .. name .. " = " .. name .. " + " .. tostring(amount)
             end
 
             emitters["var_sub"] = function(step, lvl)
                 local p = step.params or {}
-                local name   = p.name or "v"
+                local name   = ident(p.name, "v")
                 local amount = p.amount or 1
                 return indent(lvl) .. name .. " = " .. name .. " - " .. tostring(amount)
             end
 
             emitters["var_mul"] = function(step, lvl)
                 local p = step.params or {}
-                local name   = p.name or "v"
+                local name   = ident(p.name, "v")
                 local amount = p.amount or 2
                 return indent(lvl) .. name .. " = " .. name .. " * " .. tostring(amount)
             end
 
             local _flowCounter = 0
 
+            -- The visual canvas (ToolCanvas) is the canonical shape: it stores
+            -- branches as step.then / step.else / step.body and the condition in
+            -- step.params.condition. Older/hand-authored JSON used step.condition
+            -- and step.then_steps / step.else_steps. Read both, canvas first.
+            local function stepCond(step)
+                local c = step.condition
+                if c == nil then c = step.params and step.params.condition end
+                -- An empty string is truthy in Lua and would emit `if  then`;
+                -- fall back to `true` so an unset condition is still valid code.
+                if c == nil or c == "" then c = "true" end
+                return c
+            end
+            -- `then`/`else` are reserved words, so the canvas keys must be
+            -- reached with bracket syntax rather than dot access.
+            local function thenSteps(step) return step["then"] or step.then_steps end
+            local function elseSteps(step) return step["else"] or step.else_steps end
+
             emitters["if"] = function(step, lvl)
-                local cond = step.condition or "true"
+                local cond = stepCond(step)
                 local lines = {}
                 lines[#lines + 1] = indent(lvl) .. "if " .. cond .. " then"
                 lines[#lines + 1] = indent(lvl + 1) .. "ms.log('if', '" .. cond:gsub("'", "\\'") .. "', true)"
-                if step.then_steps then
-                    for _, s in ipairs(step.then_steps) do
+                local ts = thenSteps(step)
+                if ts then
+                    for _, s in ipairs(ts) do
                         lines[#lines + 1] = emitStep(s, lvl + 1)
                     end
                 end
-                if step.else_steps then
+                local es = elseSteps(step)
+                if es and #es > 0 then
                     lines[#lines + 1] = indent(lvl) .. "else"
                     lines[#lines + 1] = indent(lvl + 1) .. "ms.log('if', '" .. cond:gsub("'", "\\'") .. "', false)"
-                    for _, s in ipairs(step.else_steps) do
+                    for _, s in ipairs(es) do
                         lines[#lines + 1] = emitStep(s, lvl + 1)
                     end
                 end
@@ -209,7 +236,7 @@
 
             emitters["for"] = function(step, lvl)
                 local p = step.params or {}
-                local varName = p.var or "i"
+                local varName = ident(p.var, "i")
                 local from    = p.from or 1
                 local to      = p.to or 1
                 local stepVal = p.step
@@ -232,7 +259,7 @@
             end
 
             emitters["while"] = function(step, lvl)
-                local cond = step.condition or "true"
+                local cond = stepCond(step)
                 local lines = {}
                 _flowCounter = _flowCounter + 1
                 local fc = "_fc" .. _flowCounter
@@ -250,7 +277,7 @@
             end
 
             emitters["repeat"] = function(step, lvl)
-                local cond = step.condition or "true"
+                local cond = stepCond(step)
                 local lines = {}
                 _flowCounter = _flowCounter + 1
                 local fc = "_fc" .. _flowCounter

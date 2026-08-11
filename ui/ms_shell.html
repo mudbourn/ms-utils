@@ -666,6 +666,14 @@
         .fn-entry.active { background: var(--surface2); color: var(--accent-hi); border-left-color: var(--accent); }
         .fn-entry-sig { font-family: var(--font-mono); font-size: 11px; }
         .fn-entry-label { color: var(--text3); font-size: 10px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+        /* Collapsible category headers in the module picker. */
+        .fn-cat-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; cursor: pointer; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text3); user-select: none; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+        .fn-cat-head:hover { color: var(--text2); }
+        .fn-cat-chev { display: flex; align-items: center; transition: transform 0.15s; }
+        .fn-cat-chev .icon { width: 12px; height: 12px; }
+        .fn-cat-head.collapsed .fn-cat-chev { transform: rotate(-90deg); }
+        .fn-cat-name { flex: 1; }
+        .fn-cat-count { color: var(--text3); font-weight: 400; opacity: 0.7; }
         .fn-picker-detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .fn-detail-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border-dim); }
         .fn-detail-name { font-family: var(--font-mono); font-size: 14px; color: var(--accent-hi); font-weight: 700; }
@@ -677,6 +685,8 @@
         .fn-param-type { font-size: 9px; font-weight: 400; color: var(--accent); background: var(--accent-glow-faint); padding: 1px 5px; border-radius: var(--radius-s); text-transform: none; letter-spacing: 0; }
         .fn-param input[type="text"], .fn-param input[type="number"] { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: var(--font-mono); user-select: text; -webkit-user-select: text; }
         .fn-param input:focus { border-color: var(--accent); }
+        .fn-code-input { width: 100%; box-sizing: border-box; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--accent-hi); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; padding: 5px 8px; outline: none; resize: vertical; min-height: 30px; user-select: text; -webkit-user-select: text; }
+        .fn-code-input:focus { border-color: var(--accent); }
         .fn-key-capture { display: flex; align-items: center; gap: 8px; }
         .fn-key-btn { background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 5px 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; min-width: 60px; text-align: center; user-select: text; -webkit-user-select: text; }
         .fn-key-btn:hover { border-color: var(--accent); }
@@ -717,6 +727,15 @@
         .macro-select-menu::-webkit-scrollbar { width: 4px; }
         .macro-select-menu::-webkit-scrollbar-track { background: transparent; }
         .macro-select-menu::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
+        /* Overflow "⋯" menu — holds the secondary toolbar actions so they never
+           clip at the shell's smallest width. Mirrors .macro-select-menu. */
+        .macro-overflow { position: relative; display: flex; }
+        .macro-overflow-btn { font-size: 14px; line-height: 1; padding: 4px 9px; }
+        .macro-overflow-menu { display: none; position: absolute; top: calc(100% + 3px); right: 0; min-width: 150px; flex-direction: column; gap: 4px; padding: 5px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+        .macro-overflow.open .macro-overflow-menu { display: flex; }
+        /* Buttons keep their .macro-toolbar-btn identity but lay out full-width,
+           left-aligned, as menu rows. */
+        .macro-overflow-menu .macro-toolbar-btn { justify-content: flex-start; width: 100%; gap: 6px; }
         .macro-toolbar-btn { display: flex; align-items: center; justify-content: center; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text2); font-size: 10px; font-weight: 700; padding: 4px 10px; cursor: pointer; transition: background 0.1s, border-color 0.1s, color 0.1s; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.4px; }
         .macro-toolbar-btn:hover { background: var(--hover); border-color: var(--border); color: var(--text); }
         .macro-toolbar-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
@@ -782,7 +801,9 @@
         .macros-add-tool-btn { position: absolute; bottom: 14px; right: 14px; display: flex; align-items: center; gap: 5px; background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius); font-size: 11px; font-weight: 700; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; text-transform: uppercase; letter-spacing: 0.5px; z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
         .macros-add-tool-btn:hover { opacity: 0.85; }
         .macros-add-tool-btn svg { width: 12px; height: 12px; }
-        .macros-add-tool-btn svg path { stroke: var(--bg); fill: none; }
+        /* The `add` glyph is a fill-style icon, so fill it (stroking it left a
+           thin outline mismatched against the bold button text). */
+        .macros-add-tool-btn svg path { fill: var(--bg); stroke: none; }
 
         /* ── Step Canvas ─────────────────────────────────────────────── */
         .tool-canvas { display: flex; flex-direction: column; gap: 2px; padding: 8px; min-height: 100%; overflow-y: auto; position: relative; }

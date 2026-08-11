@@ -473,6 +473,119 @@
                 desc: "Cancel all active macro coroutines.",
                 category: "flow",
                 params: []
+            },
+
+            /* ── logic ──────────────────────────────────────────────
+               Lua language constructs, not ms.* calls. `name` is the raw
+               action the compiler emits an emitter for (see ms_compiler.lua):
+               if / for / while / repeat are containers (they nest child
+               modules); var_* / comment / code are leaves. */
+            {
+                id: "if",
+                name: "if",
+                sig: "if <condition> then … else … end",
+                desc: "Branch: run the nested modules when a Lua condition is true, otherwise the else branch.",
+                category: "logic",
+                params: [
+                    { name: "condition", type: "condition", label: "Condition", required: false }
+                ]
+            },
+            {
+                id: "for",
+                name: "for",
+                sig: "for i = from, to do … end",
+                desc: "Numeric loop: run the nested modules once per step from `from` to `to`.",
+                category: "logic",
+                params: [
+                    { name: "var",  type: "string", label: "Variable", required: false },
+                    { name: "from", type: "number", label: "From",     required: false },
+                    { name: "to",   type: "number", label: "To",       required: false },
+                    { name: "step", type: "number", label: "Step",     required: false }
+                ]
+            },
+            {
+                id: "while",
+                name: "while",
+                sig: "while <condition> do … end",
+                desc: "Loop the nested modules while a Lua condition holds true.",
+                category: "logic",
+                params: [
+                    { name: "condition", type: "condition", label: "Condition", required: false }
+                ]
+            },
+            {
+                id: "repeat",
+                name: "repeat",
+                sig: "repeat … until <condition>",
+                desc: "Loop the nested modules until a Lua condition becomes true (runs at least once).",
+                category: "logic",
+                params: [
+                    { name: "condition", type: "condition", label: "Until", required: false }
+                ]
+            },
+            {
+                id: "var_set",
+                name: "var_set",
+                sig: "local name = value",
+                desc: "Declare or set a local variable.",
+                category: "logic",
+                params: [
+                    { name: "name",  type: "string", label: "Name",  required: true },
+                    { name: "value", type: "string", label: "Value", required: false }
+                ]
+            },
+            {
+                id: "var_add",
+                name: "var_add",
+                sig: "name = name + amount",
+                desc: "Increment a variable.",
+                category: "logic",
+                params: [
+                    { name: "name",   type: "string", label: "Name",   required: true },
+                    { name: "amount", type: "number", label: "Amount", required: false }
+                ]
+            },
+            {
+                id: "var_sub",
+                name: "var_sub",
+                sig: "name = name - amount",
+                desc: "Decrement a variable.",
+                category: "logic",
+                params: [
+                    { name: "name",   type: "string", label: "Name",   required: true },
+                    { name: "amount", type: "number", label: "Amount", required: false }
+                ]
+            },
+            {
+                id: "var_mul",
+                name: "var_mul",
+                sig: "name = name * amount",
+                desc: "Multiply a variable.",
+                category: "logic",
+                params: [
+                    { name: "name",   type: "string", label: "Name",   required: true },
+                    { name: "amount", type: "number", label: "Amount", required: false }
+                ]
+            },
+            {
+                id: "comment",
+                name: "comment",
+                sig: "-- text",
+                desc: "A Lua comment. Documents the macro; emits nothing at runtime.",
+                category: "logic",
+                params: [
+                    { name: "text", type: "string", label: "Text", required: false }
+                ]
+            },
+            {
+                id: "code",
+                name: "code",
+                sig: "<raw Lua>",
+                desc: "Raw Lua escape hatch — emitted verbatim. Use for coroutines or anything the modules don't cover.",
+                category: "logic",
+                params: [
+                    { name: "source", type: "code", label: "Lua source", required: false }
+                ]
             }
         ];
 
@@ -500,7 +613,7 @@
         searchBox.className = "fn-picker-search";
         var searchInput = document.createElement("input");
         searchInput.type = "text";
-        searchInput.placeholder = "Search ms.* functions\u2026";
+        searchInput.placeholder = "Search modules\u2026";
         searchInput.setAttribute("spellcheck", "false");
         searchInput.setAttribute("autocomplete", "off");
         searchInput.setAttribute("autocorrect", "off");
@@ -515,7 +628,7 @@
         // Right: detail
         var detailPane = document.createElement("div");
         detailPane.className = "fn-picker-detail";
-        detailPane.innerHTML = '<div class="fn-detail-empty"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.6582 9.28638C18.098 10.1862 18.8178 10.6361 19.0647 11.2122C19.2803 11.7152 19.2803 12.2847 19.0647 12.7878C18.8178 13.3638 18.098 13.8137 16.6582 14.7136L9.896 18.94C8.29805 19.9387 7.49907 20.4381 6.83973 20.385C6.26501 20.3388 5.73818 20.0469 5.3944 19.584C5 19.053 5 18.1108 5 16.2264V7.77357C5 5.88919 5 4.94701 5.3944 4.41598C5.73818 3.9531 6.26501 3.66111 6.83973 3.6149C7.49907 3.5619 8.29805 4.06126 9.896 5.05998L16.6582 9.28638Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Select a function from the list</div>';
+        detailPane.innerHTML = '<div class="fn-detail-empty"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.6582 9.28638C18.098 10.1862 18.8178 10.6361 19.0647 11.2122C19.2803 11.7152 19.2803 12.2847 19.0647 12.7878C18.8178 13.3638 18.098 13.8137 16.6582 14.7136L9.896 18.94C8.29805 19.9387 7.49907 20.4381 6.83973 20.385C6.26501 20.3388 5.73818 20.0469 5.3944 19.584C5 19.053 5 18.1108 5 16.2264V7.77357C5 5.88919 5 4.94701 5.3944 4.41598C5.73818 3.9531 6.26501 3.66111 6.83973 3.6149C7.49907 3.5619 8.29805 4.06126 9.896 5.05998L16.6582 9.28638Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Select a module from the list</div>';
 
         root.appendChild(listPane);
         root.appendChild(detailPane);
@@ -526,11 +639,39 @@
         toast.className = "fn-toast";
         document.body.appendChild(toast);
 
-        /* ── Render Function List ──────────────────────────────────── */
+        /* ── Render Function List ──────────────────────────────────────
+           Grouped by category into collapsible sections, in REGISTRY order.
+           A search query flattens the collapse — every matching category is
+           forced open so results are never hidden behind a folded header. */
+        var _catCollapsed = {};   // category -> true when folded shut
+
+        function makeEntryRow(fn) {
+            var row = document.createElement("div");
+            row.className = "fn-entry" + (_selectedId === fn.id ? " active" : "");
+            row.setAttribute("data-fn-id", fn.id);
+
+            var sigSpan = document.createElement("span");
+            sigSpan.className = "fn-entry-sig";
+            sigSpan.textContent = fn.name;
+            row.appendChild(sigSpan);
+
+            row.addEventListener("click", function() {
+                selectFunction(fn.id);
+            });
+            row.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
+            return row;
+        }
+
         function renderList(filter) {
             entriesDiv.innerHTML = "";
             var q = (filter || "").toLowerCase();
-            var visible = [];
+            var searching = q.length > 0;
+
+            // Group visible entries by category, preserving REGISTRY order.
+            var order = [];
+            var groups = {};
             for (var i = 0; i < REGISTRY.length; i++) {
                 var fn = REGISTRY[i];
                 if (q && fn.name.toLowerCase().indexOf(q) === -1
@@ -538,31 +679,55 @@
                        && fn.category.toLowerCase().indexOf(q) === -1) {
                     continue;
                 }
-                visible.push(fn);
+                var c = fn.category || "other";
+                if (!groups[c]) { groups[c] = []; order.push(c); }
+                groups[c].push(fn);
             }
-            for (var j = 0; j < visible.length; j++) {
-                (function(fn) {
-                    var row = document.createElement("div");
-                    row.className = "fn-entry" + (_selectedId === fn.id ? " active" : "");
-                    row.setAttribute("data-fn-id", fn.id);
 
-                    var sigSpan = document.createElement("span");
-                    sigSpan.className = "fn-entry-sig";
-                    sigSpan.textContent = fn.name;
-                    row.appendChild(sigSpan);
+            order.forEach(function(cat) {
+                var collapsed = searching ? false : !!_catCollapsed[cat];
 
-                    var catSpan = document.createElement("span");
-                    catSpan.className = "fn-entry-label";
-                    catSpan.textContent = fn.category;
-                    row.appendChild(catSpan);
+                var head = document.createElement("div");
+                head.className = "fn-cat-head" + (collapsed ? " collapsed" : "");
 
-                    row.addEventListener("click", function() {
-                        selectFunction(fn.id);
+                var chev = document.createElement("span");
+                chev.className = "fn-cat-chev";
+                chev.innerHTML = (typeof window.icon === "function"
+                    && window.ICONS && window.ICONS.chevdown)
+                    ? window.icon("chevdown") : "";
+                head.appendChild(chev);
+
+                var name = document.createElement("span");
+                name.className = "fn-cat-name";
+                name.textContent = cat;
+                head.appendChild(name);
+
+                var count = document.createElement("span");
+                count.className = "fn-cat-count";
+                count.textContent = String(groups[cat].length);
+                head.appendChild(count);
+
+                head.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
+                // While searching the sections are forced open, so the header
+                // is inert — toggling collapse state would just be undone by
+                // the next keystroke's re-render.
+                if (!searching) {
+                    head.addEventListener("click", function() {
+                        if (window.playSlot) playSlot("interact");
+                        _catCollapsed[cat] = !_catCollapsed[cat];
+                        renderList(filter);
                     });
+                }
+                entriesDiv.appendChild(head);
 
-                    entriesDiv.appendChild(row);
-                })(visible[j]);
-            }
+                if (!collapsed) {
+                    groups[cat].forEach(function(fn) {
+                        entriesDiv.appendChild(makeEntryRow(fn));
+                    });
+                }
+            });
         }
 
         /* ── Select Function ───────────────────────────────────────── */
@@ -627,7 +792,7 @@
 
             // Footer
             html += '<div class="fn-detail-footer">';
-            html += '<button class="fn-add-btn" id="fn-add-btn">Add Tool</button>';
+            html += '<button class="fn-add-btn" id="fn-add-btn">Add Module</button>';
             html += '<span class="fn-tool-preview" id="fn-tool-preview"></span>';
             html += '</div>';
 
@@ -678,6 +843,14 @@
                     }
                     html += '</div>';
                     break;
+
+                case "condition":
+                    html += '<textarea class="fn-code-input" data-param="' + esc(p.name) + '" rows="1" placeholder="Lua expression…" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>';
+                    break;
+
+                case "code":
+                    html += '<textarea class="fn-code-input" data-param="' + esc(p.name) + '" rows="3" placeholder="Lua source…" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>';
+                    break;
             }
 
             html += '</div>';
@@ -686,8 +859,8 @@
 
         /* ── Wire up input events ──────────────────────────────────── */
         function wireParamInputs(fn) {
-            // Text and number inputs
-            var inputs = detailPane.querySelectorAll("input[data-param]");
+            // Text and number inputs, plus condition/code textareas.
+            var inputs = detailPane.querySelectorAll("input[data-param], textarea[data-param]");
             for (var i = 0; i < inputs.length; i++) {
                 (function(inp) {
                     var name = inp.getAttribute("data-param");
@@ -699,6 +872,11 @@
                         }
                         updatePreview(fn);
                     });
+                    // Textareas capture typing that would otherwise reach the
+                    // canvas/key-capture handlers.
+                    if (inp.tagName === "TEXTAREA") {
+                        inp.addEventListener("keydown", function(e) { e.stopPropagation(); });
+                    }
                 })(inputs[i]);
             }
 
@@ -937,7 +1115,9 @@
         "ms.saveCursor":"select","ms.restoreCursor":"select",
         "ms.setVolume":"sound","ms.mute":"sound","ms.unmute":"sound",
         "ms.drag":"drag",
-        "if":"branch","for":"loop","while":"repeat","else":"branch"
+        "if":"branch","for":"loop","while":"repeat","repeat":"repeat","else":"branch",
+        "var_set":"variable","var_add":"variable","var_sub":"variable","var_mul":"variable",
+        "comment":"inputs","code":"macros"
     };
 
     function iconFor(action) { return ACTION_ICON[action] || "macros"; }
@@ -947,8 +1127,15 @@
         if (!params) return "";
         var keys = Object.keys(params);
         if (keys.length === 0) return "";
-        if (action === "if" || action === "while") return params.condition || "";
+        if (action === "if" || action === "while" || action === "repeat") return params.condition || "";
         if (action === "for") return (params.var||"i") + " = " + (params.from||1) + " → " + (params.to||1);
+        if (action === "comment") return params.text || "";
+        if (action === "code") return (params.source||"").split("\n")[0] || "";
+        if (action === "var_set") return (params.name||"v") + " = " + (params.value!==undefined?params.value:"");
+        if (action === "var_add" || action === "var_sub" || action === "var_mul") {
+            var op = action==="var_add"?"+":action==="var_sub"?"-":"*";
+            return (params.name||"v") + " " + op + "= " + (params.amount!==undefined?params.amount:1);
+        }
         var parts = [];
         for (var i = 0; i < Math.min(keys.length, 2); i++) {
             var k = keys[i], v = params[k];
@@ -1008,9 +1195,22 @@
         this._render();
     };
 
+    // Container actions carry nested child lists. Seed them on insert so the
+    // block renders its droppable "then/else/body" nests immediately, even
+    // before anything is dropped in.
+    function seedContainer(step) {
+        if (step.action === "if") {
+            if (!step.then) step.then = [];
+            if (!step.else) step.else = [];
+        } else if (step.action === "for" || step.action === "while" || step.action === "repeat") {
+            if (!step.body) step.body = [];
+        }
+    }
+
     ToolCanvas.prototype.addTool = function(def, afterId) {
         var step = deepClone(def);
         step._sid = nextToolId();
+        seedContainer(step);
         this._map[step._sid] = step;
         if (afterId) {
             var idx = this._findIdx(this._tools, afterId);
@@ -1095,12 +1295,12 @@
         this._root.innerHTML = "";
         var d = document.createElement("div");
         d.className = "tool-canvas-empty";
-        d.innerHTML = '<span class="tool-canvas-empty-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.6582 9.28638C18.098 10.1862 18.8178 10.6361 19.0647 11.2122C19.2803 11.7152 19.2803 12.2847 19.0647 12.7878C18.8178 13.3638 18.098 13.8137 16.6582 14.7136L9.896 18.94C8.29805 19.9387 7.49907 20.4381 6.83973 20.385C6.26501 20.3388 5.73818 20.0469 5.3944 19.584C5 19.053 5 18.1108 5 16.2264V7.77357C5 5.88919 5 4.94701 5.3944 4.41598C5.73818 3.9531 6.26501 3.66111 6.83973 3.6149C7.49907 3.5619 8.29805 4.06126 9.896 5.05998L16.6582 9.28638Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>No tools yet<br><span style="font-size:10px">Click <b>+ Add Tool</b> to begin</span>';
+        d.innerHTML = '<span class="tool-canvas-empty-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.6582 9.28638C18.098 10.1862 18.8178 10.6361 19.0647 11.2122C19.2803 11.7152 19.2803 12.2847 19.0647 12.7878C18.8178 13.3638 18.098 13.8137 16.6582 14.7136L9.896 18.94C8.29805 19.9387 7.49907 20.4381 6.83973 20.385C6.26501 20.3388 5.73818 20.0469 5.3944 19.584C5 19.053 5 18.1108 5 16.2264V7.77357C5 5.88919 5 4.94701 5.3944 4.41598C5.73818 3.9531 6.26501 3.66111 6.83973 3.6149C7.49907 3.5619 8.29805 4.06126 9.896 5.05998L16.6582 9.28638Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>No modules yet<br><span style="font-size:10px">Click <b>+ Add Module</b> to begin</span>';
         this._root.appendChild(d);
     };
 
     ToolCanvas.prototype._isContainer = function(s) {
-        return s.action==="if" || s.action==="for" || s.action==="while";
+        return s.action==="if" || s.action==="for" || s.action==="while" || s.action==="repeat";
     };
 
     ToolCanvas.prototype._renderTool = function(step) {
@@ -1536,26 +1736,53 @@
     saveBtn.textContent = "Save";
     toolbar.appendChild(saveBtn);
 
+    // Secondary actions live under an overflow "⋯" menu so the toolbar never
+    // clips them when the shell is shrunk to its smallest width (Test/Record/
+    // Delete/Edit File used to run off the edge). New/Save/Bind stay inline.
+    var overflowWrap = document.createElement("div");
+    overflowWrap.className = "macro-overflow";
+    var overflowBtn = document.createElement("button");
+    overflowBtn.className = "macro-toolbar-btn macro-overflow-btn";
+    overflowBtn.textContent = "⋯"; // ⋯
+    overflowBtn.title = "More actions";
+    var overflowMenu = document.createElement("div");
+    overflowMenu.className = "macro-overflow-menu";
+    overflowWrap.appendChild(overflowBtn);
+    overflowWrap.appendChild(overflowMenu);
+
+    function closeOverflow() { overflowWrap.classList.remove("open"); }
+    overflowBtn.addEventListener("mouseenter", function() {
+        if (window.playSlot) playSlot("hover");
+    });
+    overflowBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        if (!overflowWrap.classList.contains("open") && window.playSlot) playSlot("interact");
+        overflowWrap.classList.toggle("open");
+    });
+    // A menu item's own handler still runs; close the menu after any click in it.
+    overflowMenu.addEventListener("click", function() { closeOverflow(); });
+    document.addEventListener("click", closeOverflow);
+
     // Test Run button
     var testBtn = document.createElement("button");
     testBtn.className = "macro-toolbar-btn";
     testBtn.textContent = "\u25b6 Test";
     testBtn.title = "Test Run current macro";
-    toolbar.appendChild(testBtn);
+    overflowMenu.appendChild(testBtn);
 
     // Record button
     var recordBtn = document.createElement("button");
     recordBtn.className = "macro-toolbar-btn";
     recordBtn.innerHTML = '<span class="macro-rec-dot" style="display:none"></span> Record';
-    recordBtn.title = "Record user actions into tools";
-    toolbar.appendChild(recordBtn);
+    recordBtn.title = "Record user actions into modules";
+    overflowMenu.appendChild(recordBtn);
 
     // Delete button
     var delMacroBtn = document.createElement("button");
     delMacroBtn.className = "macro-toolbar-btn danger";
     delMacroBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 12L14 16M14 12L10 16M4 6H20M16 6L15.7294 5.18807C15.4671 4.40125 15.3359 4.00784 15.0927 3.71698C14.8779 3.46013 14.6021 3.26132 14.2905 3.13878C13.9376 3 13.523 3 12.6936 3H11.3064C10.477 3 10.0624 3 9.70951 3.13878C9.39792 3.26132 9.12208 3.46013 8.90729 3.71698C8.66405 4.00784 8.53292 4.40125 8.27064 5.18807L8 6M18 6V16.2C18 17.8802 18 18.7202 17.673 19.362C17.3854 19.9265 16.9265 20.3854 16.362 20.673C15.7202 21 14.8802 21 13.2 21H10.8C9.11984 21 8.27976 21 7.63803 20.673C7.07354 20.3854 6.6146 19.9265 6.32698 19.362C6 18.7202 6 17.8802 6 16.2V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     delMacroBtn.title = "Delete macro";
-    toolbar.appendChild(delMacroBtn);
+    overflowMenu.appendChild(delMacroBtn);
 
     // Edit raw macro file — the escape hatch for anything the visual builder
     // doesn't cover. Lives here, with the builder that owns ms_macros.lua,
@@ -1564,7 +1791,9 @@
     editFileBtn.className = "macro-toolbar-btn";
     editFileBtn.textContent = "Edit File";
     editFileBtn.title = "Open ms_macros.lua in your editor";
-    toolbar.appendChild(editFileBtn);
+    overflowMenu.appendChild(editFileBtn);
+
+    toolbar.appendChild(overflowWrap);
 
     // ── Main area ──
     var mainArea = document.createElement("div");
@@ -1583,7 +1812,7 @@
     // Floating add-tool button
     var addToolBtn = document.createElement("button");
     addToolBtn.className = "macros-add-tool-btn";
-    addToolBtn.innerHTML = (_svgCache["add"] || "+") + " Add Tool";
+    addToolBtn.innerHTML = (_svgCache["add"] || "+") + " Add Module";
     toolArea.appendChild(addToolBtn);
 
     // Test run / recording toast
@@ -1599,7 +1828,7 @@
     overlayHeader.className = "fn-picker-overlay-header";
     var overlayTitle = document.createElement("span");
     overlayTitle.className = "fn-picker-overlay-title";
-    overlayTitle.textContent = "Add Tool";
+    overlayTitle.textContent = "Add Module";
     overlayHeader.appendChild(overlayTitle);
     var overlayClose = document.createElement("div");
     overlayClose.className = "fn-picker-overlay-close";
@@ -1719,7 +1948,7 @@
 
     /* ── Preload add icon ────────────────────────────────────────── */
     _fetchSVG("add").then(function(svg) {
-        if (svg) addToolBtn.innerHTML = svg + " Add Tool";
+        if (svg) addToolBtn.innerHTML = svg + " Add Module";
     });
     _fetchSVG("close").then(function(svg) {
         if (svg) overlayClose.innerHTML = svg;

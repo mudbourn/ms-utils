@@ -4291,6 +4291,22 @@
                                         return function(id, a, b)
                                             local opts = type(a) == "table" and a or (type(b) == "table" and b or {})
                                             opts.system = false
+                                            -- Coexistence guard: handwritten
+                                            -- ms_macros.lua loads first, so any id
+                                            -- already in the registry belongs to it
+                                            -- (or to a system bind). The visual
+                                            -- compiler load runs after, so a
+                                            -- colliding visual macro is skipped
+                                            -- rather than silently clobbering the
+                                            -- hand-authored one.
+                                            if type(id) == "string"
+                                                and ms.registry and ms.registry._defs
+                                                and ms.registry._defs[id] then
+                                                print("ms.bind.define: skipping duplicate id '"
+                                                    .. id .. "' — already registered "
+                                                    .. "(handwritten macros win over visual).")
+                                                return
+                                            end
                                             return ms.bind.define(id, a, b)
                                         end
                                     end
@@ -4508,6 +4524,28 @@
                     error("ms_macros.lua: no ms.bind.define calls found — file may be malformed.")
                 end
             end
+
+            -- 14a. Visual Macros (builder-authored) --
+                -- The visual builder writes data/ms_macros_visual.json and the
+                -- compiler emits data/ms_macros_visual.lua from it. That file is
+                -- loaded here — AFTER handwritten ms_macros.lua has registered —
+                -- into the same ms._macroSandbox, so builder macros and
+                -- hand-authored ones coexist. rebuild-then-load keeps the .lua in
+                -- sync with the .json; both no-op when no visual macros exist.
+                -- Never fatal: a broken visual file must not take down boot, so
+                -- both steps are pcall'd and only warn.
+                if ms.compiler and ms.compiler.paths
+                    and hs.fs.attributes(ms.compiler.paths.json) then
+                    local rebOk, rebErr = pcall(ms.compiler.rebuild)
+                    if not rebOk then
+                        print("ms.compiler.rebuild (boot): " .. tostring(rebErr))
+                    end
+                    local ldOk, ldErr = pcall(ms.compiler.load)
+                    if not ldOk then
+                        print("ms.compiler.load (boot): " .. tostring(ldErr))
+                    end
+                end
+            -- END 14a. Visual Macros --
 
             ms.macroDefaults = {
                 trackpadMode = false,
