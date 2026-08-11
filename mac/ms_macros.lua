@@ -50,6 +50,64 @@
         })
     -- END Ref Sensitivity --
 
+    -- Reference Resolution --
+        ms.settings.define({
+            type = "groupLabel",
+            label = "Reference Resolution",
+            section = "calibration"
+        })
+
+        ms.settings.define({
+            type    = "toggle",
+            key     = "refScaling",
+            label   = "Scale To Window",
+            hint    = "Scale Window-relative points to the live window size. Off = raw pixel offsets from the reference resolution",
+            default = true,
+            save    = true,
+            section = "calibration",
+            onChange = function(on)
+                ms.setReferenceScaling(on)
+            end,
+        })
+
+        ms.settings.define({
+            type    = "slider",
+            key     = "refWidth",
+            label   = "Reference Width",
+            hint    = "Window width (px) the macro coordinates were captured at",
+            min     = 640,
+            max     = 3840,
+            step    = 1,
+            default = 1680,
+            save    = true,
+            section = "calibration",
+            onChange = function(w)
+                ms.setReferenceResolution(w, nil)
+            end,
+        })
+
+        ms.settings.define({
+            type    = "slider",
+            key     = "refHeight",
+            label   = "Reference Height",
+            hint    = "Window height (px) the macro coordinates were captured at",
+            min     = 480,
+            max     = 2160,
+            step    = 1,
+            default = 1044,
+            save    = true,
+            section = "calibration",
+            onChange = function(h)
+                ms.setReferenceResolution(nil, h)
+            end,
+        })
+
+        ms.settings.define({
+            type = "divider",
+            section = "calibration"
+        })
+    -- END Reference Resolution --
+
     -- Click Level --
         ms.settings.define({
             key     = "clickLevel",

@@ -502,6 +502,16 @@
             REF_W = REF_W or 1680
             REF_H = REF_H or 1044
             REF_SENS = REF_SENS or 1.5
+            -- Reference resolution & scaling — the values the point resolver
+            -- actually reads. They seed from the REF_W/REF_H globals but a macro
+            -- pack retargets them at runtime through ms.settings (see
+            -- ms.setReferenceResolution / ms.setReferenceScaling, defined in the
+            -- Resolution & Window Scaling section). ms._refScaling gates
+            -- Window-relative scaling: when false, Window* points are placed at
+            -- raw offsets, as if every call had passed Unscaled.
+            ms._refW       = ms._refW or REF_W
+            ms._refH       = ms._refH or REF_H
+            if ms._refScaling == nil then ms._refScaling = true end
             Move        = "Move";    Click       = "Click";    DoubleClick = "DoubleClick"
             TripleClick = "TripleClick";   Drag   = "Drag";    Press       = "Press";    Release     = "Release"
             Left        = "Left";    Right       = "Right";   Center      = "Center"
@@ -1726,15 +1736,32 @@
                 return f.x + (f.w / 2), f.y + (f.h / 2)
             end
 
+            -- Reference resolution the resolver scales against. Kept in sync
+            -- with the REF_W/REF_H globals so older code that reads them keeps
+            -- working. Macro packs drive these via ms.settings (see ms_macros).
+            ms.setReferenceResolution = function(w, h)
+                if type(w) == "number" and w > 0 then ms._refW = w; REF_W = w end
+                if type(h) == "number" and h > 0 then ms._refH = h; REF_H = h end
+            end
+
+            -- Toggle Window-relative scaling. When off, Window* points are
+            -- placed at raw offsets (as if every call passed Unscaled).
+            ms.setReferenceScaling = function(on)
+                ms._refScaling = (on ~= false)
+            end
+
             ms.getScaled = function(targetX, targetY)
+                local RW, RH = ms._refW or REF_W, ms._refH or REF_H
                 local win = ms.getTargetWin() or hs.window.focusedWindow()
                 if not win then
+                    if ms._refScaling == false then return targetX, targetY end
                     local screen = hs.screen.mainScreen():frame()
-                    return targetX * (screen.w / REF_W), targetY * (screen.h / REF_H)
+                    return targetX * (screen.w / RW), targetY * (screen.h / RH)
                 end
                 local f = win:frame()
-                local finalX = f.x + (targetX * (f.w / REF_W))
-                local finalY = f.y + (targetY * (f.h / REF_H))
+                if ms._refScaling == false then return f.x + targetX, f.y + targetY end
+                local finalX = f.x + (targetX * (f.w / RW))
+                local finalY = f.y + (targetY * (f.h / RH))
                 return finalX, finalY
             end
 
@@ -1742,30 +1769,34 @@
                 local win = ms.getTargetWin() or hs.window.focusedWindow()
                 local f   = win and win:frame()
                 local s   = hs.screen.mainScreen():frame()
+                local RW, RH = ms._refW or REF_W, ms._refH or REF_H
+                -- Scale Window* points unless the caller opted out (Unscaled)
+                -- or the user turned reference scaling off entirely.
+                local scaled = (ms._refScaling ~= false) and not unscaled
                 if     reference == "Absolute"     then return x, y
                 elseif reference == "Mouse"        then
                     local p = hs.mouse.absolutePosition()
                     return p.x + x, p.y + y
                 elseif reference == "WindowTL"     then
                     if not f then return x, y end
-                    if unscaled then return f.x + x,         f.y + y         end
-                    return f.x + (x * f.w / REF_W), f.y + (y * f.h / REF_H)
+                    if not scaled then return f.x + x,         f.y + y         end
+                    return f.x + (x * f.w / RW), f.y + (y * f.h / RH)
                 elseif reference == "WindowTR"     then
                     if not f then return x, y end
-                    if unscaled then return f.x + f.w + x,   f.y + y         end
-                    return f.x + f.w + (x * f.w / REF_W), f.y + (y * f.h / REF_H)
+                    if not scaled then return f.x + f.w + x,   f.y + y         end
+                    return f.x + f.w + (x * f.w / RW), f.y + (y * f.h / RH)
                 elseif reference == "WindowBL"     then
                     if not f then return x, y end
-                    if unscaled then return f.x + x,         f.y + f.h + y   end
-                    return f.x + (x * f.w / REF_W), f.y + f.h + (y * f.h / REF_H)
+                    if not scaled then return f.x + x,         f.y + f.h + y   end
+                    return f.x + (x * f.w / RW), f.y + f.h + (y * f.h / RH)
                 elseif reference == "WindowBR"     then
                     if not f then return x, y end
-                    if unscaled then return f.x + f.w + x,   f.y + f.h + y   end
-                    return f.x + f.w + (x * f.w / REF_W), f.y + f.h + (y * f.h / REF_H)
+                    if not scaled then return f.x + f.w + x,   f.y + f.h + y   end
+                    return f.x + f.w + (x * f.w / RW), f.y + f.h + (y * f.h / RH)
                 elseif reference == "WindowCenter" then
                     if not f then return x, y end
-                    if unscaled then return f.x + f.w/2 + x, f.y + f.h/2 + y end
-                    return f.x + f.w/2 + (x * f.w / REF_W), f.y + f.h/2 + (y * f.h / REF_H)
+                    if not scaled then return f.x + f.w/2 + x, f.y + f.h/2 + y end
+                    return f.x + f.w/2 + (x * f.w / RW), f.y + f.h/2 + (y * f.h / RH)
                 elseif reference == "ScreenTL"     then return s.x + x,         s.y + y
                 elseif reference == "ScreenTR"     then return s.x + s.w + x,   s.y + y
                 elseif reference == "ScreenBL"     then return s.x + x,         s.y + s.h + y
@@ -1790,7 +1821,9 @@
                         string.format("Full Screen: %s", tostring(win:isFullScreen())),
                         "-------------------------",
                         string.format("Monitor Size: %.0f x %.0f", screen.w, screen.h),
-                        string.format("Reference Target: %d x %d", REF_W or 1680, REF_H or 1044),
+                        string.format("Reference Target: %d x %d (scaling %s)",
+                            ms._refW or REF_W or 1680, ms._refH or REF_H or 1044,
+                            (ms._refScaling ~= false) and "on" or "off"),
                         "-------------------------",
                         string.format("Aspect Ratio: %.2f", currentRatio),
                         string.format("Camera Sensitivity: %.2f", currentSens),
