@@ -1816,21 +1816,79 @@
         var acts = document.createElement("div");
         acts.className = "bind-acts";
 
-        acts.appendChild(bindPill(m.bind, function() {
-            shellPost("macros", "startRebind", {
-                action:     "startRebind",
-                id:         m.id,
-                systemBind: m.systemBind || false,
+        // A sub-bind's trigger is inherited from its parent — only its modifier
+        // is its own. Rebinding it as a whole key would sever it from the parent
+        // and turn it into a standalone bind, so its pill drives the modifier
+        // flow (startModRebind), and its reset clears the modifier rather than
+        // resetting a bind that doesn't independently exist.
+        if (isSub) {
+            // A sub-bind inherits its parent's trigger and owns only its
+            // modifier. Two rebind modes: "Mod" changes just that modifier and
+            // stays attached to the parent; "Full" captures a whole new trigger
+            // and branches this bind off into its own adjacent top-level bind.
+            // The mode toggle drives which flow the pill starts.
+            var mode = { full: false };
+            var modeBtn = document.createElement("button");
+            modeBtn.className = "bind-act bind-mode-toggle";
+            function syncMode() {
+                modeBtn.textContent = mode.full ? "Full" : "Mod";
+                modeBtn.title = mode.full
+                    ? "Full rebind — branches this off into its own bind"
+                    : "Modifier only — stays attached to the parent";
+            }
+            syncMode();
+            modeBtn.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
             });
-        }, "Click to rebind"));
+            modeBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                if (window.playSlot) playSlot("interact");
+                mode.full = !mode.full;
+                syncMode();
+            });
 
-        acts.appendChild(iconBtn("refresh", "Reset to default bind", function() {
-            shellPost("macros", "resetBind", {
-                action:     "resetBind",
-                id:         m.id,
-                systemBind: m.systemBind || false,
-            });
-        }));
+            acts.appendChild(bindPill(m.bind, function() {
+                if (mode.full) {
+                    shellPost("macros", "startRebind", {
+                        action:     "startRebind",
+                        id:         m.id,
+                        systemBind: false,
+                    });
+                } else {
+                    shellPost("macros", "startModRebind", {
+                        action: "startModRebind",
+                        id:     m.id,
+                    });
+                }
+            }, "Click to rebind — Mod/Full toggle selects the mode"));
+
+            acts.appendChild(modeBtn);
+
+            // Clearing writes the derived link back (re-nesting a severed
+            // sub) and drops the modifier.
+            acts.appendChild(iconBtn("refresh", "Clear modifier / re-attach to parent", function() {
+                shellPost("macros", "clearModifier", {
+                    action: "clearModifier",
+                    id:     m.id,
+                });
+            }));
+        } else {
+            acts.appendChild(bindPill(m.bind, function() {
+                shellPost("macros", "startRebind", {
+                    action:     "startRebind",
+                    id:         m.id,
+                    systemBind: m.systemBind || false,
+                });
+            }, "Click to rebind"));
+
+            acts.appendChild(iconBtn("refresh", "Reset to default bind", function() {
+                shellPost("macros", "resetBind", {
+                    action:     "resetBind",
+                    id:         m.id,
+                    systemBind: m.systemBind || false,
+                });
+            }));
+        }
 
         // System binds are always live; only real macros can be disabled.
         if (!isSub && m.group !== "system" && !m.systemBind) {

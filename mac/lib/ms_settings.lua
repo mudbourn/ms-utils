@@ -225,8 +225,14 @@ return function(ms)
                         ms.binds[id] = entry.enabled
                     end
                     if entry.bind then
+                        -- Restore any saved override for a still-registered bind.
+                        -- The old guard skipped every bind whose default had a
+                        -- `.type` — i.e. all of them — so confirmed rebinds were
+                        -- dropped on the next boot/macro-reload and appeared not
+                        -- to take. Derived binds (sub-bind modifier changes and
+                        -- full-rebind severs) load here too.
                         local def = ms.registry._defs and ms.registry._defs[id]
-                        if def and not (def.default and def.default.type) then
+                        if def and type(entry.bind) == "table" and entry.bind.type then
                             ms.bindConfig[id] = entry.bind
                         end
                     end
@@ -390,21 +396,26 @@ return function(ms)
                 local regEntry = ms.registry._defs and ms.registry._defs[id]
                 local def = regEntry and regEntry.default
                 if def then
-                    local isDifferent = false
-                    if cfg.type ~= def.type then
-                        isDifferent = true
-                    elseif cfg.type == "mouse" and cfg.button ~= def.button then
-                        isDifferent = true
-                    elseif cfg.type == "scroll" and cfg.direction ~= def.direction then
-                        isDifferent = true
-                    elseif cfg.type == "gamepad" and cfg.button ~= def.button then
-                        isDifferent = true
-                    elseif cfg.type == "key" then
-                        local cfgMods = table.concat(cfg.mods or {}, "+")
-                        local defMods = table.concat(def.mods or {}, "+")
-                        if cfg.key ~= def.key or cfgMods ~= defMods then isDifferent = true end
+                    -- Canonical compare across every trigger shape — including
+                    -- derived sub-bind modifier changes (type = <parentId>) and
+                    -- chords (type = "combo", carrying `keys`), which the old
+                    -- per-field chain silently treated as identical to default
+                    -- and never persisted. Persist only genuine overrides.
+                    local function canon(x)
+                        if type(x) ~= "table" then return tostring(x) end
+                        local mods = {}
+                        for _, m in ipairs(x.mods or {}) do mods[#mods + 1] = m end
+                        table.sort(mods)
+                        local keys = {}
+                        for _, k in ipairs(x.keys or {}) do keys[#keys + 1] = k end
+                        table.sort(keys)
+                        return table.concat({
+                            tostring(x.type), tostring(x.key), tostring(x.button),
+                            tostring(x.direction), table.concat(mods, "+"),
+                            table.concat(keys, "+"),
+                        }, "|")
                     end
-                    if isDifferent then
+                    if canon(cfg) ~= canon(def) then
                         data.macros[id] = data.macros[id] or {}
                         data.macros[id].bind = cfg
                     end

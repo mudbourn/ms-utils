@@ -974,7 +974,18 @@
                                     if (not binding.mods.ctrl)  ~= (not flags.ctrl)  then modsMatch = false end
                                     if (not binding.mods.shift) ~= (not flags.shift) then modsMatch = false end
                                 end
-                                if modsMatch then
+                                -- Chord binds (ms.keyCombo) require their other keys to
+                                -- be physically held; keytrack was just set for this key,
+                                -- so we only check the companions. When they aren't held
+                                -- we fall through to the next (less specific) binding in
+                                -- the bucket rather than swallowing the key.
+                                local heldMatch = true
+                                if binding.alsoHeld then
+                                    for _, oc in ipairs(binding.alsoHeld) do
+                                        if not ms.keytrack[oc] then heldMatch = false; break end
+                                    end
+                                end
+                                if modsMatch and heldMatch then
                                     if BindValidity == 1 or binding.system then
                                         if binding.pressFn then
                                             local co = coroutine.create(binding.pressFn)
@@ -1182,6 +1193,69 @@
                             if #bcBucket == 0 then ms._keyBindingsByCode[keyCode] = nil end
                         end
                     end}
+                end
+
+                -- Register a chord: fires when the last key of `keys` goes down
+                -- while every other key in the chord (and the required modifiers)
+                -- is already held. Order-independent — a binding is registered on
+                -- each key, and whichever completes the chord is the one that
+                -- fires. Matched off ms.keytrack, the same physical-hold table
+                -- SOCD and the trackpad holds read. hs.hotkey can't express a
+                -- two-normal-key chord (V+K), so this bypasses it entirely.
+                ms.keyCombo = function(mods, keys, swallow, pressFn, isSystem)
+                    local codes = {}
+                    for _, k in ipairs(keys or {}) do
+                        local c = getCode(k)
+                        if not c then
+                            print("Error: keyCombo could not resolve " .. tostring(k))
+                            return { delete = function() end }
+                        end
+                        codes[#codes + 1] = c
+                    end
+                    -- A one-key "chord" is just a plain key bind.
+                    if #codes < 2 then
+                        return ms.key(mods, keys and keys[1], swallow, pressFn, nil, isSystem)
+                    end
+
+                    local modSet = {}
+                    for _, m in ipairs(mods or {}) do modSet[m] = true end
+
+                    local handles = {}
+                    for i, code in ipairs(codes) do
+                        local others = {}
+                        for j, oc in ipairs(codes) do
+                            if j ~= i then others[#others + 1] = oc end
+                        end
+                        local binding = {
+                            keyCode  = code,
+                            mods     = modSet,
+                            modsAny  = false,
+                            swallow  = swallow,
+                            pressFn  = pressFn,
+                            alsoHeld = others,
+                            system   = isSystem or false,
+                        }
+                        table.insert(ms._keyBindings, binding)
+                        local bucket = ms._keyBindingsByCode[code]
+                        if not bucket then bucket = {}; ms._keyBindingsByCode[code] = bucket end
+                        bucket[#bucket + 1] = binding
+                        handles[#handles + 1] = binding
+                    end
+
+                    return { delete = function()
+                        for _, binding in ipairs(handles) do
+                            for i, b in ipairs(ms._keyBindings) do
+                                if b == binding then table.remove(ms._keyBindings, i); break end
+                            end
+                            local bc = ms._keyBindingsByCode[binding.keyCode]
+                            if bc then
+                                for i, b in ipairs(bc) do
+                                    if b == binding then table.remove(bc, i); break end
+                                end
+                                if #bc == 0 then ms._keyBindingsByCode[binding.keyCode] = nil end
+                            end
+                        end
+                    end }
                 end
         -- END 3. Keyboard Actions --
 
@@ -3665,6 +3739,12 @@
                     if c.type == "mouse"   then return "mouse:"   .. tostring(c.button) .. modStr end
                     if c.type == "scroll"  then return "scroll:"  .. (c.direction or "up") .. modStr end
                     if c.type == "gamepad" then return "gamepad:" .. (c.button or "?")  .. modStr end
+                    if c.type == "combo"   then
+                        local ks = {}
+                        for _, k in ipairs(c.keys or {}) do ks[#ks+1] = k end
+                        table.sort(ks)
+                        return "combo:" .. table.concat(ks, "+") .. modStr
+                    end
                     return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
                 end
 
@@ -3677,8 +3757,17 @@
 
                 -- Count modifiers for a resolved bind (most-specific-wins ordering)
                 local function modCount(c)
-                    if not c or not c.mods then return 0 end
-                    local n = 0; for _ in ipairs(c.mods) do n = n + 1 end; return n
+                    if not c then return 0 end
+                    local n = 0
+                    for _ in ipairs(c.mods or {}) do n = n + 1 end
+                    -- Chords count each key toward specificity so a V+K bind
+                    -- registers ahead of a plain V bind in the shared bucket
+                    -- (first-match-wins), letting the chord claim V+K while the
+                    -- bare key still fires on its own.
+                    if c.type == "combo" then
+                        for _ in ipairs(c.keys or {}) do n = n + 1 end
+                    end
+                    return n
                 end
 
                 local conflicted = {}
@@ -3748,6 +3837,12 @@
                                 if c.type == "mouse" then return "M" .. c.button end
                                 if c.type == "scroll" then return "S:" .. (c.direction or "?") end
                                 if c.type == "gamepad" then return "G:" .. (c.button or "?") end
+                                if c.type == "combo" then
+                                    local _p = {}
+                                    for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
+                                    for _, k in ipairs(c.keys or {}) do _p[#_p+1] = k end
+                                    return table.concat(_p, "+")
+                                end
                                 local _p = {}
                                 for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
                                 _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
@@ -3759,6 +3854,8 @@
                     end
                     if c.type == "key" then
                         ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
+                    elseif c.type == "combo" then
+                        ms.bindHandles[id] = ms.keyCombo(c.mods, c.keys, false, firedFn)
                     elseif c.type == "mouse" or c.type == "scroll" or c.type == "gamepad" then
                         local tkey = triggerKey(c)
                         local grp  = deviceGroups[tkey]
@@ -3870,6 +3967,11 @@
                     if cfg.type == "gamepad" then return "gamepad:" .. (cfg.button or "?") end
                     local mods = {}; for _, m in ipairs(cfg.mods or {}) do table.insert(mods, m) end
                     table.sort(mods)
+                    if cfg.type == "combo" then
+                        local ks = {}; for _, k in ipairs(cfg.keys or {}) do ks[#ks+1] = k end
+                        table.sort(ks)
+                        return "combo:" .. table.concat(mods, ",") .. ":" .. table.concat(ks, "+")
+                    end
                     return "key:" .. table.concat(mods, ",") .. ":" .. (cfg.key or "")
                 end
                 local ck = key(c)
