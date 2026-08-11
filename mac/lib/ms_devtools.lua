@@ -589,8 +589,17 @@ return function(ms)
                     end
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
+                elseif action == "ackDanger" then
+                    -- Persist the first-open danger-notice ack into
+                    -- ms_settings.json so it survives reloads and reinstalls.
+                    ms._consoleDangerAck = true
+                    if ms.saveSettings then ms.saveSettings() end
                 elseif action == "ready" then
                     _loadDevHistory(nil, {"console", "error", "system"}, "console", _consoleSkip)
+                    -- Push the persisted danger-notice ack so the panel knows
+                    -- whether to raise the first-open warning.
+                    _pushToPanel(_consolePanel, "console",
+                        "setDangerAck(" .. (ms._consoleDangerAck and "true" or "false") .. ")")
                 end
             end)
 

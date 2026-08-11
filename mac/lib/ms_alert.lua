@@ -85,12 +85,14 @@ return function(ms)
 
         local c = hs.canvas.new({ x = cx, y = y, w = cw, h = ch })
 
-        -- One step above the shell/popouts/Guardian, which all sit at popUpMenu.
-        -- At an equal level macOS orders by recency, so the shell can end up
-        -- drawn over a toast and hide it; +1 keeps alerts reliably on top. The
-        -- exit curtain (screenSaver+1) and the loading screen (which suppresses
-        -- toasts on its own) still outrank this.
-        c:level((hs.canvas.windowLevels.popUpMenu or hs.canvas.windowLevels.status or 25) + 1)
+        -- The shell/popouts force themselves above the screenSaver level via
+        -- bringToFront(true) on show and on interaction, so any move/resize
+        -- re-asserts the shell over a plain screenSaver-level toast. The only
+        -- level proven to sit above that force-front is the exit curtain at
+        -- screenSaver+1, so toasts live there too. Tying with the curtain is
+        -- safe: exit both clears existing toasts (expireAll) and seals against
+        -- new ones (_sealed), so no toast is ever alive when the curtain shows.
+        c:level((hs.canvas.windowLevels.screenSaver or 1000) + 1)
         c:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
         c:alpha(alpha or 0)
 

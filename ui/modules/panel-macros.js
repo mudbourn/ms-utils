@@ -666,6 +666,7 @@
             row.appendChild(sigSpan);
 
             row.addEventListener("click", function() {
+                if (window.playSlot) playSlot("interact");
                 selectFunction(fn.id);
             });
             row.addEventListener("mouseenter", function() {
@@ -747,7 +748,10 @@
                 row.addEventListener("mouseenter", function() {
                     if (window.playSlot) playSlot("hover");
                 });
-                row.addEventListener("click", function() { selectTool(t.key); });
+                row.addEventListener("click", function() {
+                    if (window.playSlot) playSlot("interact");
+                    selectTool(t.key);
+                });
                 entriesDiv.appendChild(row);
             });
 
@@ -759,7 +763,10 @@
                 newRow.addEventListener("mouseenter", function() {
                     if (window.playSlot) playSlot("hover");
                 });
-                newRow.addEventListener("click", function() { openToolCreator(); });
+                newRow.addEventListener("click", function() {
+                    if (window.playSlot) playSlot("interact");
+                    openToolCreator();
+                });
                 entriesDiv.appendChild(newRow);
             }
         }
@@ -936,7 +943,11 @@
 
             var del = document.getElementById("fn-tool-delete");
             if (del) {
+                del.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
                 del.addEventListener("click", function() {
+                    if (window.playSlot) playSlot("back");
                     if (window.macroLab && window.macroLab.deleteTool) {
                         window.macroLab.deleteTool(t.key);
                     }
@@ -1061,7 +1072,11 @@
             // Type chips
             var typeChips = detailPane.querySelectorAll("[data-tctype]");
             typeChips.forEach(function(c) {
+                c.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
                 c.addEventListener("click", function() {
+                    if (window.playSlot) playSlot("interact");
                     d.type = c.getAttribute("data-tctype");
                     renderToolCreator();
                 });
@@ -1090,8 +1105,13 @@
                 var v = parseFloat(defEl.value); d.numDefault = isNaN(v) ? undefined : v;
             });
             var tog = document.getElementById("tc-toggle-def");
+            if (tog) tog.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
             if (tog) tog.addEventListener("click", function() {
-                d.toggleDefault = !d.toggleDefault; renderToolCreator();
+                d.toggleDefault = !d.toggleDefault;
+                if (window.playSlot) playSlot(d.toggleDefault ? "toggleOn" : "toggleOff");
+                renderToolCreator();
             });
             // Seg options
             detailPane.querySelectorAll(".fn-seg-optlabel").forEach(function(el) {
@@ -1107,19 +1127,33 @@
                 el.addEventListener("keydown", function(e) { e.stopPropagation(); });
             });
             detailPane.querySelectorAll(".fn-seg-optdel").forEach(function(el) {
+                el.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
                 el.addEventListener("click", function() {
                     if (d.options.length <= 1) return;
+                    if (window.playSlot) playSlot("back");
                     d.options.splice(+el.getAttribute("data-oi"), 1);
                     renderToolCreator();
                 });
             });
             var add = document.getElementById("tc-optadd");
+            if (add) add.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
             if (add) add.addEventListener("click", function() {
+                if (window.playSlot) playSlot("interact");
                 d.options.push({ label: "", value: "" });
                 renderToolCreator();
             });
             var create = document.getElementById("tc-create");
-            if (create) create.addEventListener("click", submitToolCreator);
+            if (create) create.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
+            if (create) create.addEventListener("click", function() {
+                if (window.playSlot) playSlot("interact");
+                submitToolCreator();
+            });
         }
 
         function submitToolCreator() {
@@ -1214,7 +1248,11 @@
             // Wire add button
             var addBtn = document.getElementById("fn-add-btn");
             if (addBtn) {
+                addBtn.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
                 addBtn.addEventListener("click", function() {
+                    if (window.playSlot) playSlot("interact");
                     addToMacro(fn);
                 });
             }
@@ -1333,8 +1371,12 @@
             for (var j = 0; j < keyBtns.length; j++) {
                 (function(btn) {
                     var name = btn.getAttribute("data-param");
+                    btn.addEventListener("mouseenter", function() {
+                        if (window.playSlot) playSlot("hover");
+                    });
                     btn.addEventListener("click", function(e) {
                         e.stopPropagation();
+                        if (window.playSlot) playSlot("interact");
                         startKeyCapture(name, btn, fn);
                     });
                 })(keyBtns[j]);
@@ -1345,8 +1387,12 @@
             for (var k = 0; k < modChips.length; k++) {
                 (function(chip) {
                     var mod = chip.getAttribute("data-mod");
+                    chip.addEventListener("mouseenter", function() {
+                        if (window.playSlot) playSlot("hover");
+                    });
                     chip.addEventListener("click", function() {
                         _modState[mod] = !_modState[mod];
+                        if (window.playSlot) playSlot(_modState[mod] ? "toggleOn" : "toggleOff");
                         chip.classList.toggle("on", _modState[mod]);
                         // Update mods param value
                         var mods = [];
@@ -1417,6 +1463,7 @@
                 (function(sel) {
                     var name = sel.getAttribute("data-toolsel");
                     sel.addEventListener("change", function() {
+                        if (window.playSlot) playSlot("interact");
                         _paramBind[name] = sel.value;
                         _paramValues[name] = { __toolRef: sel.value };
                         updatePreview(fn);
@@ -1883,8 +1930,12 @@
 
         el.appendChild(this._buildToolActions(step));
 
+        el.addEventListener("mouseenter", function() {
+            if (window.playSlot) playSlot("hover");
+        });
         el.addEventListener("click", function(e) {
             if (e.target.closest(".tool-action-btn") || e.target.closest(".tool-drag-handle")) return;
+            if (window.playSlot) playSlot("interact");
             self._selectTool(step._sid);
         });
 
@@ -1904,15 +1955,22 @@
         cp.className = "tool-action-btn copy";
         cp.title = "Copy module";
         cp.innerHTML = _svgCache["copy"] || (window.icon ? window.icon("copy") : "");
-        cp.addEventListener("click", function(e) { e.stopPropagation(); self.copyStep(step._sid); });
+        cp.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+        cp.addEventListener("click", function(e) {
+            e.stopPropagation();
+            if (window.playSlot) playSlot("interact");
+            self.copyStep(step._sid);
+        });
         acts.appendChild(cp);
 
         var pt = document.createElement("div");
         pt.className = "tool-action-btn paste";
         pt.title = "Paste module after this one";
         pt.innerHTML = _svgCache["paste"] || (window.icon ? window.icon("paste") : "");
+        pt.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
         pt.addEventListener("click", function(e) {
             e.stopPropagation();
+            if (window.playSlot) playSlot("interact");
             self.pasteAfterId(step._sid);
         });
         acts.appendChild(pt);
@@ -1921,7 +1979,12 @@
         db.className = "tool-action-btn del";
         db.title = "Delete module";
         db.innerHTML = _svgCache["close"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>';
-        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeTool(step._sid); });
+        db.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+        db.addEventListener("click", function(e) {
+            e.stopPropagation();
+            if (window.playSlot) playSlot("back");
+            self.removeTool(step._sid);
+        });
         acts.appendChild(db);
 
         return acts;
@@ -1946,8 +2009,10 @@
         var tg = document.createElement("div");
         tg.className = "tool-nest-toggle";
         tg.innerHTML = _svgCache["chevdown"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 13L12 18L17 13M7 6L12 11L17 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        tg.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
         tg.addEventListener("click", function(e) {
             e.stopPropagation();
+            if (window.playSlot) playSlot("interact");
             tg.classList.toggle("collapsed");
             var b = wrap.querySelector(".tool-nest-body");
             if (b) b.classList.toggle("collapsed");
@@ -1971,8 +2036,12 @@
 
         header.appendChild(this._buildToolActions(step));
 
+        header.addEventListener("mouseenter", function() {
+            if (window.playSlot) playSlot("hover");
+        });
         header.addEventListener("click", function(e) {
             if (e.target.closest(".tool-action-btn")||e.target.closest(".tool-drag-handle")||e.target.closest(".tool-nest-toggle")) return;
+            if (window.playSlot) playSlot("interact");
             self._selectTool(step._sid);
         });
         this._wireDrag(header, step);
@@ -2419,7 +2488,11 @@
     var overlayClose = document.createElement("div");
     overlayClose.className = "fn-picker-overlay-close";
     overlayClose.innerHTML = (_svgCache["close"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>');
-    overlayClose.addEventListener("click", function() { closeFnOverlay(); });
+    overlayClose.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+    overlayClose.addEventListener("click", function() {
+        if (window.playSlot) playSlot("back");
+        closeFnOverlay();
+    });
     overlayHeader.appendChild(overlayClose);
     overlay.appendChild(overlayHeader);
 
@@ -2550,7 +2623,11 @@
     function closeFnOverlay() {
         overlay.classList.remove("open");
     }
+    addToolBtn.addEventListener("mouseenter", function() {
+        if (window.playSlot) playSlot("hover");
+    });
     addToolBtn.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
         openFnOverlay();
     });
 
@@ -2952,7 +3029,9 @@
     }
 
     /* ── Wire toolbar buttons ────────────────────────────────────── */
+    newBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
     newBtn.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
         _currentMacroId = null;
         _currentMacroDef = null;
         _canvas.load([]);
@@ -2964,8 +3043,13 @@
         updateBindBtn();
     });
 
-    saveBtn.addEventListener("click", function() { saveMacro(); });
+    saveBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+    saveBtn.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
+        saveMacro();
+    });
 
+    editFileBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
     editFileBtn.addEventListener("click", function() {
         if (window.playSlot) playSlot("interact");
         if (window.shellPost) shellPost("macros", "editMacros", {});
@@ -2994,13 +3078,16 @@
         _testRunning = false;
     }
 
+    testBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
     testBtn.addEventListener("click", function() {
         if (_testRunning) return;
         var steps = _canvas.serialize();
         if (!steps || steps.length === 0) {
+            if (window.playSlot) playSlot("back");
             showTestToast("No steps to run", "error");
             return;
         }
+        if (window.playSlot) playSlot("interact");
 
         // Build macro def for test run
         var macroId = _currentMacroId || ("_test_" + Date.now().toString(36));
@@ -3047,7 +3134,9 @@
         }
     }
 
+    recordBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
     recordBtn.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
         if (!_isRecording) {
             // Start recording
             if (window.shellPost) {
@@ -3064,8 +3153,12 @@
         }
     });
 
+    delMacroBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
     delMacroBtn.addEventListener("click", function() {
-        if (_currentMacroId) deleteMacro();
+        if (_currentMacroId) {
+            if (window.playSlot) playSlot("back");
+            deleteMacro();
+        }
     });
 
     macroSelect.addEventListener("change", function() {

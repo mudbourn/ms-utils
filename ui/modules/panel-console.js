@@ -93,25 +93,30 @@
 
             // ── First-open danger notice ────────────────────────────────────
             // Warn once, the first time the user opens the console, that pasted
-            // code runs with full machine access. The ack is remembered so it
-            // never nags again. localStorage may be unavailable in some webview
-            // data-store setups; on any failure we fail safe and re-show it.
-            const DANGER_ACK_KEY = "ms.console.dangerAck.v1";
+            // code runs with full machine access. The ack now lives in
+            // ms_settings.json (not localStorage): the host pushes the persisted
+            // value via setConsoleDangerAck() after "ready", and
+            // dismissConsoleDanger() sends it back to be saved. Until the host
+            // reports the state, _dangerAcked is null (unknown) so the notice
+            // stays down rather than flashing before the value arrives.
+            let _dangerAcked = null;
 
-            function _dangerAcked() {
-                try {
-                    return window.localStorage.getItem(DANGER_ACK_KEY) === "1";
-                } catch (_) {
-                    return false;
+            function setConsoleDangerAck(acked) {
+                _dangerAcked = (acked === true);
+                if (_dangerAcked) {
+                    const el = _panel && _panel.querySelector(".danger-overlay");
+                    if (el) el.classList.remove("open");
+                } else {
+                    maybeShowConsoleDanger();
                 }
             }
 
             function dismissConsoleDanger() {
                 const el = _panel && _panel.querySelector(".danger-overlay");
                 if (el) el.classList.remove("open");
-                try {
-                    window.localStorage.setItem(DANGER_ACK_KEY, "1");
-                } catch (_) {}
+                _dangerAcked = true;
+                // Persist to ms_settings.json via the host bus.
+                try { lp.sendToHost({ action: "ackDanger" }); } catch (_) {}
                 const input = document.getElementById("code-input");
                 if (input) input.focus();
             }
@@ -119,7 +124,7 @@
             // Called by the shell each time the console panel is shown. Only the
             // first-ever open (before ack) actually raises the notice.
             function maybeShowConsoleDanger() {
-                if (_dangerAcked()) return;
+                if (_dangerAcked !== false) return; // acked, or state not yet known
                 const el = _panel && _panel.querySelector(".danger-overlay");
                 if (!el) return;
                 el.classList.add("open");
@@ -127,8 +132,9 @@
                 if (btn) btn.focus();
             }
 
-            window.dismissConsoleDanger   = dismissConsoleDanger;
+            window.dismissConsoleDanger    = dismissConsoleDanger;
             window._maybeShowConsoleDanger = maybeShowConsoleDanger;
+            window.setConsoleDangerAck     = setConsoleDangerAck;
 
             // Enter/Escape dismiss the notice while it is up (capture phase so the
             // keypress doesn't also reach the console input and run code).
@@ -160,6 +166,7 @@
                     registerPanel("console", function(action, body) {
                         if (action === "appendEntry" && body) lp.appendEntry(body);
                         else if (action === "loadHistory" && body) lp.loadHistory(body);
+                        else if (action === "setDangerAck") setConsoleDangerAck(body === true);
                     });
                 }
                 // Strip window-chrome when embedded in shell

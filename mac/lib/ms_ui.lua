@@ -2049,7 +2049,13 @@ return function(ms)
                 ms.saveSettings()
                 ms.bind.rebind()
                 ms.playSlot("reset")
-                ms.ui.refresh()
+                -- Mirror resetBind: a sub-bind reset is still a reset, so it
+                -- gets the same "reset to default." alert the top-level path
+                -- shows. Deferred so it lands after the rebind settles.
+                hs.timer.doAfter(0.1, function()
+                    ms.alert((def.label or data.id) .. " reset to default.", 2, true)
+                    ms.ui.refresh()
+                end)
             end,
 
             startModRebind = function(data)
