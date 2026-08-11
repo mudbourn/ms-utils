@@ -408,14 +408,14 @@
                         ms.cam(-370, 0)
                     end
                     ms.wait(3)
-                    for i = 1, 50 do
-                        ms.cam(10, 0)
+                    for i = 1, 20 do
+                        ms.cam(7, 0)
                         ms.wait(1.2)
                         ms.cam(10, 0)
                         ms.wait(1.2)
                     end
                     for i = 1, 170 do
-                        ms.cam(10, 0)
+                        ms.cam(7, 0)
                         ms.wait(1.2)
                         ms.cam(10, 0)
                         ms.wait(1.2)
@@ -442,13 +442,13 @@
                 end
                 ms.wait(3)
                 for i = 1, 50 do
-                    ms.cam(10, 0)
+                    ms.cam(7, 0)
                     ms.wait(1.2)
                     ms.cam(10, 0)
                     ms.wait(1.2)
                 end
                 for i = 1, 170 do
-                    ms.cam(10, 0)
+                    ms.cam(7, 0)
                     ms.wait(1.2)
                     ms.cam(10, 0)
                     ms.wait(1.2)
@@ -469,16 +469,15 @@
         -- High Leap Assist --
             local HighLeapAssistFunction = ms.fn(function()
                 MovementCheck(1)
-                ms.wait(5)
+                ms.wait(15)
                 for i = 1, 3 do
                     ms.type("e", nil, nil, 5)
                 end
-                ms.wait(20)
+                ms.wait(10)
                 for i = 1, 3 do
                     ms.type("space", nil, nil, 5)
                 end
                 ms.wait(2)
-
                 if not JumpHigh() then
                     if not JumpLow() then
                         JumpDefault()
@@ -531,16 +530,16 @@
                 end
                 ms.scroll("up", 2000)
                 MovementCheck(1)
+                ms.wait(15)
                 for i = 1, 5 do
                     ms.type("e")
                     ms.wait(1)
                 end
-                ms.wait(30)
+                ms.wait(10)
                 for i = 1, 2 do
                     ms.type("space")
                 end
                 ms.wait(50)
-
                 if not ThrowLow() then
                     ThrowDefault()
                 else
@@ -565,7 +564,7 @@
                 ms.type("5")
                 ms.wait(5)
                 ms.type("1")
-                ms.wait(500)
+                ms.wait(400)
             end)
 
             ms.bind.define("fakeSwing", function()
