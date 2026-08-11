@@ -954,7 +954,20 @@
                 end
 
                 if type == hs.eventtap.event.types.keyDown then
-                    local isRepeat = ms.keytrack[keyCode] == true
+                    -- Repeat detection reads the OS autorepeat flag rather than
+                    -- inferring it from our own keytrack bookkeeping. keytrack was
+                    -- fragile: if a key-up was ever missed (the tap briefly
+                    -- disabled by macOS then revived, an up delivered while
+                    -- another app held focus, a swallowed event) keytrack[keyCode]
+                    -- stayed true, so the next genuine press was misread as an
+                    -- auto-repeat and silently dropped — the intermittent
+                    -- "Escape toggle ignores the input" bug. The autorepeat
+                    -- property is authoritative per event, so a fresh press always
+                    -- registers. This matches _makeKeyWatcher, which already uses
+                    -- it. keytrack is still maintained below for the physical-hold
+                    -- consumers (SOCD, chords).
+                    local isRepeat = (event:getProperty(
+                        hs.eventtap.event.properties.keyboardEventAutorepeat) or 0) ~= 0
                     ms.keytrack[keyCode] = true
                     if not isRepeat and ms.dev and ms.dev._wantsKeyEvents and ms.dev._wantsKeyEvents() then
                         pcall(ms.dev._onKeyEvent, keyCode, keyName(keyCode), true)

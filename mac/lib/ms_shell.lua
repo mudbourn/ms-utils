@@ -348,7 +348,21 @@
             end
 
             _shellView = hs.webview.new({ x = x, y = y, w = w, h = h }, {}, _shellChannel)
-            pcall(function() _shellView:windowStyle(0) end)
+            -- Non-activating panel rather than a plain borderless window: as a
+            -- floating tool-palette-style panel the shell keeps its cursor
+            -- rectangles active while it is the frontmost panel, so the drag and
+            -- resize regions show their grab/resize cursors without flicker —
+            -- even though Hammerspoon is a background agent that never becomes
+            -- the active app. A plain borderless window's cursor rects are only
+            -- live while it is the key window of the active app, which it never
+            -- is, so the system kept reverting the cursor to the arrow.
+            -- hs.webview's window is an NSPanel subclass, so the nonactivating
+            -- mask takes effect. Borderless (0) is preserved; allowResizing()
+            -- below re-adds the resizable bit. This does NOT steal app focus.
+            pcall(function()
+                local M = hs.webview.windowMasks or {}
+                _shellView:windowStyle((M.borderless or 0) | (M.nonactivating or 128))
+            end)
             pcall(function() _shellView:transparent(true) end)
             pcall(function() _shellView:allowResizing(true) end)
             -- Note: minimumSize is unreliable on borderless webviews.
@@ -1007,7 +1021,13 @@
                 print("[popOut] hs.webview.new returned nil")
                 return false
             end
-            pcall(function() popView:windowStyle(0) end)
+            -- Non-activating panel — same rationale as the main shell: keeps the
+            -- pop-out's drag/resize cursor rects live while frontmost without
+            -- stealing app focus. See ms.shell.init.
+            pcall(function()
+                local M = hs.webview.windowMasks or {}
+                popView:windowStyle((M.borderless or 0) | (M.nonactivating or 128))
+            end)
             pcall(function() popView:transparent(true) end)
             pcall(function() popView:level(hs.canvas.windowLevels.popUpMenu or 101) end)
             pcall(function() popView:allowTextEntry(true) end)
