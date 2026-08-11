@@ -1557,6 +1557,15 @@
     delMacroBtn.title = "Delete macro";
     toolbar.appendChild(delMacroBtn);
 
+    // Edit raw macro file — the escape hatch for anything the visual builder
+    // doesn't cover. Lives here, with the builder that owns ms_macros.lua,
+    // rather than in the Settings > Developer section it used to share.
+    var editFileBtn = document.createElement("button");
+    editFileBtn.className = "macro-toolbar-btn";
+    editFileBtn.textContent = "Edit File";
+    editFileBtn.title = "Open ms_macros.lua in your editor";
+    toolbar.appendChild(editFileBtn);
+
     // ── Main area ──
     var mainArea = document.createElement("div");
     mainArea.className = "macros-main";
@@ -2068,6 +2077,11 @@
     });
 
     saveBtn.addEventListener("click", function() { saveMacro(); });
+
+    editFileBtn.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
+        if (window.shellPost) shellPost("macros", "editMacros", {});
+    });
 
     /* ── Test Run ────────────────────────────────────────────────── */
     var _testRunning = false;

@@ -29,6 +29,13 @@ return function(ms)
         local settingsPath    = os.getenv("HOME") .. "/.hammerspoon/ms_settings.txt"
         local jsonPath        = os.getenv("HOME") .. "/.hammerspoon/data/ms_settings.json"
         local defaultPath     = os.getenv("HOME") .. "/.hammerspoon/data/ms_settings_default.json"
+        -- Settings authored from the Tools panel's Setting Builder. Kept in
+        -- their own file, not the pack (ms_macros.lua) and not the main
+        -- settings JSON: definitions here are re-applied via ms.settings.define
+        -- after the pack loads, while their VALUES ride the usual data.user
+        -- path. Separating the two keeps Save/Reset-as-Default (which only
+        -- touch values) from ever dropping an authored definition.
+        local authoredPath    = os.getenv("HOME") .. "/.hammerspoon/data/ms_authored.json"
         local archivePath     = os.getenv("HOME") .. "/.hammerspoon/backups/"
         local macrosPath      = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
         local profilesPath    = os.getenv("HOME") .. "/.hammerspoon/profiles/"
@@ -420,6 +427,153 @@ return function(ms)
             end
         end
 
+        -- ── Authored settings (Tools > Setting Builder) ──────────────────────
+        -- Normalise a definition posted by the builder into a clean, trusted
+        -- def. The UI is untrusted input, so every field is re-derived and
+        -- clamped here rather than taken on faith. Returns (def) or (nil, err).
+        local _AUTHORED_TYPES = {
+            toggle = true, slider = true, seg = true,
+            action = true, groupLabel = true, divider = true,
+        }
+        local function _trim(s)
+            return (type(s) == "string") and s:match("^%s*(.-)%s*$") or ""
+        end
+        ms._sanitizeAuthoredDef = function(raw)
+            if type(raw) ~= "table" then return nil, "definition must be a table" end
+            local t = raw.type
+            if not _AUTHORED_TYPES[t] then return nil, "unsupported type" end
+
+            local def = { type = t, authored = true }
+            if raw.target == "calibration" then def.section = "calibration" end
+
+            if t == "divider" then return def end
+            if t == "groupLabel" then
+                def.label = _trim(raw.label)
+                if def.label == "" then return nil, "a label is required" end
+                return def
+            end
+
+            -- Everything past here is keyed and carries a value or an action.
+            local key = _trim(raw.key)
+            if key == "" then return nil, "a key is required" end
+            if not key:match("^[%a_][%w_]*$") then
+                return nil, "key must be a valid identifier (letters, digits, _)"
+            end
+            def.key   = key
+            def.label = _trim(raw.label) ~= "" and _trim(raw.label) or key
+            local hint = _trim(raw.hint)
+            if hint ~= "" then def.hint = hint end
+            def.save = true
+
+            if t == "toggle" then
+                def.default = raw.default == true
+            elseif t == "slider" then
+                local mn = tonumber(raw.min) or 0
+                local mx = tonumber(raw.max) or 100
+                if mx <= mn then mx = mn + 1 end
+                local st = tonumber(raw.step) or 1
+                if st <= 0 then st = 1 end
+                local d = tonumber(raw.default)
+                if d == nil then d = mn end
+                if d < mn then d = mn elseif d > mx then d = mx end
+                def.min, def.max, def.step, def.default = mn, mx, st, d
+                local unit = _trim(raw.unit)
+                if unit ~= "" then def.unit = unit end
+            elseif t == "seg" then
+                local opts = {}
+                if type(raw.options) == "table" then
+                    for _, o in ipairs(raw.options) do
+                        if type(o) == "table" and _trim(o.label) ~= "" then
+                            local val = o.value
+                            if val == nil or val == "" then val = _trim(o.label) end
+                            table.insert(opts, { label = _trim(o.label), value = val })
+                        end
+                    end
+                end
+                if #opts == 0 then return nil, "at least one option is required" end
+                def.options = opts
+                def.default = raw.default ~= nil and raw.default or opts[1].value
+            elseif t == "action" then
+                local bl = _trim(raw.btnLabel)
+                def.btnLabel = bl ~= "" and bl or "Run"
+                def.danger   = raw.danger == true
+                -- Authored actions carry no onAction — there is nowhere safe to
+                -- run arbitrary UI-supplied code — so the button renders and is
+                -- a deliberate no-op until wired up in the pack.
+            end
+            return def
+        end
+
+        -- Read the authored-settings file into ms._authoredSettings. Never
+        -- throws: a missing or corrupt file just yields an empty list.
+        ms._loadAuthoredSettings = function()
+            ms._authoredSettings = {}
+            local f = io.open(authoredPath, "r")
+            if not f then return end
+            local content = f:read("*all"); f:close()
+            local ok, data = pcall(hs.json.decode, content)
+            if ok and type(data) == "table" then
+                for _, def in ipairs(data) do
+                    local clean = ms._sanitizeAuthoredDef(def)
+                    if clean then table.insert(ms._authoredSettings, clean) end
+                end
+            end
+        end
+
+        ms._saveAuthoredSettings = function()
+            local f = io.open(authoredPath, "w")
+            if f then
+                f:write(hs.json.encode(ms._authoredSettings or {}, true))
+                f:close()
+            end
+        end
+
+        -- Register every authored setting via the normal define() path, so it
+        -- lands in ms._userSettingDefs and renders like any pack setting. Runs
+        -- after the pack and after loadSettings, so saved values are waiting in
+        -- ms._pendingUserSettings and get picked up at define time. Keys that
+        -- already exist (a pack setting claimed the name) are skipped, not
+        -- fatal — an authored name can be shadowed but never crash the boot.
+        ms._defineAuthoredSettings = function()
+            for _, def in ipairs(ms._authoredSettings or {}) do
+                local key = def.key
+                if not (key and ms._userSettingIndex[key]) then
+                    -- define() stores the table by reference; hand it a copy so
+                    -- a later reset/reload can't accumulate runtime state on the
+                    -- persisted definition.
+                    local copy = {}
+                    for k, v in pairs(def) do copy[k] = v end
+                    if def.options then
+                        copy.options = {}
+                        for i, o in ipairs(def.options) do
+                            copy.options[i] = { label = o.label, value = o.value }
+                        end
+                    end
+                    pcall(ms.settings.define, copy)
+                end
+            end
+        end
+
+        -- Public: add a setting authored in the builder. Sanitises, checks the
+        -- key is free, defines it live, then persists. Returns (ok, err).
+        ms.addAuthoredSetting = function(raw)
+            local def, err = ms._sanitizeAuthoredDef(raw)
+            if not def then return false, err end
+            if def.key and ms._userSettingIndex[def.key] then
+                return false, "a setting named '" .. def.key .. "' already exists"
+            end
+            ms._authoredSettings = ms._authoredSettings or {}
+            table.insert(ms._authoredSettings, def)
+            local ok = pcall(ms.settings.define, def)
+            if not ok then
+                table.remove(ms._authoredSettings)
+                return false, "could not register the setting"
+            end
+            ms._saveAuthoredSettings()
+            ms.saveSettings()
+            return true
+        end
+
         ms.loadSettings = function()
             ms.dev.log({ type = "system", event = "settings_load_start" })
             if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
@@ -597,6 +751,8 @@ return function(ms)
                 end
             end
             ms.loadSettings()
+            ms._loadAuthoredSettings()
+            ms._defineAuthoredSettings()
             ms.loadTheme()
             if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
             ms.bind.rebind()

@@ -385,10 +385,23 @@
         /* ── Tools panel ─────────────────────────────────────────────────── */
         /* Same section-built scroll as Theme, scoped to .panel-tools. Holds
            the pack's user-defined settings (Settings/Calibration/menus). */
+        /* Tab strip: built settings in one tab, the Setting Builder in the other. */
+        .panel-tools .otabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .panel-tools .otab { flex: 1; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text2); text-align: center; cursor: pointer; border: none; border-bottom: 2px solid transparent; background: none; transition: color 0.15s, border-color 0.15s; }
+        .panel-tools .otab:hover { color: var(--text); }
+        .panel-tools .otab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .panel-tools .otab-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        .panel-tools .otab-section.active { display: flex; }
         .panel-tools .tsec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
         .panel-tools .tsec-scroll::-webkit-scrollbar { width: 4px; }
         .panel-tools .tsec-scroll::-webkit-scrollbar-track { background: transparent; }
         .panel-tools .tsec-scroll::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+        /* Setting Builder — the segmented-options editor and live preview. */
+        .setting-builder-opts { display: flex; flex-direction: column; gap: 6px; padding: 4px 14px 2px; }
+        .sb-opt-row { display: flex; align-items: center; gap: 6px; }
+        .sb-opt-row .input-sm { flex: 1; }
+        .sb-opt-row .sb-opt-rm { flex: 0 0 auto; min-width: 30px; padding: 5px 8px; }
+        .setting-builder-preview { min-height: 8px; margin: 2px 0; border-top: 1px dashed var(--border-dim); border-bottom: 1px dashed var(--border-dim); background: color-mix(in srgb, var(--accent) 5%, transparent); }
 
         /* ── Profiles panel ──────────────────────────────────────────────── */
         /* Same strip again, scoped to .panel-profiles. */
@@ -1288,7 +1301,16 @@
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
-        <div id="tools-scroll" class="tsec-scroll"></div>
+        <div class="otabs">
+            <button class="otab active" data-otab="settings" onmouseenter="playSlot('hover')" onclick="switchToolsTab('settings')">Settings</button>
+            <button class="otab" data-otab="builder" onmouseenter="playSlot('hover')" onclick="switchToolsTab('builder')">Builder</button>
+        </div>
+        <div class="otab-section active" data-osection="settings">
+            <div id="tools-scroll" class="tsec-scroll"></div>
+        </div>
+        <div class="otab-section" data-osection="builder">
+            <div id="tools-builder-scroll" class="tsec-scroll"></div>
+        </div>
 </div>
 <div class="panel-theme" style="display:none">
         <div id="header">

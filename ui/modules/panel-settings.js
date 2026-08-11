@@ -245,6 +245,11 @@
                     });
                 });
             }
+            // Lua calls this via ms.shell.eval, which runs at global scope, so
+            // the IIFE-local declaration has to be published to window — same as
+            // openModal/closeModal above. Without it the confirm modal never
+            // opens (ReferenceError), so rebinds capture but never save.
+            window.openLuaModal = openLuaModal;
 
             document
                 .getElementById("modal-overlay")
@@ -905,9 +910,11 @@
                 }
             }
 
-            // ── buildSettings — system + user-defined settings ─────────────────
-            function buildSettings(body) {
-                // Save / Reset as Default — always first
+            // ── buildDefaults — save / restore the whole settings file ─────────
+            // These act on every setting, app-level and pack-defined alike —
+            // not just the user-defined ones — so they live in the Settings
+            // panel, not in Tools with the pack's own controls.
+            function buildDefaults(body) {
                 body.appendChild(
                     btnRow(
                         actionBtn("Save as Default", "", async () => {
@@ -930,16 +937,17 @@
                         }),
                     ),
                 );
+            }
 
+            // ── buildSettings — the pack's own user-defined settings ───────────
+            function buildSettings(body) {
                 // User-defined settings targeting the Settings section
                 const items = S.userSettings || [];
                 if (items.length > 0) {
-                    body.appendChild(divider());
                     for (const item of items) {
                         renderUserItem(body, item);
                     }
                 } else {
-                    body.appendChild(divider());
                     body.appendChild(groupLabel("No settings defined."));
                     const r = h("div", { cls: "row" });
                     const lbl = h("div", { cls: "row-label" });
@@ -1157,14 +1165,11 @@
             }
 
             function buildDeveloper(body) {
+                // Edit Macros lives in the Macros panel toolbar and Edit Theme
+                // in the Theme panel's Theme File section — each raw-file escape
+                // hatch sits with the builder that owns that file.
                 body.appendChild(
                     btnRow(
-                        actionBtn("Edit Macros", "", () =>
-                            sendToHost({ action: "editMacros" }),
-                        ),
-                        actionBtn("Edit Theme", "", () =>
-                            sendToHost({ action: "editTheme" }),
-                        ),
                         actionBtn("Open Log Folder", "", () =>
                             sendToHost({ action: "openDevLogs" }),
                         ),
@@ -1482,6 +1487,10 @@
                         "Input handling and performance"),
                 );
                 scroll.appendChild(
+                    section("defaults", "Defaults", buildDefaults,
+                        "Save or restore every setting at once"),
+                );
+                scroll.appendChild(
                     section("developer", "Developer", buildDeveloper,
                         "Editing, logs, updates, and integrity"),
                 );
@@ -1490,6 +1499,358 @@
                 );
 
                 scroll.scrollTop = scrollTop;
+            }
+
+            // ── buildSettingBuilder — author a setting from the Tools panel ────
+            // A live form for composing a setting definition without hand-
+            // editing ms_macros.lua: pick a type, fill the fields, watch it
+            // render in the preview using the very same renderUserItem the real
+            // rows use, then Add it. The Add posts the finished def to the host
+            // on the tools channel (ui:tools:addUserSetting) — the Lua side that
+            // persists it into the pack is the next step; until then this
+            // models the authoring flow end to end and previews the result.
+            function buildSettingBuilder(body) {
+                // The one field of type shape shared by every kind of setting.
+                const draft = {
+                    type: "toggle",
+                    key: "",
+                    label: "",
+                    hint: "",
+                    default: false,
+                    min: 0,
+                    max: 100,
+                    step: 1,
+                    unit: "",
+                    options: [
+                        { label: "One", value: "one" },
+                        { label: "Two", value: "two" },
+                    ],
+                    btnLabel: "Run",
+                    danger: false,
+                    target: "settings",
+                };
+
+                const typeLabels = [
+                    { label: "Toggle", value: "toggle" },
+                    { label: "Slider", value: "slider" },
+                    { label: "Segmented", value: "seg" },
+                    { label: "Action", value: "action" },
+                    { label: "Label", value: "groupLabel" },
+                    { label: "Divider", value: "divider" },
+                ];
+                // Types that carry a key/value; label and divider are cosmetic.
+                const keyed = (t) =>
+                    t !== "divider" && t !== "groupLabel";
+
+                // A labelled text field on its own row, matching the input-sm
+                // house style. Re-renders nothing on input beyond the preview,
+                // so focus stays put while typing.
+                const textField = (labelText, sub, key, placeholder) =>
+                    row(
+                        labelText,
+                        sub,
+                        h("input", {
+                            type: "text",
+                            cls: "input-sm",
+                            placeholder: placeholder || "",
+                            value: draft[key] || "",
+                            oninput: (e) => {
+                                draft[key] = e.target.value;
+                                updatePreview();
+                            },
+                        }),
+                    );
+
+                const numField = (labelText, key, step) =>
+                    row(
+                        labelText,
+                        null,
+                        h("input", {
+                            type: "number",
+                            cls: "input-sm",
+                            step: String(step || 1),
+                            value: String(draft[key]),
+                            oninput: (e) => {
+                                const v = parseFloat(e.target.value);
+                                draft[key] = isNaN(v) ? 0 : v;
+                                updatePreview();
+                            },
+                        }),
+                        "row-sub row-compact",
+                    );
+
+                // ── Stable containers ────────────────────────────────────────
+                // Type picker never rebuilds; the type-specific block (dyn) and
+                // the preview do. Keeping the picker and the common text fields
+                // out of the rebuilt region is what preserves input focus.
+                body.appendChild(
+                    row(
+                        "Type",
+                        "What kind of control to add",
+                        seg(typeLabels, draft.type, (v) => {
+                            draft.type = v;
+                            renderDynamic();
+                            updatePreview();
+                        }),
+                    ),
+                );
+
+                body.appendChild(divider());
+                const dyn = h("div", { cls: "setting-builder-dyn" });
+                body.appendChild(dyn);
+
+                // ── Preview ──────────────────────────────────────────────────
+                body.appendChild(divider());
+                body.appendChild(groupLabel("Preview"));
+                const preview = h("div", { cls: "setting-builder-preview" });
+                body.appendChild(preview);
+
+                // ── Add / Reset ──────────────────────────────────────────────
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Add Setting", "accent", () => {
+                            const def = buildDef();
+                            const err = validate(def);
+                            if (err) {
+                                showAlert(err);
+                                return;
+                            }
+                            // The host validates (duplicate keys, etc.) and is
+                            // the source of truth for the success/failure
+                            // notice, then re-renders the panel with the new
+                            // row. Clear the identity fields so the next setting
+                            // starts fresh; a re-render will rebuild this form.
+                            sendToHost({ action: "addUserSetting", def: def });
+                            draft.key = "";
+                            draft.label = "";
+                            draft.hint = "";
+                            renderDynamic();
+                            updatePreview();
+                        }),
+                        actionBtn("Reset", "", () => {
+                            draft.key = "";
+                            draft.label = "";
+                            draft.hint = "";
+                            renderDynamic();
+                            updatePreview();
+                        }),
+                    ),
+                );
+
+                // ── Builders ─────────────────────────────────────────────────
+                // Assemble the serialized item the preview and the host both
+                // consume — same shape ms_ui.lua emits for a defined setting.
+                function buildDef() {
+                    const d = { type: draft.type, target: draft.target };
+                    if (keyed(draft.type)) {
+                        d.key = draft.key.trim();
+                        d.hint = draft.hint.trim() || undefined;
+                    }
+                    if (draft.type === "groupLabel") {
+                        d.label = draft.label.trim();
+                    } else if (draft.type !== "divider") {
+                        d.label = draft.label.trim();
+                    }
+                    if (draft.type === "toggle") {
+                        d.default = draft.default;
+                        d.value = draft.default;
+                    } else if (draft.type === "slider") {
+                        d.min = draft.min;
+                        d.max = draft.max;
+                        d.step = draft.step;
+                        d.unit = draft.unit.trim() || undefined;
+                        d.default = draft.default || draft.min;
+                        d.value = d.default;
+                    } else if (draft.type === "seg") {
+                        d.options = draft.options.filter(
+                            (o) => o.label.trim() !== "",
+                        );
+                        d.default =
+                            d.options.length > 0 ? d.options[0].value : undefined;
+                        d.value = d.default;
+                    } else if (draft.type === "action") {
+                        d.btnLabel = draft.btnLabel.trim() || "Run";
+                        d.danger = draft.danger;
+                    }
+                    return d;
+                }
+
+                function validate(def) {
+                    if (keyed(def.type) && !def.key)
+                        return "A key is required for this setting type.";
+                    if (def.type === "groupLabel" && !def.label)
+                        return "A label is required.";
+                    if (def.type === "seg" && (!def.options || !def.options.length))
+                        return "Add at least one option.";
+                    return null;
+                }
+
+                // ── Type-specific fields ─────────────────────────────────────
+                function renderDynamic() {
+                    dyn.innerHTML = "";
+                    const t = draft.type;
+
+                    if (keyed(t)) {
+                        dyn.appendChild(
+                            textField(
+                                "Key",
+                                "Unique id used to read the value",
+                                "key",
+                                "mySetting",
+                            ),
+                        );
+                    }
+                    if (t !== "divider") {
+                        dyn.appendChild(
+                            textField("Label", null, "label", "My Setting"),
+                        );
+                    }
+                    if (keyed(t)) {
+                        dyn.appendChild(
+                            textField("Hint", "Optional one-line help", "hint", ""),
+                        );
+                    }
+
+                    if (t === "toggle") {
+                        dyn.appendChild(
+                            row(
+                                "Default",
+                                "State when reset",
+                                toggle(draft.default, (e) => {
+                                    draft.default = e.target.checked;
+                                    updatePreview();
+                                }),
+                                "row-sub",
+                            ),
+                        );
+                    } else if (t === "slider") {
+                        dyn.appendChild(numField("Min", "min", draft.step));
+                        dyn.appendChild(numField("Max", "max", draft.step));
+                        dyn.appendChild(numField("Step", "step", 0.1));
+                        dyn.appendChild(numField("Default", "default", draft.step));
+                        dyn.appendChild(
+                            textField("Unit", "Optional suffix, e.g. px", "unit", ""),
+                        );
+                    } else if (t === "seg") {
+                        dyn.appendChild(groupLabel("Options"));
+                        renderOptions(dyn);
+                    } else if (t === "action") {
+                        dyn.appendChild(
+                            textField(
+                                "Button text",
+                                null,
+                                "btnLabel",
+                                "Run",
+                            ),
+                        );
+                        dyn.appendChild(
+                            row(
+                                "Destructive",
+                                "Style the button as a danger action",
+                                toggle(draft.danger, (e) => {
+                                    draft.danger = e.target.checked;
+                                    updatePreview();
+                                }),
+                                "row-sub",
+                            ),
+                        );
+                    }
+
+                    if (keyed(t) || t === "groupLabel") {
+                        dyn.appendChild(divider());
+                        dyn.appendChild(
+                            row(
+                                "Destination",
+                                "Which Tools section it lands in",
+                                seg(
+                                    [
+                                        { label: "Settings", value: "settings" },
+                                        {
+                                            label: "Calibration",
+                                            value: "calibration",
+                                        },
+                                    ],
+                                    draft.target,
+                                    (v) => {
+                                        draft.target = v;
+                                    },
+                                ),
+                                "row-sub",
+                            ),
+                        );
+                    }
+                }
+
+                // The segmented-control options editor: a stack of label/value
+                // pairs with add and remove. Structural changes rebuild the
+                // list; typing only touches the draft and the preview.
+                function renderOptions(host) {
+                    const list = h("div", { cls: "setting-builder-opts" });
+                    draft.options.forEach((opt, i) => {
+                        const rowEl = h("div", { cls: "sb-opt-row" });
+                        rowEl.appendChild(
+                            h("input", {
+                                type: "text",
+                                cls: "input-sm",
+                                placeholder: "Label",
+                                value: opt.label,
+                                oninput: (e) => {
+                                    opt.label = e.target.value;
+                                    updatePreview();
+                                },
+                            }),
+                        );
+                        rowEl.appendChild(
+                            h("input", {
+                                type: "text",
+                                cls: "input-sm",
+                                placeholder: "value",
+                                value: opt.value,
+                                oninput: (e) => {
+                                    opt.value = e.target.value;
+                                    updatePreview();
+                                },
+                            }),
+                        );
+                        const rm = actionBtn("✕", "", () => {
+                            draft.options.splice(i, 1);
+                            host.innerHTML = "";
+                            renderOptions(host);
+                            updatePreview();
+                        });
+                        rm.classList.add("sb-opt-rm");
+                        rowEl.appendChild(rm);
+                        list.appendChild(rowEl);
+                    });
+                    host.appendChild(list);
+                    host.appendChild(
+                        btnRow(
+                            actionBtn("Add Option", "", () => {
+                                draft.options.push({ label: "", value: "" });
+                                host.innerHTML = "";
+                                renderOptions(host);
+                                updatePreview();
+                            }),
+                        ),
+                    );
+                }
+
+                // The payoff: the exact renderUserItem the live rows use, so the
+                // preview can never drift from the real thing.
+                function updatePreview() {
+                    preview.innerHTML = "";
+                    const def = buildDef();
+                    try {
+                        renderUserItem(preview, def);
+                    } catch (e) {
+                        preview.appendChild(
+                            groupLabel("Preview unavailable."),
+                        );
+                    }
+                }
+
+                renderDynamic();
+                updatePreview();
             }
 
             // ── Tools panel (rendered into #tools-scroll) ────────────────────
@@ -1531,8 +1892,44 @@
                 }
 
                 scroll.scrollTop = scrollTop;
+
+                // Setting Builder lives in its own tab.
+                const bscroll = document.getElementById("tools-builder-scroll");
+                if (bscroll) {
+                    const bTop = bscroll.scrollTop;
+                    bscroll.innerHTML = "";
+                    bscroll.appendChild(
+                        section("builder", "Setting Builder", buildSettingBuilder,
+                            "Compose a new setting and preview it live"),
+                    );
+                    bscroll.scrollTop = bTop;
+                }
             }
             window.renderToolsPanel = renderToolsPanel;
+
+            // ── Tools tab strip ──────────────────────────────────────────────
+            let _otabs = null;
+            function toolsTabs() {
+                if (_otabs) return _otabs;
+                const panel = document.querySelector(".panel-tools");
+                if (!panel || !window.createTabs) return null;
+                _otabs = window.createTabs({
+                    root: panel,
+                    tabSelector: ".otab",
+                    sectionSelector: ".otab-section",
+                    tabKey: (el) => el.dataset.otab,
+                    sectionKey: (el) => el.dataset.osection,
+                    onSame: () => playSlot("back"),
+                    onSwitch: () => playSlot("interact"),
+                });
+                return _otabs;
+            }
+
+            function switchToolsTab(tab) {
+                const t = toolsTabs();
+                if (t) t.switch(tab);
+            }
+            window.switchToolsTab = switchToolsTab;
 
             // ── Profiles panel (rendered into #profiles-scroll) ──────────────
             function renderProfilesPanel() {

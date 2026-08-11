@@ -289,6 +289,9 @@
 
                     ms.saveSettings    = function() end
                     ms.loadSettings    = function() end
+                    ms._loadAuthoredSettings   = function() end
+                    ms._defineAuthoredSettings = function() end
+                    ms.addAuthoredSetting      = function() return false, "settings unavailable" end
                     ms.saveDefault     = function() end
                     ms.resetToDefault  = function() return false end
                     ms.reloadSettings  = function() end
@@ -965,10 +968,12 @@
                                 -- Exact-match: required mods held AND no extra mods held,
                                 -- so bare-key binds don't swallow modified combos (alt+esc)
                                 local modsMatch = true
-                                if (not binding.mods.cmd)   ~= (not flags.cmd)   then modsMatch = false end
-                                if (not binding.mods.alt)   ~= (not flags.alt)   then modsMatch = false end
-                                if (not binding.mods.ctrl)  ~= (not flags.ctrl)  then modsMatch = false end
-                                if (not binding.mods.shift) ~= (not flags.shift) then modsMatch = false end
+                                if not binding.modsAny then
+                                    if (not binding.mods.cmd)   ~= (not flags.cmd)   then modsMatch = false end
+                                    if (not binding.mods.alt)   ~= (not flags.alt)   then modsMatch = false end
+                                    if (not binding.mods.ctrl)  ~= (not flags.ctrl)  then modsMatch = false end
+                                    if (not binding.mods.shift) ~= (not flags.shift) then modsMatch = false end
+                                end
                                 if modsMatch then
                                     if BindValidity == 1 or binding.system then
                                         if binding.pressFn then
@@ -995,10 +1000,12 @@
                         for _, binding in ipairs(bucketUp) do
                             if binding then
                                 local modsMatch = true
-                                if binding.mods.cmd   and not flags.cmd   then modsMatch = false end
-                                if binding.mods.alt   and not flags.alt   then modsMatch = false end
-                                if binding.mods.ctrl  and not flags.ctrl  then modsMatch = false end
-                                if binding.mods.shift and not flags.shift then modsMatch = false end
+                                if not binding.modsAny then
+                                    if binding.mods.cmd   and not flags.cmd   then modsMatch = false end
+                                    if binding.mods.alt   and not flags.alt   then modsMatch = false end
+                                    if binding.mods.ctrl  and not flags.ctrl  then modsMatch = false end
+                                    if binding.mods.shift and not flags.shift then modsMatch = false end
+                                end
                                 if modsMatch then
                                     if BindValidity == 1 or binding.system then
                                         if binding.releaseFn then
@@ -1132,12 +1139,19 @@
                         return
                     end
 
+                    -- mods == "any" matches the key under any modifier state,
+                    -- the way the old system binds did (return / escape fire even
+                    -- while a movement modifier is held in-game).
+                    local modsAny = (mods == "any")
                     local modSet = {}
-                    for _, m in ipairs(mods or {}) do modSet[m] = true end
+                    if not modsAny then
+                        for _, m in ipairs(mods or {}) do modSet[m] = true end
+                    end
 
                     local binding = {
                         keyCode = keyCode,
                         mods = modSet,
+                        modsAny = modsAny,
                         swallow = swallow,
                         pressFn = pressFn,
                         releaseFn = releaseFn,
@@ -1742,6 +1756,10 @@
             ms.setReferenceResolution = function(w, h)
                 if type(w) == "number" and w > 0 then ms._refW = w; REF_W = w end
                 if type(h) == "number" and h > 0 then ms._refH = h; REF_H = h end
+                -- Keep the Inputs panel's REF coord-mode label in sync.
+                if ms.dev and ms.dev.pushRefDims then
+                    pcall(ms.dev.pushRefDims)
+                end
             end
 
             -- Toggle Window-relative scaling. When off, Window* points are
@@ -3211,21 +3229,15 @@
                     system     = true,
                     default    = { type = "key", mods = {"alt"}, key = "p" },
                 })
-                -- Wire up system bind actions
-                ms.bind._wires["__panicButton"] = function()
-                    ms.setMacros(0)
-                end
-                ms.bind._wires["__quickReload"] = function()
-                    if ms._qrCooldown then return end
-                    ms._qrCooldown = true
-                    hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
-                    if ms.reload then ms.reload() end
-                end
-                ms.bind._wires["__fullReload"] = function()
-                    if ms.restart then ms.restart() else hs.reload() end
-                end
-                -- __openMenu is handled by _bindHotkeys() via _makeKeyWatcher.
-                -- No wire here — having both would double-fire toggle().
+                -- These system binds are registered for display only — the
+                -- actual dispatch lives in _bindHotkeys() (one resilient tap per
+                -- key). Wiring them here made rebindSystem() spin up a SECOND,
+                -- orphaned _makeKeyWatcher tap on the same key; the two shared a
+                -- latch id (mods:key), so their down/cooldown state collided and
+                -- swallowed each other's fires — quick/full reload and panic
+                -- would intermittently no-op. Leaving them unwired (as the old
+                -- version did) restores single-path dispatch. __openMenu was
+                -- already unwired for the same reason.
             end
 
             local function modsMatch(bindMods, eventMods)
@@ -3277,13 +3289,20 @@
                     local c = ms.systemBinds.effective(id)
                     if not c then goto sysBindContinue end
                     if c.type == "key" then
-                        local tap = ms._makeKeyWatcher(c.mods, c.key, function()
+                        -- Ride the central resilient eventtap via ms.key, the way
+                        -- the old version did. _makeKeyWatcher spun up a private
+                        -- tap that was never added to _resilientTaps (so the
+                        -- watchdog never revived it after macOS disabled it) and
+                        -- was never torn down (its handle has no .delete), so the
+                        -- taps leaked and their shared latch state grew unreliable.
+                        -- ms.key handles fire regardless of BindValidity (system
+                        -- flag) and are torn down cleanly on rebind.
+                        ms.systemBinds._handles[id] = ms.key(c.mods, c.key, false, function()
                             if not ms._robloxActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
-                        end)
-                        if tap then ms.systemBinds._handles[id] = tap; tap:start() end
+                        end, nil, true)
                     elseif c.type == "mouse" then
                         ms.systemBinds._handles[id] = ms.mouse(c.button, false, function()
                             if not ms._robloxActive and not ms._isSafeZone() then return end
@@ -4422,6 +4441,8 @@
         ms._hotkeysReady   = false
         _G._bootChoreographyStarted = false  -- reset guard for loading screen ready handshake
         ms.loadSettings()            -- load first so importedSounds/soundAssign are available
+        ms._loadAuthoredSettings()   -- builder-authored setting defs (Tools panel)
+        ms._defineAuthoredSettings() -- register them after the pack + saved values
         -- Custom theming off means every built-in slot sits on its default,
         -- not just the three the loading screen needs. Settings written while
         -- theming was on survive on disk, so this has to run on every boot

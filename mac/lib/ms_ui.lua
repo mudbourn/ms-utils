@@ -1943,6 +1943,21 @@ return function(ms)
                 ms.ui.refresh()
             end,
 
+            -- Add a setting authored in the Tools panel's Setting Builder.
+            -- Delegates all validation and persistence to ms.addAuthoredSetting
+            -- (ms_settings.lua); this only surfaces the outcome to the user.
+            addUserSetting = function(data)
+                local ok, err = ms.addAuthoredSetting(data and data.def)
+                if ok then
+                    ms.playSlot("update")
+                    ms.ui.refresh()
+                    ms.alert("Setting added to your pack.", 3)
+                else
+                    ms.playSlot("alert")
+                    ms.alert("Couldn't add setting: " .. (err or "invalid"), 4)
+                end
+            end,
+
             modalResult = function(data)
                 if ms.ui._modalCallback then
                     local cb = ms.ui._modalCallback

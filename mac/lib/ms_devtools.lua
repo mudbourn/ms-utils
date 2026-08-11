@@ -612,6 +612,20 @@ return function(ms)
                 end
             end)
 
+            -- Push the live reference resolution to the Inputs panel so the
+            -- "REF" coord-mode label shows the real numbers instead of the
+            -- hardcoded default. Called on panel-ready and on any ref change.
+            local function _pushRefDims()
+                if not (_keysPanel or _shellActive()) then return end
+                local w = ms._refW or 1680
+                local h = ms._refH or 1044
+                pcall(function()
+                    _pushToPanel(_keysPanel, "keys",
+                        "setRefDims({\"w\":" .. w .. ",\"h\":" .. h .. "})")
+                end)
+            end
+            ms.dev.pushRefDims = _pushRefDims
+
             -- Inputs (keys) panel actions
             ms.bus.on("ui:keys:*", function(topic, body)
                 if not body or type(body) ~= "table" then return end
@@ -630,6 +644,7 @@ return function(ms)
                         _mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
                     end
                     _loadDevHistory(nil, {"input"}, "keys")
+                    _pushRefDims()
                 elseif action == "setCoordMode" then
                     _coordMode = body.mode or "screen"
                 end
