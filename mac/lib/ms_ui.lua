@@ -539,73 +539,53 @@ return function(ms)
             end
         end
 
-        -- Show the confirm modal for a captured bind. The modal is hosted in the
-        -- shell webview, which renders nothing while the panel is hidden during
-        -- capture — so we bring the panel back to the front FIRST. Without this
-        -- the modal silently queued and only surfaced when the user next opened a
-        -- panel (the "rebind, switch to Settings, and a confirm appears" bug that
-        -- made rebinding look broken because the change was never confirmed).
-        local function _confirmRebind(o)
-            ms._inputOpen = false
-            ms.ui._open   = true
-            ms.ui.show()
-            hs.timer.doAfter(0.05, function()
-                ms.ui.modal({
-                    title   = "Confirm Rebind",
-                    msg     = "Set \"" .. o.label .. "\" to:  " .. o.bindStr,
-                    confirm = "Confirm",
-                    cancel  = "Cancel",
-                }, function(r)
-                    if r.confirmed then
-                        o.apply()
-                        _restoreAfterCapture()
-                        hs.timer.doAfter(0.2, function()
-                            ms.alert(o.label .. " rebound to: " .. o.bindStr, 3, true, { id = "_rebind" })
-                            ms.ui.refresh()
-                        end)
-                    else
-                        ms.alert("Rebind cancelled.", 2, false, { id = "_rebind" })
-                        _restoreAfterCapture()
-                        ms.ui.refresh()
-                    end
-                end)
-            end)
-        end
-
-        -- Shared rebind capture. Listens for a keyboard combo (one or more
-        -- non-modifier keys held together, order-independent), a mouse button, a
-        -- scroll direction, or a controller button, and finalises a key combo
-        -- only once the user releases every key they were holding — so a two-key
-        -- chord like V+K registers as one combo instead of latching on the first
-        -- key or dropping the second. The instruction toast is swapped for a live
-        -- "Holding: …" toast on the first key and dismissed the moment the combo
-        -- settles.
+        -- Unified rebind prompt. One modal carries the whole flow — it informs
+        -- the user, streams the keys being held live, then turns into a confirm
+        -- for the detected bind — replacing the old floating alert toast plus a
+        -- separate confirm modal. It lives in the shell webview above whichever
+        -- panel is active, so a rebind started from Macros › Binds prompts there.
         --
-        --   opts.label    bind label, for the prompt
-        --   opts.current  current bind display string (or nil)
-        --   opts.gamepad  also capture controller buttons
-        --   opts.onResult function(parsed, bindStr) — the captured bind
-        --   opts.onCancel function(reason) — "escape" | "timeout"
-        local function _captureBind(opts)
-            local label = opts.label or "bind"
-            ms.alert("Rebinding: " .. label
-                .. "\nCurrent: " .. (opts.current or "unset")
-                .. "\nPress your new key or hold a combo, mouse button, scroll, or controller button."
-                .. "\nRelease all keys to set a combo.  Escape to cancel.", 15, false, { id = "_rebind" })
+        --   opts.label     bind label, shown in the prompt
+        --   opts.current   current bind display string (or nil → "unset")
+        --   opts.gamepad   also capture controller buttons
+        --   opts.validate  function(parsed, bindStr) → error string | nil
+        --                   (e.g. a sibling conflict); shown as a retry prompt
+        --   opts.apply     function(parsed, bindStr) — commit the accepted bind
+        --   opts.onCancel  function() — restore focus/refresh on cancel/timeout
+        --
+        -- Phases: "capture" (eventtap live, confirm button hidden — a click would
+        -- itself land as a mouse bind, so Escape is the only cancel here) →
+        -- "confirm" or "conflict" (eventtap stopped, so the modal's own buttons
+        -- and Enter/Escape work again).
+        local function _rebindModal(opts)
+            local label   = opts.label or "bind"
+            local current = opts.current or "unset"
 
-            ms._inputOpen = true
-            ms.ui._open   = false
+            ms.ui.ensureVisible()
 
+            local phase = "capture"          -- capture | confirm | conflict
+            local capturedParsed, capturedStr
             local capture, cancelTimer
-            local finished  = false
-            local heldCodes = {}   -- keyCode -> true, currently physically down
+            local settled   = false          -- capture eventtap has finished
+            local heldCodes = {}
             local heldCount = 0
-            local comboKeys = {}   -- ordered distinct key names pressed this gesture
-            local comboSeen = {}   -- key name -> true
-            local comboMods = {}   -- mod name -> true, union over the gesture
+            local comboKeys = {}
+            local comboSeen = {}
+            local comboMods = {}
             local started   = false
 
-            local function cleanup()
+            local INSTRUCTIONS =
+                "Press a key, or hold a combo. Mouse buttons, scroll,\n"
+                .. "and controller buttons work too.\n"
+                .. "Release to set  ·  Escape to cancel."
+
+            local function captureMsg(detected)
+                return "Current:  " .. current
+                    .. "\nNew:  " .. (detected or "…")
+                    .. "\n\n" .. INSTRUCTIONS
+            end
+
+            local function stopCapture()
                 if capture then capture:stop(); capture = nil end
                 if cancelTimer then cancelTimer:stop(); cancelTimer = nil end
                 if ms._gamepadCallbacks then ms._gamepadCallbacks._rebind = nil end
@@ -619,125 +599,190 @@ return function(ms)
                 return mods
             end
 
-            local function cancel(reason)
-                if finished then return end
-                finished = true
-                cleanup()
-                ms._inputOpen = false
-                if opts.onCancel then opts.onCancel(reason) end
-            end
+            local startCapture   -- forward declaration (conflict → "Try Again")
 
-            -- Fire a single-shot (mouse/scroll/gamepad) or the finished key combo.
-            local function deliver(parsed)
-                if finished then return end
-                finished = true
-                cleanup()
+            -- The single close callback for the modal opened by startCapture.
+            -- Which branch runs depends on the phase the modal was in when closed.
+            local function onClosed(r)
+                local confirmed = r and r.confirmed
+                if phase == "conflict" and confirmed then
+                    startCapture()          -- "Try Again": re-open and re-capture
+                    return
+                end
                 ms._inputOpen = false
-                pcall(function() ms.alert:dismissById("_rebind") end)
-                if opts.onResult then opts.onResult(parsed, _bindDisplay(parsed)) end
-            end
-
-            local function finalizeKeys()
-                if finished or #comboKeys == 0 then return end
-                local mods = modList()
-                if #comboKeys == 1 then
-                    deliver({ type = "key",   mods = mods, key  = comboKeys[1] })
+                if phase == "confirm" and confirmed then
+                    opts.apply(capturedParsed, capturedStr)
+                    _restoreAfterCapture()
+                    ms.ui.refresh()
                 else
-                    deliver({ type = "combo", mods = mods, keys = comboKeys })
+                    -- capture-phase close (Escape), a declined confirm, or a
+                    -- declined conflict retry all land here as a cancel.
+                    if opts.onCancel then opts.onCancel() end
                 end
             end
 
-            capture = hs.eventtap.new({
-                hs.eventtap.event.types.keyDown,
-                hs.eventtap.event.types.keyUp,
-                hs.eventtap.event.types.leftMouseDown,
-                hs.eventtap.event.types.rightMouseDown,
-                hs.eventtap.event.types.otherMouseDown,
-                hs.eventtap.event.types.scrollWheel,
-            }, function(event)
-                local t = event:getType()
+            -- Capture settled on a bind. Stop listening, then either flag a
+            -- conflict (retry prompt) or move the modal into its confirm phase.
+            local function toConfirm(parsed)
+                if settled then return end
+                settled = true
+                stopCapture()
+                local bindStr = _bindDisplay(parsed)
+                capturedParsed, capturedStr = parsed, bindStr
 
-                if t == hs.eventtap.event.types.keyDown then
-                    local keyCode = event:getKeyCode()
-                    local flags   = event:getFlags()
-                    -- Bare Escape cancels; Escape with modifiers is a real key.
-                    if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
-                        ms.alert("Rebind cancelled.", 2, false, { id = "_rebind" })
-                        cancel("escape")
+                local err = opts.validate and opts.validate(parsed, bindStr) or nil
+                if err then
+                    phase = "conflict"
+                    ms.playSlot("alert")
+                    ms.ui.modalUpdate({
+                        title       = "Bind Conflict",
+                        msg         = err .. "\n\nTry a different input?",
+                        confirm     = "Try Again",
+                        cancel      = "Cancel",
+                        showConfirm = true,
+                        showCancel  = true,
+                    })
+                    return
+                end
+
+                phase = "confirm"
+                ms.playSlot("interact")
+                ms.ui.modalUpdate({
+                    title       = "Confirm Rebind",
+                    msg         = "Set \"" .. label .. "\" to:\n" .. bindStr,
+                    confirm     = "Confirm",
+                    cancel      = "Cancel",
+                    showConfirm = true,
+                    showCancel  = true,
+                })
+            end
+
+            startCapture = function()
+                phase     = "capture"
+                settled   = false
+                started   = false
+                heldCodes = {}
+                heldCount = 0
+                comboKeys = {}
+                comboSeen = {}
+                comboMods = {}
+                ms._inputOpen = true
+
+                ms.ui.modal({
+                    title   = "Rebind — " .. label,
+                    msg     = captureMsg(nil),
+                    confirm = "Set",
+                    cancel  = "Cancel",
+                }, onClosed)
+                -- Hide both buttons during capture: a click would be swallowed by
+                -- the eventtap and registered as a mouse bind, and Escape (below)
+                -- is the intended cancel. They return in the confirm/conflict phase.
+                ms.ui.modalUpdate({ showConfirm = false, showCancel = false })
+
+                local function livePreview()
+                    if #comboKeys == 0 then return end
+                    local preview
+                    if #comboKeys > 1 then
+                        preview = { type = "combo", mods = modList(), keys = comboKeys }
+                    else
+                        preview = { type = "key",   mods = modList(), key  = comboKeys[1] }
+                    end
+                    ms.ui.modalUpdate({ msg = captureMsg(_bindDisplay(preview)) })
+                end
+
+                local function finalizeKeys()
+                    if settled or #comboKeys == 0 then return end
+                    local mods = modList()
+                    if #comboKeys == 1 then
+                        toConfirm({ type = "key",   mods = mods, key  = comboKeys[1] })
+                    else
+                        toConfirm({ type = "combo", mods = mods, keys = comboKeys })
+                    end
+                end
+
+                capture = hs.eventtap.new({
+                    hs.eventtap.event.types.keyDown,
+                    hs.eventtap.event.types.keyUp,
+                    hs.eventtap.event.types.leftMouseDown,
+                    hs.eventtap.event.types.rightMouseDown,
+                    hs.eventtap.event.types.otherMouseDown,
+                    hs.eventtap.event.types.scrollWheel,
+                }, function(event)
+                    local t = event:getType()
+
+                    if t == hs.eventtap.event.types.keyDown then
+                        local keyCode = event:getKeyCode()
+                        local flags   = event:getFlags()
+                        -- Bare Escape cancels; Escape with modifiers is a real key.
+                        if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then
+                            settled = true
+                            stopCapture()
+                            ms.ui.modalClose(false)   -- resolves onClosed as cancel
+                            return true
+                        end
+                        local keyStr = hs.keycodes.map[keyCode]
+                        if not keyStr then return true end   -- unmappable key: ignore
+                        if not heldCodes[keyCode] then
+                            heldCodes[keyCode] = true
+                            heldCount = heldCount + 1
+                            if not comboSeen[keyStr] then
+                                comboSeen[keyStr] = true
+                                comboKeys[#comboKeys + 1] = keyStr
+                            end
+                        end
+                        if flags.cmd   then comboMods.cmd   = true end
+                        if flags.alt   then comboMods.alt   = true end
+                        if flags.ctrl  then comboMods.ctrl  = true end
+                        if flags.shift then comboMods.shift = true end
+                        started = true
+                        livePreview()
+                        return true
+
+                    elseif t == hs.eventtap.event.types.keyUp then
+                        local keyCode = event:getKeyCode()
+                        if heldCodes[keyCode] then
+                            heldCodes[keyCode] = nil
+                            heldCount = heldCount - 1
+                            if heldCount <= 0 and started then finalizeKeys() end
+                        end
+                        return true
+
+                    elseif t == hs.eventtap.event.types.scrollWheel then
+                        if settled or started then return true end
+                        local dy  = event:getProperty(hs.eventtap.event.properties.scrollWheelEventDeltaAxis1)
+                        local dir = dy > 0 and "up" or "down"
+                        toConfirm({ type = "scroll", direction = dir })
+                        return true
+
+                    else
+                        if settled or started then return true end
+                        local btn
+                        if     t == hs.eventtap.event.types.leftMouseDown  then btn = 0
+                        elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
+                        else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
+                        toConfirm({ type = "mouse", button = btn })
                         return true
                     end
-                    local keyStr = hs.keycodes.map[keyCode]
-                    if not keyStr then return true end   -- unmappable key: ignore
-                    if not heldCodes[keyCode] then
-                        heldCodes[keyCode] = true
-                        heldCount = heldCount + 1
-                        if not comboSeen[keyStr] then
-                            comboSeen[keyStr] = true
-                            comboKeys[#comboKeys + 1] = keyStr
-                        end
-                    end
-                    if flags.cmd   then comboMods.cmd   = true end
-                    if flags.alt   then comboMods.alt   = true end
-                    if flags.ctrl  then comboMods.ctrl  = true end
-                    if flags.shift then comboMods.shift = true end
-                    started = true
-                    -- Live feedback of the combo captured so far. Replaces the
-                    -- instruction toast in place (same id), so the prompt goes
-                    -- away as soon as a valid key is pressed.
-                    if #comboKeys > 0 then
-                        local preview
-                        if #comboKeys > 1 then
-                            preview = { type = "combo", mods = modList(), keys = comboKeys }
-                        else
-                            preview = { type = "key",   mods = modList(), key  = comboKeys[1] }
-                        end
-                        ms.alert("Rebinding: " .. label
-                            .. "\nHolding: " .. _bindDisplay(preview)
-                            .. "\nRelease to set.  Escape to cancel.", 15, true, { id = "_rebind" })
-                    end
-                    return true
+                end)
 
-                elseif t == hs.eventtap.event.types.keyUp then
-                    local keyCode = event:getKeyCode()
-                    if heldCodes[keyCode] then
-                        heldCodes[keyCode] = nil
-                        heldCount = heldCount - 1
-                        if heldCount <= 0 and started then finalizeKeys() end
+                if opts.gamepad and ms.gamepadEnabled then
+                    if not ms._gamepadTask then ms.gamepadStart() end
+                    ms._gamepadCallbacks._rebind = function(btn)
+                        if settled or started then return end
+                        toConfirm({ type = "gamepad", button = btn })
                     end
-                    return true
-
-                elseif t == hs.eventtap.event.types.scrollWheel then
-                    if finished or started then return true end
-                    local dy  = event:getProperty(hs.eventtap.event.properties.scrollWheelEventDeltaAxis1)
-                    local dir = dy > 0 and "up" or "down"
-                    deliver({ type = "scroll", direction = dir })
-                    return true
-
-                else
-                    if finished or started then return true end
-                    local btn
-                    if     t == hs.eventtap.event.types.leftMouseDown  then btn = 0
-                    elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
-                    else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
-                    deliver({ type = "mouse", button = btn })
-                    return true
                 end
-            end)
 
-            if opts.gamepad and ms.gamepadEnabled then
-                if not ms._gamepadTask then ms.gamepadStart() end
-                ms._gamepadCallbacks._rebind = function(btn)
-                    if finished or started then return end
-                    deliver({ type = "gamepad", button = btn })
-                end
+                capture:start()
+                cancelTimer = hs.timer.doAfter(15, function()
+                    if settled then return end
+                    settled = true
+                    stopCapture()
+                    ms.ui.modalClose(false)   -- timeout resolves as cancel
+                end)
             end
 
-            capture:start()
-            cancelTimer = hs.timer.doAfter(15, function()
-                if finished then return end
-                ms.alert("Rebind timed out.", 2, false, { id = "_rebind" })
-                cancel("timeout")
-            end)
+            startCapture()
         end
 
         ms.ui._actions = {
@@ -1764,22 +1809,16 @@ return function(ms)
                     local sysDef = ms.systemBinds._defs[data.id]
                     if not sysDef then return end
                     local label = sysDef.label
-                    _captureBind({
-                        label   = label,
-                        current = _bindDisplay(ms.systemBinds.effective(data.id)),
-                        gamepad = true,
+                    _rebindModal({
+                        label    = label,
+                        current  = _bindDisplay(ms.systemBinds.effective(data.id)),
+                        gamepad  = true,
                         onCancel = function() _restoreAfterCapture(); ms.ui.refresh() end,
-                        onResult = function(parsed, bindStr)
-                            ms.playSlot("interact")
-                            _confirmRebind({
-                                label = label, bindStr = bindStr,
-                                apply = function()
-                                    ms.systemBinds._config[data.id] = parsed
-                                    ms.saveSettings()
-                                    ms.playSlot("update")
-                                    ms.systemBinds.rebind()
-                                end,
-                            })
+                        apply    = function(parsed)
+                            ms.systemBinds._config[data.id] = parsed
+                            ms.saveSettings()
+                            ms.playSlot("update")
+                            ms.systemBinds.rebind()
                         end,
                     })
                     return
@@ -1788,31 +1827,22 @@ return function(ms)
                 local def = ms.registry._defs[data.id]
                 if not def then return end
                 local label = def.label or data.id
-                _captureBind({
-                    label   = label,
-                    current = _bindDisplay(ms.effectiveBind(data.id)),
-                    gamepad = true,
+                _rebindModal({
+                    label    = label,
+                    current  = _bindDisplay(ms.effectiveBind(data.id)),
+                    gamepad  = true,
                     onCancel = function() _restoreAfterCapture(); ms.ui.refresh() end,
-                    onResult = function(parsed, bindStr)
+                    validate = function(parsed, bindStr)
                         local conflictId = ms.bind.siblingConflict(data.id, parsed)
-                        if conflictId then
-                            local cLabel = (ms.registry._defs[conflictId] and ms.registry._defs[conflictId].label) or conflictId
-                            ms.playSlot("alert")
-                            _restoreAfterCapture()
-                            ms.alert("Bind Conflict: \"" .. bindStr .. "\" is already used by \"" .. cLabel .. "\".\nChoose a different input.", 4, false, { id = "_rebind" })
-                            ms.ui.refresh()
-                            return
-                        end
-                        ms.playSlot("interact")
-                        _confirmRebind({
-                            label = label, bindStr = bindStr,
-                            apply = function()
-                                ms.bindConfig[data.id] = parsed
-                                ms.saveSettings()
-                                ms.playSlot("update")
-                                ms.bind.rebind()
-                            end,
-                        })
+                        if not conflictId then return nil end
+                        local cLabel = (ms.registry._defs[conflictId] and ms.registry._defs[conflictId].label) or conflictId
+                        return "\"" .. bindStr .. "\" is already used by \"" .. cLabel .. "\"."
+                    end,
+                    apply    = function(parsed)
+                        ms.bindConfig[data.id] = parsed
+                        ms.saveSettings()
+                        ms.playSlot("update")
+                        ms.bind.rebind()
                     end,
                 })
             end,
@@ -1969,7 +1999,10 @@ return function(ms)
                         ms.bind.rebind()
                         ms.playSlot(newKey and "update" or "reset")
                     end
-                    ms.ui.show()
+                    -- Shell stayed visible through the modifier capture, so only
+                    -- bring it forward — a full ms.ui.show() would replay the
+                    -- fade-in on an already-visible window.
+                    ms.ui.ensureVisible()
                     hs.timer.doAfter(0.1, function()
                         if not cancelled then
                             if newKey then
@@ -2096,6 +2129,21 @@ return function(ms)
             if ms.shell and ms.shell.show then ms.shell.show() end
         end
 
+        -- Bring the shell forward for a flow that needs it visible, but skip the
+        -- alpha-0 → 1 fade (and the open sound) when it is already up. ms.ui.show
+        -- always replays that intro; calling it mid-session — as the rebind
+        -- confirm did — made an already-visible shell flash a full fade-in for no
+        -- reason. When it really is hidden, fall through to the normal show.
+        ms.ui.ensureVisible = function()
+            local visible = ms._shellState and ms._shellState.visible
+            local ready   = ms.shell and ms.shell.isReady and ms.shell.isReady()
+            if visible and ready then
+                ms.ui._open = true
+                return
+            end
+            ms.ui.show()
+        end
+
         ms.ui.hide = function()
             ms.ui._open = false
             if ms.shell and ms.shell.hide then ms.shell.hide() end
@@ -2141,6 +2189,34 @@ return function(ms)
             ms.ui._modalCallback = callback
             pcall(function()
                 ms.shell.eval("openLuaModal(" .. json .. ")")
+            end)
+        end
+
+        -- Mutate the already-open modal without opening a new one. `data` may
+        -- carry any of title/msg/confirm/cancel/showConfirm/showCancel; omitted
+        -- fields are left as they are. Drives the rebind prompt's live capture →
+        -- confirm phases in a single modal (see updateLuaModal in the shell).
+        ms.ui.modalUpdate = function(data)
+            if not (ms.shell and ms.shell.isReady and ms.shell.isReady()) then
+                return
+            end
+            local ok, json = pcall(hs.json.encode, data or {})
+            if not ok then return end
+            pcall(function()
+                ms.shell.eval("updateLuaModal(" .. json .. ")")
+            end)
+        end
+
+        -- Close the open modal from Lua, resolving its callback as if the user
+        -- clicked Confirm (true) or Cancel (false). Needed because during rebind
+        -- capture an eventtap swallows the keyboard, so the modal's own
+        -- Enter/Escape handlers never fire — Escape has to close it from here.
+        ms.ui.modalClose = function(confirmed)
+            if not (ms.shell and ms.shell.isReady and ms.shell.isReady()) then
+                return
+            end
+            pcall(function()
+                ms.shell.eval("closeModal(" .. (confirmed and "true" or "false") .. ")")
             end)
         end
     -- END ms.ui.modal --

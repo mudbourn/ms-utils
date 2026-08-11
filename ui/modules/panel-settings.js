@@ -204,6 +204,11 @@
                     } else {
                         inp.classList.remove("show");
                     }
+                    // A previous live-capture modal may have hidden a button
+                    // (see updateLuaModal). Restore both to visible on every
+                    // fresh open so a plain confirm modal isn't missing a button.
+                    document.getElementById("modal-confirm").style.display = "";
+                    document.getElementById("modal-cancel").style.display = "";
                     document.getElementById("modal-confirm").textContent =
                         confirmLabel;
                     document.getElementById("modal-cancel").textContent =
@@ -250,6 +255,35 @@
             // openModal/closeModal above. Without it the confirm modal never
             // opens (ReferenceError), so rebinds capture but never save.
             window.openLuaModal = openLuaModal;
+
+            // Mutate the already-open modal in place without opening a new one
+            // or resolving the pending promise. The rebind flow uses this to
+            // drive a single modal through two phases — a live "capturing" phase
+            // that streams the keys being held, then a "confirm" phase — so the
+            // one prompt both informs the user and shows the detected bind,
+            // replacing the old floating alert toast. Any field may be omitted
+            // to leave it untouched; showConfirm/showCancel toggle each button
+            // (the confirm button is hidden while capturing, since a click in
+            // that phase would itself register as a mouse bind).
+            function updateLuaModal(d) {
+                if (d.title !== undefined)
+                    document.getElementById("modal-title").textContent = d.title;
+                if (d.msg !== undefined)
+                    document.getElementById("modal-msg").textContent = d.msg;
+                if (d.confirm !== undefined)
+                    document.getElementById("modal-confirm").textContent =
+                        d.confirm;
+                if (d.cancel !== undefined)
+                    document.getElementById("modal-cancel").textContent =
+                        d.cancel;
+                if (d.showConfirm !== undefined)
+                    document.getElementById("modal-confirm").style.display =
+                        d.showConfirm ? "" : "none";
+                if (d.showCancel !== undefined)
+                    document.getElementById("modal-cancel").style.display =
+                        d.showCancel ? "" : "none";
+            }
+            window.updateLuaModal = updateLuaModal;
 
             document
                 .getElementById("modal-overlay")
