@@ -382,6 +382,14 @@
            cards as the settings list, so they have to line up with it. */
         .panel-theme .tsec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
 
+        /* ── Tools panel ─────────────────────────────────────────────────── */
+        /* Same section-built scroll as Theme, scoped to .panel-tools. Holds
+           the pack's user-defined settings (Settings/Calibration/menus). */
+        .panel-tools .tsec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
+        .panel-tools .tsec-scroll::-webkit-scrollbar { width: 4px; }
+        .panel-tools .tsec-scroll::-webkit-scrollbar-track { background: transparent; }
+        .panel-tools .tsec-scroll::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+
         /* ── Profiles panel ──────────────────────────────────────────────── */
         /* Same strip again, scoped to .panel-profiles. */
         .panel-profiles .ptabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -840,6 +848,7 @@
     <nav id="rail">
         <div id="rail-drag" title="Drag to move window"><span class="grip"><span></span><span></span><span></span></span></div>
         <button class="rail-item active" data-panel="macros"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></span> Macros</button>
+        <button class="rail-item" data-panel="tools"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span> Tools</button>
         <button class="rail-item" data-panel="theme"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg></span> Theme</button>
         <button class="rail-item" data-panel="console"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 7C2 4.23858 4.23858 2 7 2H17C19.7614 2 22 4.23858 22 7V17C22 19.7614 19.7614 22 17 22H7C4.23858 22 2 19.7614 2 17V7ZM7 4C5.34315 4 4 5.34315 4 7V17C4 18.6569 5.34315 20 7 20H17C18.6569 20 20 18.6569 20 17V7C20 5.34315 18.6569 4 17 4H7ZM7 17C7 16.4477 7.44772 16 8 16H16C16.5523 16 17 16.4477 17 17C17 17.5523 16.5523 18 16 18H8C7.44772 18 7 17.5523 7 17ZM8.70709 7.29288C8.31656 6.90236 7.6834 6.90238 7.29288 7.29291C6.90236 7.68344 6.90238 8.3166 7.29291 8.70712L9.58588 11L7.29291 13.2929C6.90238 13.6834 6.90236 14.3166 7.29288 14.7071C7.6834 15.0976 8.31656 15.0976 8.70709 14.7071L11.7072 11.7071C11.8948 11.5196 12.0001 11.2652 12.0001 11C12.0001 10.7348 11.8948 10.4804 11.7072 10.2929L8.70709 7.29288Z" fill="currentColor"/></svg></span> Console</button>
         <button class="rail-item" data-panel="watcher"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 22C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 18.7712 2 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M22 15C22 18.7712 22 19.6569 20.8284 20.8284C19.6569 22 17.7712 22 14 22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 2C17.7712 2 19.6569 2 20.8284 3.17157C22 4.34315 22 5.22876 22 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10 2C6.22876 2 4.34315 2 3.17157 3.17157C2 4.34315 2 5.22876 2 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M5.89243 14.0598C5.29748 13.3697 5 13.0246 5 12C5 10.9754 5.29747 10.6303 5.89242 9.94021C7.08037 8.56222 9.07268 7 12 7C14.9273 7 16.9196 8.56222 18.1076 9.94021C18.7025 10.6303 19 10.9754 19 12C19 13.0246 18.7025 13.3697 18.1076 14.0598C16.9196 15.4378 14.9273 17 12 17C9.07268 17 7.08038 15.4378 5.89243 14.0598Z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/></svg></span> Watcher</button>
@@ -1267,6 +1276,20 @@
 
         <div id="ctx-menu"></div>
         </div>
+<div class="panel-tools" style="display:none">
+        <div id="header">
+            <span id="panel-title">mudscript — tools</span>
+            <div class="header-btns">
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="                        shellDispatch('_shell', 'close');
+                    "
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            </div>
+        </div>
+        <div id="tools-scroll" class="tsec-scroll"></div>
+</div>
 <div class="panel-theme" style="display:none">
         <div id="header">
             <span id="panel-title">mudscript — theme & sound</span>

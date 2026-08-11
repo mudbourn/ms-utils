@@ -1468,32 +1468,19 @@
                 const scrollTop = scroll.scrollTop;
                 scroll.innerHTML = "";
 
-                // Macros moved to the macros panel (which owns rebinding) and
-                // Calibration to the tools panel (its content is entirely
-                // user-defined settings). Settings keeps only what has no
-                // panel of its own.
+                // Everything user-defined — the pack's own Settings section,
+                // its Calibration group, and any custom menus — lives in the
+                // Tools panel now (renderToolsPanel, below). Macros moved to
+                // the macros panel, which owns rebinding. Settings keeps only
+                // the app-level surfaces that have no panel of their own.
                 scroll.appendChild(
                     section("runtime", "Runtime", buildRuntime,
                         "Macro engine and what a reload touches"),
                 );
                 scroll.appendChild(
-                    section("settings", "Settings", buildSettings,
-                        "Defined by your macro pack"),
-                );
-                scroll.appendChild(
                     section("accessibility", "Accessibility", buildAccessibility,
                         "Input handling and performance"),
                 );
-                for (const menu of S.userMenus || []) {
-                    const title = menu.icon
-                        ? menu.icon + " " + menu.title
-                        : menu.title;
-                    scroll.appendChild(
-                        section("user_" + menu.id, title, (body) =>
-                            buildUserSection(body, menu),
-                        ),
-                    );
-                }
                 scroll.appendChild(
                     section("developer", "Developer", buildDeveloper,
                         "Editing, logs, updates, and integrity"),
@@ -1504,6 +1491,48 @@
 
                 scroll.scrollTop = scrollTop;
             }
+
+            // ── Tools panel (rendered into #tools-scroll) ────────────────────
+            // Home for everything the macro pack defines: the generic Settings
+            // section (with Save/Reset as Default), the Calibration group, and
+            // any custom menus. Built from the same section()/renderUserItem
+            // kit as the Settings panel — same document, so it renders straight
+            // into the Tools panel's scroll container. Rendered from
+            // panel-settings.js exactly as the Profiles panel is.
+            function renderToolsPanel() {
+                const scroll = document.getElementById("tools-scroll");
+                if (!scroll) return;
+                const scrollTop = scroll.scrollTop;
+                scroll.innerHTML = "";
+
+                scroll.appendChild(
+                    section("settings", "Settings", buildSettings,
+                        "Defined by your macro pack"),
+                );
+
+                const calib = S.userCalibrationSettings || [];
+                if (calib.length > 0) {
+                    scroll.appendChild(
+                        section("calibration", "Calibration", (body) => {
+                            for (const item of calib) renderUserItem(body, item);
+                        }, "Tune the pack to your setup"),
+                    );
+                }
+
+                for (const menu of S.userMenus || []) {
+                    const title = menu.icon
+                        ? menu.icon + " " + menu.title
+                        : menu.title;
+                    scroll.appendChild(
+                        section("user_" + menu.id, title, (body) =>
+                            buildUserSection(body, menu),
+                        ),
+                    );
+                }
+
+                scroll.scrollTop = scrollTop;
+            }
+            window.renderToolsPanel = renderToolsPanel;
 
             // ── Profiles panel (rendered into #profiles-scroll) ──────────────
             function renderProfilesPanel() {
@@ -1665,6 +1694,7 @@
                 const verEl = document.getElementById("rail-version");
                 if (verEl && S.msVersion) verEl.textContent = "v" + S.msVersion;
                 render();
+                renderToolsPanel();
                 renderProfilesPanel();
                 // Theme & sound live in panel-theme.js — it gets the state it
                 // needs handed to it rather than reaching back for S.
