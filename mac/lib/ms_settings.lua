@@ -585,6 +585,45 @@ return function(ms)
             return true
         end
 
+        -- Public: remove a setting authored in the builder. Only authored
+        -- settings can be pulled — a key the pack declared in ms_macros.lua is
+        -- not ours to unregister — so a key that is not in ms._authoredSettings
+        -- is refused. Unregisters live (index, def list, stored value) so the
+        -- Settings panel and any tool picker drop it without a reload, then
+        -- persists the shortened authored list. Returns (ok, err).
+        ms.removeAuthoredSetting = function(key)
+            if type(key) ~= "string" or key == "" then
+                return false, "a key is required"
+            end
+            ms._authoredSettings = ms._authoredSettings or {}
+            local foundAt
+            for i, def in ipairs(ms._authoredSettings) do
+                if def.key == key then foundAt = i; break end
+            end
+            if not foundAt then
+                return false, "'" .. key .. "' is not an authored setting"
+            end
+
+            table.remove(ms._authoredSettings, foundAt)
+
+            -- Live unregister. define() stored the def by reference in both the
+            -- index and the ordered def list; drop it from each, plus its value.
+            if ms._userSettingIndex then ms._userSettingIndex[key] = nil end
+            if ms._userSettingVals  then ms._userSettingVals[key]  = nil end
+            if ms._userSettingDefs then
+                for i = #ms._userSettingDefs, 1, -1 do
+                    local d = ms._userSettingDefs[i]
+                    if type(d) == "table" and d.key == key then
+                        table.remove(ms._userSettingDefs, i)
+                    end
+                end
+            end
+
+            ms._saveAuthoredSettings()
+            ms.saveSettings()
+            return true
+        end
+
         ms.loadSettings = function()
             ms.dev.log({ type = "system", event = "settings_load_start" })
             if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end

@@ -133,14 +133,20 @@ return function(ms)
             for _, id in ipairs(ms.registry._defList or {}) do
                 local def = ms.registry._defs[id]
                 if def and not def.system and (not _parentOf(def) or _severedFromParent(id)) then
+                    local eff = ms.effectiveBind(id)
+                    local bindable = eff ~= nil
                     local enabled = ms.binds[id]
                     if enabled == nil then enabled = def.enabled end
                     local entry = {
                         id        = id,
                         label     = def.label,
                         group     = def.group,
-                        bind      = _bindDisplay(ms.effectiveBind(id)),
-                        enabled   = enabled and true or false,
+                        bind      = _bindDisplay(eff),
+                        -- Without a bind there is no trigger, so the macro can
+                        -- never be effectively on — report it off and let the
+                        -- UI lock the toggle (see `bindable`).
+                        enabled   = (enabled and bindable) and true or false,
+                        bindable  = bindable,
                         subs      = {},
                     }
                     byId[id] = entry
@@ -1142,7 +1148,22 @@ return function(ms)
                 if not data.id then return end
                 local def = ms.registry._defs[data.id]
                 if def and def.system then return end  -- system binds cannot be disabled
-                ms.binds[data.id] = (data.value == true)
+                local want = (data.value == true)
+                -- A macro with no effective bind has no trigger, so enabling it
+                -- would do nothing. Refuse it, keep the state off, and tell the
+                -- user to set a bind first. Disabling is always allowed.
+                if want and ms.effectiveBind(data.id) == nil then
+                    ms.binds[data.id] = false
+                    ms.saveSettings()
+                    ms.bind.rebind()
+                    hs.timer.doAfter(0.1, function()
+                        ms.alert((def and def.label or data.id)
+                            .. " has no bind — set one before enabling.", 2, true)
+                        ms.ui.refresh()
+                    end)
+                    return
+                end
+                ms.binds[data.id] = want
                 ms.saveSettings()
                 ms.bind.rebind()
                 ms.ui.refresh()
@@ -1945,6 +1966,23 @@ return function(ms)
                 end
             end,
 
+            -- Remove an authored setting (a "tool"). Reached from the macro
+            -- builder's tool detail; delegates validation to
+            -- ms.removeAuthoredSetting, which refuses anything but an authored
+            -- key. Only refreshes on success so a stray key is a quiet no-op
+            -- notice, not a panel churn.
+            removeUserSetting = function(data)
+                local ok, err = ms.removeAuthoredSetting(data and data.key)
+                if ok then
+                    ms.playSlot("reset")
+                    ms.ui.refresh()
+                    ms.alert("Tool removed from your pack.", 3)
+                else
+                    ms.playSlot("alert")
+                    ms.alert("Couldn't remove tool: " .. (err or "invalid"), 4)
+                end
+            end,
+
             modalResult = function(data)
                 if ms.ui._modalCallback then
                     local cb = ms.ui._modalCallback
@@ -1974,12 +2012,22 @@ return function(ms)
 
                 local def = ms.registry._defs[data.id]
                 if not def then return end
+                -- Clearing the override drops back to the bind defined in
+                -- ms_macros.lua / ms_macros_visual.lua (def.default). If the
+                -- macro was never given a default bind, there is nothing to
+                -- fall back to — it is now unbound, and an unbound macro has no
+                -- trigger to fire it, so it must go off rather than sit
+                -- "enabled" with no way to activate.
                 ms.bindConfig[data.id] = nil
+                local restored = ms.effectiveBind(data.id) ~= nil
+                if not restored then ms.binds[data.id] = false end
                 ms.saveSettings()
                 ms.bind.rebind()
                 ms.playSlot("reset")
                 hs.timer.doAfter(0.1, function()
-                    ms.alert((def.label or data.id) .. " reset to default.", 2, true)
+                    ms.alert((def.label or data.id) .. (restored
+                        and " reset to default."
+                        or " has no default bind — disabled."), 2, true)
                     ms.ui.refresh()
                 end)
             end,

@@ -292,6 +292,7 @@
                     ms._loadAuthoredSettings   = function() end
                     ms._defineAuthoredSettings = function() end
                     ms.addAuthoredSetting      = function() return false, "settings unavailable" end
+                    ms.removeAuthoredSetting   = function() return false, "settings unavailable" end
                     ms.saveDefault     = function() end
                     ms.resetToDefault  = function() return false end
                     ms.reloadSettings  = function() end
@@ -4228,6 +4229,42 @@
                         else
                             print("ms.compiler.deleteMacro error: " .. tostring(err))
                         end
+                    end)
+
+                    -- The macro builder's "Tools" section lists every live,
+                    -- value-bearing setting so a module parameter can be wired
+                    -- to one (compiled to ms.settings.get). These are the same
+                    -- defs the Settings panel renders — both the ones the pack
+                    -- declares in ms_macros.lua and the ones authored through the
+                    -- Setting Builder — so a tool created either way is bindable.
+                    -- Cosmetic types (divider/groupLabel) and keyless/actionable
+                    -- ones carry no value to read, so they are left out.
+                    local _TOOL_TYPES = { toggle = true, slider = true, seg = true }
+                    ms.bus.on("ui:macros:listTools", function()
+                        local tools = {}
+                        for _, def in ipairs(ms._userSettingDefs or {}) do
+                            if type(def) == "table" and def.key
+                                and _TOOL_TYPES[def.type] then
+                                tools[#tools + 1] = {
+                                    key     = def.key,
+                                    label   = def.label or def.key,
+                                    type    = def.type,
+                                    hint    = def.hint,
+                                    min     = def.min,
+                                    max     = def.max,
+                                    step    = def.step,
+                                    unit    = def.unit,
+                                    options = def.options,
+                                    default = def.default,
+                                    -- Authored tools can be deleted from the
+                                    -- builder; pack-declared ones live in the
+                                    -- source file and are reference-only.
+                                    source  = def.authored and "builder" or "pack",
+                                }
+                            end
+                        end
+                        local json = hs.json.encode(tools)
+                        _macroShellEval("if(window.macroLab)macroLab.setToolList(" .. json .. ")")
                     end)
                 end
             end

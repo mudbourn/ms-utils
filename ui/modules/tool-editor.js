@@ -221,6 +221,16 @@ function injectCSS() {
 }
 .tool-ed-text:focus { border-color: var(--accent); }
 
+/* ── Value / Tool bind switch ───────────────────────────────────── */
+.tool-editor-control.tool-ed-bindable { flex-wrap: wrap; }
+.tool-ed-bind-switch { display: inline-flex; border: 1px solid var(--border-dim); border-radius: var(--radius-s); overflow: hidden; }
+.tool-ed-bind-opt { background: var(--surface2); border: none; color: var(--text3); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 6px; cursor: pointer; transition: all 0.1s; }
+.tool-ed-bind-opt:hover { color: var(--text); }
+.tool-ed-bind-opt.on { background: var(--accent-glow-faint); color: var(--accent-hi); }
+.tool-ed-bind-holder { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: 4px; }
+.tool-ed-tool-select { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; padding: 4px 7px; outline: none; cursor: pointer; box-sizing: border-box; }
+.tool-ed-tool-select:focus { border-color: var(--accent); }
+
 /* ── Number Input ───────────────────────────────────────────────── */
 .tool-ed-number-wrap {
     display: flex;
@@ -478,6 +488,15 @@ class ToolEditor {
                 this.close();
             }
         };
+    }
+
+    // A value the builder wired to a tool arrives as { __toolRef: "key" }.
+    static _isToolRef(v) {
+        return !!(v && typeof v === "object" && typeof v.__toolRef === "string");
+    }
+    // The live tool list, shared by the Add Module picker via a global.
+    static _toolList() {
+        return Array.isArray(window.msMacroTools) ? window.msMacroTools : [];
     }
 
     // ── Hook into ToolCanvas._render ───────────────────────────────────
@@ -761,34 +780,116 @@ class ToolEditor {
         const control = document.createElement("div");
         control.className = "tool-editor-control";
 
-        switch (def.type) {
-            case "string":
-                control.appendChild(this._createStringInput(key, value, sid));
-                break;
-            case "number":
-                control.appendChild(this._createNumberInput(key, value, sid));
-                break;
-            case "key":
-                control.appendChild(this._createKeyCapture(key, value, sid));
-                break;
-            case "mods":
-                control.appendChild(this._createModChips(key, value, sid));
-                break;
-            case "select":
-                control.appendChild(this._createSelectInput(key, value, def.options, sid));
-                break;
-            case "condition":
-                control.appendChild(this._createConditionInput(key, value, sid));
-                break;
-            case "array":
-                control.appendChild(this._createArrayEditor(key, value, sid));
-                break;
-            default:
-                control.appendChild(this._createStringInput(key, value, sid));
+        // A parameter can be wired to a tool (an authored setting) instead of a
+        // literal — the same binding the Add Module picker offers. Only value-
+        // like params qualify; keys, modifiers, arrays and raw code do not.
+        const bindable = (def.type === "string" || def.type === "number"
+            || def.type === "condition" || def.type === undefined);
+        const bound = ToolEditor._isToolRef(value);
+
+        if (bindable) {
+            control.classList.add("tool-ed-bindable");
+            const sw = document.createElement("span");
+            sw.className = "tool-ed-bind-switch";
+            const litBtn = document.createElement("button");
+            litBtn.className = "tool-ed-bind-opt" + (bound ? "" : " on");
+            litBtn.textContent = "Value";
+            const toolBtn = document.createElement("button");
+            toolBtn.className = "tool-ed-bind-opt" + (bound ? " on" : "");
+            toolBtn.textContent = "Tool";
+            sw.appendChild(litBtn);
+            sw.appendChild(toolBtn);
+
+            const holder = document.createElement("div");
+            holder.className = "tool-ed-bind-holder";
+            control.appendChild(sw);
+            control.appendChild(holder);
+
+            const render = () => {
+                holder.innerHTML = "";
+                const nowBound = ToolEditor._isToolRef(value);
+                litBtn.classList.toggle("on", !nowBound);
+                toolBtn.classList.toggle("on", nowBound);
+                if (nowBound) {
+                    holder.appendChild(this._createToolSelect(key, value, sid));
+                } else {
+                    holder.appendChild(this._buildLiteralControl(def, key, value, sid));
+                }
+            };
+            _sfx(litBtn); _sfx(toolBtn);
+            litBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                // Drop the binding; reset to a sensible literal for the type.
+                value = def.type === "number" ? 0 : "";
+                this._updateParam(sid, key, value);
+                render();
+            });
+            toolBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const tools = ToolEditor._toolList();
+                const first = tools.length ? tools[0].key : "";
+                value = { __toolRef: first };
+                this._updateParam(sid, key, value);
+                render();
+            });
+            render();
+            row.appendChild(control);
+            return row;
         }
 
+        control.appendChild(this._buildLiteralControl(def, key, value, sid));
         row.appendChild(control);
         return row;
+    }
+
+    // The literal (non-bound) control for a parameter — the original switch.
+    _buildLiteralControl(def, key, value, sid) {
+        switch (def.type) {
+            case "string":    return this._createStringInput(key, value, sid);
+            case "number":    return this._createNumberInput(key, value, sid);
+            case "key":       return this._createKeyCapture(key, value, sid);
+            case "mods":      return this._createModChips(key, value, sid);
+            case "select":    return this._createSelectInput(key, value, def.options, sid);
+            case "condition": return this._createConditionInput(key, value, sid);
+            case "array":     return this._createArrayEditor(key, value, sid);
+            default:          return this._createStringInput(key, value, sid);
+        }
+    }
+
+    // Dropdown of the current tools for a bound parameter. Preserves the bound
+    // key even if it is not in the live list (a deleted or not-yet-loaded tool)
+    // so editing an unrelated field never silently drops the binding.
+    _createToolSelect(key, value, sid) {
+        const sel = document.createElement("select");
+        sel.className = "tool-ed-tool-select";
+        const tools = ToolEditor._toolList();
+        const current = ToolEditor._isToolRef(value) ? value.__toolRef : "";
+        if (tools.length === 0 && !current) {
+            const o = document.createElement("option");
+            o.value = ""; o.textContent = "No tools — create one in Add Module";
+            o.disabled = true; o.selected = true;
+            sel.appendChild(o);
+            sel.disabled = true;
+        } else {
+            let seen = false;
+            tools.forEach((t) => {
+                const o = document.createElement("option");
+                o.value = t.key;
+                o.textContent = (t.label || t.key) + "  ·  " + t.type;
+                if (t.key === current) { o.selected = true; seen = true; }
+                sel.appendChild(o);
+            });
+            if (current && !seen) {
+                const o = document.createElement("option");
+                o.value = current; o.textContent = current + "  (missing)";
+                o.selected = true;
+                sel.appendChild(o);
+            }
+        }
+        sel.addEventListener("change", () => {
+            this._updateParam(sid, key, { __toolRef: sel.value });
+        });
+        return sel;
     }
 
     // ── Input Widgets ──────────────────────────────────────────────────

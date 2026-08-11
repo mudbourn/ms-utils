@@ -444,6 +444,14 @@
                             onmouseenter: () => playSlot("hover"),
                             onclick: () => {
                                 playSlot("interact");
+                                // Move the highlight ourselves: some callers
+                                // (the Type picker) never rebuild this control,
+                                // so relying on a re-render to reflect the
+                                // selection left the active class stuck on the
+                                // initial option.
+                                for (const b of wrap.children)
+                                    b.classList.remove("active");
+                                btn.classList.add("active");
                                 onselect(o.value);
                             },
                         },
@@ -1615,22 +1623,31 @@
 
                 // A labelled text field on its own row, matching the input-sm
                 // house style. Re-renders nothing on input beyond the preview,
-                // so focus stays put while typing.
-                const textField = (labelText, sub, key, placeholder) =>
-                    row(
-                        labelText,
-                        sub,
-                        h("input", {
-                            type: "text",
-                            cls: "input-sm",
-                            placeholder: placeholder || "",
-                            value: draft[key] || "",
-                            oninput: (e) => {
-                                draft[key] = e.target.value;
-                                updatePreview();
-                            },
-                        }),
-                    );
+                // so focus stays put while typing. The input elements are kept
+                // in `identityInputs` so Add/Reset can push cleared draft values
+                // back into the DOM — the builder no longer rebuilds itself, so
+                // clearing `draft` alone would leave stale text on screen.
+                const identityInputs = {};
+                const textField = (labelText, sub, key, placeholder) => {
+                    const input = h("input", {
+                        type: "text",
+                        cls: "input-sm",
+                        placeholder: placeholder || "",
+                        value: draft[key] || "",
+                        oninput: (e) => {
+                            draft[key] = e.target.value;
+                            updatePreview();
+                        },
+                    });
+                    identityInputs[key] = input;
+                    return row(labelText, sub, input);
+                };
+                // Sync the identity inputs' visible text from `draft` — used
+                // after Add/Reset clears the draft.
+                const syncIdentityInputs = () => {
+                    for (const k in identityInputs)
+                        identityInputs[k].value = draft[k] || "";
+                };
 
                 const numField = (labelText, key, step) =>
                     row(
@@ -1688,13 +1705,15 @@
                             }
                             // The host validates (duplicate keys, etc.) and is
                             // the source of truth for the success/failure
-                            // notice, then re-renders the panel with the new
-                            // row. Clear the identity fields so the next setting
-                            // starts fresh; a re-render will rebuild this form.
+                            // notice. Clear the identity fields so the next
+                            // setting starts fresh — the builder no longer
+                            // rebuilds on the host's state push, so push the
+                            // cleared values into the inputs directly.
                             sendToHost({ action: "addUserSetting", def: def });
                             draft.key = "";
                             draft.label = "";
                             draft.hint = "";
+                            syncIdentityInputs();
                             renderDynamic();
                             updatePreview();
                         }),
@@ -1702,6 +1721,7 @@
                             draft.key = "";
                             draft.label = "";
                             draft.hint = "";
+                            syncIdentityInputs();
                             renderDynamic();
                             updatePreview();
                         }),
@@ -1964,16 +1984,19 @@
 
                 scroll.scrollTop = scrollTop;
 
-                // Setting Builder lives in its own tab.
+                // Setting Builder lives in its own tab. Build it ONCE: it is a
+                // self-contained compose form backed by local `draft` state and
+                // reads nothing from host state, so there is no reason to rebuild
+                // it on a state push — and doing so destroyed the focused input
+                // mid-keystroke. With the shell being a non-activating panel,
+                // the lost focus meant the next keys fell through to whatever app
+                // was actually active instead of the field.
                 const bscroll = document.getElementById("tools-builder-scroll");
-                if (bscroll) {
-                    const bTop = bscroll.scrollTop;
-                    bscroll.innerHTML = "";
+                if (bscroll && !bscroll.firstChild) {
                     bscroll.appendChild(
                         section("builder", "Setting Builder", buildSettingBuilder,
                             "Compose a new setting and preview it live"),
                     );
-                    bscroll.scrollTop = bTop;
                 }
             }
             window.renderToolsPanel = renderToolsPanel;

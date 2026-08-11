@@ -9,7 +9,27 @@
         ms.compiler = {}
 
         -- Helpers --
+            -- A parameter can be wired to a live "tool" (an authored setting)
+            -- instead of a literal. The builder sends such a binding as the
+            -- table { __toolRef = "settingKey" }; it compiles to a
+            -- ms.settings.get("settingKey") call so the macro reads the tool's
+            -- current value at run time — the whole point of the feature is to
+            -- make a macro configurable from the Settings panel without editing
+            -- and reloading its source. Anything else is not a binding.
+            -- The key is validated as an identifier so a hostile JSON payload
+            -- can never break out of the string into arbitrary Lua.
+            local function toolRef(val)
+                if type(val) == "table"
+                    and type(val.__toolRef) == "string"
+                    and val.__toolRef:match("^[%a_][%w_]*$") then
+                    return 'ms.settings.get("' .. val.__toolRef .. '")'
+                end
+                return nil
+            end
+
             local function serialize(val)
+                local ref = toolRef(val)
+                if ref then return ref end
                 local t = type(val)
                 if t == "string"  then return string.format("%q", val) end
                 if t == "number"  then return tostring(val) end
@@ -44,6 +64,18 @@
             local function ident(v, default)
                 if v == nil or v == "" then return default end
                 return v
+            end
+
+            -- A numeric argument that may instead be a tool binding. The plain
+            -- numeric emitters (waits, camera deltas, coordinates) drop values
+            -- in with tostring() rather than serialize(), so they need their
+            -- own funnel to honour a binding. Returns a Lua expression string.
+            local function numArg(v, default)
+                local ref = toolRef(v)
+                if ref then return ref end
+                if type(v) == "number" then return tostring(v) end
+                if type(v) == "string" and v ~= "" and tonumber(v) then return v end
+                return tostring(default)
             end
 
             local function buildArgs(params, argOrder)
@@ -84,8 +116,8 @@
             end
 
             emitters["ms.wait"] = function(step, lvl)
-                local ms_val = (step.params and step.params.ms) or 100
-                return indent(lvl) .. "ms.wait(" .. tostring(ms_val) .. ")"
+                local p = step.params or {}
+                return indent(lvl) .. "ms.wait(" .. numArg(p.ms, 100) .. ")"
             end
 
             emitters["ms.copy"] = function(step, lvl)
@@ -126,7 +158,7 @@
 
             emitters["ms.cam"] = function(step, lvl)
                 local p = step.params or {}
-                return indent(lvl) .. "ms.cam(" .. tostring(p.dx or 0) .. ", " .. tostring(p.dy or 0) .. ")"
+                return indent(lvl) .. "ms.cam(" .. numArg(p.dx, 0) .. ", " .. numArg(p.dy, 0) .. ")"
             end
 
             emitters["ms.cam.rebalance"] = function(step, lvl)
@@ -140,6 +172,12 @@
             emitters["ms.scroll"] = function(step, lvl)
                 local p = step.params or {}
                 local dir = serialize(p.direction or "up")
+                -- A bound clicks count is always emitted (its value is unknown
+                -- at compile time); a literal one is only emitted when > 1, the
+                -- pre-binding behaviour.
+                if toolRef(p.clicks) then
+                    return indent(lvl) .. "ms.scroll(" .. dir .. ", " .. numArg(p.clicks, 1) .. ")"
+                end
                 if p.clicks and p.clicks > 1 then
                     return indent(lvl) .. "ms.scroll(" .. dir .. ", " .. tostring(p.clicks) .. ")"
                 end
@@ -159,8 +197,8 @@
                 parts[#parts + 1] = serialize(p.operation or "Click")
                 parts[#parts + 1] = serialize(p.button or "Left")
                 parts[#parts + 1] = serialize(p.reference or "Mouse")
-                parts[#parts + 1] = tostring(p.x or 0)
-                parts[#parts + 1] = tostring(p.y or 0)
+                parts[#parts + 1] = numArg(p.x, 0)
+                parts[#parts + 1] = numArg(p.y, 0)
                 return indent(lvl) .. "ms.Mouse(" .. table.concat(parts, ", ") .. ")"
             end
 
@@ -174,22 +212,19 @@
             emitters["var_add"] = function(step, lvl)
                 local p = step.params or {}
                 local name   = ident(p.name, "v")
-                local amount = p.amount or 1
-                return indent(lvl) .. name .. " = " .. name .. " + " .. tostring(amount)
+                return indent(lvl) .. name .. " = " .. name .. " + " .. numArg(p.amount, 1)
             end
 
             emitters["var_sub"] = function(step, lvl)
                 local p = step.params or {}
                 local name   = ident(p.name, "v")
-                local amount = p.amount or 1
-                return indent(lvl) .. name .. " = " .. name .. " - " .. tostring(amount)
+                return indent(lvl) .. name .. " = " .. name .. " - " .. numArg(p.amount, 1)
             end
 
             emitters["var_mul"] = function(step, lvl)
                 local p = step.params or {}
                 local name   = ident(p.name, "v")
-                local amount = p.amount or 2
-                return indent(lvl) .. name .. " = " .. name .. " * " .. tostring(amount)
+                return indent(lvl) .. name .. " = " .. name .. " * " .. numArg(p.amount, 2)
             end
 
             local _flowCounter = 0

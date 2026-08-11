@@ -91,6 +91,58 @@
             window.doClear = doClear;
             window._panelClearFns['console'] = doClear;
 
+            // ── First-open danger notice ────────────────────────────────────
+            // Warn once, the first time the user opens the console, that pasted
+            // code runs with full machine access. The ack is remembered so it
+            // never nags again. localStorage may be unavailable in some webview
+            // data-store setups; on any failure we fail safe and re-show it.
+            const DANGER_ACK_KEY = "ms.console.dangerAck.v1";
+
+            function _dangerAcked() {
+                try {
+                    return window.localStorage.getItem(DANGER_ACK_KEY) === "1";
+                } catch (_) {
+                    return false;
+                }
+            }
+
+            function dismissConsoleDanger() {
+                const el = _panel && _panel.querySelector(".danger-overlay");
+                if (el) el.classList.remove("open");
+                try {
+                    window.localStorage.setItem(DANGER_ACK_KEY, "1");
+                } catch (_) {}
+                const input = document.getElementById("code-input");
+                if (input) input.focus();
+            }
+
+            // Called by the shell each time the console panel is shown. Only the
+            // first-ever open (before ack) actually raises the notice.
+            function maybeShowConsoleDanger() {
+                if (_dangerAcked()) return;
+                const el = _panel && _panel.querySelector(".danger-overlay");
+                if (!el) return;
+                el.classList.add("open");
+                const btn = el.querySelector(".danger-ack");
+                if (btn) btn.focus();
+            }
+
+            window.dismissConsoleDanger   = dismissConsoleDanger;
+            window._maybeShowConsoleDanger = maybeShowConsoleDanger;
+
+            // Enter/Escape dismiss the notice while it is up (capture phase so the
+            // keypress doesn't also reach the console input and run code).
+            document.addEventListener("keydown", (e) => {
+                const el = _panel && _panel.querySelector(".danger-overlay");
+                if (!el || !el.classList.contains("open")) return;
+                if (e.key === "Enter" || e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    lp.playSlot("interact");
+                    dismissConsoleDanger();
+                }
+            }, true);
+
             // ── Input bar: Enter to run ─────────────────────────────────────
             document
                 .getElementById("code-input")

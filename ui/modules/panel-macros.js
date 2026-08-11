@@ -591,12 +591,22 @@
 
         var MOD_LIST = ["ctrl", "alt", "shift", "cmd"];
 
+        // Parameter types whose value can be wired to a tool (an authored
+        // setting) instead of a literal. A bound param compiles to
+        // ms.settings.get("key"), so it only makes sense where a plain value is
+        // expected — not for key captures, modifier sets, or raw Lua blocks.
+        var BINDABLE = { number: true, string: true };
+
         /* ── State ─────────────────────────────────────────────────── */
         var _selectedId  = null;
         var _paramValues = {};   // { paramName: value }
+        var _paramBind   = {};   // { paramName: toolKey } — params wired to a tool
         var _modState    = {};   // { ctrl: false, alt: false, ... }
         var _keyCapture  = null; // param name currently capturing
         var _toastTimer  = null;
+        var _tools       = [];   // current tools (authored settings + pack settings)
+        var _view        = "module"; // "module" | "tool" | "toolCreator"
+        var _toolDraft   = null; // in-progress new-tool definition (creator form)
 
         /* ── Build DOM ─────────────────────────────────────────────── */
         var slot = document.getElementById("slot-macros");
@@ -664,10 +674,102 @@
             return row;
         }
 
+        // The Tools group sits above the module categories: it is not part of
+        // REGISTRY (tools are live settings, not code the compiler emits) so it
+        // is rendered on its own. Every tool is a row you can inspect; a final
+        // "New Tool…" row opens the creator. A module parameter is wired to a
+        // tool from that parameter's own field, not from here.
+        function renderToolsGroup(filter, searching) {
+            var q = (filter || "").toLowerCase();
+            var matches = _tools.filter(function(t) {
+                if (!q) return true;
+                return (t.label || "").toLowerCase().indexOf(q) !== -1
+                    || (t.key || "").toLowerCase().indexOf(q) !== -1
+                    || "tool".indexOf(q) !== -1;
+            });
+            // With an active query that matches no tool and not the word "tool",
+            // hide the group entirely so search results stay tight.
+            var showNew = !q || "new tool".indexOf(q) !== -1 || "tool".indexOf(q) !== -1;
+            if (matches.length === 0 && !showNew) return;
+
+            var collapsed = searching ? false : !!_catCollapsed["__tools"];
+
+            var head = document.createElement("div");
+            head.className = "fn-cat-head fn-cat-tools" + (collapsed ? " collapsed" : "");
+
+            var chev = document.createElement("span");
+            chev.className = "fn-cat-chev";
+            chev.innerHTML = (typeof window.icon === "function"
+                && window.ICONS && window.ICONS.chevdown)
+                ? window.icon("chevdown") : "";
+            head.appendChild(chev);
+
+            var name = document.createElement("span");
+            name.className = "fn-cat-name";
+            name.textContent = "tools";
+            head.appendChild(name);
+
+            var count = document.createElement("span");
+            count.className = "fn-cat-count";
+            count.textContent = String(matches.length);
+            head.appendChild(count);
+
+            head.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
+            if (!searching) {
+                head.addEventListener("click", function() {
+                    if (window.playSlot) playSlot("interact");
+                    _catCollapsed["__tools"] = !_catCollapsed["__tools"];
+                    renderList(filter);
+                });
+            }
+            entriesDiv.appendChild(head);
+
+            if (collapsed) return;
+
+            matches.forEach(function(t) {
+                var row = document.createElement("div");
+                row.className = "fn-entry fn-tool-entry"
+                    + (_view === "tool" && _selectedId === t.key ? " active" : "");
+                row.setAttribute("data-tool-key", t.key);
+
+                var sig = document.createElement("span");
+                sig.className = "fn-entry-sig";
+                sig.textContent = t.label || t.key;
+                row.appendChild(sig);
+
+                var tag = document.createElement("span");
+                tag.className = "fn-tool-tag fn-tool-tag-" + (t.source || "pack");
+                tag.textContent = t.type;
+                row.appendChild(tag);
+
+                row.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
+                row.addEventListener("click", function() { selectTool(t.key); });
+                entriesDiv.appendChild(row);
+            });
+
+            if (showNew) {
+                var newRow = document.createElement("div");
+                newRow.className = "fn-entry fn-tool-new"
+                    + (_view === "toolCreator" ? " active" : "");
+                newRow.innerHTML = '<span class="fn-entry-sig">+ New Tool…</span>';
+                newRow.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
+                newRow.addEventListener("click", function() { openToolCreator(); });
+                entriesDiv.appendChild(newRow);
+            }
+        }
+
         function renderList(filter) {
             entriesDiv.innerHTML = "";
             var q = (filter || "").toLowerCase();
             var searching = q.length > 0;
+
+            renderToolsGroup(filter, searching);
 
             // Group visible entries by category, preserving REGISTRY order.
             var order = [];
@@ -733,7 +835,9 @@
         /* ── Select Function ───────────────────────────────────────── */
         function selectFunction(id) {
             _selectedId = id;
+            _view = "module";
             _paramValues = {};
+            _paramBind = {};
             _modState = {};
             _keyCapture = null;
 
@@ -764,6 +868,312 @@
             }
 
             renderDetail(fn);
+        }
+
+        /* ── Tools ─────────────────────────────────────────────────────
+           A tool is an authored setting: it defines a value the person running
+           the pack can adjust from the Settings panel, and a module parameter
+           can be wired to it so the macro reads that value live instead of a
+           number baked into the source. selectTool shows one; openToolCreator
+           makes a new one. */
+        function findTool(key) {
+            for (var i = 0; i < _tools.length; i++) {
+                if (_tools[i].key === key) return _tools[i];
+            }
+            return null;
+        }
+
+        function selectTool(key) {
+            _view = "tool";
+            _selectedId = key;
+            var items = entriesDiv.querySelectorAll(".fn-entry");
+            for (var i = 0; i < items.length; i++) {
+                items[i].classList.toggle("active",
+                    items[i].getAttribute("data-tool-key") === key);
+            }
+            renderToolDetail(findTool(key));
+        }
+
+        function renderToolDetail(t) {
+            if (!t) { detailPane.innerHTML = ''; return; }
+            var html = '';
+            html += '<div class="fn-detail-header">';
+            html += '<div class="fn-detail-name">' + esc(t.label || t.key) + '</div>';
+            html += '<div class="fn-detail-desc">'
+                + esc(t.hint || 'A ' + t.type + ' tool. Wire it into a module parameter to read its value live.')
+                + '</div>';
+            html += '</div>';
+
+            html += '<div class="fn-detail-body"><div class="fn-params">';
+            html += toolMetaRow("Key", t.key);
+            html += toolMetaRow("Type", t.type);
+            html += toolMetaRow("Source",
+                t.source === "builder" ? "Authored here" : "Declared in the pack");
+            if (t.type === "slider") {
+                html += toolMetaRow("Range", (t.min != null ? t.min : "?")
+                    + " – " + (t.max != null ? t.max : "?")
+                    + (t.step ? " (step " + t.step + ")" : ""));
+            }
+            if (t.type === "seg" && t.options) {
+                var labels = t.options.map(function(o) { return o.label; }).join(", ");
+                html += toolMetaRow("Options", labels);
+            }
+            if (t.default !== undefined && t.default !== null && t.default !== "") {
+                html += toolMetaRow("Default", String(t.default));
+            }
+            html += '<div class="fn-tool-usehint">Reads as <code>ms.settings.get("'
+                + esc(t.key) + '")</code>. To use it, add a module and switch any '
+                + 'value field to <b>Tool</b>, then pick this.</div>';
+            html += '</div></div>';
+
+            html += '<div class="fn-detail-footer">';
+            if (t.source === "builder") {
+                html += '<button class="fn-add-btn fn-tool-delete" id="fn-tool-delete">Delete Tool</button>';
+            }
+            html += '</div>';
+
+            detailPane.innerHTML = html;
+
+            var del = document.getElementById("fn-tool-delete");
+            if (del) {
+                del.addEventListener("click", function() {
+                    if (window.macroLab && window.macroLab.deleteTool) {
+                        window.macroLab.deleteTool(t.key);
+                    }
+                });
+            }
+        }
+
+        function toolMetaRow(label, value) {
+            return '<div class="fn-param-group fn-tool-meta"><div class="fn-param-label">'
+                + esc(label) + '</div><div class="fn-tool-meta-val">'
+                + esc(String(value)) + '</div></div>';
+        }
+
+        // Tool types the creator can produce. "number" is a slider under the
+        // hood (the settings engine has no free-number control), but presented
+        // separately because a bounded counter reads differently from a
+        // percentage-style slider.
+        var TOOL_TYPES = [
+            { id: "slider", label: "Slider" },
+            { id: "number", label: "Number" },
+            { id: "toggle", label: "Toggle" },
+            { id: "seg",    label: "Segmented" }
+        ];
+
+        function openToolCreator() {
+            _view = "toolCreator";
+            _selectedId = null;
+            _toolDraft = {
+                type: "slider", key: "", label: "", hint: "",
+                min: 0, max: 100, step: 1, unit: "",
+                toggleDefault: false,
+                options: [ { label: "One", value: "one" }, { label: "Two", value: "two" } ],
+                segDefault: "one"
+            };
+            var items = entriesDiv.querySelectorAll(".fn-entry");
+            for (var i = 0; i < items.length; i++) items[i].classList.remove("active");
+            var nr = entriesDiv.querySelector(".fn-tool-new");
+            if (nr) nr.classList.add("active");
+            renderToolCreator();
+        }
+
+        function renderToolCreator() {
+            var d = _toolDraft;
+            var html = '';
+            html += '<div class="fn-detail-header">';
+            html += '<div class="fn-detail-name">New Tool</div>';
+            html += '<div class="fn-detail-desc">Define a configurable value. It '
+                + 'appears in the Settings panel and can be wired into any module '
+                + 'parameter.</div>';
+            html += '</div>';
+
+            html += '<div class="fn-detail-body"><div class="fn-params">';
+
+            // Type picker
+            html += '<div class="fn-param-group"><div class="fn-param-label">Type</div>';
+            html += '<div class="fn-mods-row" id="tc-types">';
+            TOOL_TYPES.forEach(function(tt) {
+                html += '<button class="fn-mod-chip' + (d.type === tt.id ? ' on' : '')
+                    + '" data-tctype="' + tt.id + '">' + tt.label + '</button>';
+            });
+            html += '</div></div>';
+
+            // Key + label + hint
+            html += tcText("Key", "tc-key", d.key, "identifier, e.g. clickDelay", true);
+            html += tcText("Label", "tc-label", d.label, "shown in Settings");
+            html += tcText("Hint", "tc-hint", d.hint, "optional description");
+
+            // Type-specific
+            if (d.type === "slider" || d.type === "number") {
+                html += tcNum("Min", "tc-min", d.min);
+                html += tcNum("Max", "tc-max", d.max);
+                html += tcNum("Step", "tc-step", d.step);
+                html += tcNum("Default", "tc-default", d.numDefault != null ? d.numDefault : d.min);
+                if (d.type === "slider") html += tcText("Unit", "tc-unit", d.unit, "optional, e.g. %");
+            } else if (d.type === "toggle") {
+                html += '<div class="fn-param-group"><div class="fn-param-label">Default</div>'
+                    + '<div class="fn-mods-row"><button class="fn-mod-chip'
+                    + (d.toggleDefault ? ' on' : '') + '" id="tc-toggle-def">'
+                    + (d.toggleDefault ? 'On' : 'Off') + '</button></div></div>';
+            } else if (d.type === "seg") {
+                html += '<div class="fn-param-group"><div class="fn-param-label">Options'
+                    + ' <span class="fn-param-type">label : value</span></div>'
+                    + '<div id="tc-options">';
+                d.options.forEach(function(o, i) {
+                    html += '<div class="fn-seg-optrow">'
+                        + '<input type="text" class="fn-seg-optlabel" data-oi="' + i + '" value="'
+                        + esc(o.label) + '" placeholder="label" spellcheck="false">'
+                        + '<input type="text" class="fn-seg-optval" data-oi="' + i + '" value="'
+                        + esc(String(o.value)) + '" placeholder="value" spellcheck="false">'
+                        + '<button class="fn-seg-optdel" data-oi="' + i + '" title="Remove">×</button>'
+                        + '</div>';
+                });
+                html += '</div><button class="fn-seg-optadd" id="tc-optadd">+ Add option</button></div>';
+            }
+
+            html += '</div></div>';
+
+            html += '<div class="fn-detail-footer">';
+            html += '<button class="fn-add-btn" id="tc-create">Create Tool</button>';
+            html += '</div>';
+
+            detailPane.innerHTML = html;
+            wireToolCreator();
+        }
+
+        function tcText(label, id, val, ph, required) {
+            return '<div class="fn-param-group"><div class="fn-param-label">' + esc(label)
+                + (required ? ' <span style="color:var(--danger)">*</span>' : '')
+                + '</div><input type="text" id="' + id + '" value="' + esc(val || "")
+                + '" placeholder="' + esc(ph || "") + '" spellcheck="false" autocomplete="off" '
+                + 'autocorrect="off" autocapitalize="off"></div>';
+        }
+
+        function tcNum(label, id, val) {
+            return '<div class="fn-param-group"><div class="fn-param-label">' + esc(label)
+                + '</div><input type="number" id="' + id + '" value="'
+                + (val != null ? val : 0) + '" step="any"></div>';
+        }
+
+        function wireToolCreator() {
+            var d = _toolDraft;
+            // Type chips
+            var typeChips = detailPane.querySelectorAll("[data-tctype]");
+            typeChips.forEach(function(c) {
+                c.addEventListener("click", function() {
+                    d.type = c.getAttribute("data-tctype");
+                    renderToolCreator();
+                });
+            });
+            function bindText(id, key) {
+                var el = document.getElementById(id);
+                if (el) el.addEventListener("input", function() { d[key] = el.value; });
+                if (el) el.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            }
+            function bindNum(id, key) {
+                var el = document.getElementById(id);
+                if (el) el.addEventListener("input", function() {
+                    var v = parseFloat(el.value); d[key] = isNaN(v) ? 0 : v;
+                });
+                if (el) el.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            }
+            bindText("tc-key", "key");
+            bindText("tc-label", "label");
+            bindText("tc-hint", "hint");
+            bindText("tc-unit", "unit");
+            bindNum("tc-min", "min");
+            bindNum("tc-max", "max");
+            bindNum("tc-step", "step");
+            var defEl = document.getElementById("tc-default");
+            if (defEl) defEl.addEventListener("input", function() {
+                var v = parseFloat(defEl.value); d.numDefault = isNaN(v) ? undefined : v;
+            });
+            var tog = document.getElementById("tc-toggle-def");
+            if (tog) tog.addEventListener("click", function() {
+                d.toggleDefault = !d.toggleDefault; renderToolCreator();
+            });
+            // Seg options
+            detailPane.querySelectorAll(".fn-seg-optlabel").forEach(function(el) {
+                el.addEventListener("input", function() {
+                    d.options[+el.getAttribute("data-oi")].label = el.value;
+                });
+                el.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            });
+            detailPane.querySelectorAll(".fn-seg-optval").forEach(function(el) {
+                el.addEventListener("input", function() {
+                    d.options[+el.getAttribute("data-oi")].value = el.value;
+                });
+                el.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            });
+            detailPane.querySelectorAll(".fn-seg-optdel").forEach(function(el) {
+                el.addEventListener("click", function() {
+                    if (d.options.length <= 1) return;
+                    d.options.splice(+el.getAttribute("data-oi"), 1);
+                    renderToolCreator();
+                });
+            });
+            var add = document.getElementById("tc-optadd");
+            if (add) add.addEventListener("click", function() {
+                d.options.push({ label: "", value: "" });
+                renderToolCreator();
+            });
+            var create = document.getElementById("tc-create");
+            if (create) create.addEventListener("click", submitToolCreator);
+        }
+
+        function submitToolCreator() {
+            var d = _toolDraft;
+            var key = (d.key || "").trim();
+            if (!key) { showToast("A key is required"); return; }
+            if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+                showToast("Key must be a valid identifier"); return;
+            }
+            if (findTool(key)) { showToast("A tool named '" + key + "' already exists"); return; }
+
+            // The host's Setting Builder has no free "number" type; a number
+            // tool is a slider whose range the creator supplied.
+            var wireType = (d.type === "number") ? "slider" : d.type;
+            var def = { type: wireType, target: "settings", key: key,
+                        label: (d.label || "").trim() || key,
+                        hint: (d.hint || "").trim() || undefined };
+
+            if (wireType === "slider") {
+                var mn = Number(d.min) || 0;
+                var mx = Number(d.max);
+                if (isNaN(mx) || mx <= mn) mx = mn + (d.type === "number" ? 999 : 100);
+                var st = Number(d.step) || 1;
+                var dv = (d.numDefault != null) ? d.numDefault : mn;
+                if (dv < mn) dv = mn; if (dv > mx) dv = mx;
+                def.min = mn; def.max = mx; def.step = st;
+                def.default = dv; def.value = dv;
+                if (d.type === "slider" && (d.unit || "").trim()) def.unit = d.unit.trim();
+            } else if (wireType === "toggle") {
+                def.default = !!d.toggleDefault; def.value = def.default;
+            } else if (wireType === "seg") {
+                var opts = [];
+                d.options.forEach(function(o) {
+                    var l = (o.label || "").trim();
+                    if (l === "") return;
+                    var v = (o.value === "" || o.value == null) ? l : o.value;
+                    var nv = Number(v);
+                    opts.push({ label: l, value: (!isNaN(nv) && String(nv) === String(v)) ? nv : v });
+                });
+                if (opts.length === 0) { showToast("At least one option is required"); return; }
+                def.options = opts;
+                def.default = opts[0].value; def.value = def.default;
+            }
+
+            if (window.macroLab && window.macroLab.createTool) {
+                window.macroLab.createTool(def);
+                showToast("Creating tool: " + key);
+                // Clear identity fields so the next tool starts fresh; the
+                // pushed list refresh re-renders the picker with the new row.
+                _toolDraft.key = "";
+                _toolDraft.label = "";
+                _toolDraft.hint = "";
+                renderToolCreator();
+            }
         }
 
         /* ── Render Detail Panel ───────────────────────────────────── */
@@ -813,13 +1223,41 @@
         }
 
         /* ── Render a single parameter field ───────────────────────── */
+        // The <option> list for a tool picker. When there are no tools, the
+        // sole disabled row tells the person what to do about it.
+        function toolOptionsHtml(selectedKey) {
+            if (_tools.length === 0) {
+                return '<option value="" disabled selected>No tools — create one first</option>';
+            }
+            var html = '<option value="" disabled' + (selectedKey ? '' : ' selected') + '>Pick a tool…</option>';
+            _tools.forEach(function(t) {
+                html += '<option value="' + esc(t.key) + '"'
+                    + (t.key === selectedKey ? ' selected' : '') + '>'
+                    + esc((t.label || t.key) + '  ·  ' + t.type) + '</option>';
+            });
+            return html;
+        }
+
         function renderParamField(p) {
-            var html = '<div class="fn-param-group fn-param">';
+            var bindable = !!BINDABLE[p.type];
+            var bound = bindable && !!_paramBind[p.name];
+
+            var html = '<div class="fn-param-group fn-param' + (bound ? ' bound' : '')
+                + '" data-pname="' + esc(p.name) + '">';
             html += '<div class="fn-param-label">' + esc(p.label);
             html += ' <span class="fn-param-type">' + esc(p.type) + '</span>';
             if (p.required) html += ' <span style="color:var(--danger)">*</span>';
+            if (bindable) {
+                html += '<span class="fn-bind-switch">'
+                    + '<button class="fn-bind-opt' + (bound ? '' : ' on') + '" data-bindmode="literal" data-param="'
+                    + esc(p.name) + '">Value</button>'
+                    + '<button class="fn-bind-opt' + (bound ? ' on' : '') + '" data-bindmode="tool" data-param="'
+                    + esc(p.name) + '">Tool</button></span>';
+            }
             html += '</div>';
 
+            html += '<div class="fn-param-literal" data-lit="' + esc(p.name) + '"'
+                + (bound ? ' style="display:none"' : '') + '>';
             switch (p.type) {
                 case "string":
                     html += '<input type="text" data-param="' + esc(p.name) + '" placeholder="Enter text\u2026" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">';
@@ -851,6 +1289,16 @@
                 case "code":
                     html += '<textarea class="fn-code-input" data-param="' + esc(p.name) + '" rows="3" placeholder="Lua source…" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>';
                     break;
+            }
+            html += '</div>';
+
+            if (bindable) {
+                var sel = _paramBind[p.name] || "";
+                html += '<div class="fn-param-tool" data-toolwrap="' + esc(p.name) + '"'
+                    + (bound ? '' : ' style="display:none"') + '>';
+                html += '<select class="fn-tool-select" data-toolsel="' + esc(p.name) + '">'
+                    + toolOptionsHtml(sel) + '</select>';
+                html += '</div>';
             }
 
             html += '</div>';
@@ -915,6 +1363,65 @@
                         updatePreview(fn);
                     });
                 })(modChips[k]);
+            }
+
+            // Value/Tool switch — flips a parameter between a literal and a
+            // tool binding. Switching to Tool with no tool chosen yet leaves the
+            // binding empty until the select fires; switching back to Value
+            // clears the binding and restores the literal value in state.
+            var switches = detailPane.querySelectorAll(".fn-bind-opt");
+            for (var s = 0; s < switches.length; s++) {
+                (function(btn) {
+                    var name = btn.getAttribute("data-param");
+                    var mode = btn.getAttribute("data-bindmode");
+                    btn.addEventListener("click", function() {
+                        if (window.playSlot) playSlot("interact");
+                        var group = detailPane.querySelector('.fn-param[data-pname="' + name + '"]');
+                        if (!group) return;
+                        var lit  = group.querySelector('[data-lit="' + name + '"]');
+                        var tool = group.querySelector('[data-toolwrap="' + name + '"]');
+                        var opts = group.querySelectorAll('.fn-bind-opt');
+                        opts.forEach(function(o) {
+                            o.classList.toggle("on", o.getAttribute("data-bindmode") === mode);
+                        });
+                        if (mode === "tool") {
+                            group.classList.add("bound");
+                            if (lit)  lit.style.display  = "none";
+                            if (tool) tool.style.display = "";
+                            var selEl = group.querySelector('[data-toolsel="' + name + '"]');
+                            _paramBind[name] = (selEl && selEl.value) ? selEl.value : "";
+                            if (_paramBind[name]) {
+                                _paramValues[name] = { __toolRef: _paramBind[name] };
+                            }
+                        } else {
+                            group.classList.remove("bound");
+                            if (lit)  lit.style.display  = "";
+                            if (tool) tool.style.display = "none";
+                            delete _paramBind[name];
+                            var litInput = group.querySelector('[data-param="' + name + '"]');
+                            if (litInput) {
+                                _paramValues[name] = (litInput.type === "number")
+                                    ? (parseFloat(litInput.value) || 0) : litInput.value;
+                            } else {
+                                _paramValues[name] = "";
+                            }
+                        }
+                        updatePreview(fn);
+                    });
+                })(switches[s]);
+            }
+
+            // Tool selects — pick which tool a bound parameter reads from.
+            var toolSels = detailPane.querySelectorAll(".fn-tool-select");
+            for (var ts = 0; ts < toolSels.length; ts++) {
+                (function(sel) {
+                    var name = sel.getAttribute("data-toolsel");
+                    sel.addEventListener("change", function() {
+                        _paramBind[name] = sel.value;
+                        _paramValues[name] = { __toolRef: sel.value };
+                        updatePreview(fn);
+                    });
+                })(toolSels[ts]);
             }
         }
 
@@ -983,7 +1490,10 @@
             for (var i = 0; i < fn.params.length; i++) {
                 var p = fn.params[i];
                 var val = _paramValues[p.name];
-                if (p.type === "mods") {
+                if (val && typeof val === "object" && val.__toolRef) {
+                    // A bound parameter previews as the call it compiles to.
+                    parts.push(p.name + ':ms.settings.get("' + val.__toolRef + '")');
+                } else if (p.type === "mods") {
                     parts.push(p.name + ":[" + (val || []).join(",") + "]");
                 } else if (p.type === "string") {
                     parts.push(p.name + ':"' + (val || "") + '"');
@@ -1000,6 +1510,15 @@
             for (var i = 0; i < fn.params.length; i++) {
                 var p = fn.params[i];
                 var val = _paramValues[p.name];
+                // A parameter switched to Tool but never given one is unfinished.
+                if (_paramBind[p.name] !== undefined && !_paramBind[p.name]) {
+                    showToast("Pick a tool for: " + p.label);
+                    return;
+                }
+                if (val && typeof val === "object" && val.__toolRef) {
+                    params[p.name] = { __toolRef: val.__toolRef };
+                    continue;
+                }
                 if (p.required && p.type === "string" && (!val || val === "")) {
                     showToast("Missing required field: " + p.label);
                     return;
@@ -1066,11 +1585,39 @@
             }
         }
 
+        // Refresh the tool list (pushed from Lua). Keeps the shared global in
+        // sync so the inline step editor can read the same set, re-renders the
+        // list, and — if a tool detail or a param's tool picker is open —
+        // refreshes what is on screen so a just-created tool shows up at once.
+        function setToolList(list) {
+            _tools = Array.isArray(list) ? list : [];
+            window.msMacroTools = _tools;
+            renderList(searchInput.value);
+            if (_view === "toolCreator") {
+                // Leave the creator as-is unless the new tool is now present.
+                if (_selectedId && findTool(_selectedId)) selectTool(_selectedId);
+            } else if (_view === "tool" && _selectedId) {
+                var t = findTool(_selectedId);
+                if (t) renderToolDetail(t); else { detailPane.innerHTML = ''; _view = "module"; }
+            } else {
+                // A module detail may be open and mid-edit — re-rendering it
+                // would wipe half-typed fields — so only the tool <select>
+                // option lists are refreshed in place, keeping each current
+                // selection.
+                var sels = detailPane.querySelectorAll(".fn-tool-select");
+                for (var s = 0; s < sels.length; s++) {
+                    var name = sels[s].getAttribute("data-toolsel");
+                    sels[s].innerHTML = toolOptionsHtml(_paramBind[name] || "");
+                }
+            }
+        }
+
         /* ── External API: allow ms.shell.eval to call in ──────────── */
         window.fnPicker = {
             select: selectFunction,
             registry: REGISTRY,
             showToast: showToast,
+            setToolList: setToolList,
             handler: _fnPickerHandler
         };
 
@@ -1169,7 +1716,7 @@
     }
 
     ToolCanvas.prototype._preloadIcons = function() {
-        var needed = ["drag","close","chevdown","macros"];
+        var needed = ["drag","close","chevdown","macros","copy","paste"];
         for (var a in ACTION_ICON) { if (needed.indexOf(ACTION_ICON[a]) === -1) needed.push(ACTION_ICON[a]); }
         var self = this;
         var chain = Promise.resolve();
@@ -1334,14 +1881,7 @@
         pm.textContent = paramSummary(step.action, step.params);
         el.appendChild(pm);
 
-        var acts = document.createElement("div");
-        acts.className = "tool-actions";
-        var db = document.createElement("div");
-        db.className = "tool-action-btn del";
-        db.innerHTML = _svgCache["close"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>';
-        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeTool(step._sid); });
-        acts.appendChild(db);
-        el.appendChild(acts);
+        el.appendChild(this._buildToolActions(step));
 
         el.addEventListener("click", function(e) {
             if (e.target.closest(".tool-action-btn") || e.target.closest(".tool-drag-handle")) return;
@@ -1350,6 +1890,41 @@
 
         this._wireDrag(el, step);
         return el;
+    };
+
+    // Copy / paste / delete controls shared by leaf and container blocks.
+    // Copy loads this module onto the clipboard; Paste (revealed only once
+    // the clipboard holds a module) drops a copy directly after this one.
+    ToolCanvas.prototype._buildToolActions = function(step) {
+        var self = this;
+        var acts = document.createElement("div");
+        acts.className = "tool-actions";
+
+        var cp = document.createElement("div");
+        cp.className = "tool-action-btn copy";
+        cp.title = "Copy module";
+        cp.innerHTML = _svgCache["copy"] || (window.icon ? window.icon("copy") : "");
+        cp.addEventListener("click", function(e) { e.stopPropagation(); self.copyStep(step._sid); });
+        acts.appendChild(cp);
+
+        var pt = document.createElement("div");
+        pt.className = "tool-action-btn paste";
+        pt.title = "Paste module after this one";
+        pt.innerHTML = _svgCache["paste"] || (window.icon ? window.icon("paste") : "");
+        pt.addEventListener("click", function(e) {
+            e.stopPropagation();
+            self.pasteAfterId(step._sid);
+        });
+        acts.appendChild(pt);
+
+        var db = document.createElement("div");
+        db.className = "tool-action-btn del";
+        db.title = "Delete module";
+        db.innerHTML = _svgCache["close"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>';
+        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeTool(step._sid); });
+        acts.appendChild(db);
+
+        return acts;
     };
 
     ToolCanvas.prototype._renderContainer = function(step) {
@@ -1394,14 +1969,7 @@
         pm.textContent = paramSummary(step.action, step.params);
         header.appendChild(pm);
 
-        var acts = document.createElement("div");
-        acts.className = "tool-actions";
-        var db = document.createElement("div");
-        db.className = "tool-action-btn del";
-        db.innerHTML = _svgCache["close"] || '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="Edit / Close_Circle"><path id="Vector" d="M9 9L11.9999 11.9999M11.9999 11.9999L14.9999 14.9999M11.9999 11.9999L9 14.9999M11.9999 11.9999L14.9999 9M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g></svg>';
-        db.addEventListener("click", function(e) { e.stopPropagation(); self.removeTool(step._sid); });
-        acts.appendChild(db);
-        header.appendChild(acts);
+        header.appendChild(this._buildToolActions(step));
 
         header.addEventListener("click", function(e) {
             if (e.target.closest(".tool-action-btn")||e.target.closest(".tool-drag-handle")||e.target.closest(".tool-nest-toggle")) return;
@@ -1542,23 +2110,31 @@
     ToolCanvas.prototype.getSelectedTool = function() { return this._selId ? this._map[this._selId] : null; };
 
     /* ── Clipboard (copy / cut / paste) ─────────────────────────────── */
-    ToolCanvas.prototype.copySelected = function() {
-        var step = this.getSelectedTool();
+    // Copy a specific module (by id) onto the module clipboard. Adding the
+    // .has-clip class to the canvas root is what reveals every module's paste
+    // button — see the CSS rule that gates .tool-action-btn.paste.
+    ToolCanvas.prototype.copyStep = function(sid) {
+        var step = sid ? this._map[sid] : null;
         if (!step) return false;
         var clone = deepClone(step);
         this._strip([clone]);
         try { navigator.clipboard.writeText(JSON.stringify(clone)); } catch(e) {}
         this._clipboard = clone;
+        if (this._root) this._root.classList.add("has-clip");
         return true;
+    };
+    ToolCanvas.prototype.copySelected = function() {
+        return this.copyStep(this._selId);
     };
     ToolCanvas.prototype.cutSelected = function() {
         var sid = this._selId;
         if (!sid || !this._map[sid]) return false;
-        this.copySelected();
+        this.copyStep(sid);
         this.removeTool(sid);
         return true;
     };
-    ToolCanvas.prototype.pasteAfter = function() {
+    // Paste the clipboard module after `afterId` (or at the end when null).
+    ToolCanvas.prototype.pasteAfterId = function(afterId) {
         if (!this._clipboard) return false;
         var clone = deepClone(this._clipboard);
         clone._sid = nextToolId();
@@ -1566,7 +2142,6 @@
         if (clone.then) this._assignIds(clone.then);
         if (clone.else) this._assignIds(clone.else);
         if (clone.body) this._assignIds(clone.body);
-        var afterId = this._selId;
         if (afterId) {
             var idx = this._findIdx(this._tools, afterId);
             if (idx !== -1) this._tools.splice(idx + 1, 0, clone);
@@ -1576,8 +2151,12 @@
         }
         this._selId = clone._sid;
         this._render();
+        if (this._root) this._root.classList.add("has-clip");
         this._fireChange();
         return true;
+    };
+    ToolCanvas.prototype.pasteAfter = function() {
+        return this.pasteAfterId(this._selId);
     };
 
     /* ── Macro Management State ──────────────────────────────────── */
@@ -1763,24 +2342,31 @@
     overflowMenu.addEventListener("click", function() { closeOverflow(); });
     document.addEventListener("click", closeOverflow);
 
+    // Every overflow item is icon + label, in that order, so the menu reads as
+    // one consistent list rather than the old mix of symbol+label / label-only
+    // / icon-only entries. `menuLabel()` renders one via the shell's icon().
+    function menuLabel(name, text) {
+        return (window.icon ? window.icon(name) : "") + '<span>' + text + '</span>';
+    }
+
     // Test Run button
     var testBtn = document.createElement("button");
     testBtn.className = "macro-toolbar-btn";
-    testBtn.textContent = "\u25b6 Test";
+    testBtn.innerHTML = menuLabel("play", "Test");
     testBtn.title = "Test Run current macro";
     overflowMenu.appendChild(testBtn);
 
     // Record button
     var recordBtn = document.createElement("button");
     recordBtn.className = "macro-toolbar-btn";
-    recordBtn.innerHTML = '<span class="macro-rec-dot" style="display:none"></span> Record';
+    recordBtn.innerHTML = menuLabel("record", "Record");
     recordBtn.title = "Record user actions into modules";
     overflowMenu.appendChild(recordBtn);
 
     // Delete button
     var delMacroBtn = document.createElement("button");
     delMacroBtn.className = "macro-toolbar-btn danger";
-    delMacroBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 12L14 16M14 12L10 16M4 6H20M16 6L15.7294 5.18807C15.4671 4.40125 15.3359 4.00784 15.0927 3.71698C14.8779 3.46013 14.6021 3.26132 14.2905 3.13878C13.9376 3 13.523 3 12.6936 3H11.3064C10.477 3 10.0624 3 9.70951 3.13878C9.39792 3.26132 9.12208 3.46013 8.90729 3.71698C8.66405 4.00784 8.53292 4.40125 8.27064 5.18807L8 6M18 6V16.2C18 17.8802 18 18.7202 17.673 19.362C17.3854 19.9265 16.9265 20.3854 16.362 20.673C15.7202 21 14.8802 21 13.2 21H10.8C9.11984 21 8.27976 21 7.63803 20.673C7.07354 20.3854 6.6146 19.9265 6.32698 19.362C6 18.7202 6 17.8802 6 16.2V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    delMacroBtn.innerHTML = menuLabel("trash", "Delete");
     delMacroBtn.title = "Delete macro";
     overflowMenu.appendChild(delMacroBtn);
 
@@ -1789,7 +2375,7 @@
     // rather than in the Settings > Developer section it used to share.
     var editFileBtn = document.createElement("button");
     editFileBtn.className = "macro-toolbar-btn";
-    editFileBtn.textContent = "Edit File";
+    editFileBtn.innerHTML = menuLabel("edit", "Edit File");
     editFileBtn.title = "Open ms_macros.lua in your editor";
     overflowMenu.appendChild(editFileBtn);
 
@@ -1957,6 +2543,9 @@
     /* ── Fn-picker overlay toggle ────────────────────────────────── */
     function openFnOverlay() {
         overlay.classList.add("open");
+        // Pull the current tool list every time — a tool may have been added
+        // or removed from the Settings panel since the overlay last opened.
+        refreshToolList();
     }
     function closeFnOverlay() {
         overlay.classList.remove("open");
@@ -1964,6 +2553,10 @@
     addToolBtn.addEventListener("click", function() {
         openFnOverlay();
     });
+
+    function refreshToolList() {
+        if (window.shellPost) shellPost("macros", "listTools", {});
+    }
 
     /* ── Macro select / management ───────────────────────────────── */
     function refreshMacroList() {
@@ -2123,15 +2716,23 @@
         if (!isSub && m.group !== "system" && !m.systemBind) {
             // Same markup as the settings panel's toggle() so it picks up the
             // shared .toggle track/thumb styling rather than a native checkbox.
+            // A macro with no bind has no trigger, so it cannot be enabled. The
+            // host refuses setMacroEnabled(true) for it too; locking the toggle
+            // here just makes that unreachable state legible instead of a click
+            // that silently snaps back.
+            var bindable = (m.bindable !== false);
             var lbl = document.createElement("label");
-            lbl.className = "toggle bind-toggle";
+            lbl.className = "toggle bind-toggle" + (bindable ? "" : " disabled");
+            if (!bindable) lbl.title = "Set a bind before enabling this macro";
             lbl.addEventListener("mouseenter", function() {
                 if (window.playSlot) playSlot("hover");
             });
             var t = document.createElement("input");
             t.type = "checkbox";
             t.checked = !!m.enabled;
+            t.disabled = !bindable;
             t.addEventListener("change", function() {
+                if (!bindable) { t.checked = false; return; }
                 shellPost("macros", "setMacroEnabled", {
                     action: "setMacroEnabled",
                     id:     m.id,
@@ -2388,7 +2989,7 @@
 
     function _resetTestBtn() {
         testBtn.className = "macro-toolbar-btn";
-        testBtn.textContent = "\u25b6 Test";
+        testBtn.innerHTML = menuLabel("play", "Test");
         testBtn.disabled = false;
         _testRunning = false;
     }
@@ -2412,7 +3013,7 @@
         // Set running state
         _testRunning = true;
         testBtn.className = "macro-toolbar-btn running";
-        testBtn.textContent = "Running\u2026";
+        testBtn.innerHTML = menuLabel("timer", "Running\u2026");
         testBtn.disabled = true;
 
         // Send to Lua
@@ -2434,15 +3035,14 @@
 
     function _setRecordingState(on) {
         _isRecording = on;
-        var dot = recordBtn.querySelector(".macro-rec-dot");
         if (on) {
             recordBtn.className = "macro-toolbar-btn recording";
-            recordBtn.innerHTML = '<span class="macro-rec-dot"></span> Stop';
+            recordBtn.innerHTML = menuLabel("stop", "Stop");
             recordBtn.title = "Stop recording";
             showTestToast("\u23fa Recording — perform actions, then click Stop\u2026");
         } else {
             recordBtn.className = "macro-toolbar-btn";
-            recordBtn.innerHTML = '<span class="macro-rec-dot" style="display:none"></span> Record';
+            recordBtn.innerHTML = menuLabel("record", "Record");
             recordBtn.title = "Record user actions into tools";
         }
     }
@@ -2512,6 +3112,12 @@
             setBindList(body);
             return;
         }
+        if (action === "setToolList" && Array.isArray(body)) {
+            if (window.fnPicker && window.fnPicker.setToolList) {
+                window.fnPicker.setToolList(body);
+            }
+            return;
+        }
         if (action === "testRunResult" && body) {
             _resetTestBtn();
             if (body.ok) {
@@ -2549,6 +3155,25 @@
         setBindList: setBindList,
         refreshBinds: refreshBindList,
         addTool: function(def) { _canvas.addTool(def); closeFnOverlay(); },
+        // Tools (authored settings) — list is pushed from Lua; create/delete
+        // round-trip through the host, which re-pushes the updated list.
+        setToolList: function(list) {
+            if (window.fnPicker && window.fnPicker.setToolList) {
+                window.fnPicker.setToolList(list);
+            }
+        },
+        createTool: function(def) {
+            if (!window.shellPost) return;
+            shellPost("macros", "addUserSetting", { action: "addUserSetting", def: def });
+            // The host has no create-ack, so re-pull the list shortly after so
+            // the new tool appears in the picker.
+            setTimeout(refreshToolList, 250);
+        },
+        deleteTool: function(key) {
+            if (!window.shellPost) return;
+            shellPost("macros", "removeUserSetting", { action: "removeUserSetting", key: key });
+            setTimeout(refreshToolList, 250);
+        },
         // Test Run & Record Mode
         testRun: function() { testBtn.click(); },
         startRecording: function() { if (!_isRecording) recordBtn.click(); },

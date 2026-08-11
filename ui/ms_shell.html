@@ -712,6 +712,36 @@
         .fn-toast { position: fixed; bottom: 16px; right: 16px; background: var(--surface2); border: 1px solid var(--success); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 8px 14px; opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 1000; }
         .fn-toast.show { opacity: 1; transform: translateY(0); }
 
+        /* ── Tools section in the Add Module picker ─────────────────── */
+        .fn-cat-tools .fn-cat-name { color: var(--accent); }
+        .fn-tool-entry { justify-content: space-between; }
+        .fn-tool-tag { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 1px 5px; border-radius: var(--radius-s); margin-left: auto; }
+        .fn-tool-tag-builder { color: var(--accent-hi); background: var(--accent-glow-faint); }
+        .fn-tool-tag-pack { color: var(--text3); background: var(--surface2); }
+        .fn-tool-new .fn-entry-sig { color: var(--accent); }
+        .fn-tool-meta .fn-tool-meta-val { font-family: var(--font-mono); font-size: 12px; color: var(--text); margin-top: 2px; }
+        .fn-tool-usehint { font-size: 10px; color: var(--text3); line-height: 1.5; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-dim); }
+        .fn-tool-usehint code { font-family: var(--font-mono); color: var(--accent-hi); background: var(--accent-glow-faint); padding: 0 3px; border-radius: var(--radius-s); }
+        .fn-tool-delete { background: var(--danger); }
+
+        /* ── Value / Tool bind switch on a parameter ────────────────── */
+        .fn-bind-switch { margin-left: auto; display: inline-flex; gap: 0; border: 1px solid var(--border-dim); border-radius: var(--radius-s); overflow: hidden; }
+        .fn-bind-opt { background: var(--surface2); border: none; color: var(--text3); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 6px; cursor: pointer; transition: all 0.1s; }
+        .fn-bind-opt:hover { color: var(--text); }
+        .fn-bind-opt.on { background: var(--accent-glow-faint); color: var(--accent-hi); }
+        .fn-param-tool select.fn-tool-select { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: var(--font-mono); cursor: pointer; }
+        .fn-param-tool select.fn-tool-select:focus { border-color: var(--accent); }
+        .fn-param.bound .fn-param-type { color: var(--accent-hi); }
+
+        /* ── Segmented-option editor in the tool creator ────────────── */
+        .fn-seg-optrow { display: flex; gap: 4px; margin-bottom: 4px; }
+        .fn-seg-optrow input { flex: 1; min-width: 0; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 4px 6px; outline: none; font-family: var(--font-mono); user-select: text; -webkit-user-select: text; }
+        .fn-seg-optrow input:focus { border-color: var(--accent); }
+        .fn-seg-optdel { flex: 0 0 auto; width: 24px; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text3); cursor: pointer; font-size: 13px; }
+        .fn-seg-optdel:hover { border-color: var(--danger); color: var(--danger); }
+        .fn-seg-optadd { margin-top: 2px; background: none; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text3); font-size: 10px; padding: 4px 8px; cursor: pointer; width: 100%; }
+        .fn-seg-optadd:hover { border-color: var(--accent); color: var(--accent); }
+
         .macro-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border-dim); background: var(--surface); flex-shrink: 0; }
         .macro-select { position: relative; display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 4px 8px; outline: none; font-family: inherit; cursor: pointer; min-width: 120px; }
         .macro-select:hover { border-color: var(--border); }
@@ -735,7 +765,11 @@
         .macro-overflow.open .macro-overflow-menu { display: flex; }
         /* Buttons keep their .macro-toolbar-btn identity but lay out full-width,
            left-aligned, as menu rows. */
-        .macro-overflow-menu .macro-toolbar-btn { justify-content: flex-start; width: 100%; gap: 6px; }
+        .macro-overflow-menu .macro-toolbar-btn { justify-content: flex-start; width: 100%; gap: 7px; }
+        /* Menu items are icon + label as one row: the icon is a fixed size and
+           the label sits next to it, so every entry reads the same way. */
+        .macro-overflow-menu .macro-toolbar-btn .icon { width: 13px; height: 13px; opacity: 0.85; }
+        .macro-overflow-menu .macro-toolbar-btn:hover .icon { opacity: 1; }
         .macro-toolbar-btn { display: flex; align-items: center; justify-content: center; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text2); font-size: 10px; font-weight: 700; padding: 4px 10px; cursor: pointer; transition: background 0.1s, border-color 0.1s, color 0.1s; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.4px; }
         .macro-toolbar-btn:hover { background: var(--hover); border-color: var(--border); color: var(--text); }
         .macro-toolbar-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
@@ -794,6 +828,10 @@
            the accent so the current mode reads at a glance. */
         .bind-mode-toggle { width: auto; min-width: 34px; padding: 0 8px; font: 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; }
         .bind-toggle { margin-left: 2px; }
+        /* An unbound macro can't be enabled — the track dims and the toggle
+           stops taking the pointer so it reads as locked, not merely off. */
+        .toggle.disabled { cursor: not-allowed; opacity: 0.4; }
+        .toggle.disabled .toggle-track { background: var(--surface2); }
         #slot-macros { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
         .macros-main { flex: 1; display: flex; flex-direction: row; overflow: hidden; position: relative; }
         .macros-tool-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }
@@ -838,6 +876,10 @@
         .tool-action-btn svg path, .tool-action-btn svg g { stroke: var(--text); fill: none; }
         .tool-action-btn.del:hover { background: var(--danger-bg); }
         .tool-action-btn.del:hover svg path, .tool-action-btn.del:hover svg g { stroke: var(--danger); }
+        /* Paste target only makes sense once something is on the module
+           clipboard; the canvas gets .has-clip when a module is copied. */
+        .tool-action-btn.paste { display: none; }
+        .tool-canvas.has-clip .tool-action-btn.paste { display: flex; }
         .tool-block-container { display: flex; flex-direction: column; }
         .tool-nest-body { margin-left: 20px; border-left: 2px solid var(--border-dim); padding-left: 8px; padding-top: 2px; padding-bottom: 2px; display: flex; flex-direction: column; gap: 2px; min-height: 28px; position: relative; }
         .tool-nest-body.drag-target { border-left-color: var(--accent); background: var(--accent-glow-faint); border-radius: var(--radius); }
@@ -899,6 +941,41 @@
         .resize-se:hover::after { opacity: 0.85; }
         /* During resize, suppress pointer events on content so grab isn't lost */
         body.resizing * { pointer-events: none !important; }
+
+        /* ── Console first-open danger notice (scoped to the console panel) ── */
+        .panel-console { position: relative; }
+        .panel-console .danger-overlay {
+            position: absolute; inset: 0; z-index: 400; display: none;
+            align-items: center; justify-content: center; padding: 24px;
+            background: color-mix(in srgb, var(--bg) 82%, transparent);
+            -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+        }
+        .panel-console .danger-overlay.open { display: flex; }
+        .panel-console .danger-card {
+            width: 100%; max-width: 440px; background: var(--surface);
+            border: 1px solid var(--danger-border, var(--danger));
+            border-radius: var(--radius);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px var(--border-dim);
+            overflow: hidden;
+        }
+        .panel-console .danger-head {
+            display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+            background: var(--danger-bg);
+            border-bottom: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+        }
+        .panel-console .danger-head .icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--danger); }
+        .panel-console .danger-head h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: 0.02em; color: var(--danger); }
+        .panel-console .danger-body { padding: 16px; font-size: 13px; line-height: 1.55; color: var(--text2); }
+        .panel-console .danger-body p { margin: 0 0 10px; }
+        .panel-console .danger-body p:last-child { margin-bottom: 0; }
+        .panel-console .danger-body strong { color: var(--text); font-weight: 700; }
+        .panel-console .danger-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 16px 16px; }
+        .panel-console .danger-ack {
+            padding: 7px 16px; border-radius: var(--radius); font-size: 12px; font-weight: 700;
+            background: var(--danger); color: var(--bg); border: none; cursor: pointer;
+            font-family: inherit; transition: opacity 0.15s;
+        }
+        .panel-console .danger-ack:hover { opacity: 0.85; }
 
     </style>
     <!-- Before tool-editor.js: its param rows call createSelect(). -->
@@ -1013,8 +1090,39 @@
 
         <div id="ctx-menu"></div>
 
-        
-    
+        <!-- First-open danger notice -->
+        <div class="danger-overlay" role="alertdialog" aria-modal="true" aria-labelledby="console-danger-title">
+            <div class="danger-card">
+                <div class="danger-head">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                    <h2 id="console-danger-title">Console &mdash; use with care</h2>
+                </div>
+                <div class="danger-body">
+                    <p>
+                        This console runs <strong>arbitrary Lua on your machine</strong>
+                        with the same access mudscript itself has &mdash; your files,
+                        input, and windows.
+                    </p>
+                    <p>
+                        <strong>Never paste code you didn't write or don't fully
+                        understand.</strong> A snippet someone hands you can look
+                        harmless and still delete files, log your keystrokes, or take
+                        over your session. If you can't say exactly what a line does,
+                        don't run it here.
+                    </p>
+                </div>
+                <div class="danger-actions">
+                    <button
+                        class="danger-ack"
+                        onmouseenter="playSlot('hover')"
+                        onclick="playSlot('interact'); dismissConsoleDanger();"
+                    >
+                        I understand
+                    </button>
+                </div>
+            </div>
+        </div>
+
         </div>
 <div class="panel-watcher" style="display:none">
 
@@ -1668,6 +1776,8 @@
     "arrow-up": '<path d="M12 19V5M5 12L12 5L19 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     "arrow-down": '<path d="M12 5V19M19 12L12 19L5 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     multiply: '<path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    copy: '<path d="M9 9V5.25C9 4.42157 9.67157 3.75 10.5 3.75H18.75C19.5784 3.75 20.25 4.42157 20.25 5.25V13.5C20.25 14.3284 19.5784 15 18.75 15H15M9 9H5.25C4.42157 9 3.75 9.67157 3.75 10.5V18.75C3.75 19.5784 4.42157 20.25 5.25 20.25H13.5C14.3284 20.25 15 19.5784 15 18.75V15M9 9H13.5C14.3284 9 15 9.67157 15 10.5V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    paste: '<path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5M9 5C9 6.10457 9.89543 7 11 7H13C14.1046 7 15 6.10457 15 5M12 11V17M12 17L9.5 14.5M12 17L14.5 14.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
     function icon(name, cls) {
@@ -1807,6 +1917,10 @@
         });
         currentPanel = id;
         shellDispatch('_shell', 'navigate', { panel: id });
+        // First-open safety notice for the console panel (no-op after ack).
+        if (id === 'console' && typeof window._maybeShowConsoleDanger === 'function') {
+            window._maybeShowConsoleDanger();
+        }
     };
 
     window._shellApplyTheme = function(theme) {
