@@ -209,6 +209,11 @@
                     // fresh open so a plain confirm modal isn't missing a button.
                     document.getElementById("modal-confirm").style.display = "";
                     document.getElementById("modal-cancel").style.display = "";
+                    // The detected-key strip is rebind-only; keep it out of
+                    // plain modals until a keys[] payload turns it on.
+                    const keysBox = document.getElementById("modal-keys");
+                    keysBox.innerHTML = "";
+                    keysBox.style.display = "none";
                     document.getElementById("modal-confirm").textContent =
                         confirmLabel;
                     document.getElementById("modal-cancel").textContent =
@@ -282,6 +287,38 @@
                 if (d.showCancel !== undefined)
                     document.getElementById("modal-cancel").style.display =
                         d.showCancel ? "" : "none";
+                // keys: render the detected combo as spotlighted key caps. An
+                // array (even empty) shows the strip — empty renders a dim "…"
+                // placeholder so the user can see where their keys will land
+                // before pressing anything. Omit the field to leave it as is;
+                // openModal hides the strip for ordinary (non-rebind) modals.
+                // hs.json encodes an empty Lua table as {}, not [], so anything
+                // that isn't a real array is treated as the empty/placeholder case.
+                if (d.keys !== undefined) {
+                    const box = document.getElementById("modal-keys");
+                    box.innerHTML = "";
+                    box.style.display = "flex";
+                    const arr = Array.isArray(d.keys) ? d.keys : [];
+                    if (arr.length === 0) {
+                        const ph = document.createElement("kbd");
+                        ph.className = "modal-key placeholder";
+                        ph.textContent = "…";
+                        box.appendChild(ph);
+                    } else {
+                        arr.forEach((k, i) => {
+                            if (i > 0) {
+                                const plus = document.createElement("span");
+                                plus.className = "modal-key-plus";
+                                plus.textContent = "+";
+                                box.appendChild(plus);
+                            }
+                            const cap = document.createElement("kbd");
+                            cap.className = "modal-key";
+                            cap.textContent = k;
+                            box.appendChild(cap);
+                        });
+                    }
+                }
             }
             window.updateLuaModal = updateLuaModal;
 

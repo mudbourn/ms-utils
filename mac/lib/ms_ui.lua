@@ -73,6 +73,31 @@ return function(ms)
             return table.concat(parts, "+")
         end
 
+        -- Same content as _bindDisplay, but as an ordered list of individual
+        -- tokens (each modifier, then each trigger key) rather than a joined
+        -- string — so the rebind prompt can render one spotlighted key cap per
+        -- token. A combo splits into a cap per key; single-shot triggers are one.
+        local function _bindTokens(c)
+            if not c then return {} end
+            local out = {}
+            for _, m in ipairs(c.mods or {}) do
+                out[#out + 1] = m:sub(1, 1):upper() .. m:sub(2)
+            end
+            if c.type == "mouse" then
+                out[#out + 1] = "Mouse " .. tostring(c.button)
+            elseif c.type == "scroll" then
+                local d = c.direction or "?"
+                out[#out + 1] = "Scroll " .. d:sub(1,1):upper() .. d:sub(2)
+            elseif c.type == "gamepad" then
+                out[#out + 1] = "Pad " .. (c.button or "?"):upper()
+            elseif c.type == "combo" then
+                for _, k in ipairs(c.keys or {}) do out[#out + 1] = (k or ""):upper() end
+            else
+                out[#out + 1] = (c.key or ""):upper()
+            end
+            return out
+        end
+
         -- A bind is *derived* (a sub-bind of another macro) when its
         -- default.type names another registered bind id — the same test
         -- ms.bind.define uses. Testing default.type alone is not enough:
@@ -579,10 +604,10 @@ return function(ms)
                 .. "and controller buttons work too.\n"
                 .. "Release to set  ·  Escape to cancel."
 
-            local function captureMsg(detected)
-                return "Current:  " .. current
-                    .. "\nNew:  " .. (detected or "…")
-                    .. "\n\n" .. INSTRUCTIONS
+            -- The detected keys render as spotlighted caps below this text
+            -- (see the keys[] payload), so the message stays instructional only.
+            local function captureMsg()
+                return "Current:  " .. current .. "\n\n" .. INSTRUCTIONS
             end
 
             local function stopCapture()
@@ -637,6 +662,7 @@ return function(ms)
                     ms.ui.modalUpdate({
                         title       = "Bind Conflict",
                         msg         = err .. "\n\nTry a different input?",
+                        keys        = _bindTokens(parsed),
                         confirm     = "Try Again",
                         cancel      = "Cancel",
                         showConfirm = true,
@@ -649,7 +675,8 @@ return function(ms)
                 ms.playSlot("interact")
                 ms.ui.modalUpdate({
                     title       = "Confirm Rebind",
-                    msg         = "Set \"" .. label .. "\" to:\n" .. bindStr,
+                    msg         = "Set \"" .. label .. "\" to:",
+                    keys        = _bindTokens(parsed),
                     confirm     = "Confirm",
                     cancel      = "Cancel",
                     showConfirm = true,
@@ -670,15 +697,21 @@ return function(ms)
 
                 ms.ui.modal({
                     title   = "Rebind — " .. label,
-                    msg     = captureMsg(nil),
+                    msg     = captureMsg(),
                     confirm = "Set",
                     cancel  = "Cancel",
                 }, onClosed)
                 -- Hide both buttons during capture: a click would be swallowed by
                 -- the eventtap and registered as a mouse bind, and Escape (below)
                 -- is the intended cancel. They return in the confirm/conflict phase.
-                ms.ui.modalUpdate({ showConfirm = false, showCancel = false })
+                -- keys = {} lights the empty placeholder cap, so the user can see
+                -- where their keys will appear before pressing anything.
+                ms.ui.modalUpdate({ showConfirm = false, showCancel = false, keys = {} })
 
+                -- The eventtap only sees keyDown for real (non-modifier) keys —
+                -- bare modifiers arrive as flagsChanged, which it doesn't watch —
+                -- so by the time this runs there is always at least one key, and
+                -- the empty state stays on the placeholder cap set above.
                 local function livePreview()
                     if #comboKeys == 0 then return end
                     local preview
@@ -687,7 +720,7 @@ return function(ms)
                     else
                         preview = { type = "key",   mods = modList(), key  = comboKeys[1] }
                     end
-                    ms.ui.modalUpdate({ msg = captureMsg(_bindDisplay(preview)) })
+                    ms.ui.modalUpdate({ keys = _bindTokens(preview) })
                 end
 
                 local function finalizeKeys()

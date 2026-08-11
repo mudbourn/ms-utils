@@ -629,6 +629,13 @@
         #modal-overlay.open #modal { transform: scale(1); }
         #modal-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
         #modal-msg { font-size: 12px; color: var(--text2); line-height: 1.5; white-space: pre-line; }
+        /* Detected-key spotlight for the rebind prompt. Hidden until the flow
+           sends a keys[] payload (see updateLuaModal); a lit accent ring makes
+           the keys being pressed easy to find without being loud. */
+        #modal-keys { display: none; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 16px 0 4px; }
+        .modal-key { min-width: 20px; padding: 7px 11px; border-radius: var(--radius); background: var(--surface3); border: 1px solid var(--accent); border-bottom-width: 2px; box-shadow: 0 0 0 3px var(--accent-glow-faint), 0 2px 5px rgba(0,0,0,0.35); color: var(--accent-hi); font: 600 13px/1 var(--font-mono); text-align: center; }
+        .modal-key.placeholder { background: var(--surface2); border-color: var(--border); border-bottom-width: 1px; color: var(--text3); box-shadow: none; letter-spacing: 3px; padding-left: 14px; }
+        .modal-key-plus { color: var(--text3); font: 600 12px/1 var(--font-mono); }
         #modal-input { margin-top: 10px; width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); padding: 7px 10px; font-size: 13px; color: var(--text); display: none; }
         #modal-input.show { display: block; }
         .modal-btns { display: flex; gap: 8px; margin-top: 16px; }
@@ -1526,6 +1533,7 @@
         <div id="modal">
             <div id="modal-title"></div>
             <div id="modal-msg"></div>
+            <div id="modal-keys"></div>
             <input id="modal-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
             <div class="modal-btns">
                 <button
