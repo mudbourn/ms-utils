@@ -2226,7 +2226,12 @@
                     if not ms._robloxActive and not ms._isSafeZone() then return end
                     if ms._qrCooldown then return end
                     ms._qrCooldown = true
-                    hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
+                    -- Retain the timer in a field: an anonymous doAfter timer can
+                    -- be GC'd mid-reload (heavy allocation churn) before it fires,
+                    -- which would leave _qrCooldown latched true forever and wedge
+                    -- the hotkey after a single use.
+                    if ms._qrCooldownTimer then ms._qrCooldownTimer:stop() end
+                    ms._qrCooldownTimer = hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
                     pcall(ms.reload)
                 end)
                 if tap then _register("quickReload", tap) end

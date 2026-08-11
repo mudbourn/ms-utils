@@ -1494,38 +1494,6 @@
              host's teardown closes — a curtain inside it cannot outlive the
              thing it is covering for. -->
 
-        <!-- Modal -->
-        <div id="modal-overlay">
-            <div id="modal">
-                <div id="modal-title"></div>
-                <div id="modal-msg"></div>
-                <input id="modal-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-                <div class="modal-btns">
-                    <button
-                        id="modal-cancel"
-                        onmouseenter="playSlot('hover')"
-                        onclick="
-                            playSlot('back');
-                            closeModal(false);
-                        "
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        id="modal-confirm"
-                        class="primary"
-                        onmouseenter="playSlot('hover')"
-                        onclick="
-                            playSlot('interact');
-                            closeModal(true);
-                        "
-                    >
-                        OK
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <!-- Context menu -->
         <div id="ctx-menu-settings"></div>
 
@@ -1547,6 +1515,43 @@
         </div>
         <div id="slot-macros"></div></div>
     </main>
+
+    <!-- Modal — a shell-level element, deliberately outside every panel div.
+         It hosts the Lua confirm/prompt round-trip (openLuaModal). It used to
+         live inside .panel-settings, so it only rendered while Settings was the
+         active panel: a rebind captured from Macros › Binds queued a confirm
+         that never appeared unless you then switched to Settings. Kept here it
+         floats above whichever panel is showing, where the request originates. -->
+    <div id="modal-overlay">
+        <div id="modal">
+            <div id="modal-title"></div>
+            <div id="modal-msg"></div>
+            <input id="modal-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+            <div class="modal-btns">
+                <button
+                    id="modal-cancel"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('back');
+                        closeModal(false);
+                    "
+                >
+                    Cancel
+                </button>
+                <button
+                    id="modal-confirm"
+                    class="primary"
+                    onmouseenter="playSlot('hover')"
+                    onclick="
+                        playSlot('interact');
+                        closeModal(true);
+                    "
+                >
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- ═══ Shared: ui-tabs.js ════════════════════════════════════════════════ -->
     <script src="./modules/ui-tabs.js"></script>
