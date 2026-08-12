@@ -1223,10 +1223,10 @@
                 body.appendChild(
                     btnRow(
                         actionBtn("Import Profile", "", () =>
-                            sendToHost({ action: "importProfilePkg" }),
+                            sendToHost({ action: "importPackage" }),
                         ),
                         actionBtn("Export Profile", "", () =>
-                            sendToHost({ action: "exportProfilePkg" }),
+                            sendToHost({ action: "exportPackage", type: "profile" }),
                         ),
                     ),
                 );

@@ -2784,26 +2784,42 @@
         return { wrap: wrap, input: inp };
     }
 
+    // Collapsed by default: the editor is set-once, but it sits above the
+    // bind list and expanded it ate a third of the tab. Collapsed it is a
+    // single header row, and the chevron says there is more.
     var metaCard = document.createElement("div");
-    metaCard.className = "section macro-meta-section";
+    metaCard.className = "section macro-meta-section collapsed";
     var metaHead = document.createElement("div");
-    metaHead.className = "section-head";
+    metaHead.className = "section-head macro-meta-head";
+    var metaChev = document.createElement("span");
+    metaChev.className = "macro-meta-chev";
+    metaChev.innerHTML = (typeof window.icon === "function"
+        && window.ICONS && window.ICONS.chevdown)
+        ? window.icon("chevdown") : "";
     var metaTitle = document.createElement("span");
     metaTitle.className = "section-title";
     metaTitle.textContent = "Pack Info";
     var metaDesc = document.createElement("span");
     metaDesc.className = "section-desc";
     metaDesc.textContent = "Credits baked into your visual macros (ms.macroMeta)";
+    metaHead.appendChild(metaChev);
     metaHead.appendChild(metaTitle);
     metaHead.appendChild(metaDesc);
+    metaHead.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+    metaHead.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
+        metaCard.classList.toggle("collapsed");
+    });
     metaCard.appendChild(metaHead);
 
     var metaBody = document.createElement("div");
     metaBody.className = "section-body macro-meta-body";
     var _metaName    = metaField("Name",    "My Macros");
+    var _metaVersion = metaField("Version", "1.0.0");
     var _metaAuthor  = metaField("Author",  "You");
     var _metaWebsite = metaField("Website", "https://…");
     metaBody.appendChild(_metaName.wrap);
+    metaBody.appendChild(_metaVersion.wrap);
     metaBody.appendChild(_metaAuthor.wrap);
     metaBody.appendChild(_metaWebsite.wrap);
 
@@ -2819,6 +2835,7 @@
         if (window.shellPost) {
             shellPost("macros", "setMeta", {
                 name:    _metaName.input.value.trim(),
+                version: _metaVersion.input.value.trim(),
                 author:  _metaAuthor.input.value.trim(),
                 website: _metaWebsite.input.value.trim(),
             });
@@ -2845,6 +2862,7 @@
         meta = meta || {};
         _metaLoaded = false;
         _metaName.input.value    = meta.name    || "";
+        _metaVersion.input.value = meta.version || "";
         _metaAuthor.input.value  = meta.author  || "";
         _metaWebsite.input.value = meta.website || "";
         _metaLoaded = true;

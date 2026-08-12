@@ -4281,6 +4281,7 @@
                         if type(body) ~= "table" then return end
                         local ok, err = pcall(ms.compiler.setMeta, {
                             name    = body.name,
+                            version = body.version,
                             author  = body.author,
                             website = body.website,
                         })

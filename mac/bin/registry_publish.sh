@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+# bin/registry_publish.sh
+# ─────────────────────────────────────────────────────────────────────────────
+# Publishes a .mspkg to the registry: uploads it as a GitHub release asset and
+# writes its entry into registry/index.json. This is steps 1–2 of registry/
+# README.md's "Publishing" — signing (step 3) stays with the Sign Registry
+# workflow, or `registry_sign.sh --sign` for key holders.
+#
+#   bash mac/bin/registry_publish.sh aurora.mspkg
+#   bash mac/bin/registry_publish.sh aurora.mspkg --id aurora-theme --release v1.2.0
+#   bash mac/bin/registry_publish.sh aurora.mspkg --dry-run      # print the row, touch nothing
+#   bash mac/bin/registry_publish.sh aurora.mspkg --no-upload    # asset already uploaded
+#
+# Re-running on a package whose id is already listed UPDATES that entry —
+# re-uploads the asset and refreshes sha256/size/version/… from the new bytes.
+# That is the normal way to ship a new version; no flag is needed.
+#   bash mac/bin/registry_publish.sh aurora.mspkg --sign --key k.pem   # publish + sign locally
+#
+# Most fields come from the package's own mspkg.json manifest, so the row can
+# never disagree with the bytes it points at. The one field the manifest does
+# not carry is `id` (the registry's stable handle): it defaults to a
+# type-name slug and can be pinned with --id.
+#
+# The index is left UNSIGNED. Adding a row invalidates the old signature, and
+# an unsigned index serves zero entries until re-signed — so publishing is not
+# live until the Sign Registry workflow (or --sign here) runs. This script
+# validates the result with registry_sign.sh before it finishes, so a row the
+# client would reject fails here rather than after a commit.
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+INDEX="$ROOT/registry/index.json"
+SIGN_SH="$SCRIPT_DIR/registry_sign.sh"
+
+PKG=""
+ID=""
+REPO=""
+TAG="packages"
+TRUST="trusted"
+DO_UPLOAD=true
+DO_SIGN=false
+DRY_RUN=false
+KEY_FILE=""
+
+usage() { sed -n '2,33p' "$0"; }
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --id)       ID="${2:-}"; shift 2 ;;
+        --repo)     REPO="${2:-}"; shift 2 ;;
+        --release)  TAG="${2:-}"; shift 2 ;;
+        --trust)    TRUST="${2:-}"; shift 2 ;;
+        --no-upload) DO_UPLOAD=false; shift ;;
+        --sign)     DO_SIGN=true; shift ;;
+        --key)      KEY_FILE="${2:-}"; shift 2 ;;
+        --dry-run)  DRY_RUN=true; shift ;;
+        --replace)  shift ;;   # accepted for muscle memory; updating is now the default
+        -h|--help)  usage; exit 0 ;;
+        -*)         echo "ERROR: unknown argument '$1'"; exit 2 ;;
+        *)          [ -z "$PKG" ] && PKG="$1" || { echo "ERROR: only one package at a time (got extra '$1')."; exit 2; }; shift ;;
+    esac
+done
+
+# ── Preconditions ────────────────────────────────────────────────────────────
+command -v jq     >/dev/null || { echo "ERROR: jq is required.";     exit 1; }
+command -v unzip  >/dev/null || { echo "ERROR: unzip is required.";  exit 1; }
+command -v shasum >/dev/null || { echo "ERROR: shasum is required."; exit 1; }
+[ -n "$PKG" ]     || { echo "ERROR: no package given."; usage; exit 2; }
+[ -f "$PKG" ]     || { echo "ERROR: package not found: $PKG"; exit 1; }
+[ -f "$INDEX" ]   || { echo "ERROR: index not found at $INDEX"; exit 1; }
+case "$PKG" in *.mspkg) ;; *) echo "ERROR: not a .mspkg file: $PKG"; exit 1 ;; esac
+[ "$TRUST" = "trusted" ] || [ "$TRUST" = "community" ] \
+    || { echo "ERROR: --trust must be 'trusted' or 'community'."; exit 1; }
+
+ASSET="$(basename "$PKG")"
+
+# ── Read the manifest out of the package ─────────────────────────────────────
+MANIFEST="$(unzip -p "$PKG" mspkg.json 2>/dev/null || true)"
+[ -n "$MANIFEST" ] || { echo "ERROR: $ASSET has no mspkg.json manifest (is it a typed package?)."; exit 1; }
+echo "$MANIFEST" | jq empty 2>/dev/null || { echo "ERROR: $ASSET manifest is not valid JSON."; exit 1; }
+
+field() { printf '%s' "$MANIFEST" | jq -r --arg k "$1" '.[$k] // "" | if type=="string" then . else "" end'; }
+TYPE="$(field type)"
+NAME="$(field name)"
+VERSION="$(field version)"
+AUTHOR="$(field author)"
+WEBSITE="$(field website)"
+DESCRIPTION="$(field description)"
+REQUIRES="$(field requires)"
+MANIFEST_ID="$(field id)"
+
+[ -n "$TYPE" ] || { echo "ERROR: manifest has no type."; exit 1; }
+[ -n "$NAME" ] || NAME="$ASSET"
+
+# ── id: manifest.id, else --id, else a slug of type-name ─────────────────────
+slug() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'; }
+if [ -z "$ID" ]; then
+    if [ -n "$MANIFEST_ID" ]; then ID="$MANIFEST_ID"; else ID="$(slug "$TYPE-$NAME")"; fi
+fi
+[ -n "$ID" ] || { echo "ERROR: could not derive an id; pass --id."; exit 1; }
+
+# ── Hash + size ──────────────────────────────────────────────────────────────
+SHA="$(shasum -a 256 "$PKG" | cut -c1-64 | tr '[:upper:]' '[:lower:]')"
+SIZE="$(wc -c < "$PKG" | tr -d ' ')"
+
+# ── Resolve OWNER/REPO for the asset URL ─────────────────────────────────────
+if [ -z "$REPO" ]; then
+    URL="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
+    # Handles git@host:owner/repo.git, ssh://…/owner/repo, https://…/owner/repo
+    REPO="$(printf '%s' "$URL" | sed -E 's#\.git$##; s#^.*[:/]([^/]+/[^/]+)$#\1#')"
+fi
+case "$REPO" in
+    */*) ;;
+    *) echo "ERROR: could not determine owner/repo — pass --repo owner/name."; exit 1 ;;
+esac
+
+ASSET_URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
+
+# ── Build the entry (omit empty optionals; the client reads absent as "") ────
+ENTRY="$(jq -n \
+    --arg id "$ID" --arg type "$TYPE" --arg name "$NAME" --arg version "$VERSION" \
+    --arg author "$AUTHOR" --arg description "$DESCRIPTION" --arg website "$WEBSITE" \
+    --arg sha256 "$SHA" --arg url "$ASSET_URL" --argjson size "$SIZE" \
+    --arg requires "$REQUIRES" --arg trust "$TRUST" '
+    {id: $id, type: $type, name: $name}
+    + (if $version     != "" then {version: $version}         else {} end)
+    + (if $author      != "" then {author: $author}           else {} end)
+    + (if $description != "" then {description: $description}  else {} end)
+    + (if $website     != "" then {website: $website}         else {} end)
+    + {sha256: $sha256, url: $url, size: $size}
+    + (if $requires    != "" then {requires: $requires}       else {} end)
+    + {trust: $trust}
+')"
+
+echo "── Entry ─────────────────────────────────────────"
+printf '%s\n' "$ENTRY" | jq .
+echo "  asset : $ASSET  ($SIZE bytes)"
+echo "  url   : $ASSET_URL"
+echo "──────────────────────────────────────────────────"
+
+# ── Add vs update ────────────────────────────────────────────────────────────
+# An id already in the index is an update, not a collision: re-running with a
+# newer .mspkg is how a version ships. Show the transition so it is never a
+# silent overwrite. Only a sha reused under a *different* id is a real mistake.
+ID_HITS="$(jq --arg id "$ID" '[.entries[] | select(.id == $id)] | length' "$INDEX")"
+if [ "$ID_HITS" != "0" ]; then
+    OLD_VER="$(jq -r --arg id "$ID" 'first(.entries[] | select(.id == $id) | .version) // ""' "$INDEX")"
+    OLD_SHA="$(jq -r --arg id "$ID" 'first(.entries[] | select(.id == $id) | .sha256) // ""' "$INDEX")"
+    echo "Updating existing entry '$ID' (v${OLD_VER:-?} → v${VERSION:-?})."
+    [ "$OLD_SHA" = "$SHA" ] && echo "  note: the package bytes are unchanged (same sha256)."
+fi
+SHA_OTHER="$(jq -r --arg id "$ID" --arg sha "$SHA" \
+    '[.entries[] | select((.sha256 | ascii_downcase) == $sha and .id != $id)] | first | .id // empty' "$INDEX")"
+[ -z "$SHA_OTHER" ] || { echo "ERROR: this sha256 is already published under id '$SHA_OTHER'."; exit 1; }
+
+if [ "$DRY_RUN" = true ]; then
+    echo "Dry run: nothing uploaded, index untouched."
+    exit 0
+fi
+
+# ── Upload the asset ─────────────────────────────────────────────────────────
+if [ "$DO_UPLOAD" = true ]; then
+    command -v gh >/dev/null || { echo "ERROR: gh (GitHub CLI) is required to upload — or pass --no-upload if the asset already exists."; exit 1; }
+    if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+        echo "Release '$TAG' does not exist; creating it."
+        gh release create "$TAG" --repo "$REPO" \
+            --title "Package assets" \
+            --notes "Registry package binaries. Managed by registry_publish.sh." \
+            >/dev/null
+    fi
+    echo "Uploading $ASSET to release '$TAG'…"
+    gh release upload "$TAG" "$PKG" --repo "$REPO" --clobber
+else
+    echo "Skipping upload (--no-upload). Assuming $ASSET_URL already exists."
+fi
+
+# ── Write the row (replace-by-id, then append) ───────────────────────────────
+TMP="$(mktemp)"
+jq --argjson entry "$ENTRY" '
+    .entries = ((.entries // []) | map(select(.id != $entry.id)) + [$entry])
+' "$INDEX" > "$TMP"
+mv "$TMP" "$INDEX"
+echo "Wrote entry '$ID' into $INDEX ($(jq '.entries | length' "$INDEX") total)."
+
+# ── Validate (and optionally sign) via the single source of truth ────────────
+echo "── Validating index ──────────────────────────────"
+if [ "$DO_SIGN" = true ]; then
+    if [ -n "$KEY_FILE" ]; then
+        bash "$SIGN_SH" --sign --key "$KEY_FILE"
+    else
+        bash "$SIGN_SH" --sign
+    fi
+else
+    bash "$SIGN_SH"
+    echo
+    echo "Index updated but UNSIGNED — it serves zero entries until re-signed."
+    echo "Commit registry/index.json and run the Sign Registry workflow, or"
+    echo "re-run with --sign --key <file> if you hold the signing key."
+fi

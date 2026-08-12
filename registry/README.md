@@ -79,12 +79,34 @@ carries the previous signature, which no longer covers it, so the client
 discards it whole and every install falls back to zero entries. **An edit is
 live only once it has been re-signed.**
 
+Steps 1–2 are automated by `mac/bin/registry_publish.sh`, which uploads the
+asset, derives the row from the package's own `mspkg.json`, and validates the
+result — so a row cannot disagree with the bytes it points at:
+
+```bash
+bash mac/bin/registry_publish.sh path/to/aurora.mspkg
+# --id <slug>       pin the registry id (default: a type-name slug)
+# --release <tag>   release holding the asset (default: packages)
+# --dry-run         print the row and touch nothing
+```
+
+Re-running on a package whose id is already listed **updates** that entry —
+re-uploads the asset and refreshes `sha256`/`size`/`version` from the new
+bytes. That is how a version bump ships; no flag is needed. The command prints
+the `v… → v…` transition so an update is never a silent overwrite.
+
+It leaves the index **unsigned** on purpose; step 3 still signs. Doing it by
+hand instead:
+
 1. Upload the `.mspkg` as a release asset and note its `sha256` and size.
 2. Add the row to `entries` and commit. Push validation runs on every change
    to this file — check it before assuming the edit is good.
 3. Run the **Sign Registry** workflow from the Actions tab with *sign*
    checked. It validates, signs, verifies its own signature against the key
    the client carries, and commits the result back.
+
+Key holders can collapse all three with
+`registry_publish.sh path/to/pkg.mspkg --sign --key <file>`.
 
 Validate locally before committing — no key needed:
 

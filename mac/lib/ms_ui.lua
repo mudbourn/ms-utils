@@ -1276,8 +1276,11 @@ return function(ms)
             end,
 
             importProfile     = function() ms.importProfile() end,
-            importProfilePkg  = function() ms.importProfilePkg() end,
-            exportProfilePkg  = function() ms.exportProfilePkg() end,
+            -- Profile packaging now rides the generic exportPackage/importPackage
+            -- path (type "profile"), so profiles are manifested .mspkg packages
+            -- the registry accepts and install audits. The hand-rolled
+            -- exportProfilePkg/importProfilePkg in ms_settings.lua are retired
+            -- (unreferenced) pending a smoke-tested round-trip, then deletion.
             createNewProfile  = function() ms.createNewProfile() end,
             saveCurrentProfile = function() ms.saveCurrentProfile() end,
 
@@ -1661,6 +1664,7 @@ return function(ms)
                 local manifest, err = ms.package.pack({
                     type    = kind,
                     name    = base .. " " .. kind,
+                    version = (type(meta.version) == "string" and meta.version ~= "") and meta.version or nil,
                     author  = meta.author,
                     website = meta.website,
                     files   = files,

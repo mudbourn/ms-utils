@@ -144,14 +144,19 @@ return function(ms)
                 paths    = { "Spoons/" },
                 required = { "Spoons/" },
             },
-            -- No sounds/ here. Audio travels with the theme; a profile that
-            -- also carried it would give two types a claim on the same files
-            -- and make "which one wins on import" a coin toss.
+            -- A profile is monolithic: the whole look and feel in one archive,
+            -- so it carries its audio and fonts alongside the config. The
+            -- theme/sound overlap the earlier design avoided is not a conflict
+            -- here — a profile is a wholesale swap, not a layer, so on install
+            -- it simply is the source of truth for every file it names.
+            -- sounds/defaults/ is still excluded: it ships identical with every
+            -- install and must never be overwritten by a package.
             profile = {
                 label    = "Profile",
                 paths    = {
                     "ms_macros.lua", "ms_macros_visual.json", "ms_settings.json",
                     "ms_settings_default.json", "ms_theme.json",
+                    "sounds/active/", "sounds/macro/", "ui/fonts/", "sound_assign.json",
                 },
                 required = {},
             },
@@ -579,6 +584,29 @@ return function(ms)
                 return nil, "Package is not in the validated library. Import anyway to continue."
             end
 
+            -- ms_macros.lua is executable code. The hand-rolled profile
+            -- importer, the compiler and the macros panel all scan it with
+            -- ms.auditMacros before it can run; the generic install path did
+            -- not, so a profile or macro package installed here — including one
+            -- pulled from the registry via Browse — could land unscanned code
+            -- on disk. Scan it before anything is written, and reject the whole
+            -- install on failure, exactly as the importer does.
+            if ms.auditMacros then
+                for _, rel in ipairs(ms.package.contents(path)) do
+                    if rel == "ms_macros.lua" then
+                        local src = hs.execute("/usr/bin/unzip -p " .. sq(path) .. " ms_macros.lua 2>/dev/null")
+                        if type(src) == "string" and src ~= "" then
+                            local errs = ms.auditMacros(src)
+                            if type(errs) == "table" and #errs > 0 then
+                                return nil, "Macro security scan failed:\n  \xe2\x80\xa2 " ..
+                                    table.concat(errs, "\n  \xe2\x80\xa2 ")
+                            end
+                        end
+                        break
+                    end
+                end
+            end
+
             local manifest = report.manifest
             local staging  = tempDir("install")
             hs.execute("/usr/bin/unzip -qq -o " .. sq(path) .. " -d " .. sq(staging) .. " 2>/dev/null")
@@ -863,6 +891,15 @@ return function(ms)
                 addIf("ms_settings.json",         _dataDir .. "/ms_settings.json")
                 addIf("ms_settings_default.json", _dataDir .. "/ms_settings_default.json")
                 addIf("ms_theme.json",            _dataDir .. "/ms_theme.json")
+                -- Monolithic: carry the audio and fonts too, so an installed
+                -- profile is the whole look and feel and not a config shell
+                -- pointing at sounds and a font the recipient does not have.
+                -- sounds/defaults/ is deliberately omitted (ships everywhere).
+                addDir("sounds/active/", _hsDir .. "/sounds/active/")
+                addDir("sounds/macro/",  _hsDir .. "/sounds/macro/")
+                addDir("ui/fonts/",      _hsDir .. "/ui/fonts/")
+                local assign = ms.package.exportSoundAssign()
+                if assign then files["sound_assign.json"] = assign end
             end
 
             return files

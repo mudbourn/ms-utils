@@ -482,6 +482,7 @@
                 lines[#lines + 1] = "-- Creator Credits --"
                 lines[#lines + 1] = "    ms.macroMeta = {"
                 lines[#lines + 1] = "        name    = " .. luaStr(meta.name    or "Visual Macros") .. ","
+                lines[#lines + 1] = "        version = " .. luaStr(meta.version or "1.0.0") .. ","
                 lines[#lines + 1] = "        author  = " .. luaStr(meta.author  or "ms.compiler") .. ","
                 lines[#lines + 1] = "        website = " .. luaStr(meta.website or "") .. ","
                 lines[#lines + 1] = "    }"
@@ -832,6 +833,7 @@
                 end
                 return {
                     name    = data.meta.name    or "",
+                    version = data.meta.version or "",
                     author  = data.meta.author  or "",
                     website = data.meta.website or "",
                 }
@@ -853,6 +855,7 @@
 
                 data.meta = {
                     name    = type(meta.name)    == "string" and meta.name    or "",
+                    version = type(meta.version) == "string" and meta.version or "",
                     author  = type(meta.author)  == "string" and meta.author  or "",
                     website = type(meta.website) == "string" and meta.website or "",
                 }

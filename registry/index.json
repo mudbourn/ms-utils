@@ -1,6 +1,19 @@
 {
   "formatVersion": 1,
   "generated": "2026-08-02T22:53:55Z",
-  "entries": [],
+  "entries": [
+    {
+      "id": "profile-combat-warriors-macros-profile",
+      "type": "profile",
+      "name": "Combat Warriors Macros profile",
+      "version": "1.0.0",
+      "author": "mudbourn",
+      "website": "https://mudbourn.info",
+      "sha256": "3de1ddd2d257cfc0c44e1b00d6968c4eaccae4275de99ff806bed43db3076ad8",
+      "url": "https://github.com/mudbourn/ms-utils/releases/download/packages/Combat Warriors Macros-profile.mspkg",
+      "size": 3688481,
+      "trust": "trusted"
+    }
+  ],
   "signature": "jfrMRNoI33ovdg+nk4i0tMoaWTSIqmWO9bEsU2boI7CSFo+juhJVetFcENF7P94X56/r/ap2XLCorPYAbMNc+lPxBt09NFS+7vxQ7RB9Gbse3SzEJhJduyCFcoslKdnpFYIbIZ3URiMuSLBMXRB9JA5GkYfArZ3OGwoaLv3Br6Fi0+XZ/EGntWZHDi9ce15LOrMA/Vmh2oOdChGrMLR4F+skfm+/hMFDPENbt1F8kVYDioZvx6s+z38yWvK8VlWTUW6NfrpunH8JVmDTTJNCLmKBS6Hx9UqWy3Qek4FOL+tU6WedT238jtBvhOQYPgnIkhYP2d3aJrnU3LIaC5n9tw=="
 }

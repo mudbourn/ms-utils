@@ -845,8 +845,14 @@
         /* ── Binds list ──────────────────────────────────────────────────── */
         .binds-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
         .binds-empty { padding: 20px 14px; font-size: 12px; color: var(--text3); text-align: center; }
-        /* Pack Info (ms.macroMeta) editor — sits above the bind list. */
+        /* Pack Info (ms.macroMeta) editor — sits above the bind list.
+           Collapsible so it does not permanently steal room from the binds. */
         .macro-meta-section { flex-shrink: 0; }
+        .macro-meta-head { cursor: pointer; user-select: none; }
+        .macro-meta-chev { display: flex; align-items: center; flex-shrink: 0; transition: transform 0.15s; color: var(--text3); }
+        .macro-meta-chev .icon { width: 12px; height: 12px; }
+        .macro-meta-section.collapsed .macro-meta-chev { transform: rotate(-90deg); }
+        .macro-meta-section.collapsed .macro-meta-body { display: none; }
         .macro-meta-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
         .meta-field { display: flex; align-items: center; gap: 10px; }
         .meta-field-label { flex: 0 0 64px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
