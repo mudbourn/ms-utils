@@ -1755,12 +1755,12 @@
              host's teardown closes — a curtain inside it cannot outlive the
              thing it is covering for. -->
 
-        <!-- Context menu -->
-        <div id="ctx-menu-settings"></div>
-
-        
-    
         </div>
+        <!-- Context menu — a sibling of the panels, never inside one, so it is
+             not removed from the render tree when its owning panel is hidden.
+             Shared by the Settings and Profiles panels (both drawn by
+             panel-settings.js); position:fixed places it by viewport coords. -->
+        <div id="ctx-menu-settings"></div>
         <div class="panel-macros" style="display:none">
         <!-- Header -->
         <div id="header">
