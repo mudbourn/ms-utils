@@ -982,7 +982,12 @@ return function(ms)
 
     -- Export Helpers --
         -- Collects the live install's files for a given type, ready for pack().
-        ms.package.collect = function(kind)
+        -- opts.configDir (profile kind only): read the config files from a saved
+        -- profile directory instead of the live locations, so an inactive
+        -- profile can be exported without switching to it. Sounds and fonts are
+        -- NOT snapshotted per-profile, so those always come from the live dirs
+        -- (config + live assets — a deliberate choice, see the Profiles panel).
+        ms.package.collect = function(kind, opts)
             local files = {}
 
             local function addIf(rel, abs)
@@ -1027,11 +1032,17 @@ return function(ms)
                 if assign then files["sound_assign.json"] = assign end
 
             elseif kind == "profile" then
-                addIf("ms_macros.lua",            _hsDir .. "/ms_macros.lua")
-                addIf("ms_macros_visual.json",    _dataDir .. "/ms_macros_visual.json")
-                addIf("ms_settings.json",         _dataDir .. "/ms_settings.json")
-                addIf("ms_settings_default.json", _dataDir .. "/ms_settings_default.json")
-                addIf("ms_theme.json",            _dataDir .. "/ms_theme.json")
+                -- Config comes from a saved profile dir when exporting an
+                -- inactive profile (all files flat in that dir), else the live
+                -- split _hsDir / _dataDir layout.
+                local cfg = opts and opts.configDir
+                local macrosSrc = cfg and (cfg .. "ms_macros.lua")            or (_hsDir   .. "/ms_macros.lua")
+                local dataSrc   = function(f) return cfg and (cfg .. f)       or (_dataDir .. "/" .. f) end
+                addIf("ms_macros.lua",            macrosSrc)
+                addIf("ms_macros_visual.json",    dataSrc("ms_macros_visual.json"))
+                addIf("ms_settings.json",         dataSrc("ms_settings.json"))
+                addIf("ms_settings_default.json", dataSrc("ms_settings_default.json"))
+                addIf("ms_theme.json",            dataSrc("ms_theme.json"))
                 -- Monolithic: carry the audio and fonts too, so an installed
                 -- profile is the whole look and feel and not a config shell
                 -- pointing at sounds and a font the recipient does not have.

@@ -1071,9 +1071,60 @@
                     "Moving a profile between machines"));
             }
 
+            // The row menu (also opened by right-click). Switch/Delete only make
+            // sense for a saved, non-active profile; Export works for either —
+            // the active one exports live, a saved one exports its snapshot plus
+            // the live assets (see exportPackage/collect in the host).
+            function profileMenuItems(name, isCurrent) {
+                const items = [];
+                if (!isCurrent) {
+                    items.push({
+                        icon: "",
+                        label: "Switch to this profile",
+                        action: async () => {
+                            const res = await openModal(
+                                "Switch Profile",
+                                `Switch to "${name}"?\n\nThe current profile will be archived and settings reloaded.`,
+                                "Switch",
+                            );
+                            if (res.confirmed)
+                                sendToHost({ action: "switchProfile", name });
+                        },
+                    });
+                }
+                items.push({
+                    icon: "",
+                    label: "Export this profile…",
+                    action: () =>
+                        sendToHost(
+                            isCurrent
+                                ? { action: "exportPackage", type: "profile" }
+                                : { action: "exportPackage", type: "profile", profileName: name },
+                        ),
+                });
+                if (!isCurrent) {
+                    items.push("divider");
+                    items.push({
+                        icon: "",
+                        label: "Delete profile",
+                        danger: true,
+                        action: async () => {
+                            const res = await openModal(
+                                "Delete Profile",
+                                `Delete "${name}"?\n\nThis cannot be undone.`,
+                                "Delete",
+                            );
+                            if (res.confirmed)
+                                sendToHost({ action: "deleteProfile", name });
+                        },
+                    });
+                }
+                return items;
+            }
+
             function buildProfileList(body, current, profiles) {
                 const otherProfiles = profiles.filter((n) => n !== current);
-                if (otherProfiles.length === 0) {
+                if (otherProfiles.length === 0 && !current) {
                     body.appendChild(
                         h(
                             "div",
@@ -1089,8 +1140,10 @@
 
                 for (const name of profiles) {
                     const isCurrent = name === current;
+                    // No "disabled" on the active row — it must stay interactive
+                    // so its actions button (Export) is clickable.
                     const r = h("div", {
-                        cls: "row" + (isCurrent ? " disabled" : ""),
+                        cls: "row",
                         onmouseenter: () => playSlot("hover"),
                     });
                     r.appendChild(h("div", { cls: "row-label" }, name));
@@ -1098,7 +1151,33 @@
                         r.appendChild(
                             h("span", { cls: "pill success" }, "Active"),
                         );
-                    else
+
+                    // Visible actions affordance — right-click is not reliable in
+                    // the host webview, so every action is reachable from here.
+                    const menuBtn = h(
+                        "button",
+                        {
+                            cls: "row-menu-btn",
+                            title: "Profile actions",
+                            onmouseenter: () => playSlot("hover"),
+                        },
+                        "⋯",
+                    );
+                    menuBtn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        playSlot("interact");
+                        const rect = menuBtn.getBoundingClientRect();
+                        showCtxMenu(
+                            rect.right,
+                            rect.bottom,
+                            profileMenuItems(name, isCurrent),
+                            name,
+                        );
+                    });
+                    r.appendChild(menuBtn);
+
+                    if (!isCurrent)
                         r.addEventListener("click", async () => {
                             playSlot("interact");
                             const res = await openModal(
@@ -1109,50 +1188,15 @@
                             if (res.confirmed)
                                 sendToHost({ action: "switchProfile", name });
                         });
+
                     r.addEventListener("contextmenu", (e) => {
                         e.preventDefault();
                         e.stopImmediatePropagation();
-                        if (isCurrent) return;
                         playSlot("interact");
                         showCtxMenu(
                             e.clientX,
                             e.clientY,
-                            [
-                                {
-                                    icon: "",
-                                    label: "Switch to this profile",
-                                    action: async () => {
-                                        const res = await openModal(
-                                            "Switch Profile",
-                                            `Switch to "${name}"?\n\nThe current profile will be archived and settings reloaded.`,
-                                            "Switch",
-                                        );
-                                        if (res.confirmed)
-                                            sendToHost({
-                                                action: "switchProfile",
-                                                name,
-                                            });
-                                    },
-                                },
-                                "divider",
-                                {
-                                    icon: "",
-                                    label: "Delete profile",
-                                    danger: true,
-                                    action: async () => {
-                                        const res = await openModal(
-                                            "Delete Profile",
-                                            `Delete "${name}"?\n\nThis cannot be undone.`,
-                                            "Delete",
-                                        );
-                                        if (res.confirmed)
-                                            sendToHost({
-                                                action: "deleteProfile",
-                                                name,
-                                            });
-                                    },
-                                },
-                            ],
+                            profileMenuItems(name, isCurrent),
                             name,
                         );
                     });

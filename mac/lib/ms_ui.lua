@@ -1644,7 +1644,22 @@ return function(ms)
                 local kind = data and data.type
                 if not (ms.package and ms.package.collect and kind) then return end
 
-                local files = ms.package.collect(kind)
+                -- Inactive-profile export: config from the saved profile dir,
+                -- assets from the live dirs (see ms.package.collect). Only valid
+                -- for the profile kind.
+                local collectOpts, namedProfile = nil, nil
+                if kind == "profile" and data.profileName then
+                    local safe = ms.sanitizeName(data.profileName)
+                    local pdir = profilesPath .. safe
+                    if safe == "" or not hs.fs.attributes(pdir) then
+                        ms.alert("Profile \"" .. tostring(data.profileName) .. "\" not found.", 4)
+                        return
+                    end
+                    collectOpts = { configDir = pdir .. "/" }
+                    namedProfile = safe
+                end
+
+                local files = ms.package.collect(kind, collectOpts)
                 if kind == "sound" then
                     local assignPath = ms.package.exportSoundAssign()
                     if assignPath then files["sound_assign.json"] = assignPath end
@@ -1666,8 +1681,11 @@ return function(ms)
                 ms.ui.show()
                 if not dir then return end
 
-                local meta = ms.macroMeta or {}
-                local base = ms.sanitizeName(meta.name or "mudscript")
+                -- An inactive profile has no live macroMeta; name it from its
+                -- folder and leave author/version/website blank (its own
+                -- ms.macroMeta travels inside the packaged ms_macros.lua).
+                local meta = namedProfile and {} or (ms.macroMeta or {})
+                local base = namedProfile or ms.sanitizeName(meta.name or "mudscript")
                 if base == "" then base = "mudscript" end
                 local out = dir:gsub("/$", "") .. "/" .. base .. "-" .. kind .. ".mspkg"
 
