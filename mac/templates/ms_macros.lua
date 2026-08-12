@@ -5,6 +5,10 @@
     }
 -- END Creator Credits --
 
+-- Target App (optional) --
+    -- ms.setTargetApp("Roblox")
+-- END Target App --
+
 
 local NewMacro1Function = ms.fn(function()
     local t = 100
@@ -27,7 +31,7 @@ ms.bind.define("NewMacro1", NewMacro1Function, {
     },
 })
 
--- Camera Sensitivity — Roblox-specific, per-profile
+-- Camera Sensitivity — target-game-specific, per-profile
 ms.settings.define({
     type    = "slider",
     key     = "cameraSensitivity",

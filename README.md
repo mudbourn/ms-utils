@@ -153,16 +153,14 @@ Switch channels from Settings → Developer → Update Channel.
 
 ## A note on HID injection
 
-HID injection is the ability to send input events directly to a specific application process, bypassing the global event stream. mudscript's API includes an optional `hidinject` parameter on key and mouse functions — when enabled, events are posted directly to the target app via `CGEventPostToPSN` instead of the standard macOS event system.
-
-I want to be transparent about this: HID injection can be used to bypass anti-cheat systems that filter global input events. That's not why it exists — it's there because some games don't respond to global event posts, and direct process injection is the only way to make macros work at all. But I understand how it looks.
+HID injection is the ability to send input events directly to a specific application process, bypassing the global event stream — on macOS, posting to the target app via `CGEventPostToPSN` instead of the standard event system. Some games don't respond to global event posts, so this is the only way to make macros work at all; it can also be used to bypass anti-cheat that filters global input. I understand how it looks.
 
 My position:
 
-- **The `hidinject` parameter stays in the core API.** It uses Hammerspoon's built-in event posting — no external binary, no kernel extensions, no SIP changes. It's opt-in and off by default.
-- **An external HID injection binary** (lower-level, more capable) was previously bundled but has been removed from the repo. The source is [archived here](https://save.mudbourn.info/s/asSFkb8wyq6z2Cb/download) for reference. It will return as an optional plugin in a future plugin system, where users explicitly opt into installing it.
+- **HID injection is not in base mudscript.** Core key and mouse functions post to the global event stream, full stop — there is no `hidinject` parameter and no direct-to-process path anywhere in the core API.
+- **It is available only as an opt-in, removable plugin.** Users who need it install the HIDInject plugin explicitly; uninstalling the plugin removes the capability entirely. Nothing in the base codebase references it.
 - **I don't condone using this to cheat.** If a game's terms of service prohibit input automation, don't use mudscript for that game. The tool exists for games where macros are welcome.
-- **I won't pretend the feature doesn't exist.** Hiding it would be dishonest, and mudscript is built on transparency. If you can't understand what a macro tool is doing, you shouldn't trust it.
+- **I won't pretend the feature doesn't exist.** Keeping it a clearly-labelled, self-contained plugin is the honest arrangement: present for those who need it, absent for everyone else.
 
 ---
 

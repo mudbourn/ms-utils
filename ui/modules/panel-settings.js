@@ -699,9 +699,9 @@
                             }
                             if (!sent) showAlert("Nothing selected to reload.");
                         }),
-                        actionBtn("Reload Everything", "", async () => {
+                        actionBtn("Reload All", "", async () => {
                             const r = await openModal(
-                                "Reload Everything",
+                                "Reload All",
                                 "Restart Hammerspoon and reload mudscript from disk?",
                                 "Reload",
                             );
@@ -1256,21 +1256,6 @@
                 );
 
                 body.appendChild(divider());
-
-                // Roblox cache cleaner toggle
-                const cacheCleaner = S.cacheCleanerEnabled === true;
-                body.appendChild(
-                    row(
-                        "Roblox cache cleaner",
-                        "Auto-purge micro-profiler dumps & stale logs every 6 h",
-                        toggle(cacheCleaner, (e) => {
-                            sendToHost({
-                                action: "setCacheCleanerEnabled",
-                                value: e.target.checked,
-                            });
-                        }),
-                    ),
-                );
 
                 // Log archive limit
                 body.appendChild(

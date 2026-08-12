@@ -454,7 +454,6 @@ return function(ms)
                 devArchiveLimit         = ms._devArchiveLimit or 15,
                 updateChannel           = ms._updateChannel or "stable",
                 testingSource           = ms._testingSource or "release",
-                cacheCleanerEnabled     = ms._cacheCleanerEnabled or false,
                 octaneMode              = ms._octaneMode or false,
                 octaneMuteSounds        = ms._octaneMuteSounds or false,
                 macroLabEnabled         = ms._macroLabEnabled ~= false,
@@ -560,12 +559,12 @@ return function(ms)
         -- panel open again so ms_core's focus watcher restores macros correctly.
         local function _restoreAfterCapture()
             ms.ui._open = true
-            local roblox = hs.application.get(ms._targetApp or "Roblox")
-            if roblox then
+            local target = hs.application.get(ms._targetApp)
+            if target then
                 hs.timer.doAfter(0.05, function()
-                    local ok, win = pcall(function() return roblox:mainWindow() end)
+                    local ok, win = pcall(function() return target:mainWindow() end)
                     if ok and win then pcall(function() win:focus() end) end
-                    pcall(function() roblox:activate() end)
+                    pcall(function() target:activate() end)
                 end)
             end
         end
@@ -931,7 +930,7 @@ return function(ms)
                     ms.playSlot("update")
                     ms.alert("Macros reloaded.", 4, true)
                 end
-                -- Roblox unfocus/refocus (macro-specific)
+                -- target-app unfocus/refocus (macro-specific)
                 -- Skip during quick reload — UI operations will steal focus,
                 -- so the refocus is handled after they complete.
                 if not ms._quickReloading then
@@ -1070,35 +1069,6 @@ return function(ms)
                     ms.saveSettings()
                     ms.playSlot("update")
                 end
-                ms.ui.refresh()
-            end,
-
-            setCacheCleanerEnabled = function(data)
-                local enabled = data.value and true or false
-                ms._cacheCleanerEnabled = enabled
-                local home = os.getenv("HOME")
-                local plistSrc = home .. "/.hammerspoon/bin/com.mudscript.cache-cleaner.plist"
-                local scriptSrc = home .. "/.hammerspoon/bin/clean_roblox_cache.sh"
-                local plistDst = home .. "/Library/LaunchAgents/com.mudscript.cache-cleaner.plist"
-                if enabled then
-                    -- Install the launch agent
-                    if hs.fs.attributes(plistSrc) and hs.fs.attributes(scriptSrc) then
-                        local f = io.open(plistSrc, "r")
-                        if f then
-                            local content = f:read("*all"); f:close()
-                            content = content:gsub("%%AGENT_PATH%%", scriptSrc)
-                            local g = io.open(plistDst, "w")
-                            if g then g:write(content); g:close() end
-                            os.execute("chmod 755 '" .. scriptSrc .. "'")
-                            os.execute("launchctl unload '" .. plistDst .. "' 2>/dev/null; launchctl load '" .. plistDst .. "'")
-                        end
-                    end
-                else
-                    -- Uninstall the launch agent
-                    os.execute("launchctl unload '" .. plistDst .. "' 2>/dev/null")
-                    os.remove(plistDst)
-                end
-                ms.saveSettings()
                 ms.ui.refresh()
             end,
 
@@ -1758,6 +1728,80 @@ return function(ms)
                 end)
             end,
 
+            -- Browse --
+            -- The universal storefront. browseList answers with a full catalog
+            -- push; the panel filters locally so typing stays a round-trip
+            -- short. Refresh (force=true) refetches the signed index; a plain
+            -- open pushes the cached index immediately and lets the TTL-guarded
+            -- refresh repaint if the network has something newer.
+            browseList = function(data)
+                if not (ms.shell and ms.shell.isReady and ms.shell.isReady()) then return end
+
+                local function push()
+                    local entries = (ms.registry and ms.registry.list)
+                        and ms.registry.list({}) or {}
+                    local out = {}
+                    for _, e in ipairs(entries) do
+                        out[#out + 1] = {
+                            id          = e.id,
+                            type        = e.type,
+                            name        = e.name,
+                            version     = e.version,
+                            author      = e.author,
+                            description = e.description,
+                            website     = e.website,
+                            trust       = e.trust,
+                        }
+                    end
+                    local ok, json = pcall(hs.json.encode, { entries = out })
+                    if ok and json then
+                        pcall(function()
+                            ms.shell.eval("shellReceive('browse', 'catalog', " .. json .. ")")
+                        end)
+                    end
+                end
+
+                push()  -- cached first, always
+                if ms.registry and ms.registry.refresh then
+                    local force = data and data.force == true
+                    ms.registry.refresh({ force = force }, function(ok)
+                        if ok then push() end
+                    end)
+                end
+            end,
+
+            -- Install straight from the registry. download verifies the bytes
+            -- against the index hash before it hands back a path; install
+            -- re-checks trust before it writes. A registry entry is signed, so
+            -- the normal path clears without the unsigned-import prompt.
+            browseInstall = function(data)
+                if not (data and data.id and ms.registry and ms.registry.download
+                        and ms.package and ms.package.install) then return end
+                local label = data.label or data.id
+
+                ms.registry.download(data.id, function(path, derr)
+                    if not path then
+                        ms.alert("Download failed:\n" .. tostring(derr), 5)
+                        return
+                    end
+                    local result, err = ms.package.install(path)
+                    hs.timer.doAfter(0.15, function()
+                        if not result then
+                            ms.alert("Install failed:\n" .. tostring(err), 5)
+                            return
+                        end
+                        if ms._soundsDirty then ms._discoverSounds() end
+                        if ms.loadTheme then ms.loadTheme() end
+                        ms.playSlot("update")
+                        ms.alert(
+                            (result.manifest.name or label) .. " installed (" ..
+                            #result.installed .. " files).", 4, true
+                        )
+                        ms.ui.refresh()
+                    end)
+                end)
+            end,
+
             -- Plugins --
             -- The flag decides, ms.plugins.apply() enforces: it loads what is
             -- newly enabled and tears down what is newly off, so the switch
@@ -2211,6 +2255,9 @@ return function(ms)
             -- The plugins panel sends on its own channel so its actions read
             -- as plugin actions in the log, but they resolve in the same set.
             ms.bus.on("ui:plugins:*", _routeAction)
+            -- The browse stage sends on its own channel so its actions read as
+            -- browse actions in the log; they resolve in the same set.
+            ms.bus.on("ui:browse:*", _routeAction)
         end
 
         -- ms.ui window methods are a thin adapter over the shell — the legacy

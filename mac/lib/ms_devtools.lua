@@ -135,7 +135,7 @@ return function(ms)
         g:close()
     end
     local _lastReadLine       = nil
-    local _consoleSkip = { roblox_focus=1, roblox_blur=1, target_focus=1, target_blur=1, macros_enabled=1, macros_disabled=1 }
+    local _consoleSkip = { target_focus=1, target_blur=1, macros_enabled=1, macros_disabled=1 }
     local _lastReadType       = nil
     local _lastReadCategory   = nil
 
@@ -2040,7 +2040,7 @@ return function(ms)
     -- The engine must idle the moment the Window monitor is not the thing on
     -- screen — otherwise its AX polling keeps hammering the shared Lua thread in
     -- the background (shell hidden, or a different panel showing), which is pure
-    -- overhead and can steal frames from whatever is running (e.g. Roblox).
+    -- overhead and can steal frames from whatever is running (e.g. the target game).
     -- `_shellActive()` only means the webview loaded; it never goes false, so it
     -- is NOT a sufficient liveness test on its own.
     local function _winStillOpen()

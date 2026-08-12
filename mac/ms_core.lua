@@ -453,8 +453,8 @@
             ms.binds                 = {}
             ms.running   = {}
             ms.cooldowns = {}
-            ms._robloxActive = false
-            -- Safe zones: system binds fire here even without Roblox focus
+            ms._targetActive = false
+            -- Safe zones: system binds fire here even without target-app focus
             ms._safeApps = {
                 ["Hammerspoon"]      = true,
                 ["Activity Monitor"] = true,
@@ -478,10 +478,14 @@
             ms.registry              = { _defs = {}, _defList = {} }
             ms.bind                  = { _wires = {}, _autoCount = 0 }
 
-            ms._targetApp     = "Roblox"
-            ms._targetHandle  = hs.application.get(ms._targetApp)
-            roblox = ms._targetHandle
-            ms._robloxActive  = false
+            -- The game/app macros target. No longer hardcoded: a macro pack
+            -- (ms_macros.lua) or a plugin declares it via ms.setTargetApp(). The
+            -- optional TARGET_APP global lets a pack seed it before core runs;
+            -- with none set there is no target and system binds only fire in
+            -- safe zones.
+            ms._targetApp     = TARGET_APP or nil
+            ms._targetHandle  = ms._targetApp and hs.application.get(ms._targetApp) or nil
+            ms._targetActive  = false
             ms._qrOptions = { macros = true, theme = true, settings = true, ui = true }
             -- Plugins the user has switched off, by bundle dir name. Empty is
             -- the normal state: install is the decision point, so this only
@@ -498,7 +502,7 @@
                 ms._targetApp    = name or nil
                 ms._targetHandle = name and hs.application.get(name) or nil
                 if ms._targetHandle then
-                    ms._robloxActive = true
+                    ms._targetActive = true
                 end
             end
             notice = 0
@@ -812,6 +816,7 @@
                 require("hs.keycodes")
                 require("hs.canvas")
                 require("hs.window")
+                require("hs.window.filter")
                 require("hs.screen")
                 require("hs.menubar")
                 require("hs.application")
@@ -819,7 +824,7 @@
                 hs.timer.doAfter(0.3, function()
                     local targetApp = hs.application.get(ms._targetApp)
                     if targetApp then
-                        ms._robloxActive = true
+                        ms._targetActive = true
 
                         local hs_app = hs.application.get("Hammerspoon")
                         if hs_app then hs_app:activate() end
@@ -1072,7 +1077,7 @@
             local _keyFlush = function() end
             -- END Key logging --
 
-                ms.press = function(key, mods, hidinject)
+                ms.press = function(key, mods)
                     if ms.dev then ms.devtools:flushAll(); _keyFlush() end
                     local keyCode = getCode(key)
                     if not keyCode then
@@ -1090,17 +1095,13 @@
                             _keyLog(msg)
                         end
                     end
-                    ms._macroHeldKeys[keyCode] = { mods = mods or {}, hidinject = hidinject }
+                    ms._macroHeldKeys[keyCode] = { mods = mods or {} }
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, true)
-                    if hidinject then
-                        local app = hs.application.get(ms._targetApp or "Roblox")
-                        if app then ev:post(app); return end
-                    end
                     ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
                     ev:post()
                 end
 
-                ms.release = function(key, mods, hidinject)
+                ms.release = function(key, mods)
                     if ms.dev then ms.devtools:flushAll(); _keyFlush() end
                     local keyCode = getCode(key)
                     if not keyCode then return end
@@ -1124,10 +1125,6 @@
                     end
                     ms._macroHeldKeys[keyCode] = nil
                     local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, false)
-                    if hidinject then
-                        local app = hs.application.get(ms._targetApp or "Roblox")
-                        if app then ev:post(app); return end
-                    end
                     ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
                     ev:post()
                 end
@@ -1141,7 +1138,7 @@
                     return true
                 end
 
-                ms.type = function(key, mods, hidinject, holdMs)
+                ms.type = function(key, mods, holdMs)
                     if ms.dev then ms.devtools:flushAll(); _keyFlush() end
                     local _hold = holdMs or 15
                     if ms.dev then
@@ -1151,9 +1148,9 @@
                     end
                     local _saved = ms.devtools:getTraceSuppress()
                     ms.devtools:setTraceSuppress(true)
-                    ms.press(key, mods, hidinject)
+                    ms.press(key, mods)
                     ms.wait(_hold)
-                    ms.release(key, mods, hidinject)
+                    ms.release(key, mods)
                     ms.devtools:setTraceSuppress(_saved)  -- restore rather than reset; safe across cancellation
                 end
 
@@ -1293,7 +1290,7 @@
                 ev:post()
             end
 
-            ms.mouse = function(button, swallow, clickFn, hidinject, isSystem)
+            ms.mouse = function(button, swallow, clickFn, isSystem)
                 if not ms._mouseListener then
                     ms._mouseCallbacks = {}
                     local types = {
@@ -1343,10 +1340,6 @@
 
                         local callbackData = ms._mouseCallbacks[b]
                         if callbackData then
-                            if callbackData.swallow and callbackData.hidinject then
-                                local app = hs.application.get(ms._targetApp or "Roblox")
-                                if app then event:copy():post(app) end
-                            end
                             local co = coroutine.create(callbackData.fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then
@@ -1359,7 +1352,7 @@
                     end):start()
                     ms._resilientTaps[#ms._resilientTaps+1] = ms._mouseListener
                 end
-                ms._mouseCallbacks[button] = { fn = clickFn, swallow = swallow, hidinject = hidinject, system = isSystem or false }
+                ms._mouseCallbacks[button] = { fn = clickFn, swallow = swallow, system = isSystem or false }
             end
 
             -- ms.scrollBind(direction, fn) — listen for scroll wheel up/down and fire callback
@@ -1471,14 +1464,14 @@
                 assert(BTNS[button] ~= nil, "ms.Mouse: unknown button '"      .. tostring(button)     .. "'")
                 assert(REFS[reference],    "ms.Mouse: unknown reference '"   .. tostring(reference)  .. "'")
 
-                local unscaled, x1, y1, x2, y2, hidinject
-                local _a, _b, _c, _d, _e, _f = ...
+                local unscaled, x1, y1, x2, y2
+                local _a, _b, _c, _d, _e = ...
                 if type(_a) == "boolean" then
-                    unscaled                   = _a
-                    x1, y1, x2, y2, hidinject = _b, _c, _d, _e, _f
+                    unscaled        = _a
+                    x1, y1, x2, y2 = _b, _c, _d, _e
                 else
-                    unscaled                   = false
-                    x1, y1, x2, y2, hidinject = _a, _b, _c, _d, _e
+                    unscaled        = false
+                    x1, y1, x2, y2 = _a, _b, _c, _d
                 end
 
                 -- Log with all available params
@@ -1496,7 +1489,6 @@
                 end
 
                 local btn  = BTNS[button]
-                local _app = hidinject and hs.application.get(ms._targetApp or "Roblox") or nil
 
                 local function resolve(x, y) return ms.resolvePoint(x, y, reference, unscaled) end
 
@@ -1530,20 +1522,14 @@
                     if btn >= 2 then
                         ev:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btn)
                     end
-                    if _app then ev:post(_app)
-                    else
-                        ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
-                        ev:post()
-                    end
+                    ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    ev:post()
                 end
 
                 local function moveTo(pos)
                     local mv = hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.mouseMoved, pos)
-                    if _app then mv:post(_app)
-                    else
-                        mv:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
-                        mv:post()
-                    end
+                    mv:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    mv:post()
                     hs.mouse.absolutePosition(pos)
                 end
 
@@ -1568,7 +1554,7 @@
                     post(upT, pos2)
                 elseif operation == "Press"       then
                     moveTo(pos1); post(downT, pos1)
-                    ms._macroHeldButtons[btn] = { upT = upT, pos = pos1, app = _app }
+                    ms._macroHeldButtons[btn] = { upT = upT, pos = pos1 }
                 elseif operation == "Release"     then
                     post(upT, pos1)
                     ms._macroHeldButtons[btn] = nil
@@ -1597,7 +1583,7 @@
                 end
             end
 
-            -- Activate camera control (post mouse down/up to register with Roblox)
+            -- Activate camera control (post mouse down/up to register with the target app)
             local function _activateCam()
                 if _camActivated then return end
                 -- Use current cursor position, not anchor
@@ -1657,7 +1643,7 @@
                 end,
             })
 
-            -- Update anchor when Roblox gains focus
+            -- Update anchor when the target app gains focus
             ms.bus.on("ui:_shell:navigate", function(data)
                 if data and data.panel then
                     _updateCamAnchor()
@@ -1791,8 +1777,16 @@
             end
 
             ms.wait = function(ms_time)
-                local co = coroutine.running()
-                if co then
+                -- Lua 5.4 (Hammerspoon) returns (mainthread, true) on the main
+                -- thread, where 5.1 returned nil — so a bare `if co` was always
+                -- true and the yield below fired even on the main thread, which
+                -- cannot yield. That errored on the yield and then again when the
+                -- orphaned timer resumed the non-suspended main thread ("cannot
+                -- resume non-suspended coroutine"). Gate on the isMain flag so
+                -- actions run directly (console, testRun's pcall) block-sleep
+                -- instead, and only real macro coroutines take the yield path.
+                local co, isMain = coroutine.running()
+                if co and not isMain then
                     local ctx = ms._coroContext[co]
                     if ms.dev and not ms.devtools:getTraceSuppress() then
                         ms.devtools:flushCam()
@@ -1827,10 +1821,6 @@
         -- END 5. Timing --
 
         -- 6. Resolution & Window Scaling --
-            ms.getRobloxWin = function()
-                return ms.getTargetWin()
-            end
-
             ms.winCenter = function()
                 local win = ms.getTargetWin() or hs.window.focusedWindow()
                 if not win then return 0, 0 end
@@ -1912,15 +1902,16 @@
                 return x, y
             end
 
-            ms.debugRoblox = function()
-                local win = ms.getRobloxWin() or hs.window.find(ms._targetApp)
+            ms.debugTarget = function()
+                local win = ms.getTargetWin()
+                    or (ms._targetApp and hs.window.find(ms._targetApp))
                 if win then
                     local f = win:frame()
                     local screen = win:screen():frame()
                     local currentRatio = f.w / f.h
                     local currentSens = ms._camSens or 1.5
                     local output = {
-                        "--- ROBLOX DEBUG INFO ---",
+                        "--- TARGET WINDOW DEBUG INFO ---",
                         string.format("Window Title: %s", win:title()),
                         string.format("Resolution (Points): %.1f x %.1f", f.w, f.h),
                         string.format("Position: x=%.1f, y=%.1f", f.x, f.y),
@@ -1942,8 +1933,8 @@
                         ms.alert("Warning: Ratio too narrow.", 8)
                     end
                 else
-                    print("DEBUG ERROR: Roblox window not found.")
-                    ms.alert("Roblox not found.", 2)
+                    print("DEBUG ERROR: target window not found.")
+                    ms.alert("Target window not found.", 2)
                 end
             end
         -- END 6. Resolution & Window Scaling --
@@ -1992,10 +1983,10 @@
 
             ms._appWatcher = hs.application.watcher.new(function(appName, eventType, app)
                 if eventType == hs.application.watcher.activated then
-                    if appName == (ms._targetApp or "Roblox") then
+                    if appName == (ms._targetApp) then
                         local fromDialog = ms._inputOpen
                         ms._inputOpen = false
-                        ms._robloxActive = true
+                        ms._targetActive = true
                         ms.dev.log({ type = "system", event = "target_focus", fromDialog = fromDialog or false })
                         -- Update camera anchor when target gains focus
                         if ms._updateCamAnchor then ms._updateCamAnchor() end
@@ -2011,10 +2002,10 @@
                         -- Don't disable macros if settings panel or shell is open
                         local shellOpen = ms._shellState and ms._shellState.visible
                         if (ms.ui._open or shellOpen) and appName == "Hammerspoon" then return end
-                        ms._inputOpen    = (appName == "Hammerspoon") and ms._robloxActive
-                        ms._robloxActive = false
+                        ms._inputOpen    = (appName == "Hammerspoon") and ms._targetActive
+                        ms._targetActive = false
                         ms.dev.log({ type = "system", event = "target_blur", to = appName })
-                        -- Reset camera activation state when Roblox loses focus
+                        -- Reset camera activation state when the target app loses focus
                         if ms._camActivated ~= nil then ms._camActivated = false end
                         if BindValidity == 1 then
                             ms.setMacros(0, ms._inputOpen)
@@ -2027,7 +2018,7 @@
             _G._initTimer = hs.timer.doAfter(0.3, function()
                 local frontApp = hs.application.frontmostApplication()
                 if ms._targetApp and frontApp and frontApp:name() == ms._targetApp then
-                    ms._robloxActive = true
+                    ms._targetActive = true
                 end
             end)
 
@@ -2228,7 +2219,7 @@
                 local hk = ms._hotkeys.panic
                 local tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
                     if not ms._hotkeysReady then return end
-                    if not ms._robloxActive and not ms._isSafeZone() then return end
+                    if not ms._targetActive and not ms._isSafeZone() then return end
                     ms.setMacros(0)
                 end)
                 if tap then _register("panic", tap) end
@@ -2237,7 +2228,7 @@
                 hk = ms._hotkeys.quickReload
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
                     if not ms._hotkeysReady then return end
-                    if not ms._robloxActive and not ms._isSafeZone() then return end
+                    if not ms._targetActive and not ms._isSafeZone() then return end
                     if ms._qrCooldown then return end
                     ms._qrCooldown = true
                     -- Retain the timer in a field: an anonymous doAfter timer can
@@ -2264,7 +2255,7 @@
                 hk = ms._hotkeys.openMenu
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
                     if not ms._hotkeysReady then return end
-                    -- No _robloxActive / _isSafeZone guard: the menu is a
+                    -- No _targetActive / _isSafeZone guard: the menu is a
                     -- Hammerspoon UI, not a game action. It should open
                     -- regardless of target-app focus.
                     if ms._macroLabEnabled and ms.shell and ms.shell.toggle then
@@ -2279,7 +2270,7 @@
                 hk = ms._hotkeys.octane
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
                     if not ms._hotkeysReady then return end
-                    if not ms._robloxActive and not ms._isSafeZone() then return end
+                    if not ms._targetActive and not ms._isSafeZone() then return end
                     ms.octane.toggle()
                 end)
                 if tap then _register("octane", tap) end
@@ -2597,17 +2588,8 @@
 
                 for keyCode, entry in pairs(ms._macroHeldKeys) do
                     local ev = hs.eventtap.event.newKeyEvent(entry.mods, keyCode, false)
-                    if entry.hidinject then
-                        local app = hs.application.get(ms._targetApp or "Roblox")
-                        if app then ev:post(app)
-                        else
-                            ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
-                            ev:post()
-                        end
-                    else
-                        ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
-                        ev:post()
-                    end
+                    ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    ev:post()
                 end
                 ms._macroHeldKeys = {}
 
@@ -2616,11 +2598,8 @@
                     if btn >= 2 then
                         ev:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btn)
                     end
-                    if entry.app then ev:post(entry.app)
-                    else
-                        ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
-                        ev:post()
-                    end
+                    ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    ev:post()
                 end
                 ms._macroHeldButtons = {}
             end
@@ -3052,11 +3031,32 @@
                 return { x = f.x, y = f.y, w = f.w, h = f.h }
             end
 
+            -- Move or resize a window (defaults to the focused window). Backs the
+            -- macro recorder's window-action capture and is available as a module.
+            -- op "Move" → top-left to (a,b); "Resize" → size (a,b); "Frame" →
+            -- full frame (a,b,c,d). Coordinates are absolute screen points.
+            ms.window = function(operation, a, b, c, d)
+                local win = ms.getTargetWin() or hs.window.focusedWindow()
+                if not win then return false end
+                local op = tostring(operation or "Move"):lower()
+                local ok = pcall(function()
+                    if op == "resize" then
+                        win:setSize({ w = tonumber(a) or 0, h = tonumber(b) or 0 })
+                    elseif op == "frame" then
+                        win:setFrame({ x = tonumber(a) or 0, y = tonumber(b) or 0,
+                                       w = tonumber(c) or 0, h = tonumber(d) or 0 })
+                    else -- "move"
+                        win:setTopLeft({ x = tonumber(a) or 0, y = tonumber(b) or 0 })
+                    end
+                end)
+                return ok
+            end
+
             -- Press multiple keys in sequence with optional delay between them
-            ms.multiPress = function(keys, delayMs, mods, hidinject)
+            ms.multiPress = function(keys, delayMs, mods)
                 delayMs = delayMs or 15
                 for i, key in ipairs(keys) do
-                    ms.type(key, mods, hidinject)
+                    ms.type(key, mods)
                     if i < #keys then ms.wait(delayMs) end
                 end
             end
@@ -3177,7 +3177,8 @@
                 return note
             end
 
-            -- Anti-Timeout — prevents Roblox 20-minute inactivity kick
+            -- Anti-Timeout — generic idle-prevention (e.g. a game's inactivity kick).
+            -- The action + interval come from whichever pack/plugin configures it.
                 ms._antiTimeout = { fn = nil, interval = 900, timer = nil, running = false }
 
                 ms.antiTimeout = function(config)
@@ -3208,7 +3209,7 @@
                         local wrappedFn = ms.fn(ms._antiTimeout.fn)
                         ms._antiTimeout.timer = hs.timer.doEvery(ms._antiTimeout.interval, function()
                             if not ms._antiTimeout.running then return end
-                            if not ms._robloxActive then return end
+                            if not ms._targetActive then return end
                             pcall(wrappedFn)
                         end)
                     else
@@ -3231,7 +3232,7 @@
                         local wrappedFn = ms.fn(ms._antiTimeout.fn)
                         ms._antiTimeout.timer = hs.timer.doEvery(ms._antiTimeout.interval, function()
                             if not ms._antiTimeout.running then return end
-                            if not ms._robloxActive then return end
+                            if not ms._targetActive then return end
                             pcall(wrappedFn)
                         end)
                     end
@@ -3391,28 +3392,28 @@
                         -- ms.key handles fire regardless of BindValidity (system
                         -- flag) and are torn down cleanly on rebind.
                         ms.systemBinds._handles[id] = ms.key(c.mods, c.key, false, function()
-                            if not ms._robloxActive and not ms._isSafeZone() then return end
+                            if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, nil, true)
                     elseif c.type == "mouse" then
                         ms.systemBinds._handles[id] = ms.mouse(c.button, false, function()
-                            if not ms._robloxActive and not ms._isSafeZone() then return end
+                            if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, true)
                     elseif c.type == "scroll" then
                         ms.systemBinds._handles[id] = ms.scrollBind(c.direction, function()
-                            if not ms._robloxActive and not ms._isSafeZone() then return end
+                            if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end)
                     elseif c.type == "gamepad" then
                         ms.systemBinds._handles[id] = ms.gamepadBind(c.button, function()
-                            if not ms._robloxActive and not ms._isSafeZone() then return end
+                            if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
@@ -3626,6 +3627,17 @@
                 group  = "app",
                 info   = "Get the position of an app's window",
                 params = { {name = "appName", type = "string"} },
+                icon   = "window",
+            })
+            ms.fn.define("ms.window", ms.window, {
+                label  = "Window Move/Resize",
+                group  = "app",
+                info   = "Move or resize the focused window (Move/Resize/Frame)",
+                params = {
+                    {name = "operation", type = "string"},
+                    {name = "x", type = "number"}, {name = "y", type = "number"},
+                    {name = "w", type = "number"}, {name = "h", type = "number"},
+                },
                 icon   = "window",
             })
 
@@ -3943,7 +3955,7 @@
                     print("rebindSystem: registering " .. id .. " as system bind")
                     if c.type == "key" then
                         local tap = ms._makeKeyWatcher(c.mods, c.key, function()
-                            if not ms._robloxActive and not ms._isSafeZone() then return end
+                            if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
@@ -3951,21 +3963,21 @@
                         if tap then ms._systemBindHandles[id] = tap; tap:start() end
                     elseif c.type == "mouse" then
                         ms._systemBindHandles[id] = ms.mouse(c.button, false, function()
-                            if not ms._robloxActive and not ms._isSafeZone() then return end
+                            if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end, true)
                     elseif c.type == "scroll" then
                         ms._systemBindHandles[id] = ms.scrollBind(c.direction, function()
-                            if not ms._robloxActive and not ms._isSafeZone() then return end
+                            if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end)
                     elseif c.type == "gamepad" then
                         ms._systemBindHandles[id] = ms.gamepadBind(c.button, function()
-                            if not ms._robloxActive and not ms._isSafeZone() then return end
+                            if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(fn)
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
@@ -4034,7 +4046,7 @@
                         leftActive = true
                         local co = coroutine.create(function()
                             ms.Mouse(Press, Left, Mouse, 0, 0)
-                            while leftPhysicallyHeld and BindValidity == 1 and ms._robloxActive do ms.wait(1) end
+                            while leftPhysicallyHeld and BindValidity == 1 and ms._targetActive do ms.wait(1) end
                             ms.Mouse(Release, Left, Mouse, 0, 0)
                             ms.wait(50)
                             leftActive = false
@@ -4067,7 +4079,7 @@
                         rightActive = true
                         local co = coroutine.create(function()
                             ms.Mouse(Press, Right, Mouse, 0, 0)
-                            while rightPhysicallyHeld and BindValidity == 1 and ms._robloxActive do ms.wait(1) end
+                            while rightPhysicallyHeld and BindValidity == 1 and ms._targetActive do ms.wait(1) end
                             ms.Mouse(Release, Right, Mouse, 0, 0)
                             ms.wait(50)
                             rightActive = false
@@ -4202,7 +4214,12 @@
                         end
                     end)
 
-                    ms.bus.on("ui:macros:getMacro", function(body)
+                    -- ms.bus.emit calls handlers as (topic, payload); the real
+                    -- message body is the SECOND argument. Declaring these as
+                    -- function(body) bound `body` to the topic string, so every
+                    -- payload-reading handler here silently saw nil fields —
+                    -- which is why save/getMacro/testRun/delete never worked.
+                    ms.bus.on("ui:macros:getMacro", function(_, body)
                         if not body or not body.id then return end
                         local def = ms.compiler.get(body.id)
                         if def then
@@ -4211,25 +4228,383 @@
                         end
                     end)
 
-                    ms.bus.on("ui:macros:saveMacro", function(body)
-                        if not body or not body.id or not body.def then return end
+                    -- Push a saved/deleted macro into the live session so it is
+                    -- immediately listable, bindable and runnable without a
+                    -- reboot. write()/delete() only regenerate the .lua file on
+                    -- disk; load() re-defines the macros into the sandbox and
+                    -- ms.bind.rebind() re-applies every hotkey. The panel
+                    -- notify goes through shellReceive (invokes the JS panel
+                    -- handler); shellDispatch would post back to Lua and loop,
+                    -- so macroSaved never actually reached the panel before.
+                    local function _registerAndNotify()
+                        pcall(ms.compiler.load)
+                        if ms.bind and ms.bind.rebind then pcall(ms.bind.rebind) end
+                        _macroShellEval("if(window.shellReceive)shellReceive('macros','macroSaved',{})")
+                        if ms.ui and ms.ui.pushBindList then pcall(ms.ui.pushBindList) end
+                    end
+
+                    ms.bus.on("ui:macros:saveMacro", function(_, body)
+                        if not body or not body.id or not body.def then
+                            return
+                        end
                         local ok, err = pcall(ms.compiler.write, body.id, body.def)
                         if ok then
-                            _macroShellEval("shellDispatch('macros','macroSaved',{})")
+                            print("ms.compiler.saveMacro: '" .. tostring(body.id) .. "' saved and registered")
+                            _registerAndNotify()
                         else
                             print("ms.compiler.saveMacro error: " .. tostring(err))
                         end
                     end)
 
-                    ms.bus.on("ui:macros:deleteMacro", function(body)
+                    ms.bus.on("ui:macros:deleteMacro", function(_, body)
                         if not body or not body.id then return end
                         local ok, err = pcall(ms.compiler.delete, body.id)
                         if ok then
-                            _macroShellEval("shellDispatch('macros','macroSaved',{})")
+                            print("ms.compiler.deleteMacro: '" .. tostring(body.id) .. "' removed")
+                            _registerAndNotify()
                         else
                             print("ms.compiler.deleteMacro error: " .. tostring(err))
                         end
                     end)
+
+                    -- Pack meta (ms.macroMeta) for the visual macro pack. The
+                    -- Binds tab reads it on open and writes it on edit; a write
+                    -- recompiles and reloads so ms.macroMeta and the loading
+                    -- screen's credits update live.
+                    ms.bus.on("ui:macros:getMeta", function()
+                        local ok, meta = pcall(ms.compiler.getMeta)
+                        local json = hs.json.encode(ok and meta or {})
+                        _macroShellEval("if(window.macroLab)macroLab.setMeta(" .. json .. ")")
+                    end)
+
+                    ms.bus.on("ui:macros:setMeta", function(_, body)
+                        if type(body) ~= "table" then return end
+                        local ok, err = pcall(ms.compiler.setMeta, {
+                            name    = body.name,
+                            author  = body.author,
+                            website = body.website,
+                        })
+                        if ok then
+                            print("ms.compiler.setMeta: pack meta updated")
+                            _registerAndNotify()
+                        else
+                            print("ms.compiler.setMeta error: " .. tostring(err))
+                        end
+                    end)
+
+                    -- Test Run: compile + run the in-progress macro def once and
+                    -- report ok/err back so the panel's toast resolves instead
+                    -- of timing out. The run is async (a coroutine, like a bound
+                    -- macro), so testRun delivers its result through this
+                    -- callback when the run finishes — not a return value.
+                    ms.bus.on("ui:macros:testRun", function(_, body)
+                        local reported = false
+                        local function report(ok, err)
+                            if reported then return end
+                            reported = true
+                            local res = hs.json.encode({ ok = ok and true or false, err = err or "" })
+                            _macroShellEval("if(window.shellReceive)shellReceive('macros','testRunResult'," .. res .. ")")
+                        end
+                        if not body then report(false, "no macro definition"); return end
+                        local callOk, cerr = pcall(ms.compiler.testRun, body, report)
+                        -- Only fires if testRun itself throws before/around
+                        -- scheduling the run; the coroutine path reports via
+                        -- `report` on its own.
+                        if not callOk then report(false, tostring(cerr)) end
+                    end)
+
+                    -- Record Mode: capture keystrokes, clicks and the idle gaps
+                    -- between them, pushing each as a module into the canvas.
+                    -- (Previously start/stopRecording had no handler, so the
+                    -- button toggled its own state and captured nothing.)
+                    do
+                        -- opts (all supplied by the panel's record-settings menu):
+                        --   recordDelays        bool  emit ms.wait for idle gaps
+                        --   pressMode           str   "type" | "press" | "pressRelease"
+                        --   recordDrags         bool  capture mouse drags as Drag ops
+                        --   recordMouseButtons  bool  capture click-downs
+                        --   recordWindowMove    bool  capture focused-window moves
+                        --   recordWindowResize  bool  capture focused-window resizes
+                        local rec = {
+                            tap = nil, winFilter = nil, lastTs = nil,
+                            threshold = 50, opts = {}, drag = nil, winFrames = {},
+                        }
+                        ms._macroRecord = rec
+
+                        local function pushStep(action, params)
+                            local json = hs.json.encode({ action = action, params = params })
+                            _macroShellEval("if(window.shellReceive)shellReceive('macros','recordStep'," .. json .. ")")
+                        end
+
+                        -- Emit a wait module for the gap since the last capture,
+                        -- but only once it exceeds the threshold (sub-threshold
+                        -- gaps are noise, not intent). Skipped entirely when the
+                        -- user turns delay recording off — the clock still ticks
+                        -- so a later re-enable measures from the right instant.
+                        local function maybeWait()
+                            local now = hs.timer.secondsSinceEpoch()
+                            if rec.opts.recordDelays ~= false and rec.lastTs then
+                                local dt = math.floor((now - rec.lastTs) * 1000 + 0.5)
+                                if dt >= rec.threshold then
+                                    pushStep("ms.wait", { ms = dt })
+                                end
+                            end
+                            rec.lastTs = now
+                        end
+
+                        -- Ignore input that lands on the shell window itself
+                        -- (e.g. the Stop button) so it doesn't get recorded.
+                        local function inShell(pt)
+                            if not pt then return false end
+                            local ok, frame = pcall(function()
+                                if ms.shell and ms.shell.webview and ms.shell.webview() then
+                                    return ms.shell.webview():frame()
+                                end
+                            end)
+                            if ok and frame then
+                                return pt.x >= frame.x and pt.x <= frame.x + frame.w
+                                    and pt.y >= frame.y and pt.y <= frame.y + frame.h
+                            end
+                            return false
+                        end
+
+                        local function modsOf(ev)
+                            local f = ev:getFlags()
+                            local mods = {}
+                            if f.cmd   then mods[#mods + 1] = "cmd"   end
+                            if f.alt   then mods[#mods + 1] = "alt"   end
+                            if f.ctrl  then mods[#mods + 1] = "ctrl"  end
+                            if f.shift then mods[#mods + 1] = "shift" end
+                            return mods
+                        end
+
+                        -- Map a raw mouse event type to the ms.Mouse button name.
+                        local function buttonOf(t, et)
+                            if t == et.rightMouseDown or t == et.rightMouseUp
+                                or t == et.rightMouseDragged then return "Right" end
+                            if t == et.otherMouseDown or t == et.otherMouseUp
+                                or t == et.otherMouseDragged then return "Center" end
+                            return "Left"
+                        end
+
+                        local function emitClick(button, pt)
+                            pushStep("ms.Mouse", {
+                                operation = "Click", button = button, reference = "Absolute",
+                                x = math.floor((pt and pt.x or 0) + 0.5),
+                                y = math.floor((pt and pt.y or 0) + 0.5),
+                            })
+                        end
+
+                        rec.start = function(threshold, opts)
+                            if rec.tap then return end
+                            rec.threshold = tonumber(threshold) or 50
+                            rec.opts = opts or {}
+                            rec.lastTs = nil
+                            rec.drag = nil
+                            local et = hs.eventtap.event.types
+
+                            -- Build the tapped-event set from the options. keyDown
+                            -- is always on; the rest are added only when needed so
+                            -- the tap does the least work it can.
+                            local mode  = rec.opts.pressMode or "type"
+                            local types = { et.keyDown }
+                            if mode == "pressRelease" then
+                                types[#types + 1] = et.keyUp
+                            end
+                            if rec.opts.recordMouseButtons ~= false or rec.opts.recordDrags then
+                                types[#types + 1] = et.leftMouseDown
+                                types[#types + 1] = et.rightMouseDown
+                                types[#types + 1] = et.otherMouseDown
+                            end
+                            if rec.opts.recordDrags then
+                                types[#types + 1] = et.leftMouseUp
+                                types[#types + 1] = et.rightMouseUp
+                                types[#types + 1] = et.otherMouseUp
+                                types[#types + 1] = et.leftMouseDragged
+                                types[#types + 1] = et.rightMouseDragged
+                                types[#types + 1] = et.otherMouseDragged
+                            end
+
+                            rec.tap = hs.eventtap.new(types, function(ev)
+                                local ok = pcall(function()
+                                    local t = ev:getType()
+
+                                    -- ── Keyboard ──
+                                    if t == et.keyDown then
+                                        local key = hs.keycodes.map[ev:getKeyCode()]
+                                        if type(key) ~= "string" or key == "" then return end
+                                        -- In hold-oriented modes a held key auto-repeats
+                                        -- keyDowns; capturing each would emit a run of
+                                        -- duplicate presses. The real down/up pair is
+                                        -- what matters, so drop the repeats.
+                                        if mode ~= "type" and ev:getProperty(
+                                            hs.eventtap.event.properties.keyboardEventAutorepeat) == 1 then
+                                            return
+                                        end
+                                        local mods = modsOf(ev)
+                                        maybeWait()
+                                        if mode == "press" or mode == "pressRelease" then
+                                            pushStep("ms.press", { key = key, mods = mods })
+                                        else
+                                            pushStep("ms.type", { key = key, mods = mods })
+                                        end
+                                        return
+                                    end
+                                    if t == et.keyUp then
+                                        -- Only reached in pressRelease mode.
+                                        local key = hs.keycodes.map[ev:getKeyCode()]
+                                        if type(key) ~= "string" or key == "" then return end
+                                        maybeWait()
+                                        pushStep("ms.release", { key = key })
+                                        return
+                                    end
+
+                                    -- ── Mouse down ──
+                                    if t == et.leftMouseDown or t == et.rightMouseDown
+                                        or t == et.otherMouseDown then
+                                        local pt = ev:location()
+                                        if inShell(pt) then return end
+                                        local button = buttonOf(t, et)
+                                        if rec.opts.recordDrags then
+                                            -- Defer: a plain click and the start of
+                                            -- a drag look identical until the mouse
+                                            -- either moves or releases in place.
+                                            rec.drag = {
+                                                button = button, moved = false,
+                                                x1 = pt.x, y1 = pt.y, x2 = pt.x, y2 = pt.y,
+                                            }
+                                        elseif rec.opts.recordMouseButtons ~= false then
+                                            maybeWait()
+                                            emitClick(button, pt)
+                                        end
+                                        return
+                                    end
+
+                                    -- ── Mouse drag / up (drag capture only) ──
+                                    if t == et.leftMouseDragged or t == et.rightMouseDragged
+                                        or t == et.otherMouseDragged then
+                                        if rec.drag then
+                                            local pt = ev:location()
+                                            rec.drag.moved = true
+                                            rec.drag.x2, rec.drag.y2 = pt.x, pt.y
+                                        end
+                                        return
+                                    end
+                                    if t == et.leftMouseUp or t == et.rightMouseUp
+                                        or t == et.otherMouseUp then
+                                        local d = rec.drag
+                                        rec.drag = nil
+                                        if not d then return end
+                                        local pt = ev:location()
+                                        d.x2, d.y2 = pt.x, pt.y
+                                        if d.moved then
+                                            maybeWait()
+                                            pushStep("ms.Mouse", {
+                                                operation = "Drag", button = d.button,
+                                                reference = "Absolute",
+                                                x  = math.floor(d.x1 + 0.5), y  = math.floor(d.y1 + 0.5),
+                                                x2 = math.floor(d.x2 + 0.5), y2 = math.floor(d.y2 + 0.5),
+                                            })
+                                        elseif rec.opts.recordMouseButtons ~= false
+                                            and not inShell({ x = d.x1, y = d.y1 }) then
+                                            -- Pressed and released in place — a click.
+                                            maybeWait()
+                                            emitClick(d.button, { x = d.x1, y = d.y1 })
+                                        end
+                                        return
+                                    end
+                                end)
+                                if not ok then print("ms.macroRecord: capture error") end
+                                -- Never consume the event — the user's input must
+                                -- still reach the foreground app.
+                                return false
+                            end)
+
+                            if rec.tap then rec.tap:start() end
+
+                            -- Window move/resize ride a separate hs.window.filter
+                            -- rather than the eventtap: the OS reports the settled
+                            -- frame, and comparing it to the last-seen frame tells
+                            -- move from resize (a title-bar drag changes position,
+                            -- an edge drag changes size).
+                            if rec.opts.recordWindowMove or rec.opts.recordWindowResize then
+                                rec.winFrames = {}
+                                local wf = hs.window.filter.new(nil)
+                                rec.winFilter = wf
+                                local function onWinChange(win)
+                                    local okw = pcall(function()
+                                        if not win then return end
+                                        -- The shell and any other Hammerspoon-owned
+                                        -- window (console, panels, the webview shell)
+                                        -- must not be captured — only the user's apps.
+                                        local app = win:application()
+                                        if app and app:name() == "Hammerspoon" then return end
+                                        local id = win:id()
+                                        local f  = win:frame()
+                                        local prev = rec.winFrames[id]
+                                        rec.winFrames[id] = { x = f.x, y = f.y, w = f.w, h = f.h }
+                                        if not prev then return end
+                                        local moved   = (f.x ~= prev.x) or (f.y ~= prev.y)
+                                        local resized = (f.w ~= prev.w) or (f.h ~= prev.h)
+                                        if resized and rec.opts.recordWindowResize then
+                                            maybeWait()
+                                            pushStep("ms.window", {
+                                                operation = "Resize",
+                                                x = math.floor(f.w + 0.5), y = math.floor(f.h + 0.5),
+                                            })
+                                        elseif moved and rec.opts.recordWindowMove then
+                                            maybeWait()
+                                            pushStep("ms.window", {
+                                                operation = "Move",
+                                                x = math.floor(f.x + 0.5), y = math.floor(f.y + 0.5),
+                                            })
+                                        end
+                                    end)
+                                    if not okw then print("ms.macroRecord: window capture error") end
+                                end
+                                -- Seed the baseline frames so the first move/resize
+                                -- has something to diff against.
+                                pcall(function()
+                                    for _, w in ipairs(wf:getWindows()) do
+                                        if w and w.id and w:id() then
+                                            local f = w:frame()
+                                            rec.winFrames[w:id()] = { x = f.x, y = f.y, w = f.w, h = f.h }
+                                        end
+                                    end
+                                end)
+                                -- windowMoved covers frame changes on most
+                                -- builds; subscribe to windowsChanged too where it
+                                -- exists so an edge-only resize is never missed.
+                                local wEvents = { hs.window.filter.windowMoved }
+                                if hs.window.filter.windowsChanged then
+                                    wEvents[#wEvents + 1] = hs.window.filter.windowsChanged
+                                end
+                                wf:subscribe(wEvents, onWinChange)
+                            end
+
+                            print("ms.macroRecord: started (threshold "
+                                .. rec.threshold .. "ms, mode " .. mode .. ")")
+                        end
+
+                        rec.stop = function()
+                            if rec.tap then rec.tap:stop(); rec.tap = nil end
+                            if rec.winFilter then
+                                pcall(function() rec.winFilter:unsubscribeAll() end)
+                                rec.winFilter = nil
+                            end
+                            rec.drag = nil
+                            rec.lastTs = nil
+                            rec.winFrames = {}
+                            print("ms.macroRecord: stopped")
+                        end
+
+                        ms.bus.on("ui:macros:startRecording", function(_, body)
+                            rec.start(body and body.waitThreshold, body and body.options)
+                        end)
+                        ms.bus.on("ui:macros:stopRecording", function()
+                            rec.stop()
+                        end)
+                    end
 
                     -- The macro builder's "Tools" section lists every live,
                     -- value-bearing setting so a module parameter can be wired
@@ -4331,8 +4706,8 @@
                                 return ms.key(mods, key, swallow, pressFn, releaseFn, false)
                             end
                         elseif k == "mouse" then
-                            return function(button, swallow, clickFn, hidinject)
-                                return ms.mouse(button, swallow, clickFn, hidinject, false)
+                            return function(button, swallow, clickFn)
+                                return ms.mouse(button, swallow, clickFn, false)
                             end
                         elseif k == "bind" then
                             return setmetatable({}, {
@@ -4414,7 +4789,6 @@
                     debug=true, package=true, collectgarbage=true,
                     setfenv=true, getfenv=true,
                     setmetatable=true, getmetatable=true,
-                    roblox=true,               -- hs.application handle; :activate() risk
                     __ms_appWatcher=true,        -- hs.eventtap: :stop() kills app monitoring
                     _integrityPollTimer=true,    -- hs.timer: :stop() disables integrity poll
                     _initTimer=true,             -- hs.timer: deferred init timer
@@ -4651,39 +5025,6 @@
         ms._discoverSounds()
         -- Theme loading deferred to after loading screen appears (debounce)
 
-        -- Sync Roblox cache cleaner LaunchAgent with setting
-        do
-            local home = os.getenv("HOME")
-            local plistDst = home .. "/Library/LaunchAgents/com.mudscript.cache-cleaner.plist"
-            local agentExists = hs.fs.attributes(plistDst) ~= nil
-
-            -- Migration: if setting never saved but agent already installed, preserve it
-            if ms._cacheCleanerEnabled == nil then
-                ms._cacheCleanerEnabled = agentExists
-                if agentExists then pcall(ms.saveSettings) end
-            end
-
-            if ms._cacheCleanerEnabled and not agentExists then
-                -- Setting says ON but agent missing — install it
-                local plistSrc = home .. "/.hammerspoon/bin/com.mudscript.cache-cleaner.plist"
-                local scriptSrc = home .. "/.hammerspoon/bin/clean_roblox_cache.sh"
-                if hs.fs.attributes(plistSrc) and hs.fs.attributes(scriptSrc) then
-                    local f = io.open(plistSrc, "r")
-                    if f then
-                        local content = f:read("*all"); f:close()
-                        content = content:gsub("%%AGENT_PATH%%", scriptSrc)
-                        local g = io.open(plistDst, "w")
-                        if g then g:write(content); g:close() end
-                        os.execute("chmod 755 '" .. scriptSrc .. "'")
-                        os.execute("launchctl load '" .. plistDst .. "' 2>/dev/null")
-                    end
-                end
-            elseif not ms._cacheCleanerEnabled and agentExists then
-                -- Setting says OFF but agent present — uninstall it
-                os.execute("launchctl unload '" .. plistDst .. "' 2>/dev/null")
-                os.remove(plistDst)
-            end
-        end
         os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
         ms.bind._registerSystemBinds()
         ms.bind.rebind()
@@ -4745,7 +5086,7 @@
                     if ms._octaneMode and ms.octane and ms.octane._apply then
                         pcall(ms.octane._apply)
                     end
-                    if ms._robloxActive then ms.setMacros(1, true) end
+                    if ms._targetActive then ms.setMacros(1, true) end
                     _G._loadTimers.integrityWarn = hs.timer.doAfter(10, function()
                         if _needsIntegrityWarning then
                             ms.alert("\u{26a0} Integrity Error\nNo trusted manifest on record.\nSettings \u{2192} Developer \u{2192} Trust Current Version.", 10)
@@ -4920,7 +5261,7 @@
             end)
 
 
-            if roblox then roblox:activate() end
+            if ms._targetHandle then pcall(function() ms._targetHandle:activate() end) end
 
             notice = 0
             loadfinish = 0
@@ -4955,7 +5296,7 @@
                         ms._hotkeysReady = true
                         if not ms._loadComplete then
                             ms._loadComplete = true
-                            if ms._robloxActive then pcall(function() ms.setMacros(1, true) end) end
+                            if ms._targetActive then pcall(function() ms.setMacros(1, true) end) end
                         end
                     end)
                 end)

@@ -77,6 +77,20 @@
                 local action = data.action or "unknown"
                 local body   = data.body
 
+                if panel == "_shell" and action == "jsError" then
+                    -- Diagnostic forwarder (ui/ms_shell.html): uncaught webview
+                    -- errors print here so a silent panel-init throw is visible.
+                    local b = body or {}
+                    local where = tostring(b.src or "?")
+                    if b.line and b.line ~= 0 then where = where .. ":" .. tostring(b.line) end
+                    print("[shell JS " .. tostring(b.kind or "error") .. "] "
+                        .. tostring(b.msg or "") .. "  (" .. where .. ")")
+                    if b.stack and b.stack ~= "" then
+                        print("  stack: " .. tostring(b.stack))
+                    end
+                    return
+                end
+
                 if panel == "_shell" and action == "ready" then
                     _shellReady = true
                     for _, js in ipairs(_shellEvalQ) do

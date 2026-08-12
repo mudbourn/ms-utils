@@ -6,6 +6,10 @@
     }
 -- END Creator Credits --
 
+-- Target App --
+    ms.setTargetApp("Roblox")
+-- END Target App --
+
 -- Pack Settings --
     -- Camera Sensitivity --
         ms.settings.define({
@@ -377,7 +381,7 @@
                         -- Stand down if macros were disabled or the target lost
                         -- focus; otherwise the loop keeps pressing W into whatever
                         -- window the user switched to.
-                        if BindValidity ~= 1 or not ms._robloxActive then
+                        if BindValidity ~= 1 or not ms._targetActive then
                             MovementFailsafe.running = false
                             MovementFailsafe.timer   = nil
                             releaseW()
@@ -529,11 +533,11 @@
                 MovementCheck(1)
                 ms.wait(15)
                 for i = 1, 3 do
-                    ms.type("e", nil, nil, 5)
+                    ms.type("e", nil, 5)
                 end
                 ms.wait(10)
                 for i = 1, 3 do
-                    ms.type("space", nil, nil, 5)
+                    ms.type("space", nil, 5)
                 end
                 ms.wait(2)
                 if not JumpHigh() then

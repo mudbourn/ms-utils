@@ -200,7 +200,7 @@ Pass `false` as the second argument to skip wrapping (rarely needed).
 
 ## 5. Keyboard Actions
 
-### `ms.press(key, mods [, hidinject])`
+### `ms.press(key, mods)`
 
 Sends a key-down event. Does not send key-up.
 
@@ -209,27 +209,24 @@ ms.press("w")
 ms.press("shift")
 ms.press("space")
 ms.press("v", {"cmd"})        -- Cmd+V down
-ms.press("w", {}, true)       -- HID-injected directly to Roblox
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `key` | string/number | — | Key name or numeric keycode. |
 | `mods` | table | `{}` | Modifier keys, e.g. `{"cmd", "shift"}`. |
-| `hidinject` | bool | `false` | Post directly to the Roblox process via `CGEventPostToPSN` instead of the global session event stream. Bypasses all other event taps including the SOCD engine. |
 
 **Key names:** any single character, or named keys: `"space"`, `"escape"`, `"return"`, `"tab"`, `"left"`, `"right"`, `"up"`, `"down"`, `"shift"`, `"ctrl"`, `"alt"`, `"cmd"`, `"f1"`–`"f12"`. Numeric keycodes are also accepted.
 
 ---
 
-### `ms.release(key, mods [, hidinject])`
+### `ms.release(key, mods)`
 
 Sends a key-up event.
 
 ```lua
 ms.release("w")
 ms.release("shift")
-ms.release("w", {}, true)     -- HID-injected
 ```
 
 Same parameters as `ms.press`.
@@ -258,16 +255,16 @@ end
 
 ---
 
-### `ms.type(key, mods [, hidinject])`
+### `ms.type(key, mods [, holdMs])`
 
-Press + 15 ms wait + release. Use for single keystrokes.
+Press + hold (default 15 ms) + release. Use for single keystrokes.
 
 ```lua
 ms.type("e")
 ms.type("space")
 ms.type("escape")
 ms.type("v", {"cmd"})         -- Cmd+V tap
-ms.type("e", {}, true)        -- HID-injected tap
+ms.type("e", nil, 5)          -- 5 ms hold
 ```
 
 ---
@@ -315,7 +312,7 @@ ms.toggle("c")          -- toggle crouch
 ms.toggle("shift")      -- toggle sprint
 ```
 
-### `ms.multiPress(keys [, delayMs [, mods [, hidinject]]])`
+### `ms.multiPress(keys [, delayMs [, mods]])`
 
 Presses a sequence of keys in order, with an optional delay between each press. Useful for combo sequences or rapid-fire inputs.
 
@@ -329,7 +326,7 @@ ms.multiPress({"a", "b"}, 100, {"shift"}) -- Shift+A, Shift+B
 
 ## 6. Mouse Actions
 
-### `ms.Mouse(operation, button, reference [, Unscaled,] x1, y1 [, x2, y2 [, hidinject]])`
+### `ms.Mouse(operation, button, reference [, Unscaled,] x1, y1 [, x2, y2])`
 
 Unified, named-constant mouse API. All arguments are validated at call time — typos error immediately.
 
@@ -377,9 +374,7 @@ ms.Mouse(Click, Left, WindowTL, 900, 660)             -- REF-space (scaled to wi
 ms.Mouse(Click, Left, WindowTL, Unscaled, 445, 37)    -- raw pixels from window TL
 ```
 
-#### `hidinject` (optional, last argument)
-
-Pass `true` as the final argument to inject events directly to the Roblox process via `CGEventPostToPSN` instead of the global session stream.
+#### Examples
 
 ```lua
 ms.Mouse(Click,   Left,  WindowTL, 900, 660)
@@ -387,31 +382,28 @@ ms.Mouse(Move,    Left,  Mouse,    0,   0)
 ms.Mouse(Drag,    Left,  Absolute, 100, 100, 300, 300)
 ms.Mouse(Press,   Left,  WindowTL, Unscaled, 467, 52)
 ms.Mouse(Release, Right, WindowCenter, 0, 0)
-ms.Mouse(Click,   Left,  WindowTL, 900, 660, nil, nil, true)   -- hidinject
 ```
 
 ---
 
-### `ms.mouse(button, swallow, clickFn [, hidinject])`
+### `ms.mouse(button, swallow, clickFn)`
 
 Registers a persistent mouse-button listener. When the specified button is clicked, `clickFn` is called inside a coroutine.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `button` | number | Button number: `0` = left, `1` = right, `2+` = other. |
-| `swallow` | bool | `true` = consume the click (Roblox never sees it). |
+| `swallow` | bool | `true` = consume the click (the target app never sees it). |
 | `clickFn` | function | Called when the button fires. |
-| `hidinject` | bool | When `swallow = true` and `hidinject = true`, the event is re-injected directly to the Roblox process after being consumed from the global stream. |
 
 ```lua
 ms.mouse(0, true, function()
     -- fires on left-click
 end)
 
--- Swallow the click but re-deliver it to Roblox via HID path:
 ms.mouse(1, true, function()
     -- fires on right-click
-end, true)
+end)
 ```
 
 ---
@@ -1318,7 +1310,7 @@ Neither recovery can double-fire a bind: a genuine held key produces autorepeat 
 | `ms.getTargetWin()` | Returns the target app's main window, or `nil` if the app isn't running. Fallback to `hs.window.focusedWindow()` in coordinate functions. |
 | `ms.app()` | Returns the bundle name of the currently focused app. |
 
-Call `ms.setTargetApp()` at the top of `ms_macros.lua`, right after `ms.macroMeta`. The app watcher, window lookups, focus restoration, and hidinject all follow this setting.
+Call `ms.setTargetApp()` at the top of `ms_macros.lua`, right after `ms.macroMeta`. The app watcher, window lookups, and focus restoration all follow this setting.
 
 ---
 
@@ -1794,7 +1786,6 @@ end
 | `"userSettings"` | `ms.settings.define` API is present — use for version compatibility |
 | `"userMenu"` | `ms.menu.define` API is present — use for version compatibility |
 | `"integrity"` | `ms_core.lua` matches its trusted hash (system integrity) (`ms.integrity.check() == "trusted"`) |
-| `"hidinject"` | hidinject binary is present in `bin/` |
 
 > **Note:** `"integrity"` runs a `shasum` check and is slightly heavier than the others. Avoid calling it inside a hot macro loop.
 

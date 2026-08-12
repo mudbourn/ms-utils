@@ -450,6 +450,11 @@ function injectCSS() {
     font-style: italic;
     padding: 4px 0;
 }
+.tool-ed-setting-info { padding: 4px 0; }
+.tool-ed-setting-name { font-size: 13px; font-weight: 700; color: var(--text); }
+.tool-ed-setting-meta { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent); margin-top: 2px; }
+.tool-ed-setting-hint { font-size: 11px; color: var(--text3); margin-top: 8px; line-height: 1.5; }
+.tool-ed-setting-hint code { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent-hi, var(--accent)); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 1px 4px; border-radius: 3px; }
 `;
     document.head.appendChild(style);
 }
@@ -684,7 +689,9 @@ class ToolEditor {
 
         const title = document.createElement("div");
         title.className = "tool-editor-title";
-        title.textContent = tool.action + " — parameters";
+        title.textContent = tool.action === "setting"
+            ? "Shared setting"
+            : tool.action + " — parameters";
         header.appendChild(title);
 
         const closeBtn = document.createElement("div");
@@ -700,6 +707,26 @@ class ToolEditor {
         this._formEl = document.createElement("div");
         this._formEl.className = "tool-editor-form";
         this._panelEl.appendChild(this._formEl);
+
+        // A setting block is a read-only reference to a globally-shared tool,
+        // not an editable step. Show what it points at and how to read it,
+        // rather than exposing its key/label/type as editable fields.
+        if (tool.action === "setting") {
+            const p = tool.params || {};
+            const info = document.createElement("div");
+            info.className = "tool-ed-setting-info";
+            const key = p.key || "?";
+            info.innerHTML =
+                '<div class="tool-ed-setting-name">' + esc(p.label || key) + '</div>' +
+                '<div class="tool-ed-setting-meta">' + esc(p.type || "setting") +
+                    ' &middot; shared across macros</div>' +
+                '<div class="tool-ed-setting-hint">Reads live as ' +
+                    '<code>ms.settings.get("' + esc(key) + '")</code>.<br>' +
+                    'Wire any Value field to <b>Tool</b> and pick this to use it. ' +
+                    'Edit its value in the Settings panel.</div>';
+            this._formEl.appendChild(info);
+            return;
+        }
 
         // Get param defs for this action
         const defs = this._getParamDefs(tool);

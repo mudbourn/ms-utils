@@ -1,0 +1,8 @@
+{
+  "id": "com.mudbourn.roblox",
+  "name": "Roblox",
+  "version": "0.1.0",
+  "author": "mudbourn",
+  "website": "https://mudbourn.info",
+  "description": "Declares Roblox as the macro target and exposes Roblox's live saved settings (sensitivity, framerate cap, graphics quality) to macros, plus an anti-timeout keep-alive."
+}

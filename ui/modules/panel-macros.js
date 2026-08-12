@@ -220,6 +220,22 @@
                 params: []
             },
 
+            /* ── window ─────────────────────────────────────────── */
+            {
+                id: "ms.window",
+                name: "ms.window",
+                sig: "ms.window(operation, x, y, w, h)",
+                desc: "Move or resize the focused window. Move uses (x,y); Resize uses (x=width, y=height); Frame uses all four.",
+                category: "window",
+                params: [
+                    { name: "operation", type: "string", label: "Operation (Move/Resize/Frame)", required: true },
+                    { name: "x", type: "number", label: "X / Width",  required: true },
+                    { name: "y", type: "number", label: "Y / Height", required: true },
+                    { name: "w", type: "number", label: "Width (Frame)",  required: false },
+                    { name: "h", type: "number", label: "Height (Frame)", required: false }
+                ]
+            },
+
             /* ── camera ─────────────────────────────────────────── */
             {
                 id: "ms.cam",
@@ -605,8 +621,7 @@
         var _keyCapture  = null; // param name currently capturing
         var _toastTimer  = null;
         var _tools       = [];   // current tools (authored settings + pack settings)
-        var _view        = "module"; // "module" | "tool" | "toolCreator"
-        var _toolDraft   = null; // in-progress new-tool definition (creator form)
+        var _view        = "module"; // "module" | "tool"
 
         /* ── Build DOM ─────────────────────────────────────────────── */
         var slot = document.getElementById("slot-macros");
@@ -665,6 +680,18 @@
             sigSpan.textContent = fn.name;
             row.appendChild(sigSpan);
 
+            // Draggable straight onto the canvas as a new module (with default
+            // params), as an alternative to selecting it and clicking Add Module.
+            // The canvas reads this MIME type; see the drop wiring on the canvas.
+            row.setAttribute("draggable", "true");
+            row.addEventListener("dragstart", function(e) {
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData("application/x-ms-fn", fn.id);
+                // A plain-text fallback keeps the drag valid where the custom
+                // type is filtered; the canvas prefers the typed payload.
+                e.dataTransfer.setData("text/plain", fn.name);
+            });
+
             row.addEventListener("click", function() {
                 if (window.playSlot) playSlot("interact");
                 selectFunction(fn.id);
@@ -688,12 +715,15 @@
                     || (t.key || "").toLowerCase().indexOf(q) !== -1
                     || "tool".indexOf(q) !== -1;
             });
-            // With an active query that matches no tool and not the word "tool",
-            // hide the group entirely so search results stay tight.
-            var showNew = !q || "new tool".indexOf(q) !== -1 || "tool".indexOf(q) !== -1;
-            if (matches.length === 0 && !showNew) return;
+            // During a search that matches no tool (and isn't the word "tool"),
+            // hide the group entirely so results stay tight. With no query the
+            // group always shows — even empty — so tools stay discoverable.
+            var searchingTools = q && "tool".indexOf(q) === -1;
+            if (matches.length === 0 && searchingTools) return;
 
-            var collapsed = searching ? false : !!_catCollapsed["__tools"];
+            // Categories default to collapsed: an unset entry reads as folded,
+            // so the picker opens with every section closed until clicked open.
+            var collapsed = searching ? false : (_catCollapsed["__tools"] !== false);
 
             var head = document.createElement("div");
             head.className = "fn-cat-head fn-cat-tools" + (collapsed ? " collapsed" : "");
@@ -721,7 +751,7 @@
             if (!searching) {
                 head.addEventListener("click", function() {
                     if (window.playSlot) playSlot("interact");
-                    _catCollapsed["__tools"] = !_catCollapsed["__tools"];
+                    _catCollapsed["__tools"] = !(_catCollapsed["__tools"] !== false);
                     renderList(filter);
                 });
             }
@@ -745,6 +775,16 @@
                 tag.textContent = t.type;
                 row.appendChild(tag);
 
+                // Draggable onto the canvas as a shared-setting reference block,
+                // mirroring the module rows. The canvas drop wiring reads this
+                // MIME type and inserts a { action:"setting" } step.
+                row.setAttribute("draggable", "true");
+                row.addEventListener("dragstart", function(e) {
+                    e.dataTransfer.effectAllowed = "copy";
+                    e.dataTransfer.setData("application/x-ms-tool", t.key);
+                    e.dataTransfer.setData("text/plain", t.label || t.key);
+                });
+
                 row.addEventListener("mouseenter", function() {
                     if (window.playSlot) playSlot("hover");
                 });
@@ -755,19 +795,15 @@
                 entriesDiv.appendChild(row);
             });
 
-            if (showNew) {
-                var newRow = document.createElement("div");
-                newRow.className = "fn-entry fn-tool-new"
-                    + (_view === "toolCreator" ? " active" : "");
-                newRow.innerHTML = '<span class="fn-entry-sig">+ New Tool…</span>';
-                newRow.addEventListener("mouseenter", function() {
-                    if (window.playSlot) playSlot("hover");
-                });
-                newRow.addEventListener("click", function() {
-                    if (window.playSlot) playSlot("interact");
-                    openToolCreator();
-                });
-                entriesDiv.appendChild(newRow);
+            // Tools are authored in the dedicated Tools panel (Setting Builder),
+            // not here — the macro builder only references them. When none exist
+            // yet, a hint row points at where to make one instead of an inert
+            // empty section.
+            if (matches.length === 0) {
+                var hint = document.createElement("div");
+                hint.className = "fn-entry fn-tool-hint";
+                hint.innerHTML = '<span class="fn-entry-sig">No tools — add one in the Tools panel</span>';
+                entriesDiv.appendChild(hint);
             }
         }
 
@@ -794,7 +830,7 @@
             }
 
             order.forEach(function(cat) {
-                var collapsed = searching ? false : !!_catCollapsed[cat];
+                var collapsed = searching ? false : (_catCollapsed[cat] !== false);
 
                 var head = document.createElement("div");
                 head.className = "fn-cat-head" + (collapsed ? " collapsed" : "");
@@ -825,7 +861,7 @@
                 if (!searching) {
                     head.addEventListener("click", function() {
                         if (window.playSlot) playSlot("interact");
-                        _catCollapsed[cat] = !_catCollapsed[cat];
+                        _catCollapsed[cat] = !(_catCollapsed[cat] !== false);
                         renderList(filter);
                     });
                 }
@@ -881,13 +917,25 @@
            A tool is an authored setting: it defines a value the person running
            the pack can adjust from the Settings panel, and a module parameter
            can be wired to it so the macro reads that value live instead of a
-           number baked into the source. selectTool shows one; openToolCreator
-           makes a new one. */
+           number baked into the source. selectTool shows one read-only; tools
+           are authored in the dedicated Tools panel, not here. */
         function findTool(key) {
             for (var i = 0; i < _tools.length; i++) {
                 if (_tools[i].key === key) return _tools[i];
             }
             return null;
+        }
+
+        // Canvas step for a tool reference. Only the key/label/type are kept —
+        // the setting itself lives globally (authored in the Tools panel), so
+        // the block just points at it. The compiler emits an inert, documented
+        // marker; the live value is read via ms.settings.get(key) wherever a
+        // parameter is wired to this tool.
+        function settingDefFor(t) {
+            return {
+                action: "setting",
+                params: { key: t.key, label: t.label || t.key, type: t.type },
+            };
         }
 
         function selectTool(key) {
@@ -934,12 +982,30 @@
             html += '</div></div>';
 
             html += '<div class="fn-detail-footer">';
+            // Add the tool to the macro as a shared-setting reference block.
+            // Tools are independent of macros — this places an anchor that says
+            // "this macro uses this setting"; it never redefines the setting,
+            // so several macros can reference the same one.
+            html += '<button class="fn-add-btn" id="fn-tool-add">Add to Macro</button>';
             if (t.source === "builder") {
                 html += '<button class="fn-add-btn fn-tool-delete" id="fn-tool-delete">Delete Tool</button>';
             }
             html += '</div>';
 
             detailPane.innerHTML = html;
+
+            var add = document.getElementById("fn-tool-add");
+            if (add) {
+                add.addEventListener("mouseenter", function() {
+                    if (window.playSlot) playSlot("hover");
+                });
+                add.addEventListener("click", function() {
+                    if (window.playSlot) playSlot("interact");
+                    if (window.macroLab && window.macroLab.addTool) {
+                        window.macroLab.addTool(settingDefFor(t));
+                    }
+                });
+            }
 
             var del = document.getElementById("fn-tool-delete");
             if (del) {
@@ -961,254 +1027,9 @@
                 + esc(String(value)) + '</div></div>';
         }
 
-        // Tool types the creator can produce. "number" is a slider under the
-        // hood (the settings engine has no free-number control), but presented
-        // separately because a bounded counter reads differently from a
-        // percentage-style slider.
-        var TOOL_TYPES = [
-            { id: "slider", label: "Slider" },
-            { id: "number", label: "Number" },
-            { id: "toggle", label: "Toggle" },
-            { id: "seg",    label: "Segmented" }
-        ];
-
-        function openToolCreator() {
-            _view = "toolCreator";
-            _selectedId = null;
-            _toolDraft = {
-                type: "slider", key: "", label: "", hint: "",
-                min: 0, max: 100, step: 1, unit: "",
-                toggleDefault: false,
-                options: [ { label: "One", value: "one" }, { label: "Two", value: "two" } ],
-                segDefault: "one"
-            };
-            var items = entriesDiv.querySelectorAll(".fn-entry");
-            for (var i = 0; i < items.length; i++) items[i].classList.remove("active");
-            var nr = entriesDiv.querySelector(".fn-tool-new");
-            if (nr) nr.classList.add("active");
-            renderToolCreator();
-        }
-
-        function renderToolCreator() {
-            var d = _toolDraft;
-            var html = '';
-            html += '<div class="fn-detail-header">';
-            html += '<div class="fn-detail-name">New Tool</div>';
-            html += '<div class="fn-detail-desc">Define a configurable value. It '
-                + 'appears in the Settings panel and can be wired into any module '
-                + 'parameter.</div>';
-            html += '</div>';
-
-            html += '<div class="fn-detail-body"><div class="fn-params">';
-
-            // Type picker
-            html += '<div class="fn-param-group"><div class="fn-param-label">Type</div>';
-            html += '<div class="fn-mods-row" id="tc-types">';
-            TOOL_TYPES.forEach(function(tt) {
-                html += '<button class="fn-mod-chip' + (d.type === tt.id ? ' on' : '')
-                    + '" data-tctype="' + tt.id + '">' + tt.label + '</button>';
-            });
-            html += '</div></div>';
-
-            // Key + label + hint
-            html += tcText("Key", "tc-key", d.key, "identifier, e.g. clickDelay", true);
-            html += tcText("Label", "tc-label", d.label, "shown in Settings");
-            html += tcText("Hint", "tc-hint", d.hint, "optional description");
-
-            // Type-specific
-            if (d.type === "slider" || d.type === "number") {
-                html += tcNum("Min", "tc-min", d.min);
-                html += tcNum("Max", "tc-max", d.max);
-                html += tcNum("Step", "tc-step", d.step);
-                html += tcNum("Default", "tc-default", d.numDefault != null ? d.numDefault : d.min);
-                if (d.type === "slider") html += tcText("Unit", "tc-unit", d.unit, "optional, e.g. %");
-            } else if (d.type === "toggle") {
-                html += '<div class="fn-param-group"><div class="fn-param-label">Default</div>'
-                    + '<div class="fn-mods-row"><button class="fn-mod-chip'
-                    + (d.toggleDefault ? ' on' : '') + '" id="tc-toggle-def">'
-                    + (d.toggleDefault ? 'On' : 'Off') + '</button></div></div>';
-            } else if (d.type === "seg") {
-                html += '<div class="fn-param-group"><div class="fn-param-label">Options'
-                    + ' <span class="fn-param-type">label : value</span></div>'
-                    + '<div id="tc-options">';
-                d.options.forEach(function(o, i) {
-                    html += '<div class="fn-seg-optrow">'
-                        + '<input type="text" class="fn-seg-optlabel" data-oi="' + i + '" value="'
-                        + esc(o.label) + '" placeholder="label" spellcheck="false">'
-                        + '<input type="text" class="fn-seg-optval" data-oi="' + i + '" value="'
-                        + esc(String(o.value)) + '" placeholder="value" spellcheck="false">'
-                        + '<button class="fn-seg-optdel" data-oi="' + i + '" title="Remove">×</button>'
-                        + '</div>';
-                });
-                html += '</div><button class="fn-seg-optadd" id="tc-optadd">+ Add option</button></div>';
-            }
-
-            html += '</div></div>';
-
-            html += '<div class="fn-detail-footer">';
-            html += '<button class="fn-add-btn" id="tc-create">Create Tool</button>';
-            html += '</div>';
-
-            detailPane.innerHTML = html;
-            wireToolCreator();
-        }
-
-        function tcText(label, id, val, ph, required) {
-            return '<div class="fn-param-group"><div class="fn-param-label">' + esc(label)
-                + (required ? ' <span style="color:var(--danger)">*</span>' : '')
-                + '</div><input type="text" id="' + id + '" value="' + esc(val || "")
-                + '" placeholder="' + esc(ph || "") + '" spellcheck="false" autocomplete="off" '
-                + 'autocorrect="off" autocapitalize="off"></div>';
-        }
-
-        function tcNum(label, id, val) {
-            return '<div class="fn-param-group"><div class="fn-param-label">' + esc(label)
-                + '</div><input type="number" id="' + id + '" value="'
-                + (val != null ? val : 0) + '" step="any"></div>';
-        }
-
-        function wireToolCreator() {
-            var d = _toolDraft;
-            // Type chips
-            var typeChips = detailPane.querySelectorAll("[data-tctype]");
-            typeChips.forEach(function(c) {
-                c.addEventListener("mouseenter", function() {
-                    if (window.playSlot) playSlot("hover");
-                });
-                c.addEventListener("click", function() {
-                    if (window.playSlot) playSlot("interact");
-                    d.type = c.getAttribute("data-tctype");
-                    renderToolCreator();
-                });
-            });
-            function bindText(id, key) {
-                var el = document.getElementById(id);
-                if (el) el.addEventListener("input", function() { d[key] = el.value; });
-                if (el) el.addEventListener("keydown", function(e) { e.stopPropagation(); });
-            }
-            function bindNum(id, key) {
-                var el = document.getElementById(id);
-                if (el) el.addEventListener("input", function() {
-                    var v = parseFloat(el.value); d[key] = isNaN(v) ? 0 : v;
-                });
-                if (el) el.addEventListener("keydown", function(e) { e.stopPropagation(); });
-            }
-            bindText("tc-key", "key");
-            bindText("tc-label", "label");
-            bindText("tc-hint", "hint");
-            bindText("tc-unit", "unit");
-            bindNum("tc-min", "min");
-            bindNum("tc-max", "max");
-            bindNum("tc-step", "step");
-            var defEl = document.getElementById("tc-default");
-            if (defEl) defEl.addEventListener("input", function() {
-                var v = parseFloat(defEl.value); d.numDefault = isNaN(v) ? undefined : v;
-            });
-            var tog = document.getElementById("tc-toggle-def");
-            if (tog) tog.addEventListener("mouseenter", function() {
-                if (window.playSlot) playSlot("hover");
-            });
-            if (tog) tog.addEventListener("click", function() {
-                d.toggleDefault = !d.toggleDefault;
-                if (window.playSlot) playSlot(d.toggleDefault ? "toggleOn" : "toggleOff");
-                renderToolCreator();
-            });
-            // Seg options
-            detailPane.querySelectorAll(".fn-seg-optlabel").forEach(function(el) {
-                el.addEventListener("input", function() {
-                    d.options[+el.getAttribute("data-oi")].label = el.value;
-                });
-                el.addEventListener("keydown", function(e) { e.stopPropagation(); });
-            });
-            detailPane.querySelectorAll(".fn-seg-optval").forEach(function(el) {
-                el.addEventListener("input", function() {
-                    d.options[+el.getAttribute("data-oi")].value = el.value;
-                });
-                el.addEventListener("keydown", function(e) { e.stopPropagation(); });
-            });
-            detailPane.querySelectorAll(".fn-seg-optdel").forEach(function(el) {
-                el.addEventListener("mouseenter", function() {
-                    if (window.playSlot) playSlot("hover");
-                });
-                el.addEventListener("click", function() {
-                    if (d.options.length <= 1) return;
-                    if (window.playSlot) playSlot("back");
-                    d.options.splice(+el.getAttribute("data-oi"), 1);
-                    renderToolCreator();
-                });
-            });
-            var add = document.getElementById("tc-optadd");
-            if (add) add.addEventListener("mouseenter", function() {
-                if (window.playSlot) playSlot("hover");
-            });
-            if (add) add.addEventListener("click", function() {
-                if (window.playSlot) playSlot("interact");
-                d.options.push({ label: "", value: "" });
-                renderToolCreator();
-            });
-            var create = document.getElementById("tc-create");
-            if (create) create.addEventListener("mouseenter", function() {
-                if (window.playSlot) playSlot("hover");
-            });
-            if (create) create.addEventListener("click", function() {
-                if (window.playSlot) playSlot("interact");
-                submitToolCreator();
-            });
-        }
-
-        function submitToolCreator() {
-            var d = _toolDraft;
-            var key = (d.key || "").trim();
-            if (!key) { showToast("A key is required"); return; }
-            if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
-                showToast("Key must be a valid identifier"); return;
-            }
-            if (findTool(key)) { showToast("A tool named '" + key + "' already exists"); return; }
-
-            // The host's Setting Builder has no free "number" type; a number
-            // tool is a slider whose range the creator supplied.
-            var wireType = (d.type === "number") ? "slider" : d.type;
-            var def = { type: wireType, target: "settings", key: key,
-                        label: (d.label || "").trim() || key,
-                        hint: (d.hint || "").trim() || undefined };
-
-            if (wireType === "slider") {
-                var mn = Number(d.min) || 0;
-                var mx = Number(d.max);
-                if (isNaN(mx) || mx <= mn) mx = mn + (d.type === "number" ? 999 : 100);
-                var st = Number(d.step) || 1;
-                var dv = (d.numDefault != null) ? d.numDefault : mn;
-                if (dv < mn) dv = mn; if (dv > mx) dv = mx;
-                def.min = mn; def.max = mx; def.step = st;
-                def.default = dv; def.value = dv;
-                if (d.type === "slider" && (d.unit || "").trim()) def.unit = d.unit.trim();
-            } else if (wireType === "toggle") {
-                def.default = !!d.toggleDefault; def.value = def.default;
-            } else if (wireType === "seg") {
-                var opts = [];
-                d.options.forEach(function(o) {
-                    var l = (o.label || "").trim();
-                    if (l === "") return;
-                    var v = (o.value === "" || o.value == null) ? l : o.value;
-                    var nv = Number(v);
-                    opts.push({ label: l, value: (!isNaN(nv) && String(nv) === String(v)) ? nv : v });
-                });
-                if (opts.length === 0) { showToast("At least one option is required"); return; }
-                def.options = opts;
-                def.default = opts[0].value; def.value = def.default;
-            }
-
-            if (window.macroLab && window.macroLab.createTool) {
-                window.macroLab.createTool(def);
-                showToast("Creating tool: " + key);
-                // Clear identity fields so the next tool starts fresh; the
-                // pushed list refresh re-renders the picker with the new row.
-                _toolDraft.key = "";
-                _toolDraft.label = "";
-                _toolDraft.hint = "";
-                renderToolCreator();
-            }
-        }
+        // The tool CREATOR was removed: tools are authored in the dedicated
+        // Tools panel (Setting Builder) and only referenced here. selectTool /
+        // renderToolDetail below still show a tool read-only for wiring.
 
         /* ── Render Detail Panel ───────────────────────────────────── */
         function renderDetail(fn) {
@@ -1261,19 +1082,50 @@
         }
 
         /* ── Render a single parameter field ───────────────────────── */
-        // The <option> list for a tool picker. When there are no tools, the
-        // sole disabled row tells the person what to do about it.
-        function toolOptionsHtml(selectedKey) {
+        // Option list for a createSelect tool picker, as the {value,label}
+        // array the themed dropdown consumes. The empty "" row is the
+        // placeholder / "no tool chosen" state.
+        function toolSelectOptions() {
             if (_tools.length === 0) {
-                return '<option value="" disabled selected>No tools — create one first</option>';
+                return [{ value: "", label: "No tools — create one first" }];
             }
-            var html = '<option value="" disabled' + (selectedKey ? '' : ' selected') + '>Pick a tool…</option>';
+            var opts = [{ value: "", label: "Pick a tool…" }];
             _tools.forEach(function(t) {
-                html += '<option value="' + esc(t.key) + '"'
-                    + (t.key === selectedKey ? ' selected' : '') + '>'
-                    + esc((t.label || t.key) + '  ·  ' + t.type) + '</option>';
+                opts.push({ value: t.key, label: (t.label || t.key) + "  ·  " + t.type });
             });
-            return html;
+            return opts;
+        }
+
+        // Live createSelect nodes for the currently rendered param fields, keyed
+        // by param name, so setToolList can refresh their options in place.
+        var _toolSelects = {};
+
+        // Replace each tool-select mount point with a themed createSelect. Falls
+        // back to a native <select> only if createSelect isn't loaded.
+        function mountToolSelects(fn) {
+            _toolSelects = {};
+            if (typeof window.createSelect !== "function") return;
+            var mounts = detailPane.querySelectorAll(".fn-tool-select-mount");
+            for (var i = 0; i < mounts.length; i++) {
+                (function(mount) {
+                    var name = mount.getAttribute("data-toolmount");
+                    var sel = window.createSelect({
+                        options: toolSelectOptions(),
+                        value: _paramBind[name] || "",
+                        className: "fn-tool-select",
+                        onChange: function(v) {
+                            if (window.playSlot) playSlot("interact");
+                            _paramBind[name] = v;
+                            _paramValues[name] = { __toolRef: v };
+                            updatePreview(fn);
+                        },
+                    });
+                    // The Value/Tool switch reads the current pick via this attr.
+                    sel.setAttribute("data-toolsel", name);
+                    mount.appendChild(sel);
+                    _toolSelects[name] = sel;
+                })(mounts[i]);
+            }
         }
 
         function renderParamField(p) {
@@ -1331,11 +1183,13 @@
             html += '</div>';
 
             if (bindable) {
-                var sel = _paramBind[p.name] || "";
                 html += '<div class="fn-param-tool" data-toolwrap="' + esc(p.name) + '"'
                     + (bound ? '' : ' style="display:none"') + '>';
-                html += '<select class="fn-tool-select" data-toolsel="' + esc(p.name) + '">'
-                    + toolOptionsHtml(sel) + '</select>';
+                // A themed createSelect is mounted here after the HTML lands — a
+                // native <select> can style its closed control but not its open
+                // popup (macOS draws that), so the tool picker broke the shell's
+                // look mid-interaction. See mountToolSelects().
+                html += '<div class="fn-tool-select-mount" data-toolmount="' + esc(p.name) + '"></div>';
                 html += '</div>';
             }
 
@@ -1458,18 +1312,8 @@
             }
 
             // Tool selects — pick which tool a bound parameter reads from.
-            var toolSels = detailPane.querySelectorAll(".fn-tool-select");
-            for (var ts = 0; ts < toolSels.length; ts++) {
-                (function(sel) {
-                    var name = sel.getAttribute("data-toolsel");
-                    sel.addEventListener("change", function() {
-                        if (window.playSlot) playSlot("interact");
-                        _paramBind[name] = sel.value;
-                        _paramValues[name] = { __toolRef: sel.value };
-                        updatePreview(fn);
-                    });
-                })(toolSels[ts]);
-            }
+            // Mounted as themed createSelect nodes (each wires its own onChange).
+            mountToolSelects(fn);
         }
 
         /* ── Key Capture ───────────────────────────────────────────── */
@@ -1640,21 +1484,18 @@
             _tools = Array.isArray(list) ? list : [];
             window.msMacroTools = _tools;
             renderList(searchInput.value);
-            if (_view === "toolCreator") {
-                // Leave the creator as-is unless the new tool is now present.
-                if (_selectedId && findTool(_selectedId)) selectTool(_selectedId);
-            } else if (_view === "tool" && _selectedId) {
+            if (_view === "tool" && _selectedId) {
                 var t = findTool(_selectedId);
                 if (t) renderToolDetail(t); else { detailPane.innerHTML = ''; _view = "module"; }
             } else {
                 // A module detail may be open and mid-edit — re-rendering it
-                // would wipe half-typed fields — so only the tool <select>
-                // option lists are refreshed in place, keeping each current
-                // selection.
-                var sels = detailPane.querySelectorAll(".fn-tool-select");
-                for (var s = 0; s < sels.length; s++) {
-                    var name = sels[s].getAttribute("data-toolsel");
-                    sels[s].innerHTML = toolOptionsHtml(_paramBind[name] || "");
+                // would wipe half-typed fields — so only the tool picker option
+                // lists are refreshed in place, keeping each current selection.
+                for (var name in _toolSelects) {
+                    if (!_toolSelects.hasOwnProperty(name)) continue;
+                    var picked = _paramBind[name] || "";
+                    _toolSelects[name].setOptions(toolSelectOptions());
+                    _toolSelects[name].value = picked;
                 }
             }
         }
@@ -1665,6 +1506,7 @@
             registry: REGISTRY,
             showToast: showToast,
             setToolList: setToolList,
+            settingDef: settingDefFor,
             handler: _fnPickerHandler
         };
 
@@ -1711,7 +1553,7 @@
         "ms.drag":"drag",
         "if":"branch","for":"loop","while":"repeat","repeat":"repeat","else":"branch",
         "var_set":"variable","var_add":"variable","var_sub":"variable","var_mul":"variable",
-        "comment":"inputs","code":"macros"
+        "comment":"inputs","code":"macros","setting":"settings"
     };
 
     function iconFor(action) { return ACTION_ICON[action] || "macros"; }
@@ -1725,6 +1567,7 @@
         if (action === "for") return (params.var||"i") + " = " + (params.from||1) + " → " + (params.to||1);
         if (action === "comment") return params.text || "";
         if (action === "code") return (params.source||"").split("\n")[0] || "";
+        if (action === "setting") return 'ms.settings.get("' + (params.key || "") + '")';
         if (action === "var_set") return (params.name||"v") + " = " + (params.value!==undefined?params.value:"");
         if (action === "var_add" || action === "var_sub" || action === "var_mul") {
             var op = action==="var_add"?"+":action==="var_sub"?"-":"*";
@@ -1753,8 +1596,17 @@
         this._onSelect = (opts && opts.onSelect) || function(){};
         this._tools = [];
         this._map = {};
-        this._selId = null;
+        // Selection model (Keyboard-Maestro style, text-like):
+        //   _selSet   — every currently selected sid (map sid → true)
+        //   _anchorId — the pivot for shift-range selection
+        // _selId is kept as the "primary" single selection: it is non-null
+        // ONLY when exactly one block is selected, and it is what drives the
+        // inline parameter editor. Multi-selection ⇒ _selId null ⇒ no params.
+        this._selSet   = {};
+        this._anchorId = null;
+        this._selId    = null;
         this._dragId = null;
+        this._dragGroup = null;  // sids being dragged together (doc order)
         this._root = document.createElement("div");
         this._root.className = "tool-canvas";
         this._el.appendChild(this._root);
@@ -1785,7 +1637,7 @@
         this._tools = steps || [];
         this._map = {};
         this._assignIds(this._tools);
-        this._selId = null;
+        this._clearSelection();
         this._render();
     };
 
@@ -1817,11 +1669,30 @@
         this._fireChange();
     };
 
+    // Insert a new top-level module before `beforeSid` (or at the end when
+    // null), selecting it. Used by the picker→canvas drag; keeps insertion at
+    // the top level so an external drop can never land inside a container it
+    // has no context for.
+    ToolCanvas.prototype.insertDefAt = function(def, beforeSid) {
+        var step = deepClone(def);
+        step._sid = nextToolId();
+        seedContainer(step);
+        this._map[step._sid] = step;
+        var idx = beforeSid ? this._findIdx(this._tools, beforeSid) : -1;
+        if (idx !== -1) this._tools.splice(idx, 0, step);
+        else this._tools.push(step);
+        this._setSelection([step._sid]);
+        this._render();
+        this._fireChange();
+        return step._sid;
+    };
+
     ToolCanvas.prototype.removeTool = function(sid) {
         if (this._removeFrom(this._tools, sid)) {
             delete this._map[sid];
-            if (this._selId === sid) this._selId = null;
+            this._deselectOne(sid);
             this._render();
+            this._emitSelection();
             this._fireChange();
         }
     };
@@ -1858,6 +1729,60 @@
             else this._tools.push(step);
         }
         this._render();
+        this._fireChange();
+    };
+
+    // Locate the list a sid lives in and its index within that list.
+    ToolCanvas.prototype._locate = function(sid, list) {
+        list = list || this._tools;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i]._sid === sid) return { list: list, idx: i };
+            var s = list[i];
+            var r = (s.then && this._locate(sid, s.then))
+                 || (s.else && this._locate(sid, s.else))
+                 || (s.body && this._locate(sid, s.body));
+            if (r) return r;
+        }
+        return null;
+    };
+
+    // Move a group of blocks (given in document order) to a target, keeping
+    // their relative order. A single-element group behaves exactly like
+    // moveTool, so both drag paths share this code.
+    ToolCanvas.prototype.moveTools = function(dragIds, targetId, pos) {
+        if (!dragIds || !dragIds.length) return;
+        if (dragIds.indexOf(targetId) !== -1) return;   // never drop onto self
+        // Collect the step objects, then detach them all from the tree.
+        var steps = [];
+        for (var i = 0; i < dragIds.length; i++) {
+            var s = this._map[dragIds[i]];
+            if (s) { steps.push(s); this._removeFrom(this._tools, dragIds[i]); }
+        }
+        if (!steps.length) return;
+
+        if (pos === "nest") {
+            var tgt = this._map[targetId];
+            if (tgt) {
+                var branch = tgt.action === "if"
+                    ? (tgt.then || (tgt.then = []))
+                    : (tgt.body || (tgt.body = []));
+                for (var j = 0; j < steps.length; j++) branch.push(steps[j]);
+            }
+        } else {
+            // Re-locate the target AFTER detaching, since indices shifted.
+            var loc = this._locate(targetId);
+            if (loc) {
+                var at = pos === "above" ? loc.idx : loc.idx + 1;
+                Array.prototype.splice.apply(loc.list, [at, 0].concat(steps));
+            } else {
+                for (var k = 0; k < steps.length; k++) this._tools.push(steps[k]);
+            }
+        }
+        // The moved blocks stay selected so the group can be nudged again.
+        this._setSelection(dragIds);
+        this._render();
+        this._applySelectionClasses();
+        this._emitSelection();
         this._fireChange();
     };
 
@@ -1903,8 +1828,10 @@
 
     ToolCanvas.prototype._renderLeaf = function(step) {
         var self = this;
+        var isSetting = step.action === "setting";
         var el = document.createElement("div");
-        el.className = "tool-block" + (step._sid===this._selId?" selected":"");
+        el.className = "tool-block" + (this._isSelected(step._sid)?" selected":"")
+            + (isSetting ? " tool-block-setting" : "");
         el.setAttribute("data-sid", step._sid);
         el.setAttribute("draggable","true");
 
@@ -1920,7 +1847,11 @@
 
         var nm = document.createElement("span");
         nm.className = "tool-action-name";
-        nm.textContent = step.action;
+        // A setting block is a reference to a shared tool, not a code action, so
+        // it reads "Setting · <label>" rather than the bare "setting" action.
+        nm.textContent = isSetting
+            ? ("Setting · " + ((step.params && (step.params.label || step.params.key)) || "?"))
+            : step.action;
         el.appendChild(nm);
 
         var pm = document.createElement("span");
@@ -1936,7 +1867,7 @@
         el.addEventListener("click", function(e) {
             if (e.target.closest(".tool-action-btn") || e.target.closest(".tool-drag-handle")) return;
             if (window.playSlot) playSlot("interact");
-            self._selectTool(step._sid);
+            self._clickSelect(step._sid, e);
         });
 
         this._wireDrag(el, step);
@@ -1997,7 +1928,7 @@
         wrap.setAttribute("data-sid", step._sid);
 
         var header = document.createElement("div");
-        header.className = "tool-block" + (step._sid===this._selId?" selected":"");
+        header.className = "tool-block" + (this._isSelected(step._sid)?" selected":"");
         header.setAttribute("data-sid", step._sid);
         header.setAttribute("draggable","true");
 
@@ -2042,7 +1973,7 @@
         header.addEventListener("click", function(e) {
             if (e.target.closest(".tool-action-btn")||e.target.closest(".tool-drag-handle")||e.target.closest(".tool-nest-toggle")) return;
             if (window.playSlot) playSlot("interact");
-            self._selectTool(step._sid);
+            self._clickSelect(step._sid, e);
         });
         this._wireDrag(header, step);
 
@@ -2082,26 +2013,149 @@
         body.addEventListener("dragleave", function() { body.classList.remove("drag-target"); });
         body.addEventListener("drop", function(e) {
             e.preventDefault(); e.stopPropagation();
-            if (!self._dragId) return;
-            var step = self._map[self._dragId]; if (!step) return;
-            self._removeFrom(self._tools, self._dragId);
-            if (branch==="then") { if(!parent.then)parent.then=[]; parent.then.push(step); }
-            else if (branch==="else") { if(!parent.else)parent.else=[]; parent.else.push(step); }
-            else { if(!parent.body)parent.body=[]; parent.body.push(step); }
+            var group = self._dragGroup || (self._dragId ? [self._dragId] : []);
+            if (!group.length) return;
+            // Reject dropping the parent (or any dragged ancestor) into its own body.
+            for (var i = 0; i < group.length; i++) {
+                if (group[i] === parent._sid || self._isDesc(group[i], parent._sid)) {
+                    body.classList.remove("drag-target"); return;
+                }
+            }
+            var steps = [];
+            for (var g = 0; g < group.length; g++) {
+                var st = self._map[group[g]];
+                if (st) { steps.push(st); self._removeFrom(self._tools, group[g]); }
+            }
+            var dst = branch==="then" ? (parent.then||(parent.then=[]))
+                    : branch==="else" ? (parent.else||(parent.else=[]))
+                    : (parent.body||(parent.body=[]));
+            for (var k = 0; k < steps.length; k++) dst.push(steps[k]);
             body.classList.remove("drag-target");
-            self._dragId = null;
-            self._render(); self._fireChange();
+            self._setSelection(group);
+            self._dragId = null; self._dragGroup = null;
+            self._render(); self._applySelectionClasses(); self._emitSelection(); self._fireChange();
         });
         return body;
     };
 
-    ToolCanvas.prototype._selectTool = function(sid) {
-        this._selId = sid;
-        var prev = this._root.querySelector(".tool-block.selected");
-        if (prev) prev.classList.remove("selected");
-        var el = this._root.querySelector('[data-sid="'+sid+'"] > .tool-block[data-sid="'+sid+'"], .tool-block[data-sid="'+sid+'"]');
-        if (el) el.classList.add("selected");
-        this._onSelect(sid, this._map[sid]);
+    /* ── Selection engine ────────────────────────────────────────────
+     * The set of selected blocks is _selSet. _selId mirrors it only when the
+     * selection is a single block — that is the signal the parameter editor
+     * uses, so a multi-selection (or empty selection) shows no params. */
+
+    ToolCanvas.prototype._isSelected = function(sid) {
+        return !!this._selSet[sid];
+    };
+    ToolCanvas.prototype._selCount = function() {
+        return Object.keys(this._selSet).length;
+    };
+    // Selected sids in document (visual) order — the order the user sees, and
+    // the order a group keeps when dragged or copied.
+    ToolCanvas.prototype._selList = function() {
+        var self = this, out = [];
+        if (this._root) {
+            this._root.querySelectorAll(".tool-block[data-sid]").forEach(function(el) {
+                var sid = el.getAttribute("data-sid");
+                if (self._selSet[sid] && out.indexOf(sid) === -1) out.push(sid);
+            });
+        }
+        // Fall back to insertion order for any selected id not currently in the
+        // DOM (shouldn't happen, but keeps the set from silently dropping ids).
+        for (var sid in this._selSet) { if (out.indexOf(sid) === -1) out.push(sid); }
+        return out;
+    };
+    // All sids in document order — the flat visual sequence shift-range walks.
+    ToolCanvas.prototype._docOrder = function() {
+        var out = [];
+        if (this._root) {
+            this._root.querySelectorAll(".tool-block[data-sid]").forEach(function(el) {
+                var sid = el.getAttribute("data-sid");
+                if (out.indexOf(sid) === -1) out.push(sid);
+            });
+        }
+        return out;
+    };
+
+    // Update state only (no DOM, no emit). Primary/_selId is set iff exactly
+    // one block is selected.
+    ToolCanvas.prototype._setSelection = function(ids) {
+        this._selSet = {};
+        for (var i = 0; i < ids.length; i++) { if (ids[i]) this._selSet[ids[i]] = true; }
+        var keys = Object.keys(this._selSet);
+        this._selId = keys.length === 1 ? keys[0] : null;
+        if (ids.length) this._anchorId = ids[ids.length - 1];
+    };
+    ToolCanvas.prototype._clearSelection = function() {
+        this._selSet = {};
+        this._selId = null;
+        this._anchorId = null;
+    };
+    ToolCanvas.prototype._deselectOne = function(sid) {
+        delete this._selSet[sid];
+        if (this._anchorId === sid) this._anchorId = null;
+        var keys = Object.keys(this._selSet);
+        this._selId = keys.length === 1 ? keys[0] : null;
+    };
+
+    // Repaint .selected on every block from _selSet without a full re-render.
+    ToolCanvas.prototype._applySelectionClasses = function() {
+        var self = this;
+        if (!this._root) return;
+        this._root.querySelectorAll(".tool-block[data-sid]").forEach(function(el) {
+            var sid = el.getAttribute("data-sid");
+            el.classList.toggle("selected", !!self._selSet[sid]);
+        });
+    };
+
+    // Tell the host what the primary (single) selection is. null ⇒ hide params
+    // (nothing selected, or a multi-selection).
+    ToolCanvas.prototype._emitSelection = function() {
+        this._onSelect(this._selId, this._selId ? this._map[this._selId] : null);
+    };
+
+    // Click routing: plain / ⌘(⌃)-toggle / ⇧-range, text-editor semantics.
+    ToolCanvas.prototype._clickSelect = function(sid, e) {
+        var meta  = e && (e.metaKey || e.ctrlKey);
+        var shift = e && e.shiftKey;
+
+        if (meta) {
+            // Toggle this block in/out of the selection.
+            if (this._selSet[sid]) this._deselectOne(sid);
+            else { this._selSet[sid] = true; this._anchorId = sid;
+                   var k = Object.keys(this._selSet); this._selId = k.length === 1 ? k[0] : null; }
+        } else if (shift && this._anchorId && this._anchorId !== sid) {
+            // Select the contiguous visual range between the anchor and here.
+            var order = this._docOrder();
+            var a = order.indexOf(this._anchorId), b = order.indexOf(sid);
+            if (a === -1 || b === -1) { this._setSelection([sid]); }
+            else {
+                var lo = Math.min(a, b), hi = Math.max(a, b);
+                this._selSet = {};
+                for (var i = lo; i <= hi; i++) this._selSet[order[i]] = true;
+                this._selId = (hi - lo === 0) ? order[lo] : null;
+                // keep _anchorId where it was so the range can be re-dragged
+            }
+        } else {
+            // Plain click: if this block is already the sole selection, toggle
+            // it off (clears the params); otherwise select just this one.
+            if (this._selId === sid && this._selCount() === 1) this._clearSelection();
+            else this._setSelection([sid]);
+        }
+
+        this._applySelectionClasses();
+        this._emitSelection();
+    };
+
+    // Public: select exactly these ids and refresh the view + editor.
+    ToolCanvas.prototype.select = function(ids) {
+        this._setSelection(ids || []);
+        this._applySelectionClasses();
+        this._emitSelection();
+    };
+    ToolCanvas.prototype.clearSelection = function() {
+        this._clearSelection();
+        this._applySelectionClasses();
+        this._emitSelection();
     };
 
     ToolCanvas.prototype._isDesc = function(pid, cid) {
@@ -2117,24 +2171,54 @@
     ToolCanvas.prototype._wireDrag = function(el, step) {
         var self = this;
         el.addEventListener("dragstart", function(e) {
+            // If the grabbed block is part of a multi-selection, the whole
+            // selection travels together; otherwise this becomes a fresh
+            // single-block selection so the drag and the highlight agree.
+            if (self._isSelected(step._sid) && self._selCount() > 1) {
+                self._dragGroup = self._selList();
+            } else {
+                self._dragGroup = [step._sid];
+                if (!self._isSelected(step._sid)) self.select([step._sid]);
+            }
             self._dragId = step._sid;
             el.classList.add("dragging");
+            // Dim every block travelling with the group, not just the grabbed one.
+            self._dragGroup.forEach(function(sid) {
+                if (sid === step._sid) return;
+                var d = self._root.querySelector('.tool-block[data-sid="'+sid+'"]');
+                if (d) d.classList.add("dragging");
+            });
             e.dataTransfer.effectAllowed = "move";
             e.dataTransfer.setData("text/plain", step._sid);
             var ghost = el.cloneNode(true);
             ghost.style.width = el.offsetWidth + "px"; ghost.style.opacity = "0.7";
             ghost.style.position = "absolute"; ghost.style.top = "-1000px";
+            // Badge the ghost with the count when dragging a group.
+            if (self._dragGroup.length > 1) {
+                var badge = document.createElement("div");
+                badge.className = "tool-drag-badge";
+                badge.textContent = self._dragGroup.length;
+                ghost.appendChild(badge);
+            }
             document.body.appendChild(ghost);
             e.dataTransfer.setDragImage(ghost, 10, 10);
             requestAnimationFrame(function() { ghost.remove(); });
         });
         el.addEventListener("dragend", function() {
-            self._dragId = null; el.classList.remove("dragging");
+            self._dragId = null; self._dragGroup = null;
+            self._root.querySelectorAll(".tool-block.dragging").forEach(function(d) {
+                d.classList.remove("dragging");
+            });
             self._clearDrops();
         });
         el.addEventListener("dragover", function(e) {
-            if (!self._dragId || self._dragId === step._sid) return;
-            e.preventDefault(); e.dataTransfer.dropEffect = "move";
+            // Ignore hovering over any block that is itself part of the drag.
+            if (!self._dragId || (self._dragGroup && self._dragGroup.indexOf(step._sid) !== -1)) return;
+            // Stop the event bubbling to ancestor step elements. Without this,
+            // an enclosing container's dragover also fires and paints a region
+            // highlight computed against ITS box — an area the cursor isn't in —
+            // which then lingers because the pointer never leaves that ancestor.
+            e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move";
             var rect = el.getBoundingClientRect();
             var y = e.clientY - rect.top, h = rect.height;
             var isC = self._isContainer(step);
@@ -2148,7 +2232,8 @@
         });
         el.addEventListener("drop", function(e) {
             e.preventDefault(); e.stopPropagation();
-            if (!self._dragId || self._dragId === step._sid) return;
+            var group = self._dragGroup || (self._dragId ? [self._dragId] : []);
+            if (!group.length || group.indexOf(step._sid) !== -1) { self._clearDrops(); return; }
             var rect = el.getBoundingClientRect();
             var y = e.clientY - rect.top, h = rect.height;
             var isC = self._isContainer(step);
@@ -2156,8 +2241,15 @@
             if (isC && y > h*0.3 && y < h*0.7) pos = "nest";
             else if (y < h/2) pos = "above";
             else pos = "below";
-            if (pos === "nest" && self._isDesc(step._sid, self._dragId)) { self._clearDrops(); return; }
-            self.moveTool(self._dragId, step._sid, pos);
+            // Never drop a block (or the group) into one of its own descendants.
+            if (pos === "nest") {
+                for (var i = 0; i < group.length; i++) {
+                    if (self._isDesc(group[i], step._sid) || group[i] === step._sid) {
+                        self._clearDrops(); return;
+                    }
+                }
+            }
+            self.moveTools(group, step._sid, pos);
             self._clearDrops();
         });
     };
@@ -2177,55 +2269,93 @@
 
     ToolCanvas.prototype.getSelectedId = function() { return this._selId; };
     ToolCanvas.prototype.getSelectedTool = function() { return this._selId ? this._map[this._selId] : null; };
+    ToolCanvas.prototype.hasSelection = function() { return this._selCount() > 0; };
+    ToolCanvas.prototype.getSelectedIds = function() { return this._selList(); };
+    // Select every top-level block (⌘A). Nested blocks come along visually via
+    // their containers, so a select-all of the top level is the useful default.
+    ToolCanvas.prototype.selectAll = function() {
+        var ids = this._tools.map(function(s) { return s._sid; });
+        this.select(ids);
+    };
 
     /* ── Clipboard (copy / cut / paste) ─────────────────────────────── */
     // Copy a specific module (by id) onto the module clipboard. Adding the
     // .has-clip class to the canvas root is what reveals every module's paste
     // button — see the CSS rule that gates .tool-action-btn.paste.
-    ToolCanvas.prototype.copyStep = function(sid) {
-        var step = sid ? this._map[sid] : null;
-        if (!step) return false;
-        var clone = deepClone(step);
-        this._strip([clone]);
-        try { navigator.clipboard.writeText(JSON.stringify(clone)); } catch(e) {}
-        this._clipboard = clone;
+    // The clipboard holds an array of stripped module defs (one entry for a
+    // single copy, several for a multi-selection). The .has-clip class on the
+    // root reveals every block's paste button.
+    ToolCanvas.prototype._setClipboard = function(steps) {
+        var clones = deepClone(steps);
+        this._strip(clones);
+        try { navigator.clipboard.writeText(JSON.stringify(clones.length === 1 ? clones[0] : clones)); } catch(e) {}
+        this._clipboard = clones;
         if (this._root) this._root.classList.add("has-clip");
         return true;
     };
+    ToolCanvas.prototype.copyStep = function(sid) {
+        var step = sid ? this._map[sid] : null;
+        if (!step) return false;
+        return this._setClipboard([step]);
+    };
     ToolCanvas.prototype.copySelected = function() {
-        return this.copyStep(this._selId);
+        var ids = this._selList();
+        if (!ids.length) return false;
+        var steps = [];
+        for (var i = 0; i < ids.length; i++) { if (this._map[ids[i]]) steps.push(this._map[ids[i]]); }
+        if (!steps.length) return false;
+        return this._setClipboard(steps);
     };
     ToolCanvas.prototype.cutSelected = function() {
-        var sid = this._selId;
-        if (!sid || !this._map[sid]) return false;
-        this.copyStep(sid);
-        this.removeTool(sid);
+        if (!this.copySelected()) return false;
+        this.removeSelected();
         return true;
     };
-    // Paste the clipboard module after `afterId` (or at the end when null).
+    // Remove every selected block (a grouped delete). Detaches all, then
+    // clears the selection and repaints once.
+    ToolCanvas.prototype.removeSelected = function() {
+        var ids = this._selList();
+        if (!ids.length) return false;
+        for (var i = 0; i < ids.length; i++) {
+            if (this._removeFrom(this._tools, ids[i])) delete this._map[ids[i]];
+        }
+        this._clearSelection();
+        this._render();
+        this._emitSelection();
+        this._fireChange();
+        return true;
+    };
+    // Paste the clipboard modules after `afterId` (or at the end when null),
+    // preserving their order and selecting the pasted block(s).
     ToolCanvas.prototype.pasteAfterId = function(afterId) {
         if (!this._clipboard) return false;
-        var clone = deepClone(this._clipboard);
-        clone._sid = nextToolId();
-        this._map[clone._sid] = clone;
-        if (clone.then) this._assignIds(clone.then);
-        if (clone.else) this._assignIds(clone.else);
-        if (clone.body) this._assignIds(clone.body);
-        if (afterId) {
-            var idx = this._findIdx(this._tools, afterId);
-            if (idx !== -1) this._tools.splice(idx + 1, 0, clone);
+        var entries = Array.isArray(this._clipboard) ? this._clipboard : [this._clipboard];
+        if (!entries.length) return false;
+        var newIds = [];
+        var insertAt = afterId ? this._findIdx(this._tools, afterId) : -1;
+        for (var i = 0; i < entries.length; i++) {
+            var clone = deepClone(entries[i]);
+            clone._sid = nextToolId();
+            this._map[clone._sid] = clone;
+            if (clone.then) this._assignIds(clone.then);
+            if (clone.else) this._assignIds(clone.else);
+            if (clone.body) this._assignIds(clone.body);
+            if (insertAt !== -1) this._tools.splice(insertAt + 1 + i, 0, clone);
             else this._tools.push(clone);
-        } else {
-            this._tools.push(clone);
+            newIds.push(clone._sid);
         }
-        this._selId = clone._sid;
+        this._setSelection(newIds);
         this._render();
+        this._applySelectionClasses();
+        this._emitSelection();
         if (this._root) this._root.classList.add("has-clip");
         this._fireChange();
         return true;
     };
     ToolCanvas.prototype.pasteAfter = function() {
-        return this.pasteAfterId(this._selId);
+        // Paste after the last selected block so a group paste lands in order.
+        var ids = this._selList();
+        return this.pasteAfterId(ids.length ? ids[ids.length - 1] : null);
     };
 
     /* ── Macro Management State ──────────────────────────────────── */
@@ -2287,18 +2417,36 @@
 
         var _opts = [];
         var _value = "";
+        // Shown on the closed button when nothing is selected — never a menu row.
+        var PLACEHOLDER = "Select";
 
         function labelFor(v) {
             for (var i = 0; i < _opts.length; i++) {
                 if (_opts[i].value === v) return _opts[i].label;
             }
-            return _opts.length ? _opts[0].label : "";
+            return "";
         }
         function close() { root.classList.remove("open"); }
         function render() {
-            label.textContent = labelFor(_value);
+            // Empty value → the button reads "Select"; the menu never carries a
+            // "Select" row (it's a placeholder, not a real choice).
+            var lbl = _value ? labelFor(_value) : "";
+            label.textContent = lbl || PLACEHOLDER;
             menu.innerHTML = "";
-            _opts.forEach(function(o) {
+            // Real, selectable options only — anything with an empty value is a
+            // placeholder and is dropped from the list.
+            var choices = _opts.filter(function(o) { return o.value !== ""; });
+            if (choices.length === 0) {
+                // Nothing created yet: a single, non-selecting "None" row so the
+                // open menu isn't blank. It's replaced by the first real entry
+                // as soon as one exists.
+                var none = document.createElement("div");
+                none.className = "macro-select-item macro-select-empty";
+                none.textContent = "None";
+                menu.appendChild(none);
+                return;
+            }
+            choices.forEach(function(o) {
                 var item = document.createElement("div");
                 item.className = "macro-select-item" + (o.value === _value ? " active" : "");
                 item.textContent = o.label;
@@ -2337,9 +2485,9 @@
         });
         document.addEventListener("click", close);
 
-        // Seed the placeholder so the control reads correctly before the macro
-        // list arrives from Lua.
-        root.setOptions([{ value: "", label: "Select" }]);
+        // No options until the macro list arrives from Lua. The button reads
+        // "Select" on its own, and the open menu shows "None".
+        root.setOptions([]);
         return root;
     })();
     toolbar.appendChild(macroSelect);
@@ -2352,6 +2500,14 @@
     nameInput.setAttribute("autocomplete", "off");
     nameInput.setAttribute("autocorrect", "off");
     nameInput.setAttribute("autocapitalize", "off");
+    // Shell sounds: hover on enter, interact on focus (a click into the field).
+    // Guarded on playSlot so it no-ops in a bus-less context.
+    nameInput.addEventListener("mouseenter", function() {
+        if (window.playSlot) playSlot("hover");
+    });
+    nameInput.addEventListener("focus", function() {
+        if (window.playSlot) playSlot("interact");
+    });
     toolbar.appendChild(nameInput);
 
     // Bind field — the compiler already emits a ms.bind.define default block
@@ -2368,21 +2524,74 @@
     bindBtn.title = "Click to capture a bind for this macro";
     toolbar.appendChild(bindBtn);
 
-    var spacer = document.createElement("div");
-    spacer.className = "macro-toolbar-spacer";
-    toolbar.appendChild(spacer);
+    // Class field — whether this visual macro is a MAIN or OPTIONAL one. It
+    // drives the compiled ms.bind.define group ("visual - main" / "visual -
+    // optional"), which is what the Binds tab groups under. Purely a grouping
+    // convention (only "system" is functionally special), so this needs no
+    // host change — the compiler already emits macroDef.group verbatim.
+    var _currentMacroClass = "main";   // "main" | "optional"
+
+    var classLabel = document.createElement("span");
+    classLabel.style.cssText = "font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-left:8px;margin-right:4px";
+    classLabel.textContent = "Class";
+    toolbar.appendChild(classLabel);
+
+    // Two-button segmented control, reusing the param Value/Tool switch styling.
+    var classSeg = document.createElement("span");
+    classSeg.className = "fn-bind-switch macro-class-seg";
+    function buildClassOpt(value, text) {
+        var b = document.createElement("button");
+        b.className = "fn-bind-opt" + (_currentMacroClass === value ? " on" : "");
+        b.setAttribute("data-class", value);
+        b.textContent = text;
+        b.title = value === "main"
+            ? "Main macro — grouped under VISUAL - MAIN"
+            : "Optional macro — grouped under VISUAL - OPTIONAL";
+        b.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+        b.addEventListener("click", function() {
+            if (_currentMacroClass === value) return;
+            if (window.playSlot) playSlot("interact");
+            setMacroClass(value);
+            _macroDirty = true;
+            updateSaveBtnState();
+        });
+        return b;
+    }
+    classSeg.appendChild(buildClassOpt("main", "Main"));
+    classSeg.appendChild(buildClassOpt("optional", "Optional"));
+    toolbar.appendChild(classSeg);
+
+    // Reflect the current class onto the segmented control.
+    function setMacroClass(value) {
+        _currentMacroClass = (value === "optional") ? "optional" : "main";
+        var opts = classSeg.querySelectorAll(".fn-bind-opt");
+        opts.forEach(function(o) {
+            o.classList.toggle("on", o.getAttribute("data-class") === _currentMacroClass);
+        });
+    }
+    // Derive the class from a stored macro group string ("visual - optional").
+    function classFromGroup(group) {
+        return (typeof group === "string" && /optional/i.test(group)) ? "optional" : "main";
+    }
+
+    // Right-side action cluster. `margin-left:auto` pins it to the right edge,
+    // and because it's a single flex child it drops down as one right-aligned
+    // unit when the toolbar wraps — rather than the buttons scattering to the
+    // left of a new row (which is what a bare flex spacer + loose buttons did).
+    var actions = document.createElement("div");
+    actions.className = "macro-toolbar-actions";
 
     // New macro button
     var newBtn = document.createElement("button");
     newBtn.className = "macro-toolbar-btn";
     newBtn.textContent = "New";
-    toolbar.appendChild(newBtn);
+    actions.appendChild(newBtn);
 
     // Save button
     var saveBtn = document.createElement("button");
     saveBtn.className = "macro-toolbar-btn primary";
     saveBtn.textContent = "Save";
-    toolbar.appendChild(saveBtn);
+    actions.appendChild(saveBtn);
 
     // Secondary actions live under an overflow "⋯" menu so the toolbar never
     // clips them when the shell is shrunk to its smallest width (Test/Record/
@@ -2425,12 +2634,25 @@
     testBtn.title = "Test Run current macro";
     overflowMenu.appendChild(testBtn);
 
-    // Record button
+    // Record button — with a paired "⋯" that opens the recording-settings
+    // menu. The two sit in one row so the options live right next to the
+    // action they configure.
+    var recordRow = document.createElement("div");
+    recordRow.className = "macro-record-row";
     var recordBtn = document.createElement("button");
     recordBtn.className = "macro-toolbar-btn";
     recordBtn.innerHTML = menuLabel("record", "Record");
     recordBtn.title = "Record user actions into modules";
-    overflowMenu.appendChild(recordBtn);
+    recordRow.appendChild(recordBtn);
+
+    var recSettingsBtn = document.createElement("button");
+    recSettingsBtn.className = "macro-toolbar-btn macro-record-settings-btn";
+    recSettingsBtn.textContent = "⋯"; // ⋯
+    recSettingsBtn.title = "Recording settings";
+    recSettingsBtn.setAttribute("aria-label", "Recording settings");
+    recordRow.appendChild(recSettingsBtn);
+
+    overflowMenu.appendChild(recordRow);
 
     // Delete button
     var delMacroBtn = document.createElement("button");
@@ -2448,7 +2670,8 @@
     editFileBtn.title = "Open ms_macros.lua in your editor";
     overflowMenu.appendChild(editFileBtn);
 
-    toolbar.appendChild(overflowWrap);
+    actions.appendChild(overflowWrap);
+    toolbar.appendChild(actions);
 
     // ── Main area ──
     var mainArea = document.createElement("div");
@@ -2459,7 +2682,12 @@
     toolArea.className = "macros-tool-area";
     // Canvas container (ToolCanvas will be mounted here)
     var canvasContainer = document.createElement("div");
-    canvasContainer.style.cssText = "flex:1;overflow:hidden;position:relative";
+    // overflow-y:auto (not hidden) so the module list scrolls: the inner
+    // .tool-canvas grows to its content height, and this bounded flex child is
+    // the scroller. The inline editor panel lives inside that flow, so it
+    // scrolls into view instead of being clipped.
+    canvasContainer.className = "macros-canvas-scroll";
+    canvasContainer.style.cssText = "flex:1;overflow-y:auto;overflow-x:hidden;position:relative";
     toolArea.appendChild(canvasContainer);
 
     mainArea.appendChild(toolArea);
@@ -2526,6 +2754,104 @@
     bindsScroll.className = "binds-scroll";
     bindsSection.appendChild(bindsScroll);
 
+    /* ── Pack Info (ms.macroMeta) editor ─────────────────────────────
+       The visual macro pack carries an ms.macroMeta credit block (name /
+       author / website) that the compiler bakes into the generated file and
+       the loading screen shows. It lives at the top of the Binds tab so the
+       pack's identity is edited alongside its binds. Saving round-trips
+       through the host, which rewrites the JSON, recompiles, and reloads so
+       ms.macroMeta updates live. */
+    var _metaLoaded  = false;   // suppress dirty-marking during programmatic fill
+    var _metaDirty   = false;
+
+    function metaField(labelText, placeholder) {
+        var wrap = document.createElement("label");
+        wrap.className = "meta-field";
+        var lb = document.createElement("span");
+        lb.className = "meta-field-label";
+        lb.textContent = labelText;
+        var inp = document.createElement("input");
+        inp.type = "text";
+        inp.className = "meta-input";
+        inp.placeholder = placeholder || "";
+        // Keydown must not bubble to the canvas shortcut handler (⌘A/Delete etc.)
+        inp.addEventListener("keydown", function(e) { e.stopPropagation(); });
+        inp.addEventListener("input", function() {
+            if (_metaLoaded) { _metaDirty = true; updateMetaSaveBtn(); }
+        });
+        wrap.appendChild(lb);
+        wrap.appendChild(inp);
+        return { wrap: wrap, input: inp };
+    }
+
+    var metaCard = document.createElement("div");
+    metaCard.className = "section macro-meta-section";
+    var metaHead = document.createElement("div");
+    metaHead.className = "section-head";
+    var metaTitle = document.createElement("span");
+    metaTitle.className = "section-title";
+    metaTitle.textContent = "Pack Info";
+    var metaDesc = document.createElement("span");
+    metaDesc.className = "section-desc";
+    metaDesc.textContent = "Credits baked into your visual macros (ms.macroMeta)";
+    metaHead.appendChild(metaTitle);
+    metaHead.appendChild(metaDesc);
+    metaCard.appendChild(metaHead);
+
+    var metaBody = document.createElement("div");
+    metaBody.className = "section-body macro-meta-body";
+    var _metaName    = metaField("Name",    "My Macros");
+    var _metaAuthor  = metaField("Author",  "You");
+    var _metaWebsite = metaField("Website", "https://…");
+    metaBody.appendChild(_metaName.wrap);
+    metaBody.appendChild(_metaAuthor.wrap);
+    metaBody.appendChild(_metaWebsite.wrap);
+
+    var metaSaveRow = document.createElement("div");
+    metaSaveRow.className = "macro-meta-save-row";
+    var metaSaveBtn = document.createElement("button");
+    metaSaveBtn.className = "macro-toolbar-btn meta-save-btn";
+    metaSaveBtn.textContent = "Save Pack Info";
+    metaSaveBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+    metaSaveBtn.addEventListener("click", function() {
+        if (!_metaDirty) return;
+        if (window.playSlot) playSlot("interact");
+        if (window.shellPost) {
+            shellPost("macros", "setMeta", {
+                name:    _metaName.input.value.trim(),
+                author:  _metaAuthor.input.value.trim(),
+                website: _metaWebsite.input.value.trim(),
+            });
+        }
+        _metaDirty = false;
+        updateMetaSaveBtn();
+    });
+    metaSaveRow.appendChild(metaSaveBtn);
+    metaBody.appendChild(metaSaveRow);
+    metaCard.appendChild(metaBody);
+    bindsSection.insertBefore(metaCard, bindsScroll);
+
+    function updateMetaSaveBtn() {
+        metaSaveBtn.disabled = !_metaDirty;
+        metaSaveBtn.style.opacity = _metaDirty ? "1" : "0.5";
+    }
+    updateMetaSaveBtn();
+
+    function refreshMeta() {
+        if (window.shellPost) shellPost("macros", "getMeta", {});
+    }
+
+    function setMeta(meta) {
+        meta = meta || {};
+        _metaLoaded = false;
+        _metaName.input.value    = meta.name    || "";
+        _metaAuthor.input.value  = meta.author  || "";
+        _metaWebsite.input.value = meta.website || "";
+        _metaLoaded = true;
+        _metaDirty  = false;
+        updateMetaSaveBtn();
+    }
+
     ["builder", "binds"].forEach(function(id) {
         var b = document.createElement("button");
         b.className = "mtab" + (id === "binds" ? " active" : "");
@@ -2558,7 +2884,7 @@
         onSame: function() { if (window.playSlot) playSlot("back"); },
         onSwitch: function(tab) {
             if (window.playSlot) playSlot("interact");
-            if (tab === "binds") refreshBindList();
+            if (tab === "binds") { refreshBindList(); refreshMeta(); }
         },
     });
 
@@ -2569,29 +2895,150 @@
             updateSaveBtnState();
         },
         onSelect: function(sid, step) {
-            if (_toolEditor) _toolEditor.open(sid);
+            if (!_toolEditor) return;
+            // A single block shows its params; nothing (or a multi-selection)
+            // hides them — no stacked/duplicated parameter panels.
+            if (sid) _toolEditor.open(sid);
+            else _toolEditor.close();
         }
     });
 
-    // ── Tool keyboard shortcuts (copy/cut/paste/delete) ─────────────
-    toolArea.addEventListener("keydown", function(e) {
-        var mod = e.metaKey || e.ctrlKey;
-        if (mod && e.key === "c") {
+    // ── Picker → canvas drag-drop ───────────────────────────────────
+    // Dropping a module from the Add-Module picker onto the canvas inserts it
+    // as a new top-level module. Listeners are bound on the container in the
+    // CAPTURE phase and only act on our custom MIME type: this lets them
+    // intercept the external drag before the per-block reorder handlers (which
+    // stopPropagation on drop) can swallow it, while internal reorder drags —
+    // which carry no such type — fall straight through untouched.
+    (function() {
+        var FN_MIME   = "application/x-ms-fn";
+        var TOOL_MIME = "application/x-ms-tool";
+        function hasType(e, mime) {
+            var types = e.dataTransfer && e.dataTransfer.types;
+            if (!types) return false;
+            return Array.prototype.indexOf.call(types, mime) !== -1;
+        }
+        function hasFn(e)   { return hasType(e, FN_MIME) || hasType(e, TOOL_MIME); }
+        // Build a shared-setting reference step for a dragged tool key.
+        function buildToolDef(key) {
+            var tools = window.msMacroTools || [];
+            for (var i = 0; i < tools.length; i++) {
+                if (tools[i].key === key) {
+                    return (window.fnPicker && window.fnPicker.settingDef)
+                        ? window.fnPicker.settingDef(tools[i])
+                        : { action: "setting", params: { key: tools[i].key, label: tools[i].label || tools[i].key, type: tools[i].type } };
+                }
+            }
+            return null;
+        }
+        // Build a module def with default params from the shared registry.
+        function buildDefaultDef(fnId) {
+            var reg = window.fnPicker && window.fnPicker.registry;
+            if (!reg) return null;
+            var fn = null;
+            for (var i = 0; i < reg.length; i++) {
+                if (reg[i].id === fnId) { fn = reg[i]; break; }
+            }
+            if (!fn) return null;
+            var params = {};
+            (fn.params || []).forEach(function(p) {
+                if (p.type === "mods") params[p.name] = [];
+                else if (p.type === "number") params[p.name] = 0;
+                else params[p.name] = "";
+            });
+            return { action: fn.name, params: params };
+        }
+        // Which existing top-level block should the new one land before? The
+        // first whose vertical midpoint is below the cursor; else append.
+        function beforeSidAt(clientY) {
+            var root = _canvas._root;
+            var blocks = root.children;
+            for (var i = 0; i < blocks.length; i++) {
+                var b = blocks[i];
+                if (!b.getAttribute) continue;
+                var sid = b.getAttribute("data-sid");
+                if (!sid) continue;
+                var r = b.getBoundingClientRect();
+                if (clientY < r.top + r.height / 2) return sid;
+            }
+            return null;
+        }
+        canvasContainer.addEventListener("dragover", function(e) {
+            if (!hasFn(e)) return;
             e.preventDefault();
-            _canvas.copySelected();
-        } else if (mod && e.key === "x") {
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = "copy";
+            _canvas._root.classList.add("fn-drop-target");
+        }, true);
+        canvasContainer.addEventListener("dragleave", function(e) {
+            if (!hasFn(e)) return;
+            // Only clear when the pointer actually leaves the container, not on
+            // every crossing between child blocks.
+            if (e.target === canvasContainer || !canvasContainer.contains(e.relatedTarget)) {
+                _canvas._root.classList.remove("fn-drop-target");
+            }
+        }, true);
+        canvasContainer.addEventListener("drop", function(e) {
+            if (!hasFn(e)) return;
             e.preventDefault();
-            _canvas.cutSelected();
+            e.stopPropagation();
+            _canvas._root.classList.remove("fn-drop-target");
+            var def = null;
+            if (hasType(e, TOOL_MIME)) {
+                def = buildToolDef(e.dataTransfer.getData(TOOL_MIME));
+            } else {
+                def = buildDefaultDef(e.dataTransfer.getData(FN_MIME));
+            }
+            if (!def) return;
+            _canvas.insertDefAt(def, beforeSidAt(e.clientY));
             _macroDirty = true;
             updateSaveBtnState();
-        } else if (mod && e.key === "v") {
+            if (window.playSlot) playSlot("interact");
+            closeFnOverlay();
+        }, true);
+    })();
+
+    // ── Tool keyboard shortcuts (copy/cut/paste/delete) ─────────────
+    // Bound on document, not toolArea: the tool blocks and their area are not
+    // focusable, so a keydown never landed on toolArea and every shortcut was
+    // dead. Gate on the builder being the visible section and a module being
+    // selected, and bail while typing into a field so editing text is normal.
+    document.addEventListener("keydown", function(e) {
+        if (!builderSection.classList.contains("active")) return;
+        var t = e.target;
+        if (t && t.closest && t.closest("input, textarea, [contenteditable='true']")) return;
+        var mod = e.metaKey || e.ctrlKey;
+        // ⌘A selects every top-level block; paste works even with nothing
+        // selected (lands at the end). Everything else needs a selection.
+        if (mod && (e.key === "a" || e.key === "A")) {
+            e.preventDefault();
+            _canvas.selectAll();
+            return;
+        }
+        if (mod && (e.key === "v" || e.key === "V")) {
             e.preventDefault();
             _canvas.pasteAfter();
             _macroDirty = true;
             updateSaveBtnState();
-        } else if ((e.key === "Delete" || e.key === "Backspace") && _canvas.getSelectedId()) {
+            return;
+        }
+        if (e.key === "Escape" && _canvas.hasSelection()) {
             e.preventDefault();
-            _canvas.removeTool(_canvas.getSelectedId());
+            _canvas.clearSelection();
+            return;
+        }
+        if (!_canvas.hasSelection()) return;
+        if (mod && (e.key === "c" || e.key === "C")) {
+            e.preventDefault();
+            _canvas.copySelected();
+        } else if (mod && (e.key === "x" || e.key === "X")) {
+            e.preventDefault();
+            _canvas.cutSelected();
+            _macroDirty = true;
+            updateSaveBtnState();
+        } else if (e.key === "Delete" || e.key === "Backspace") {
+            e.preventDefault();
+            _canvas.removeSelected();
             _macroDirty = true;
             updateSaveBtnState();
         }
@@ -2863,10 +3310,18 @@
                 });
             });
             bindsScroll.appendChild(bindSection(
-                g.charAt(0).toUpperCase() + g.slice(1),
+                titleCaseGroup(g),
                 g === "system" ? "Always live — these cannot be disabled" : null,
                 rows,
             ));
+        });
+    }
+
+    // Title-case each word of a group key so compound groups read cleanly:
+    // "visual - main" → "Visual - Main", "system" → "System".
+    function titleCaseGroup(g) {
+        return String(g).replace(/[A-Za-z]+/g, function(w) {
+            return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
         });
     }
 
@@ -2903,7 +3358,9 @@
     }
 
     function setMacroList(ids) {
-        var opts = [{ value: "", label: "Select" }];
+        // Real macro ids only — the "Select" placeholder lives on the button,
+        // not as a menu row, and an empty list renders as "None".
+        var opts = [];
         for (var i = 0; i < ids.length; i++) {
             opts.push({ value: ids[i], label: ids[i] });
         }
@@ -2920,6 +3377,7 @@
             _currentMacroDef = null;
             _canvas.load([]);
             nameInput.value = "";
+            setMacroClass("main");
             _macroDirty = false;
             updateSaveBtnState();
             updateBindBtn();
@@ -2936,6 +3394,7 @@
         _currentMacroDef = def;
         nameInput.value = def.name || def.id || "";
         _canvas.load(def.steps || []);
+        setMacroClass(classFromGroup(def.group));
         _macroDirty = false;
         updateSaveBtnState();
         macroSelect.value = def.id;
@@ -2991,6 +3450,9 @@
             id: _currentMacroId,
             name: name,
             author: "User",
+            // Group the compiled bind under VISUAL - MAIN / VISUAL - OPTIONAL
+            // per the toolbar Class control.
+            group: "visual - " + _currentMacroClass,
             steps: _canvas.serialize()
         };
         // Carry the compiled default bind through a save — the compiler reads
@@ -3019,6 +3481,7 @@
         _currentMacroDef = null;
         _canvas.load([]);
         nameInput.value = "";
+        setMacroClass("main");
         _macroDirty = false;
         updateSaveBtnState();
         refreshMacroList();
@@ -3037,6 +3500,7 @@
         _canvas.load([]);
         nameInput.value = "";
         nameInput.focus();
+        setMacroClass("main");
         _macroDirty = false;
         updateSaveBtnState();
         macroSelect.value = "";
@@ -3120,6 +3584,36 @@
     /* ── Record Mode ─────────────────────────────────────────────── */
     var _isRecording = false;
 
+    // Recording options, tweaked through the "⋯" menu next to Record and
+    // persisted so a chosen recording style survives a reload. The Lua
+    // recorder reads the same shape (see ms_core startRecording handler).
+    var _REC_OPTS_KEY = "ms.macroRecordOpts";
+    var _recOptDefaults = {
+        recordDelays:       true,   // emit ms.wait for idle gaps
+        pressMode:          "type", // "type" | "press" | "pressRelease"
+        recordDrags:        true,   // capture mouse drags as Drag ops
+        recordMouseButtons: true,   // capture mouse-button clicks
+        recordWindowMove:   false,  // capture focused-window moves
+        recordWindowResize: false,  // capture focused-window resizes
+        waitThreshold:      50      // ms — gaps shorter than this are noise
+    };
+    var _recOpts = (function() {
+        var o = {};
+        for (var k in _recOptDefaults) o[k] = _recOptDefaults[k];
+        try {
+            var saved = JSON.parse(localStorage.getItem(_REC_OPTS_KEY) || "{}");
+            for (var k2 in saved) if (k2 in o) o[k2] = saved[k2];
+            // The key-down-only "press" mode was removed; fold any stored value
+            // into the press+release mode so recording never stays down-only.
+            if (o.pressMode === "press") o.pressMode = "pressRelease";
+        } catch (e) { /* corrupt/absent — fall back to defaults */ }
+        return o;
+    })();
+    function _saveRecOpts() {
+        try { localStorage.setItem(_REC_OPTS_KEY, JSON.stringify(_recOpts)); }
+        catch (e) { /* private mode / quota — options just won't persist */ }
+    }
+
     function _setRecordingState(on) {
         _isRecording = on;
         if (on) {
@@ -3138,9 +3632,13 @@
     recordBtn.addEventListener("click", function() {
         if (window.playSlot) playSlot("interact");
         if (!_isRecording) {
-            // Start recording
+            // Start recording — carry the current options through so the Lua
+            // recorder captures exactly what the user asked for.
             if (window.shellPost) {
-                shellPost("macros", "startRecording", { waitThreshold: 50 });
+                shellPost("macros", "startRecording", {
+                    waitThreshold: _recOpts.waitThreshold,
+                    options: _recOpts
+                });
             }
             _setRecordingState(true);
         } else {
@@ -3151,6 +3649,174 @@
             _setRecordingState(false);
             showTestToast("Recording stopped", "success");
         }
+    });
+
+    /* ── Recording settings menu ─────────────────────────────────
+       A small modal in the same visual language as the rebind / warning
+       prompts: an accent-topped card over a dimmed backdrop. Built lazily
+       on first open, then reused. */
+    var _recModal = null;
+
+    function _buildRecModal() {
+        var overlayEl = document.createElement("div");
+        overlayEl.className = "rec-settings-overlay";
+        overlayEl.style.cssText =
+            "position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;" +
+            "align-items:center;justify-content:center;z-index:320;opacity:0;" +
+            "pointer-events:none;transition:opacity 0.2s;";
+
+        var card = document.createElement("div");
+        card.style.cssText =
+            "background:var(--surface);border-top:2px solid var(--accent);" +
+            "border-radius:var(--radius);padding:18px 20px;width:340px;" +
+            "max-height:82vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.7)," +
+            "0 0 0 1px var(--border);transform:scale(0.96);transition:transform 0.2s;";
+        overlayEl.appendChild(card);
+
+        var title = document.createElement("div");
+        title.style.cssText = "font-size:14px;font-weight:700;margin-bottom:2px;";
+        title.textContent = "Recording Settings";
+        card.appendChild(title);
+
+        var sub = document.createElement("div");
+        sub.style.cssText = "font-size:11px;color:var(--text2);margin-bottom:14px;line-height:1.5;";
+        sub.textContent = "Choose what a recording captures. Applied to the next recording you start.";
+        card.appendChild(sub);
+
+        // Row scaffold shared by toggle + segmented rows.
+        function row(label, hint, control) {
+            var r = document.createElement("div");
+            r.style.cssText =
+                "display:flex;align-items:center;justify-content:space-between;" +
+                "gap:12px;padding:9px 0;border-bottom:1px solid var(--border-dim,var(--border));";
+            var lwrap = document.createElement("div");
+            lwrap.style.cssText = "min-width:0;flex:1;";
+            var l = document.createElement("div");
+            l.style.cssText = "font-size:12px;color:var(--text);";
+            l.textContent = label;
+            lwrap.appendChild(l);
+            if (hint) {
+                var h = document.createElement("div");
+                h.style.cssText = "font-size:10px;color:var(--text3);margin-top:2px;line-height:1.4;";
+                h.textContent = hint;
+                lwrap.appendChild(h);
+            }
+            r.appendChild(lwrap);
+            r.appendChild(control);
+            card.appendChild(r);
+            return r;
+        }
+
+        function toggle(key) {
+            var wrap = document.createElement("label");
+            wrap.className = "toggle";
+            var input = document.createElement("input");
+            input.type = "checkbox";
+            input.checked = !!_recOpts[key];
+            var track = document.createElement("span"); track.className = "toggle-track";
+            var thumb = document.createElement("span"); thumb.className = "toggle-thumb";
+            wrap.appendChild(input); wrap.appendChild(track); wrap.appendChild(thumb);
+            input.addEventListener("change", function() {
+                _recOpts[key] = input.checked;
+                _saveRecOpts();
+                if (window.playSlot) playSlot("interact");
+            });
+            return wrap;
+        }
+
+        function seg(key, opts) {
+            var s = document.createElement("div");
+            s.className = "seg";
+            opts.forEach(function(o) {
+                var b = document.createElement("button");
+                b.className = "seg-btn" + (_recOpts[key] === o.value ? " active" : "");
+                b.textContent = o.label;
+                b.title = o.hint || "";
+                b.addEventListener("click", function() {
+                    _recOpts[key] = o.value;
+                    _saveRecOpts();
+                    if (window.playSlot) playSlot("interact");
+                    Array.prototype.forEach.call(s.children, function(c) {
+                        c.classList.remove("active");
+                    });
+                    b.classList.add("active");
+                });
+                b.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+                s.appendChild(b);
+            });
+            return s;
+        }
+
+        row("Record delays", "Insert wait modules for idle gaps between actions.", toggle("recordDelays"));
+        row("Key presses", "How keystrokes are captured.",
+            seg("pressMode", [
+                { value: "type",         label: "Type",    hint: "Full press+release keystroke (ms.type)" },
+                { value: "pressRelease", label: "Press",   hint: "Separate press and release with real hold timing" }
+            ]));
+        row("Record mouse buttons", "Capture left/right/middle clicks.", toggle("recordMouseButtons"));
+        row("Record mouse drags", "Capture press-move-release as a drag gesture.", toggle("recordDrags"));
+        row("Record window moves", "Capture moving the focused window.", toggle("recordWindowMove"));
+        var lastRow =
+        row("Record window resizes", "Capture resizing the focused window.", toggle("recordWindowResize"));
+        lastRow.style.borderBottom = "none";
+
+        // Buttons
+        var btns = document.createElement("div");
+        btns.className = "modal-btns";
+        btns.style.cssText = "display:flex;gap:8px;margin-top:16px;";
+        var resetBtn = document.createElement("button");
+        resetBtn.textContent = "Reset";
+        resetBtn.style.cssText = "flex:0 0 auto;padding:8px 12px;border-radius:var(--radius-s);" +
+            "font-size:13px;font-weight:600;background:var(--surface2);color:var(--text2);";
+        var doneBtn = document.createElement("button");
+        doneBtn.className = "primary";
+        doneBtn.textContent = "Done";
+        doneBtn.style.cssText = "flex:1;padding:8px;border-radius:var(--radius-s);" +
+            "font-size:13px;font-weight:600;background:var(--accent);color:#fff;";
+        btns.appendChild(resetBtn);
+        btns.appendChild(doneBtn);
+        card.appendChild(btns);
+
+        function close() {
+            overlayEl.style.opacity = "0";
+            overlayEl.style.pointerEvents = "none";
+            card.style.transform = "scale(0.96)";
+        }
+        resetBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+        resetBtn.addEventListener("click", function() {
+            for (var k in _recOptDefaults) _recOpts[k] = _recOptDefaults[k];
+            _saveRecOpts();
+            if (window.playSlot) playSlot("back");
+            // Rebuild reflects the reset values cleanly.
+            _recModal = null;
+            card.remove(); overlayEl.remove();
+            _openRecModal();
+        });
+        doneBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+        doneBtn.addEventListener("click", function() { if (window.playSlot) playSlot("interact"); close(); });
+        overlayEl.addEventListener("click", function(e) {
+            if (e.target === overlayEl) { if (window.playSlot) playSlot("back"); close(); }
+        });
+
+        document.body.appendChild(overlayEl);
+        _recModal = { overlay: overlayEl, card: card };
+        return _recModal;
+    }
+
+    function _openRecModal() {
+        var m = _recModal || _buildRecModal();
+        // Force reflow so the opening transition runs from the closed state.
+        m.overlay.getBoundingClientRect();
+        m.overlay.style.opacity = "1";
+        m.overlay.style.pointerEvents = "all";
+        m.card.style.transform = "scale(1)";
+    }
+
+    recSettingsBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+    recSettingsBtn.addEventListener("click", function() {
+        // Let the click bubble so the overflow menu closes behind the modal.
+        if (window.playSlot) playSlot("interact");
+        _openRecModal();
     });
 
     delMacroBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
@@ -3205,6 +3871,10 @@
             setBindList(body);
             return;
         }
+        if (action === "packMeta" && body) {
+            setMeta(body);
+            return;
+        }
         if (action === "setToolList" && Array.isArray(body)) {
             if (window.fnPicker && window.fnPicker.setToolList) {
                 window.fnPicker.setToolList(body);
@@ -3247,6 +3917,8 @@
         setMacroDef: setMacroDef,
         setBindList: setBindList,
         refreshBinds: refreshBindList,
+        setMeta: setMeta,
+        refreshMeta: refreshMeta,
         addTool: function(def) { _canvas.addTool(def); closeFnOverlay(); },
         // Tools (authored settings) — list is pushed from Lua; create/delete
         // round-trip through the host, which re-pushes the updated list.
@@ -3283,6 +3955,7 @@
     updateSaveBtnState();
     refreshMacroList();
     refreshBindList();
+    refreshMeta();
 
     /* ── Header drag ──────────────────────────────────────────── */
     (function() {

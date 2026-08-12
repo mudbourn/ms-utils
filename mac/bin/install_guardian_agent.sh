@@ -57,21 +57,6 @@ echo "mudscript Guardian agent installed and running."
 echo "It watches:  $HS/ms_core.lua + $HS/Spoons/ + $HS/ui/ + $HS/bin/"
 echo "Log file:    $HS/data/guardian_agent.log"
 
-# ── Install Roblox cache cleaner agent ────────────────────────────────────────
-
-CACHE_SCRIPT="$HS/bin/clean_roblox_cache.sh"
-CACHE_PLIST_TEMPLATE="$HS/bin/com.mudscript.cache-cleaner.plist"
-CACHE_PLIST_DST="$HOME/Library/LaunchAgents/com.mudscript.cache-cleaner.plist"
-
-if [ -f "$CACHE_PLIST_TEMPLATE" ] && [ -f "$CACHE_SCRIPT" ]; then
-    chmod 755 "$CACHE_SCRIPT"
-    echo ""
-    echo "Roblox cache cleaner: available (enable in Settings → Developer)."
-else
-    echo ""
-    echo "⚠  Cache cleaner files not found — skipping."
-fi
-
 echo ""
 echo "Optional: make the stub read-only for stronger protection:"
 echo "  chmod 444 ~/.hammerspoon/init.lua"

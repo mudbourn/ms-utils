@@ -662,7 +662,8 @@
         .user-group-arrow { font-size: 8px; display: inline-block; transition: transform 0.15s; }
         details[open].user-group > .user-group-summary .user-group-arrow { transform: rotate(90deg); }
 
-        .input-sm { background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; user-select: text; -webkit-user-select: text; width: 100%; }
+        .input-sm { background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); -webkit-text-fill-color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; user-select: text; -webkit-user-select: text; width: 100%; }
+        .input-sm::placeholder { color: var(--text3); opacity: 0.55; -webkit-text-fill-color: var(--text3); }
 
         /* ═══ MACROS-SPECIFIC ══════════════════════════════════════════════════ */
         .fn-picker { display: flex; flex-direction: row; width: 100%; height: 100%; overflow: hidden; }
@@ -671,7 +672,10 @@
         .fn-picker-search input { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 5px 8px; outline: none; font-family: inherit; user-select: text; -webkit-user-select: text; }
         .fn-picker-search input::placeholder { color: var(--text3); }
         .fn-picker-search input:focus { border-color: var(--accent); }
-        .fn-picker-entries { flex: 1; overflow-y: auto; padding: 4px 0; }
+        /* No top padding: the category headers are position:sticky top:0, so a
+           top padding band would sit above them inside the scroll area and let
+           scrolled-up module rows show through the gap. */
+        .fn-picker-entries { flex: 1; overflow-y: auto; padding: 0 0 4px; }
         .fn-entry { display: flex; align-items: center; gap: 6px; padding: 5px 12px; cursor: pointer; font-size: 11px; color: var(--text2); transition: background 0.1s, color 0.1s; border-left: 2px solid transparent; }
         .fn-entry:hover { background: var(--hover); color: var(--text); }
         .fn-entry.active { background: var(--surface2); color: var(--accent-hi); border-left-color: var(--accent); }
@@ -694,10 +698,15 @@
         .fn-param-group { display: flex; flex-direction: column; gap: 4px; }
         .fn-param-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
         .fn-param-type { font-size: 9px; font-weight: 400; color: var(--accent); background: var(--accent-glow-faint); padding: 1px 5px; border-radius: var(--radius-s); text-transform: none; letter-spacing: 0; }
-        .fn-param input[type="text"], .fn-param input[type="number"] { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: var(--font-mono); user-select: text; -webkit-user-select: text; }
-        .fn-param input:focus { border-color: var(--accent); }
+        /* Also matches the tool-creator fields (New Tool form), whose wrappers
+           carry only .fn-param-group, not .fn-param — without this they rendered
+           as unstyled native inputs, the visible "tool elements don't theme". */
+        .fn-param input[type="text"], .fn-param input[type="number"],
+        .fn-param-group input[type="text"], .fn-param-group input[type="number"] { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: var(--font-mono); user-select: text; -webkit-user-select: text; }
+        .fn-param input:focus, .fn-param-group input:focus { border-color: var(--accent); }
         .fn-code-input { width: 100%; box-sizing: border-box; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--accent-hi); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; padding: 5px 8px; outline: none; resize: vertical; min-height: 30px; user-select: text; -webkit-user-select: text; }
         .fn-code-input:focus { border-color: var(--accent); }
+        .fn-param input::placeholder, .fn-param-group input::placeholder, .fn-code-input::placeholder, .fn-seg-optrow input::placeholder { color: var(--text3); opacity: 0.55; }
         .fn-key-capture { display: flex; align-items: center; gap: 8px; }
         .fn-key-btn { background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 5px 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; min-width: 60px; text-align: center; user-select: text; -webkit-user-select: text; }
         .fn-key-btn:hover { border-color: var(--accent); }
@@ -729,7 +738,10 @@
         .fn-tool-tag { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 1px 5px; border-radius: var(--radius-s); margin-left: auto; }
         .fn-tool-tag-builder { color: var(--accent-hi); background: var(--accent-glow-faint); }
         .fn-tool-tag-pack { color: var(--text3); background: var(--surface2); }
-        .fn-tool-new .fn-entry-sig { color: var(--accent); }
+        /* Non-interactive hint row shown when no tools exist yet. */
+        .fn-tool-hint { cursor: default; opacity: 0.7; }
+        .fn-tool-hint .fn-entry-sig { color: var(--text3); font-style: italic; font-size: 10px; }
+        .fn-tool-hint:hover { background: none; }
         .fn-tool-meta .fn-tool-meta-val { font-family: var(--font-mono); font-size: 12px; color: var(--text); margin-top: 2px; }
         .fn-tool-usehint { font-size: 10px; color: var(--text3); line-height: 1.5; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-dim); }
         .fn-tool-usehint code { font-family: var(--font-mono); color: var(--accent-hi); background: var(--accent-glow-faint); padding: 0 3px; border-radius: var(--radius-s); }
@@ -740,6 +752,10 @@
         .fn-bind-opt { background: var(--surface2); border: none; color: var(--text3); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 6px; cursor: pointer; transition: all 0.1s; }
         .fn-bind-opt:hover { color: var(--text); }
         .fn-bind-opt.on { background: var(--accent-glow-faint); color: var(--accent-hi); }
+        /* The Class control reuses the bind switch look but lives inline in the
+           macro toolbar, so it must not claim the row's leftover space the way
+           the param-panel switch does. */
+        .macro-class-seg { margin-left: 0; align-self: center; flex-shrink: 0; }
         .fn-param-tool select.fn-tool-select { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: var(--font-mono); cursor: pointer; }
         .fn-param-tool select.fn-tool-select:focus { border-color: var(--accent); }
         .fn-param.bound .fn-param-type { color: var(--accent-hi); }
@@ -753,7 +769,7 @@
         .fn-seg-optadd { margin-top: 2px; background: none; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text3); font-size: 10px; padding: 4px 8px; cursor: pointer; width: 100%; }
         .fn-seg-optadd:hover { border-color: var(--accent); color: var(--accent); }
 
-        .macro-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border-dim); background: var(--surface); flex-shrink: 0; }
+        .macro-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; row-gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border-dim); background: var(--surface); flex-shrink: 0; }
         .macro-select { position: relative; display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 4px 8px; outline: none; font-family: inherit; cursor: pointer; min-width: 120px; }
         .macro-select:hover { border-color: var(--border); }
         .macro-select:focus, .macro-select.open { border-color: var(--accent); }
@@ -765,6 +781,9 @@
         .macro-select-item { padding: 5px 10px; font-size: 11px; color: var(--text2); white-space: nowrap; cursor: pointer; transition: background 0.12s, color 0.12s; }
         .macro-select-item:hover { background: var(--hover); color: var(--text); }
         .macro-select-item.active { color: var(--accent); }
+        /* Placeholder row when no macros exist yet — not a real choice. */
+        .macro-select-empty { color: var(--text3); cursor: default; font-style: italic; }
+        .macro-select-empty:hover { background: transparent; color: var(--text3); }
         .macro-select-menu::-webkit-scrollbar { width: 4px; }
         .macro-select-menu::-webkit-scrollbar-track { background: transparent; }
         .macro-select-menu::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
@@ -777,6 +796,12 @@
         /* Buttons keep their .macro-toolbar-btn identity but lay out full-width,
            left-aligned, as menu rows. */
         .macro-overflow-menu .macro-toolbar-btn { justify-content: flex-start; width: 100%; gap: 7px; }
+        /* Record + its settings "⋯" share one menu row: Record grows, the
+           settings button stays a fixed square on the right. */
+        .macro-record-row { display: flex; width: 100%; gap: 4px; }
+        .macro-record-row .macro-toolbar-btn { width: auto; }
+        .macro-record-row > .macro-toolbar-btn:first-child { flex: 1; }
+        .macro-record-settings-btn { flex: 0 0 auto; justify-content: center; padding: 4px 9px; font-size: 14px; line-height: 1; }
         /* Menu items are icon + label as one row: the icon is a fixed size and
            the label sits next to it, so every entry reads the same way. */
         .macro-overflow-menu .macro-toolbar-btn .icon { width: 13px; height: 13px; opacity: 0.85; }
@@ -800,7 +825,10 @@
         .macro-test-toast.error-toast { border-color: var(--error-state); color: var(--error-text); white-space: normal; max-width: 500px; }
         .macro-test-toast.success-toast { border-color: var(--success-state); color: var(--success-text); }
         .macro-toolbar-spacer { flex: 1; }
-        .macro-name-input { background: transparent; border: 1px solid transparent; border-radius: var(--radius); color: var(--accent-hi); font-size: 12px; font-weight: 700; padding: 3px 6px; outline: none; width: 140px; font-family: inherit; user-select: text; -webkit-user-select: text; }
+        /* Right-side action cluster: pinned right, stays grouped, wraps as a unit. */
+        .macro-toolbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
+        .macro-name-input { background: transparent; border: 1px solid transparent; border-radius: var(--radius); color: var(--text); font-size: 12px; font-weight: 700; padding: 3px 6px; outline: none; flex: 1 1 120px; min-width: 90px; max-width: 200px; font-family: inherit; user-select: text; -webkit-user-select: text; }
+        .macro-name-input::placeholder { color: var(--text2); opacity: 0.55; }
         .macro-name-input:hover { border-color: var(--border-dim); }
         .macro-name-input:focus { border-color: var(--accent); background: var(--surface2); }
 
@@ -817,6 +845,17 @@
         /* ── Binds list ──────────────────────────────────────────────────── */
         .binds-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
         .binds-empty { padding: 20px 14px; font-size: 12px; color: var(--text3); text-align: center; }
+        /* Pack Info (ms.macroMeta) editor — sits above the bind list. */
+        .macro-meta-section { flex-shrink: 0; }
+        .macro-meta-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+        .meta-field { display: flex; align-items: center; gap: 10px; }
+        .meta-field-label { flex: 0 0 64px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
+        .meta-input { flex: 1; min-width: 0; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); -webkit-text-fill-color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; user-select: text; -webkit-user-select: text; }
+        .meta-input::placeholder { color: var(--text3); opacity: 0.55; -webkit-text-fill-color: var(--text3); }
+        .meta-input:focus { border-color: var(--accent); }
+        .macro-meta-save-row { display: flex; justify-content: flex-end; margin-top: 2px; }
+        .meta-save-btn { cursor: pointer; }
+        .meta-save-btn:disabled { cursor: default; }
         /* Bind rows live inside the shared .section-body card, so they follow
            the settings row metrics rather than the tighter list metrics they
            had when the tab was one flat scroll. */
@@ -847,6 +886,11 @@
         .macros-main { flex: 1; display: flex; flex-direction: row; overflow: hidden; position: relative; }
         .macros-tool-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }
         .macros-tool-area .tool-canvas { flex: 1; }
+        /* The scrolling container for the module list (see panel-macros.js). */
+        .macros-canvas-scroll::-webkit-scrollbar { width: 4px; }
+        .macros-canvas-scroll::-webkit-scrollbar-track { background: transparent; }
+        .macros-canvas-scroll::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
+        .macros-canvas-scroll::-webkit-scrollbar-thumb:hover { background: var(--border); }
         .macros-add-tool-btn { position: absolute; bottom: 14px; right: 14px; display: flex; align-items: center; gap: 5px; background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius); font-size: 11px; font-weight: 700; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; text-transform: uppercase; letter-spacing: 0.5px; z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
         .macros-add-tool-btn:hover { opacity: 0.85; }
         .macros-add-tool-btn svg { width: 12px; height: 12px; }
@@ -856,19 +900,40 @@
 
         /* ── Step Canvas ─────────────────────────────────────────────── */
         .tool-canvas { display: flex; flex-direction: column; gap: 2px; padding: 8px; min-height: 100%; overflow-y: auto; position: relative; }
+        /* Dragging a module from the picker over the canvas. */
+        .tool-canvas.fn-drop-target { box-shadow: inset 0 0 0 2px var(--accent); border-radius: var(--radius); background: var(--accent-glow-faint); }
         .tool-canvas::-webkit-scrollbar { width: 4px; }
         .tool-canvas::-webkit-scrollbar-track { background: transparent; }
         .tool-canvas::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
         .tool-canvas::-webkit-scrollbar-thumb:hover { background: var(--border); }
         .tool-canvas-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text3); font-size: 11px; padding: 40px 20px; text-align: center; gap: 6px; user-select: none; }
         .tool-canvas-empty-icon { font-size: 28px; opacity: 0.25; }
-        .tool-block { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--surface); border: 1px solid var(--border-dim); border-radius: var(--radius); cursor: default; transition: background 0.1s, border-color 0.15s, box-shadow 0.15s; position: relative; user-select: none; min-height: 32px; }
+        /* -webkit-user-drag:element re-enables native HTML5 drag under the
+           shell's global `-webkit-user-select:none`, which otherwise silently
+           kills `draggable` in WebKit — the reason blocks couldn't be dragged. */
+        .tool-block { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--surface); border: 1px solid var(--border-dim); border-radius: var(--radius); cursor: default; transition: background 0.1s, border-color 0.15s, box-shadow 0.15s; position: relative; user-select: none; min-height: 32px; -webkit-user-drag: element; }
+        /* Same quirk for the draggable picker entries (module rows). */
+        .fn-entry[draggable="true"] { -webkit-user-drag: element; }
         .tool-block:hover { background: var(--surface2); border-color: var(--border); }
         .tool-block.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow-faint); }
         .tool-block.drag-over-above::before { content: ''; position: absolute; top: -3px; left: 4px; right: 4px; height: 2px; background: var(--accent); border-radius: 1px; z-index: 10; }
         .tool-block.drag-over-below::after { content: ''; position: absolute; bottom: -3px; left: 4px; right: 4px; height: 2px; background: var(--accent); border-radius: 1px; z-index: 10; }
         .tool-block.drag-over-nest { border-color: var(--accent); background: var(--accent-glow-faint); }
         .tool-block.dragging { opacity: 0.4; }
+        /* A setting block references a shared tool rather than running code, so
+           it reads with an accent-tinted, dashed edge to set it apart from
+           action modules. */
+        .tool-block-setting { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 55%, var(--border-dim)); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+        .tool-block-setting .tool-icon { color: var(--accent); }
+        .tool-block-setting .tool-params { font-family: var(--font-mono); opacity: 0.85; }
+        /* Fill (not just border) on a selected block so a multi-selection reads
+           as one contiguous highlighted run, the way selected text does. */
+        .tool-block.selected { background: var(--accent-glow-faint); }
+        /* Count badge on the drag ghost when several modules travel together. */
+        .tool-drag-badge { position: absolute; top: -8px; right: -8px; min-width: 18px; height: 18px;
+            padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--bg, #10141c);
+            font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,.4); }
         .tool-drag-handle { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: grab; opacity: 0.35; transition: opacity 0.15s; }
         .tool-drag-handle:hover { opacity: 0.8; }
         .tool-drag-handle:active { cursor: grabbing; }
@@ -988,6 +1053,20 @@
         }
         .panel-console .danger-ack:hover { opacity: 0.85; }
 
+        /* Themed tooltip — replaces native `title` bubbles, which render on a
+           lower window level than the shell webview and so hide behind it. */
+        .ms-tooltip {
+            position: fixed; z-index: 100000; max-width: 260px;
+            padding: 5px 9px; font-size: 11px; line-height: 1.35;
+            color: var(--text); background: var(--surface2);
+            border: 1px solid var(--border); border-radius: var(--radius);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            pointer-events: none; white-space: normal;
+            opacity: 0; transform: translateY(2px);
+            transition: opacity 0.1s ease, transform 0.1s ease;
+        }
+        .ms-tooltip.show { opacity: 1; transform: translateY(0); }
+
     </style>
     <!-- Before tool-editor.js: its param rows call createSelect(). -->
     <script src="./modules/ui-select.js"></script>
@@ -1010,6 +1089,7 @@
         <div id="rail-drag" title="Drag to move window"><span class="grip"><span></span><span></span><span></span></span></div>
         <button class="rail-item active" data-panel="macros"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></span> Macros</button>
         <button class="rail-item" data-panel="tools"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span> Tools</button>
+        <button class="rail-item" data-panel="plugins"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="8" rx="1"/><path d="M10 8V5c0-.6-.4-1-1-1H6a1 1 0 0 0-1 1v3"/><path d="M19 8V5c0-.6-.4-1-1-1h-3a1 1 0 0 0-1 1v3"/></svg></span> Plugins</button>
         <button class="rail-item" data-panel="theme"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg></span> Theme</button>
         <button class="rail-item" data-panel="console"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 7C2 4.23858 4.23858 2 7 2H17C19.7614 2 22 4.23858 22 7V17C22 19.7614 19.7614 22 17 22H7C4.23858 22 2 19.7614 2 17V7ZM7 4C5.34315 4 4 5.34315 4 7V17C4 18.6569 5.34315 20 7 20H17C18.6569 20 20 18.6569 20 17V7C20 5.34315 18.6569 4 17 4H7ZM7 17C7 16.4477 7.44772 16 8 16H16C16.5523 16 17 16.4477 17 17C17 17.5523 16.5523 18 16 18H8C7.44772 18 7 17.5523 7 17ZM8.70709 7.29288C8.31656 6.90236 7.6834 6.90238 7.29288 7.29291C6.90236 7.68344 6.90238 8.3166 7.29291 8.70712L9.58588 11L7.29291 13.2929C6.90238 13.6834 6.90236 14.3166 7.29288 14.7071C7.6834 15.0976 8.31656 15.0976 8.70709 14.7071L11.7072 11.7071C11.8948 11.5196 12.0001 11.2652 12.0001 11C12.0001 10.7348 11.8948 10.4804 11.7072 10.2929L8.70709 7.29288Z" fill="currentColor"/></svg></span> Console</button>
         <button class="rail-item" data-panel="watcher"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 22C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 18.7712 2 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M22 15C22 18.7712 22 19.6569 20.8284 20.8284C19.6569 22 17.7712 22 14 22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 2C17.7712 2 19.6569 2 20.8284 3.17157C22 4.34315 22 5.22876 22 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10 2C6.22876 2 4.34315 2 3.17157 3.17157C2 4.34315 2 5.22876 2 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M5.89243 14.0598C5.29748 13.3697 5 13.0246 5 12C5 10.9754 5.29747 10.6303 5.89242 9.94021C7.08037 8.56222 9.07268 7 12 7C14.9273 7 16.9196 8.56222 18.1076 9.94021C18.7025 10.6303 19 10.9754 19 12C19 13.0246 18.7025 13.3697 18.1076 14.0598C16.9196 15.4378 14.9273 17 12 17C9.07268 17 7.08038 15.4378 5.89243 14.0598Z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/></svg></span> Watcher</button>
@@ -1018,7 +1098,7 @@
         <div class="rail-spacer"></div>
         <div class="rail-bottom-row">
         <button class="rail-item rail-icon-only" data-panel="settings"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M13.7654 2.15224C13.3978 2 12.9319 2 12 2C11.0681 2 10.6022 2 10.2346 2.15224C9.74457 2.35523 9.35522 2.74458 9.15223 3.23463C9.05957 3.45834 9.0233 3.7185 9.00911 4.09799C8.98826 4.65568 8.70226 5.17189 8.21894 5.45093C7.73564 5.72996 7.14559 5.71954 6.65219 5.45876C6.31645 5.2813 6.07301 5.18262 5.83294 5.15102C5.30704 5.08178 4.77518 5.22429 4.35436 5.5472C4.03874 5.78938 3.80577 6.1929 3.33983 6.99993C2.87389 7.80697 2.64092 8.21048 2.58899 8.60491C2.51976 9.1308 2.66227 9.66266 2.98518 10.0835C3.13256 10.2756 3.3397 10.437 3.66119 10.639C4.1338 10.936 4.43789 11.4419 4.43786 12C4.43783 12.5581 4.13375 13.0639 3.66118 13.3608C3.33965 13.5629 3.13248 13.7244 2.98508 13.9165C2.66217 14.3373 2.51966 14.8691 2.5889 15.395C2.64082 15.7894 2.87379 16.193 3.33973 17C3.80568 17.807 4.03865 18.2106 4.35426 18.4527C4.77508 18.7756 5.30694 18.9181 5.83284 18.8489C6.07289 18.8173 6.31632 18.7186 6.65204 18.5412C7.14547 18.2804 7.73556 18.27 8.2189 18.549C8.70224 18.8281 8.98826 19.3443 9.00911 19.9021C9.02331 20.2815 9.05957 20.5417 9.15223 20.7654C9.35522 21.2554 9.74457 21.6448 10.2346 21.8478C10.6022 22 11.0681 22 12 22C12.9319 22 13.3978 22 13.7654 21.8478C14.2554 21.6448 14.6448 21.2554 14.8477 20.7654C14.9404 20.5417 14.9767 20.2815 14.9909 19.902C15.0117 19.3443 15.2977 18.8281 15.781 18.549C16.2643 18.2699 16.8544 18.2804 17.3479 18.5412C17.6836 18.7186 17.927 18.8172 18.167 18.8488C18.6929 18.9181 19.2248 18.7756 19.6456 18.4527C19.9612 18.2105 20.1942 17.807 20.6601 16.9999C21.1261 16.1929 21.3591 15.7894 21.411 15.395C21.4802 14.8691 21.3377 14.3372 21.0148 13.9164C20.8674 13.7243 20.6602 13.5628 20.3387 13.3608C19.8662 13.0639 19.5621 12.558 19.5621 11.9999C19.5621 11.4418 19.8662 10.9361 20.3387 10.6392C20.6603 10.4371 20.8675 10.2757 21.0149 10.0835C21.3378 9.66273 21.4803 9.13087 21.4111 8.60497C21.3592 8.21055 21.1262 7.80703 20.6602 7C20.1943 6.19297 19.9613 5.78945 19.6457 5.54727C19.2249 5.22436 18.693 5.08185 18.1671 5.15109C17.9271 5.18269 17.6837 5.28136 17.348 5.45883C16.8545 5.71963 16.2644 5.73004 15.7811 5.451C15.2977 5.17196 15.0117 4.65574 14.9909 4.09799C14.9767 3.7185 14.9404 3.45835 14.8477 3.23463C14.6448 2.74458 14.2554 2.35523 13.7654 2.15224Z"/></svg></span></button>
-        <button class="rail-item rail-icon-only" data-panel="plugins"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="8" rx="1"/><path d="M10 8V5c0-.6-.4-1-1-1H6a1 1 0 0 0-1 1v3"/><path d="M19 8V5c0-.6-.4-1-1-1h-3a1 1 0 0 0-1 1v3"/></svg></span></button>
+        <button class="rail-item rail-icon-only" data-panel="browse"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></span></button>
         <button class="rail-item rail-icon-only" data-panel="profiles"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 21a8 8 0 0 1 10.821-7.487"/><path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><circle cx="10" cy="8" r="5"/></svg></span></button>
         </div>
         <span id="rail-version" style="padding: 1px 12px 3px; font-size: 10px; color: var(--text3); opacity: 0.5; text-align: center;"></span>
@@ -1518,6 +1598,20 @@
             <div id="share-scroll" class="tsec-scroll"></div>
         </div>
 </div>
+<div class="panel-browse" style="display:none">
+        <div id="header">
+            <span id="panel-title">mudscript — browse</span>
+            <div class="header-btns">
+                <button
+                    class="btn-close"
+                    onmouseenter="playSlot('hover')"
+                    onclick="                        shellDispatch('_shell', 'close');
+                    "
+                ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            </div>
+        </div>
+        <div id="browse-root" class="psec-scroll"></div>
+</div>
 <div class="panel-plugins" style="display:none">
         <div id="header">
             <span id="panel-title">mudscript — plugins</span>
@@ -1814,6 +1908,34 @@
         shellDispatch(panel, action, body);
     };
 
+    // Diagnostic: surface JS errors to the Hammerspoon console. Panel init and
+    // button handlers run inside the webview, whose console is invisible from
+    // Lua, so a throw here (e.g. during a panel's IIFE) silently kills every
+    // handler wired after it — the failure looks like "nothing happens." Route
+    // uncaught errors and rejected promises to Lua so they print alongside the
+    // rest of the log. Posts directly (not via shellDispatch) so it still works
+    // if the error fires before the rest of the API is ready.
+    function _postJsError(kind, msg, src, line, col, stack) {
+        try {
+            window.webkit.messageHandlers.msShell.postMessage(
+                JSON.stringify({ panel: "_shell", action: "jsError", body: {
+                    kind: kind, msg: String(msg == null ? "" : msg),
+                    src: src || "", line: line || 0, col: col || 0,
+                    stack: stack ? String(stack) : ""
+                } })
+            );
+        } catch(e) {}
+    }
+    window.addEventListener("error", function(e) {
+        _postJsError("error", e && e.message, e && e.filename,
+            e && e.lineno, e && e.colno, e && e.error && e.error.stack);
+    });
+    window.addEventListener("unhandledrejection", function(e) {
+        var r = e && e.reason;
+        _postJsError("unhandledrejection", r && (r.message || r),
+            "", 0, 0, r && r.stack);
+    });
+
     var _panelHandlers = {};
     window.registerPanel = function(name, handler) {
         _panelHandlers[name] = handler;
@@ -2074,10 +2196,82 @@
     <!-- ═══ Panel: plugins ═══════════════════════════════════════════════════ -->
     <!-- After panel-settings.js for the same reason panel-theme.js is. -->
     <script src="./modules/panel-plugins.js"></script>
+    <script src="./modules/panel-browse.js"></script>
 
 
     <!-- ═══ Panel: macros ═══════════════════════════════════════════════════════ -->
     <script src="./modules/panel-macros.js"></script>
+
+    <!-- ═══ Global themed tooltips ══════════════════════════════════════════════ -->
+    <script>
+    // Native `title` tooltips render in an OS window that sits below the shell
+    // webview's window level, so they're invisible until they happen to spill
+    // past the shell's right edge. This replaces them with an in-webview bubble.
+    //
+    // Strategy: on first hover of any element carrying a `title`, move the text
+    // into `data-tip` and drop the `title`. mouseover fires the instant the
+    // pointer enters, well before the OS ~1s tooltip timer, so the native bubble
+    // never appears. Dynamic `.title =` writes are picked up on the next hover.
+    (function() {
+        var tip = document.createElement("div");
+        tip.className = "ms-tooltip";
+        tip.setAttribute("role", "tooltip");
+        document.body.appendChild(tip);
+
+        var current = null, showTimer = null;
+
+        function textFor(el) {
+            if (el.hasAttribute("title")) {
+                el.setAttribute("data-tip", el.getAttribute("title"));
+                el.removeAttribute("title");
+            }
+            return el.getAttribute("data-tip") || "";
+        }
+        function hide() {
+            if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+            current = null;
+            tip.classList.remove("show");
+        }
+        function place(el) {
+            var r = el.getBoundingClientRect();
+            var tw = tip.offsetWidth, th = tip.offsetHeight;
+            var gap = 6, edge = 8;
+            var x = r.left + r.width / 2 - tw / 2;
+            var y = r.bottom + gap;                          // below by default
+            if (y + th + edge > window.innerHeight) y = r.top - th - gap; // flip up
+            x = Math.max(edge, Math.min(x, window.innerWidth - tw - edge));
+            y = Math.max(edge, Math.min(y, window.innerHeight - th - edge));
+            tip.style.left = Math.round(x) + "px";
+            tip.style.top = Math.round(y) + "px";
+        }
+
+        document.addEventListener("mouseover", function(e) {
+            var el = e.target && e.target.closest
+                ? e.target.closest("[title],[data-tip]") : null;
+            if (!el) return;
+            var txt = textFor(el);
+            if (!txt || current === el) return;
+            current = el;
+            if (showTimer) clearTimeout(showTimer);
+            showTimer = setTimeout(function() {
+                if (current !== el || !document.body.contains(el)) return;
+                tip.textContent = txt;
+                tip.classList.add("show");
+                place(el);
+            }, 350);
+        });
+        document.addEventListener("mouseout", function(e) {
+            if (!current) return;
+            var el = e.target && e.target.closest
+                ? e.target.closest("[title],[data-tip]") : null;
+            if (el === current) hide();
+        });
+        // Any interaction or layout shift dismisses the current bubble.
+        document.addEventListener("mousedown", hide, true);
+        window.addEventListener("scroll", hide, true);
+        window.addEventListener("blur", hide);
+    })();
+    </script>
 
 </div><!-- /shell-root -->
 </body>

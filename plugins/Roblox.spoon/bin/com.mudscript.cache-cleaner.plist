@@ -5,9 +5,10 @@
     com.mudscript.cache-cleaner.plist — periodic Roblox cache cleanup
     -----------------------------------------------------------------
     DO NOT edit this template directly.
-    Run  bin/install_guardian_agent.sh  to expand placeholders and install.
+    The Roblox mudscript plugin expands the placeholder and loads/unloads this
+    agent from its "Roblox Cache Cleaner" toggle.
 
-    Placeholders replaced by the install script:
+    Placeholders replaced by the plugin:
         %%AGENT_PATH%%   absolute path to clean_roblox_cache.sh
 -->
 <plist version="1.0">

@@ -206,7 +206,6 @@ return function(ms)
             if data.updateChannel == "testing" or data.updateChannel == "stable" then
                 ms._updateChannel = data.updateChannel
             end
-            if data.cacheCleanerEnabled ~= nil then ms._cacheCleanerEnabled = (data.cacheCleanerEnabled == true) end
             if data.octaneMode ~= nil then ms._octaneMode = (data.octaneMode == true) end
             if data.octaneMuteSounds ~= nil then ms._octaneMuteSounds = (data.octaneMuteSounds == true) end
             if data.swallowHotkeys ~= nil then ms._swallowHotkeys = (data.swallowHotkeys == true) end
@@ -370,7 +369,6 @@ return function(ms)
                 devArchiveLimit  = ms._devArchiveLimit or 15,
                 updateChannel    = ms._updateChannel or "stable",
                 testingSource    = ms._testingSource or "release",
-                cacheCleanerEnabled = ms._cacheCleanerEnabled or false,
                 octaneMode         = ms._octaneMode or false,
                 octaneMuteSounds   = ms._octaneMuteSounds or false,
                 swallowHotkeys     = ms._swallowHotkeys or false,
@@ -2007,9 +2005,6 @@ return function(ms)
                 return ms.integrity ~= nil
                     and ms.integrity.check() == "trusted"
 
-            elseif feature == "hidinject" then
-                return hs.fs.attributes(home .. "/.local/bin/hidinject") ~= nil
-
             end
             return false
         end
@@ -2435,18 +2430,18 @@ return function(ms)
                 os.getenv("HOME") .. "/Downloads/",
                 true, false, false
             )
-            local roblox = hs.application.get(ms._targetApp or "Roblox")
+            local target = hs.application.get(ms._targetApp)
             local selectedPath
             for _, v in pairs(result or {}) do
                 if type(v) == "string" then selectedPath = v; break end
             end
             if not selectedPath then
-                if roblox then pcall(function() roblox:activate() end) end
+                if target then pcall(function() target:activate() end) end
                 return
             end
             local meta = readMacroMeta(selectedPath)
             if not meta or not meta.name or meta.name == "" then
-                if roblox then pcall(function() roblox:activate() end) end
+                if target then pcall(function() target:activate() end) end
                 ms.alert("Could not read profile name.\nMake sure the file has ms.macroMeta = { name = \"...\" }.", 6)
                 return
             end
@@ -2456,20 +2451,20 @@ return function(ms)
             local function _commit()
                 hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
                 if not hs.fs.attributes(profilesPath .. folderName) then
-                    if roblox then pcall(function() roblox:activate() end) end
+                    if target then pcall(function() target:activate() end) end
                     ms.alert("Could not create profile folder.", 3)
                     return
                 end
                 local f = io.open(selectedPath, "rb")
                 if not f then
-                    if roblox then pcall(function() roblox:activate() end) end
+                    if target then pcall(function() target:activate() end) end
                     ms.alert("Could not read the selected file.", 3)
                     return
                 end
                 local content = f:read("*all"); f:close()
                 local auditErrs = auditMacros(content)
                 if #auditErrs > 0 then
-                    if roblox then pcall(function() roblox:activate() end) end
+                    if target then pcall(function() target:activate() end) end
                     ms.alert("Import rejected \xe2\x80\x94 security scan failed:\n  \xe2\x80\xa2 "
                         .. table.concat(auditErrs, "\n  \xe2\x80\xa2 "), 8)
                     return
@@ -2486,14 +2481,14 @@ return function(ms)
                     copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
                 end
                 if not copied then
-                    if roblox then pcall(function() roblox:activate() end) end
+                    if target then pcall(function() target:activate() end) end
                     ms.alert("Could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if importing from outside ~/.hammerspoon.", 5)
                     return
                 end
                 ms.playSlot("update")
                 ms._profilesDirty = true
                 ms.ui.refresh()
-                if roblox then pcall(function() roblox:activate() end) end
+                if target then pcall(function() target:activate() end) end
                 hs.timer.doAfter(0.2, function()
                     ms.alert("Profile \"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles.", 5, true)
                 end)
@@ -2509,7 +2504,7 @@ return function(ms)
                     if r.confirmed then
                         _commit()
                     else
-                        if roblox then pcall(function() roblox:activate() end) end
+                        if target then pcall(function() target:activate() end) end
                     end
                 end)
             else
@@ -2753,13 +2748,13 @@ return function(ms)
                 os.getenv("HOME") .. "/Downloads/",
                 true, false, false, { "mspkg", "zip" }
             )
-            local roblox = hs.application.get(ms._targetApp or "Roblox")
+            local target = hs.application.get(ms._targetApp)
             local selectedPath
             for _, v in pairs(result or {}) do
                 if type(v) == "string" then selectedPath = v; break end
             end
             if not selectedPath then
-                if roblox then pcall(function() roblox:activate() end) end
+                if target then pcall(function() target:activate() end) end
                 return
             end
             local sq = function(s) return "'" .. s:gsub("'", "'\\''" ) .. "'" end
@@ -2812,31 +2807,31 @@ return function(ms)
                         if hs.fs.attributes(themeSrc) then
                             hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
                         end
-                        if roblox then pcall(function() roblox:activate() end) end
+                        if target then pcall(function() target:activate() end) end
                         ms.alert("Imported settings as \"" .. zipName .. "\".\n(no macros in package)", 4)
                         os.execute("rm -rf " .. sq(tmpDir)); return
                     end
-                    if roblox then pcall(function() roblox:activate() end) end
+                    if target then pcall(function() target:activate() end) end
                     ms.alert("Import failed: package does not contain ms_macros.lua or ms_settings.json.", 5)
                     os.execute("rm -rf " .. sq(tmpDir)); return
                 end
             end
             local mf = io.open(macroSrc, "rb")
             if not mf then
-                if roblox then pcall(function() roblox:activate() end) end
+                if target then pcall(function() target:activate() end) end
                 ms.alert("Import failed: could not read ms_macros.lua from package.", 4)
                 os.execute("rm -rf " .. sq(tmpDir)); return
             end
             local content = mf:read("*all"); mf:close()
             local auditErrs = auditMacros(content)
             if #auditErrs > 0 then
-                if roblox then pcall(function() roblox:activate() end) end
+                if target then pcall(function() target:activate() end) end
                 ms.alert("Import rejected \xe2\x80\x94 security scan failed:\n  \xe2\x80\xa2 " .. table.concat(auditErrs, "\n  \xe2\x80\xa2 "), 8)
                 os.execute("rm -rf " .. sq(tmpDir)); return
             end
             local meta = readMacroMeta(macroSrc)
             if not meta or not meta.name or meta.name == "" then
-                if roblox then pcall(function() roblox:activate() end) end
+                if target then pcall(function() target:activate() end) end
                 ms.alert("Import failed: could not read profile name from ms_macros.lua.", 5)
                 os.execute("rm -rf " .. sq(tmpDir)); return
             end
@@ -2853,7 +2848,7 @@ return function(ms)
                     copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
                 end
                 if not copied then
-                    if roblox then pcall(function() roblox:activate() end) end
+                    if target then pcall(function() target:activate() end) end
                     ms.alert("Import failed: could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if needed.", 5)
                     os.execute("rm -rf " .. sq(tmpDir)); return
                 end
@@ -3070,7 +3065,7 @@ return function(ms)
                     end
                 end
                 os.execute("rm -rf " .. sq(tmpDir))
-                if roblox then pcall(function() roblox:activate() end) end
+                if target then pcall(function() target:activate() end) end
                 ms.playSlot("update")
                 hs.timer.doAfter(0.2, function()
                     local msg = "\"" .. meta.name .. "\" imported.\nSwitch to it from Settings \xe2\x86\x92 Profiles."
@@ -3101,7 +3096,7 @@ return function(ms)
                         _commit()
                     else
                         os.execute("rm -rf " .. sq(tmpDir))
-                        if roblox then pcall(function() roblox:activate() end) end
+                        if target then pcall(function() target:activate() end) end
                     end
                 end)
             else
@@ -4686,7 +4681,7 @@ return function(ms)
                 table.insert(sub, { title = "-" })
                 local displayBinds = {
                     {label = "Panic Button / Stop All",  bind = "Alt+F10"},
-                    {label = "Get Roblox Window Info",   bind = "Ctrl+Shift+R"},
+                    {label = "Get Target Window Info",   bind = "Ctrl+Shift+R"},
                     {label = "Quick Reload",              bind = "Alt+[→ Reload Options"},
                     {label = "Full Reload",               bind = "Alt+]→ Reload Options"},
                     {label = "Open Menu",                bind = "Alt+P"},
@@ -5187,9 +5182,9 @@ return function(ms)
             local function buildDeveloperSubmenu()
                 local _trusted = (ms.integrity.check() == "trusted")
                 return {
-                    { title = "Debug Roblox", fn = function()
+                    { title = "Debug Target Window", fn = function()
                         ms.playSlot("interact")
-                        ms.debugRoblox()
+                        ms.debugTarget()
                     end },
                     { title = "Edit Macros", fn = function()
                         ms.playSlot("interact")

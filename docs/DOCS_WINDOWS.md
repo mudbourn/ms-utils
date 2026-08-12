@@ -175,7 +175,7 @@ Sub-items work identically via `ms.isSub()` — see **Section 8**.
 
 ## 5. Keyboard — `ms.press`, `ms.release`, `ms.type`
 
-### `ms.press(key, mods [, hidinject])`
+### `ms.press(key, mods)`
 
 Sends a key-down event. Does not send key-up.
 
@@ -186,7 +186,7 @@ ms.press("space")
 ms.press("v", ["cmd"])    ; Ctrl+V down  (cmd maps to Ctrl)
 ```
 
-### `ms.release(key, mods [, hidinject])`
+### `ms.release(key, mods)`
 
 Sends a key-up event.
 
@@ -195,7 +195,7 @@ ms.release("w")
 ms.release("shift")
 ```
 
-### `ms.type(key, mods [, hidinject])`
+### `ms.type(key, mods)`
 
 Press + release in a single `SendInput` call. Use for single keystrokes.
 
@@ -205,8 +205,6 @@ ms.type("space")
 ms.type("escape")
 ms.type("v", ["cmd"])    ; Ctrl+V tap
 ```
-
-The `hidinject` parameter is accepted for API compatibility but has no effect on Windows — `SendInput` is used for all events.
 
 ### Key name translation
 
