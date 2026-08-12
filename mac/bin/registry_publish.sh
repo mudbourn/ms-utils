@@ -75,7 +75,13 @@ case "$PKG" in *.mspkg) ;; *) echo "ERROR: not a .mspkg file: $PKG"; exit 1 ;; e
 [ "$TRUST" = "trusted" ] || [ "$TRUST" = "community" ] \
     || { echo "ERROR: --trust must be 'trusted' or 'community'."; exit 1; }
 
-ASSET="$(basename "$PKG")"
+# GitHub rewrites spaces (and some other characters) in an uploaded asset's
+# name, which silently desyncs the download URL from the real asset — a URL
+# with a space 404s. Normalise the name ourselves so it is deterministic and
+# URL-safe: any run of characters outside [A-Za-z0-9._-] collapses to a dot.
+# The bytes (and therefore the sha256) are untouched; only the filename changes.
+ASSET_SRC="$(basename "$PKG")"
+ASSET="$(printf '%s' "$ASSET_SRC" | LC_ALL=C sed -E 's/[^A-Za-z0-9._-]+/./g')"
 
 # ── Read the manifest out of the package ─────────────────────────────────────
 MANIFEST="$(unzip -p "$PKG" mspkg.json 2>/dev/null || true)"
@@ -171,8 +177,18 @@ if [ "$DO_UPLOAD" = true ]; then
             --notes "Registry package binaries. Managed by registry_publish.sh." \
             >/dev/null
     fi
+    # gh uploads under the file's own basename, so when normalisation changed
+    # the name, stage a copy under the intended name rather than letting GitHub
+    # pick. Same bytes, predictable URL.
+    UP="$PKG"; STAGE=""
+    if [ "$ASSET" != "$ASSET_SRC" ]; then
+        STAGE="$(mktemp -d)"
+        cp "$PKG" "$STAGE/$ASSET"
+        UP="$STAGE/$ASSET"
+    fi
     echo "Uploading $ASSET to release '$TAG'…"
-    gh release upload "$TAG" "$PKG" --repo "$REPO" --clobber
+    gh release upload "$TAG" "$UP" --repo "$REPO" --clobber
+    [ -n "$STAGE" ] && rm -rf "$STAGE"
 else
     echo "Skipping upload (--no-upload). Assuming $ASSET_URL already exists."
 fi
