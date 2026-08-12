@@ -3,6 +3,7 @@
         name    = "Combat Warriors Macros",
         author  = "mudbourn",
         website = "https://mudbourn.info",
+        version = "1.0.0"
     }
 -- END Creator Credits --
 
