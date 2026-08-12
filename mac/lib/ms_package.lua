@@ -464,6 +464,52 @@ return function(ms)
         end
     -- END Verify --
 
+    -- Profile components --
+        -- A profile is a composition, and these rules are the single source of
+        -- truth for how it decomposes — used both to record the `components`
+        -- block at pack time and to cut a profile apart in split().
+        --
+        -- Sounds have a canonical, exclusive home in the `sound` package. The
+        -- `theme` may ALSO carry a copy when includeSoundsInTheme is set — the
+        -- same opt-in the standalone theme export offers — so "just the theme"
+        -- and "just the sounds" stay separately downloadable by default.
+        -- Macro-triggered audio (sounds/macro/) travels with the macros so a
+        -- macro pack is self-contained. Settings are profile-only: no
+        -- shareable sub-type, never emitted as a component package.
+        local PROFILE_COMPONENT_KINDS = { "theme", "sound", "macro" }
+
+        local function isAudioRel(rel)
+            return rel:sub(1, 14) == "sounds/active/"
+                or rel:sub(1, 13) == "sounds/macro/"
+                or rel == "sound_assign.json"
+        end
+
+        -- Returns { theme = {files={...}, includesSounds=bool}, sound = {files},
+        -- macro = {files}, settings = {files} }. Membership can overlap (audio
+        -- is in `sound` always and `theme` optionally) — each component is its
+        -- own package, so that is fine.
+        local function profileComponents(relPaths, includeSoundsInTheme)
+            local comp = {
+                theme    = { files = {}, includesSounds = includeSoundsInTheme and true or false },
+                sound    = { files = {} },
+                macro    = { files = {} },
+                settings = { files = {} },
+            }
+            local function add(t, r) t[#t + 1] = r end
+            for _, r in ipairs(relPaths) do
+                if r == "ms_theme.json" or r:sub(1, 9) == "ui/fonts/" then add(comp.theme.files, r) end
+                if includeSoundsInTheme and isAudioRel(r) then add(comp.theme.files, r) end
+                if isAudioRel(r) then add(comp.sound.files, r) end
+                if r == "ms_macros.lua" or r == "ms_macros_visual.json"
+                    or r:sub(1, 13) == "sounds/macro/" then add(comp.macro.files, r) end
+                if r == "ms_settings.json" or r == "ms_settings_default.json" then
+                    add(comp.settings.files, r)
+                end
+            end
+            return comp
+        end
+    -- END Profile components --
+
     -- Pack --
         -- opts = {
         --   type, name, version, author, website, description,
@@ -533,6 +579,24 @@ return function(ms)
                     or (hasJSON and "json" or "lua")
             end
 
+            -- Record the composition so the profile is self-describing: split
+            -- and (later) partial install read this map instead of re-deriving.
+            -- Only components actually present are listed. includeSoundsInTheme
+            -- defaults false — a clean split keeps theme (visuals) and sound
+            -- (audio) separate unless the author opts the audio into the theme.
+            if kind == "profile" then
+                local rels = {}
+                for rel in pairs(manifest.contents) do rels[#rels + 1] = rel end
+                local includeSounds = opts.includeSoundsInTheme
+                if includeSounds == nil then includeSounds = false end
+                local comp = profileComponents(rels, includeSounds)
+                manifest.components = {}
+                for _, k in ipairs(PROFILE_COMPONENT_KINDS) do
+                    if #comp[k].files > 0 then manifest.components[k] = comp[k] end
+                end
+                if #comp.settings.files > 0 then manifest.components.settings = comp.settings end
+            end
+
             if not writeFile(staging .. "/" .. MANIFEST_NAME, hs.json.encode(manifest)) then
                 rmrf(staging); return nil, "Could not write manifest."
             end
@@ -552,6 +616,83 @@ return function(ms)
             return manifest
         end
     -- END Pack --
+
+    -- Split --
+        -- Take a profile apart into its component packages. Each output is a
+        -- standalone typed .mspkg built by pack(), indistinguishable from one
+        -- authored directly, so it publishes and installs like any other.
+        --
+        -- File lists are always re-derived from the archive's real contents
+        -- (not trusted from a possibly-hand-edited manifest); the manifest's
+        -- recorded includeSoundsInTheme is used only as the default toggle. A
+        -- legacy profile with no components block therefore still splits.
+        --
+        -- opts = { includeSoundsInTheme = bool }  -- default: the profile's own
+        --         recorded preference, else false.
+        -- Returns { made = {{type,path,name}...}, skipped = {{type,why}...} }.
+        ms.package.split = function(path, outDir, opts)
+            opts = opts or {}
+            local manifest, err = ms.package.inspect(path)
+            if not manifest then return nil, err or "Unreadable package." end
+            if manifest.type ~= "profile" then
+                return nil, "Only a profile can be split (this is a " ..
+                    tostring(manifest.type) .. " package)."
+            end
+            if not outDir or outDir == "" then return nil, "No output folder." end
+            outDir = outDir:gsub("/$", "")
+
+            local includeSounds = opts.includeSoundsInTheme
+            if includeSounds == nil then
+                local tc = type(manifest.components) == "table" and manifest.components.theme
+                includeSounds = (type(tc) == "table" and tc.includesSounds) and true or false
+            end
+
+            local rels = ms.package.contents(path)
+            local comp = profileComponents(rels, includeSounds)
+
+            local staging = tempDir("split")
+            hs.execute("/usr/bin/unzip -qq -o " .. sq(path) .. " -d " .. sq(staging) .. " 2>/dev/null")
+
+            -- Base name for the outputs; drop a trailing "profile" so
+            -- "Combat Warriors profile" yields "Combat Warriors-theme.mspkg".
+            local base = manifest.name
+                or (path:match("([^/]+)%.mspkg$")) or "Profile"
+            base = base:gsub("%s+[Pp]rofile$", "")
+            local fileBase = base:gsub("[/\\%c]", ""):gsub("%s+$", "")
+            if fileBase == "" then fileBase = "Profile" end
+
+            local made, skipped = {}, {}
+            for _, kind in ipairs(PROFILE_COMPONENT_KINDS) do
+                local files, present = {}, {}
+                for _, rel in ipairs(comp[kind].files) do
+                    local abs = staging .. "/" .. rel
+                    if fileExists(abs) then files[rel] = abs; present[#present + 1] = rel end
+                end
+                if #present == 0 then
+                    -- This component simply is not in the profile; omit quietly.
+                elseif not requiredSatisfied(kind, present) then
+                    skipped[#skipped + 1] = { type = kind, why = "missing " ..
+                        table.concat((TYPE_SPECS[kind] or {}).required or {}, " or ") }
+                else
+                    local label = (TYPE_SPECS[kind] or {}).label or kind
+                    local out = outDir .. "/" .. fileBase .. "-" .. kind .. ".mspkg"
+                    local m, perr = ms.package.pack({
+                        type    = kind,
+                        name    = base .. " " .. label,
+                        version = manifest.version,
+                        author  = manifest.author,
+                        website = manifest.website,
+                        files   = files,
+                        out     = out,
+                    })
+                    if m then made[#made + 1] = { type = kind, path = out, name = base .. " " .. label }
+                    else skipped[#skipped + 1] = { type = kind, why = perr or "pack failed" } end
+                end
+            end
+            rmrf(staging)
+            return { made = made, skipped = skipped }
+        end
+    -- END Split --
 
     -- Install --
         -- Extracts a verified package into the live install. Every destination

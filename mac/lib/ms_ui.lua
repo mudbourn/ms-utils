@@ -1685,6 +1685,49 @@ return function(ms)
                 end)
             end,
 
+            -- Split a profile package into its component packages (theme /
+            -- sound / macro), each a standalone .mspkg the author can publish
+            -- separately. Pick the profile, pick a destination folder, done.
+            splitProfile = function()
+                if not (ms.package and ms.package.split) then return end
+                ms.playSlot("alert")
+                local pick = hs.dialog.chooseFileOrFolder(
+                    "Select a profile .mspkg to split into packages",
+                    os.getenv("HOME") .. "/Documents", true, false, false, { "mspkg" }
+                )
+                local path
+                for _, v in pairs(pick or {}) do if type(v) == "string" then path = v; break end end
+                if not path then ms.ui.show(); return end
+
+                local dest = hs.dialog.chooseFileOrFolder(
+                    "Choose where to save the component packages",
+                    os.getenv("HOME") .. "/Documents", false, true, false
+                )
+                local dir
+                for _, v in pairs(dest or {}) do if type(v) == "string" then dir = v; break end end
+                ms.ui.show()
+                if not dir then return end
+
+                local res, err = ms.package.split(path, dir)
+                hs.timer.doAfter(0.15, function()
+                    if not res then ms.alert("Split failed:\n" .. tostring(err), 5); return end
+                    local parts = {}
+                    for _, m in ipairs(res.made) do parts[#parts + 1] = m.type end
+                    if #parts == 0 then
+                        ms.alert("Nothing splittable in that profile.", 4); return
+                    end
+                    ms.playSlot("update")
+                    local msg = "Split into " .. #parts .. " package" ..
+                        (#parts > 1 and "s" or "") .. ": " .. table.concat(parts, ", ") .. "."
+                    if #res.skipped > 0 then
+                        local sk = {}
+                        for _, s in ipairs(res.skipped) do sk[#sk + 1] = s.type end
+                        msg = msg .. "\nSkipped: " .. table.concat(sk, ", ") .. "."
+                    end
+                    ms.alert(msg, 5, true)
+                end)
+            end,
+
             importPackage = function()
                 if not (ms.package and ms.package.install) then return end
                 ms.playSlot("alert")

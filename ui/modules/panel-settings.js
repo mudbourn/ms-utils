@@ -1228,6 +1228,9 @@
                         actionBtn("Export Profile", "", () =>
                             sendToHost({ action: "exportPackage", type: "profile" }),
                         ),
+                        actionBtn("Split Profile…", "", () =>
+                            sendToHost({ action: "splitProfile" }),
+                        ),
                     ),
                 );
                 // A profile carries everything; this is the narrow one — just
