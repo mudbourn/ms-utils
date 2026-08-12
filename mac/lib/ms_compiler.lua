@@ -620,7 +620,14 @@
                     return false
                 end
 
+                -- Handwritten credits win. The compiled chunk assigns
+                -- ms.macroMeta; if the handwritten pack already provided its own,
+                -- lock it so the sandbox's __newindex drops the visual write
+                -- (see ms_core). A pure-visual profile (no handwritten meta)
+                -- leaves the flag false, so its meta lands and stays editable.
+                ms._macroMetaLocked = ms._macroMetaFromHand == true
                 local ok, runErr = pcall(chunk)
+                ms._macroMetaLocked = false
                 if not ok then
                     print("ms.compiler.load: execution error: " .. tostring(runErr))
                     ms.alert("Visual macros runtime error — see console", 6)
@@ -824,6 +831,20 @@
             -- The visual pack's ms.macroMeta lives at data.meta in the JSON and
             -- is emitted verbatim into the compiled file's ms.macroMeta table.
             ms.compiler.getMeta = function()
+                -- When a handwritten ms_macros.lua supplied credits, it owns
+                -- them (its ms.macroMeta wins at load; the visual copy is inert).
+                -- Source the editor straight from the live handwritten meta and
+                -- flag it `owned` so the panel can show it read-only instead of
+                -- maintaining a second, clashing set the runtime ignores.
+                if ms._macroMetaFromHand and type(ms.macroMeta) == "table" then
+                    return {
+                        name    = ms.macroMeta.name    or "",
+                        version = ms.macroMeta.version or "",
+                        author  = ms.macroMeta.author  or "",
+                        website = ms.macroMeta.website or "",
+                        owned   = true,
+                    }
+                end
                 local f = io.open(jsonPath, "r")
                 if not f then return {} end
                 local raw = f:read("*all"); f:close()
@@ -836,11 +857,20 @@
                     version = data.meta.version or "",
                     author  = data.meta.author  or "",
                     website = data.meta.website or "",
+                    owned   = false,
                 }
             end
 
             ms.compiler.setMeta = function(meta)
                 assert(type(meta) == "table", "ms.compiler.setMeta: meta must be a table")
+
+                -- Handwritten meta wins and cannot be overridden from the visual
+                -- editor: writing here would be silently ignored at load, so
+                -- refuse rather than persist a value that never takes effect.
+                if ms._macroMetaFromHand then
+                    print("ms.compiler.setMeta: ignored — handwritten ms_macros.lua owns the pack credits")
+                    return false, "handwritten"
+                end
 
                 local data = { macros = {} }
                 local f = io.open(jsonPath, "r")

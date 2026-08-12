@@ -415,11 +415,8 @@
         .setting-builder-preview { min-height: 8px; margin: 2px 0; border-top: 1px dashed var(--border-dim); border-bottom: 1px dashed var(--border-dim); background: color-mix(in srgb, var(--accent) 5%, transparent); }
 
         /* ── Profiles panel ──────────────────────────────────────────────── */
-        /* Same strip again, scoped to .panel-profiles. */
-        .panel-profiles .ptabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        .panel-profiles .ptab { flex: 1; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text2); text-align: center; cursor: pointer; border: none; border-bottom: 2px solid transparent; background: none; transition: color 0.15s, border-color 0.15s; }
-        .panel-profiles .ptab:hover { color: var(--text); }
-        .panel-profiles .ptab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        /* Single view — no tab strip (Browse moved to its own stage). The
+           .ptab-section wrapper is kept as the flex container for the list. */
         .panel-profiles .ptab-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         .panel-profiles .ptab-section.active { display: flex; }
         .panel-profiles .psec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
@@ -859,6 +856,8 @@
         .meta-input { flex: 1; min-width: 0; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); -webkit-text-fill-color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; user-select: text; -webkit-user-select: text; }
         .meta-input::placeholder { color: var(--text3); opacity: 0.55; -webkit-text-fill-color: var(--text3); }
         .meta-input:focus { border-color: var(--accent); }
+        .meta-input-locked { opacity: 0.6; cursor: default; }
+        .meta-input-locked:focus { border-color: var(--border-dim); }
         .macro-meta-save-row { display: flex; justify-content: flex-end; margin-top: 2px; }
         .meta-save-btn { cursor: pointer; }
         .meta-save-btn:disabled { cursor: default; }
@@ -1644,15 +1643,8 @@
                 ><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
         </div>
-        <div class="ptabs">
-            <button class="ptab active" data-ptab="profiles" onmouseenter="playSlot('hover')" onclick="switchProfilesTab('profiles')">Profiles</button>
-            <button class="ptab" data-ptab="browse" onmouseenter="playSlot('hover')" onclick="switchProfilesTab('browse')">Browse</button>
-        </div>
         <div class="ptab-section active" data-psection="profiles">
             <div id="profiles-scroll" class="psec-scroll"></div>
-        </div>
-        <div class="ptab-section" data-psection="browse">
-            <div id="profiles-browse-scroll" class="psec-scroll"></div>
         </div>
 </div>
 <div class="panel-popped" style="display:none">

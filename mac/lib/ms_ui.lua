@@ -876,7 +876,13 @@ return function(ms)
 
                 -- Phase 2: Teardown + execute (source validated — safe to destroy)
                 ms.bind.teardown()
-                ms.registry       = { _defs = {}, _defList = {} }
+                -- Clear the bind registry in place — never reassign. ms.registry
+                -- is shared with the package client (ms.registry.list/refresh/
+                -- download, added by lib/ms_registry.lua), and a fresh table
+                -- would silently drop that API, leaving the Browse stage empty
+                -- after any reload. See the contract note in ms_registry.lua.
+                ms.registry._defs    = {}
+                ms.registry._defList = {}
                 ms.bind._wires    = {}
                 ms.bind._autoCount = 0
                 ms.macroMeta       = nil
@@ -907,6 +913,10 @@ return function(ms)
                     end)
                     return false
                 end
+                -- Same rule as boot: a handwritten pack that set credits owns
+                -- them; a later in-session visual save (compiler.load) will yield
+                -- its ms.macroMeta to this. See ms.compiler.load / ms_core.
+                ms._macroMetaFromHand = ms.macroMeta ~= nil
                 for _, id in ipairs(ms.registry._defList) do
                     local def = ms.registry._defs[id]
                     if def and not (def.default and def.default.type) and ms.binds[id] == nil then

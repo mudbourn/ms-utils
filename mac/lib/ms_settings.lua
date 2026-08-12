@@ -764,7 +764,12 @@ return function(ms)
 
         ms.reloadUI = function()
             ms.bind.teardown()
-            ms.registry       = { _defs = {}, _defList = {} }
+            -- Clear in place, never reassign: ms.registry also carries the
+            -- package client API (list/refresh/download from lib/ms_registry.lua).
+            -- A fresh table drops it and empties the Browse stage. See the
+            -- contract note in ms_registry.lua.
+            ms.registry._defs    = {}
+            ms.registry._defList = {}
             ms.bind._wires    = {}
             ms.bind._autoCount = 0
             ms.macroMeta       = nil

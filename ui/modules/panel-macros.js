@@ -2763,6 +2763,7 @@
        ms.macroMeta updates live. */
     var _metaLoaded  = false;   // suppress dirty-marking during programmatic fill
     var _metaDirty   = false;
+    var _metaOwned   = false;   // true when handwritten ms_macros.lua owns the meta
 
     function metaField(labelText, placeholder) {
         var wrap = document.createElement("label");
@@ -2849,8 +2850,9 @@
     bindsSection.insertBefore(metaCard, bindsScroll);
 
     function updateMetaSaveBtn() {
-        metaSaveBtn.disabled = !_metaDirty;
-        metaSaveBtn.style.opacity = _metaDirty ? "1" : "0.5";
+        var on = _metaDirty && !_metaOwned;
+        metaSaveBtn.disabled = !on;
+        metaSaveBtn.style.opacity = on ? "1" : "0.5";
     }
     updateMetaSaveBtn();
 
@@ -2867,6 +2869,19 @@
         _metaWebsite.input.value = meta.website || "";
         _metaLoaded = true;
         _metaDirty  = false;
+
+        // When a handwritten ms_macros.lua supplies credits it owns them: the
+        // visual copy is inert, so present these as read-only, sourced from the
+        // handwritten file rather than a second set the runtime ignores.
+        _metaOwned = meta.owned === true;
+        [_metaName, _metaVersion, _metaAuthor, _metaWebsite].forEach(function(f) {
+            f.input.readOnly = _metaOwned;
+            f.input.classList.toggle("meta-input-locked", _metaOwned);
+        });
+        metaDesc.textContent = _metaOwned
+            ? "Sourced from your handwritten ms_macros.lua (read-only)"
+            : "Credits baked into your visual macros (ms.macroMeta)";
+        metaSaveRow.style.display = _metaOwned ? "none" : "";
         updateMetaSaveBtn();
     }
 

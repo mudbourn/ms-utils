@@ -216,6 +216,7 @@
             background:var(--surface); color:var(--text);
             font-family:inherit; font-size:13px; outline:none; }
         .browse-search:focus { border-color:var(--accent); }
+        .browse-search::placeholder { color:var(--text3); opacity:1; }
         .browse-results { display:flex; flex-direction:column; gap:8px;
             padding:12px 14px; }
         .browse-card { border:1px solid var(--border-dim);

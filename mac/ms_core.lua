@@ -4775,6 +4775,17 @@
                     end,
                     __newindex = function(t, k, v)
                         if k == "macroMeta" then
+                            -- Handwritten ms_macros.lua owns the pack credits.
+                            -- The compiled visual pack (loaded afterward, in
+                            -- section 14a) also emits `ms.macroMeta = {...}`;
+                            -- when handwritten already set it, the visual write
+                            -- must yield rather than stomp the real name/author/
+                            -- version. ms.compiler.load raises _macroMetaLocked
+                            -- around the visual chunk (only when handwritten
+                            -- provided meta), so handwritten's own write — and a
+                            -- pure-visual profile with no handwritten meta —
+                            -- still lands. See [[mudscript-dual-macro-format]].
+                            if ms._macroMetaLocked then return end
                             rawset(ms, k, v)
                         else
                             error("ms_macros.lua: unauthorized write to ms." .. tostring(k)
@@ -4938,6 +4949,12 @@
                     error("ms_macros.lua: error during execution: " .. tostring(runErr))
                 end
 
+                -- Record whether the *handwritten* pack supplied credits. When it
+                -- did, the visual pack's own ms.macroMeta yields to it at load
+                -- (see ms.compiler.load). A profile with no handwritten meta
+                -- leaves this false, so the visual pack may still provide — and
+                -- keep updating — its own credits.
+                ms._macroMetaFromHand = ms.macroMeta ~= nil
                 if not ms.macroMeta then
                     print("Warning: ms_macros.lua did not set ms.macroMeta.")
                     hs.timer.doAfter(0.5, function()
