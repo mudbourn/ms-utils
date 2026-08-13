@@ -752,11 +752,39 @@ return function(ms)
             local staging  = tempDir("install")
             hs.execute("/usr/bin/unzip -qq -o " .. sq(path) .. " -d " .. sq(staging) .. " 2>/dev/null")
 
+            -- Optional component slice: install only one slice of a profile
+            -- (theme / sound / macro) instead of the whole thing, read from the
+            -- manifest's `components` map. The package is still verified whole
+            -- above — trust, hashes and path rules all apply to the profile —
+            -- so slicing only narrows which of its files land on disk. This is
+            -- how one uploaded profile serves four install choices without any
+            -- duplicated bytes. See [[saved-profiles-config-only-snapshot]].
+            local sliceSet = nil
+            if opts.component and type(manifest.components) == "table" then
+                sliceSet = {}
+                local c = manifest.components[opts.component]
+                if type(c) == "table" and type(c.files) == "table" then
+                    for _, rel in ipairs(c.files) do sliceSet[rel] = true end
+                end
+                -- The theme's optional bonus: also pull the profile's audio
+                -- (the sound component's files) when the user opts in.
+                if opts.component == "theme" and opts.includeSounds
+                   and type(manifest.components.sound) == "table"
+                   and type(manifest.components.sound.files) == "table" then
+                    for _, rel in ipairs(manifest.components.sound.files) do sliceSet[rel] = true end
+                end
+                if next(sliceSet) == nil then
+                    rmrf(staging)
+                    return nil, "This profile has no \"" .. tostring(opts.component) .. "\" component."
+                end
+            end
+
             local installed, failed = {}, {}
 
             for _, rel in ipairs(ms.package.contents(path)) do
                 local clean = safeRelPath(rel)
-                if clean and (manifest.legacy or pathAllowed(manifest.type, clean)) then
+                if clean and (not sliceSet or sliceSet[clean])
+                   and (manifest.legacy or pathAllowed(manifest.type, clean)) then
                     -- data/ files live under data/; everything else mirrors the install root.
                     local dest
                     if clean:find("^ms_") and clean:find("%.json$") then
@@ -785,7 +813,9 @@ return function(ms)
             if #installed == 0 then return nil, "Nothing could be installed." end
 
             -- A macro package shipping JSON needs compiling before it can bind.
-            if manifest.type == "macro" and ms.compiler and ms.compiler.compile then
+            -- Keyed on what was actually installed, not manifest.type, so a
+            -- macro slice of a profile (manifest.type == "profile") compiles too.
+            if ms.compiler and ms.compiler.compile then
                 for _, rel in ipairs(installed) do
                     if rel == "ms_macros_visual.json" then
                         pcall(function() ms.compiler.compile() end)

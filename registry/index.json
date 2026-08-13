@@ -12,6 +12,13 @@
       "sha256": "9dacfaf15af1329726b7afb7c9745dce720551e53648f5bb8659233c4bb5723e",
       "url": "https://github.com/mudbourn/ms-utils/releases/download/packages/Combat.Warriors.Macros-profile.mspkg",
       "size": 3688748,
+      "components": {
+        "theme": {
+          "includesSounds": false
+        },
+        "sound": {},
+        "macro": {}
+      },
       "trust": "trusted"
     }
   ],

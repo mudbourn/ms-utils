@@ -1826,6 +1826,7 @@ return function(ms)
                             description = e.description,
                             website     = e.website,
                             trust       = e.trust,
+                            components  = e.components,
                         }
                     end
                     local ok, json = pcall(hs.json.encode, { entries = out })
@@ -1859,7 +1860,15 @@ return function(ms)
                         ms.alert("Download failed:\n" .. tostring(derr), 5)
                         return
                     end
-                    local result, err = ms.package.install(path)
+                    -- trustLookup lets install resolve the signed-index trust so
+                    -- a registry package clears without the unsigned-import
+                    -- prompt. component (nil = whole profile) installs just one
+                    -- slice of a profile; includeSounds is the theme's bonus.
+                    local result, err = ms.package.install(path, {
+                        trustLookup   = ms.registry.trustLookup,
+                        component     = (data.component ~= "" and data.component) or nil,
+                        includeSounds = data.includeSounds == true,
+                    })
                     hs.timer.doAfter(0.15, function()
                         if not result then
                             ms.alert("Install failed:\n" .. tostring(err), 5)

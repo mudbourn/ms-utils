@@ -101,6 +101,23 @@ MANIFEST_ID="$(field id)"
 [ -n "$TYPE" ] || { echo "ERROR: manifest has no type."; exit 1; }
 [ -n "$NAME" ] || NAME="$ASSET"
 
+# ── Component summary (profiles only) ────────────────────────────────────────
+# A profile carries a `components` map (theme / sound / macro slices). Surface a
+# LIGHTWEIGHT summary in the index row — which shareable slices exist, plus the
+# theme's optional-sounds flag — so Browse can offer the install choices without
+# downloading first. The authoritative file map stays inside the package
+# manifest, which the client reads when it actually installs a slice.
+COMPONENTS="$(printf '%s' "$MANIFEST" | jq -c '
+    (.components // {}) as $c
+    | reduce (["theme","sound","macro"][]) as $k ({};
+        if $c[$k] != null then
+            .[$k] = (if $k == "theme"
+                     then {includesSounds: (($c.theme.includesSounds) == true)}
+                     else {} end)
+        else . end)
+' 2>/dev/null || echo '{}')"
+[ -n "$COMPONENTS" ] || COMPONENTS='{}'
+
 # ── id: manifest.id, else --id, else a slug of type-name ─────────────────────
 slug() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'; }
 if [ -z "$ID" ]; then
@@ -130,7 +147,7 @@ ENTRY="$(jq -n \
     --arg id "$ID" --arg type "$TYPE" --arg name "$NAME" --arg version "$VERSION" \
     --arg author "$AUTHOR" --arg description "$DESCRIPTION" --arg website "$WEBSITE" \
     --arg sha256 "$SHA" --arg url "$ASSET_URL" --argjson size "$SIZE" \
-    --arg requires "$REQUIRES" --arg trust "$TRUST" '
+    --arg requires "$REQUIRES" --arg trust "$TRUST" --argjson components "$COMPONENTS" '
     {id: $id, type: $type, name: $name}
     + (if $version     != "" then {version: $version}         else {} end)
     + (if $author      != "" then {author: $author}           else {} end)
@@ -138,6 +155,7 @@ ENTRY="$(jq -n \
     + (if $website     != "" then {website: $website}         else {} end)
     + {sha256: $sha256, url: $url, size: $size}
     + (if $requires    != "" then {requires: $requires}       else {} end)
+    + (if ($components | length) > 0 then {components: $components} else {} end)
     + {trust: $trust}
 ')"
 

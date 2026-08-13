@@ -118,14 +118,57 @@
             card.appendChild(h("div", { cls: "browse-desc" }, e.description));
         }
 
+        // A profile that advertises components can be installed whole or one
+        // slice at a time — all from the same single download. `components` is
+        // the lightweight summary the index carries (present slices + the
+        // theme's optional-sounds flag); the real file map lives in the package.
+        const comps = (e.type === "profile" && e.components
+            && typeof e.components === "object") ? e.components : null;
+        const wholeLabel = comps ? "Install profile" : "Install";
+
         const actions = h("div", { cls: "browse-actions" });
-        actions.appendChild(actionBtn("Install", "accent", () =>
+        actions.appendChild(actionBtn(wholeLabel, "accent", () =>
             send("browseInstall", { id: e.id, label: e.name || e.id })));
         if (e.website) {
             actions.appendChild(actionBtn("Website", "", () =>
                 send("openURL", { url: e.website })));
         }
         card.appendChild(actions);
+
+        if (comps) {
+            const LABELS = { theme: "Theme", sound: "Sound", macro: "Macro" };
+            const present = ["theme", "sound", "macro"].filter((k) => comps[k]);
+            if (present.length) {
+                // The theme's optional bonus: pull the profile's audio along
+                // with the theme, but only when the theme slice does not already
+                // bundle it and a separate sound slice actually exists.
+                const themeBundlesSounds = !!(comps.theme && comps.theme.includesSounds);
+                const themeHasBonus = !!(comps.theme && comps.sound && !themeBundlesSounds);
+                let includeThemeSounds = false;
+
+                const parts = h("div", { cls: "browse-parts" });
+                parts.appendChild(h("span", { cls: "browse-parts-label" }, "Or just a part:"));
+                for (const k of present) {
+                    parts.appendChild(actionBtn(LABELS[k], "", () =>
+                        send("browseInstall", {
+                            id: e.id,
+                            label: (e.name || e.id) + " — " + LABELS[k],
+                            component: k,
+                            includeSounds: (k === "theme") ? includeThemeSounds : false,
+                        })));
+                }
+                card.appendChild(parts);
+
+                if (themeHasBonus) {
+                    const bonus = h("label", { cls: "browse-bonus" });
+                    const cb = h("input", { type: "checkbox" });
+                    cb.addEventListener("change", () => { includeThemeSounds = cb.checked; });
+                    bonus.appendChild(cb);
+                    bonus.appendChild(h("span", {}, "Theme install also pulls the sounds"));
+                    card.appendChild(bonus);
+                }
+            }
+        }
 
         return card;
     }
@@ -229,6 +272,12 @@
         .browse-meta { color:var(--text3); font-size:11px; margin-top:3px; }
         .browse-desc { color:var(--text2); font-size:12px; line-height:1.45; }
         .browse-actions { display:flex; gap:8px; }
+        .browse-parts { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+            margin-top:2px; }
+        .browse-parts-label { color:var(--text3); font-size:11px; }
+        .browse-bonus { display:flex; align-items:center; gap:6px;
+            color:var(--text2); font-size:11px; cursor:pointer; user-select:none; }
+        .browse-bonus input { margin:0; cursor:pointer; }
         .browse-empty { padding:40px 16px; text-align:center;
             color:var(--text2); }
         .browse-empty-sub { margin-top:8px; color:var(--text3);

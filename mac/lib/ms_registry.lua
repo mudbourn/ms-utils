@@ -218,6 +218,11 @@ YQIDAQAB
                 url         = raw.url,
                 size        = tonumber(raw.size) or nil,
                 requires    = type(raw.requires) == "string" and raw.requires or nil,
+                -- A profile row may carry a lightweight components summary
+                -- (which slices the one asset offers) so Browse can present the
+                -- install choices without downloading first. Kept verbatim; the
+                -- authoritative file map still lives in the package manifest.
+                components  = type(raw.components) == "table" and raw.components or nil,
                 -- Anything not explicitly marked author-published is community.
                 trust       = raw.trust == "trusted" and "trusted" or "community",
             }
