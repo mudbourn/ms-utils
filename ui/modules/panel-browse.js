@@ -52,10 +52,6 @@
         { value: "macro",   label: "Macros" },
     ];
 
-    const TRUST = {
-        trusted:   { pill: "",       label: "Trusted" },
-        community: { pill: "danger", label: "Community" },
-    };
 
     // ── Data ─────────────────────────────────────────────────────────────
     function requestCatalog(opts) {
@@ -158,9 +154,10 @@
             .trim() || (e.name || e.id);
         const displayName = baseName + "  [" + typeLabel + "]";
 
+        // No trust badge: the registry is curator-published — every entry is
+        // vetted before it lands, so presence in the library IS the trust
+        // signal. install still re-checks trust before writing (ms.package).
         const name = h("div", { cls: "browse-name" }, displayName);
-        const t = TRUST[e.trust] || TRUST.community;
-        name.appendChild(h("span", { cls: "pill " + t.pill }, t.label));
 
         const bits = [];
         bits.push(typeLabel);
