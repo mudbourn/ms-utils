@@ -57,7 +57,7 @@ So here it is. mudscript will not harm your computer, take your data, or do anyt
 
 ---
 
-## Do not take our word for it
+## Do not take my word for it
 
 - **Read the code.** It is all here. Start with `mac/install.sh` to see exactly what the plain install copies.
 - **Check the internet part** in `mac/lib/ms_registry.lua`. The address list and the signature checks are right there.
