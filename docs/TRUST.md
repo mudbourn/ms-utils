@@ -34,15 +34,13 @@ It is real, and the project does not pretend it is not. Its own README warns tha
 
 ### "The Roblox plugin reads my Roblox settings. What is it doing with them?"
 
-Reading them, and nothing more. The Roblox plugin opens your saved-settings file **read only**. That is your sensitivity, FPS cap, graphics quality, volume, fullscreen, and camera setting. Macros use them to match your real settings. There is no code that writes to that file. You can check this in the source. It would also be pointless, since Roblox does not change those settings mid-game.
+Reading them, and nothing more. The Roblox plugin opens your saved-settings file **read only**. That is your sensitivity, FPS cap, graphics quality, volume, fullscreen, and camera setting. Macros use them to match your real settings. There is no code that writes to that file. You can check this in the source. It would also be pointless, since you cannot change change those settings mid-game.
 
 Its two features that can write anything are both normal and both off until you turn them on:
 - A **cache cleaner** that only removes throwaway Roblox cache and log files. It sets up a small helper under **your own** `~/Library/LaunchAgents/` folder. It never touches the game, your settings, or anything Roblox cares about. I have personally seen it save gigabytes of storage that would be hard to track down and free without special tools built for looking around your entire drive.
 - An **anti-timeout** helper that sends one harmless `F15` key press on a timer to avoid the idle kick. Off unless you turn it on.
 
----
-
-## The one real risk, and why it is your call
+### Punishment Risks (per-game)
 
 Everything above is about whether the software can be trusted. It can. This part is the real risk, and it has nothing to do with the code being safe.
 
@@ -59,7 +57,7 @@ So here it is. mudscript will not harm your computer, take your data, or do anyt
 
 ---
 
-## Do not take our word for it
+## Do not take my word for it
 
 - **Read the code.** It is all here. Start with `mac/install.sh` to see exactly what the plain install copies.
 - **Check the internet part** in `mac/lib/ms_registry.lua`. The address list and the signature checks are right there.
