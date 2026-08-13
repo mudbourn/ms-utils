@@ -47,11 +47,19 @@ jobs:
           for d in mac/lib mac/templates ui mac/bin; do
             [ -d "$d" ] && cp -R "$d" "$DIST/"
           done
-          mkdir -p "$DIST/data" "$DIST/sounds/defaults"
+          mkdir -p "$DIST/data"
           # Include default settings so fresh installs have sound assignments and QR options.
           for f in data/ms_settings.json data/ms_settings_default.json; do
             [ -f "$f" ] && cp "$f" "$DIST/data/"
           done
+          # Copy mac/data/ wholesale — .gitignore keeps this directory tracking
+          # only the files meant to ship (ms_authored.json, ms_macros_visual.*,
+          # ms_settings_default.json). Private runtime state (.ms_trusted_hash,
+          # guardian_agent.log, .ms_plugin_ledger.json, live ms_settings.json)
+          # is gitignored and simply won't exist in a clean checkout.
+          if [ -d "mac/data" ]; then
+            cp -R mac/data/. "$DIST/data/"
+          fi
           # Bundled registry index: the fallback ms_registry.lua reads when
           # there is no cache and the network is unavailable. Only the index
           # travels — .mspkg binaries stay release assets and are fetched on
@@ -61,8 +69,11 @@ jobs:
             cp registry/index.json "$DIST/data/registry_index.json"
           fi
           # Include default sounds so fresh installs have audio feedback.
+          # sounds/ has no top-level .wav files — they live in active/, defaults/,
+          # and macro/ subfolders, so the whole tree is copied to preserve structure.
           if [ -d "sounds" ]; then
-            cp sounds/*.wav "$DIST/sounds/defaults/" 2>/dev/null || true
+            mkdir -p "$DIST/sounds"
+            cp -R sounds/. "$DIST/sounds/"
           fi
           # Include the default profile and bundled .mspkg packs.
           if [ -d "profiles/Default" ]; then
