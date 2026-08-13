@@ -55,11 +55,38 @@ else
     echo "   ✓ Hammerspoon installed to /Applications/."
 fi
 
-# ── Step 2: Source the files ──────────────────────────────────────────────────
+# ── Step 2: Ensure jq (registry signature verification) ───────────────────────
+# The Browse/registry client rebuilds the signer's canonical bytes with `jq -c -S`
+# to verify the index signature. macOS 26+ ships /usr/bin/jq, but older systems
+# don't — without jq the registry reads as "signature did not verify" and Browse
+# looks broken. Install it up front so the registry just works.
+
+echo ""
+if command -v jq >/dev/null 2>&1 || [ -x /usr/bin/jq ] || [ -x /opt/homebrew/bin/jq ] || [ -x /usr/local/bin/jq ]; then
+    echo "❷  jq is already installed."
+else
+    echo "❷  jq not found — needed to verify the registry signature …"
+    if command -v brew >/dev/null 2>&1; then
+        echo "   Installing jq via Homebrew …"
+        if brew install jq; then
+            echo "   ✓ jq installed."
+        else
+            echo "   ⚠  'brew install jq' failed — install it manually later: brew install jq"
+        fi
+    else
+        echo "   ⚠  Homebrew not found, so jq can't be auto-installed."
+        echo "     The registry (Browse) will not work until jq is present."
+        echo "     Install Homebrew, then jq:"
+        echo "       /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        echo "       brew install jq"
+    fi
+fi
+
+# ── Step 3: Source the files ──────────────────────────────────────────────────
 
 if [ -f "$SCRIPT_DIR/ms_core.lua" ] && [ -f "$SCRIPT_DIR/init.lua" ]; then
     # Full repo detected — copy directly
-    echo "❷  Copying local repo to ~/.hammerspoon/ …"
+    echo "❸  Copying local repo to ~/.hammerspoon/ …"
     mkdir -p "$HS"
     cp -R "$SCRIPT_DIR"/* "$HS/"
     # MANIFEST.json lives at the repo root (one level up from mac/)
@@ -86,7 +113,7 @@ if [ -f "$SCRIPT_DIR/ms_core.lua" ] && [ -f "$SCRIPT_DIR/init.lua" ]; then
     echo "   ✓ Files copied from $SCRIPT_DIR"
 else
     # Standalone script — download latest release
-    echo "❷  Downloading latest release from GitHub …"
+    echo "❸  Downloading latest release from GitHub …"
     mkdir -p "$HS"
 
     # Try to get the latest release download URL via the GitHub API
@@ -132,10 +159,10 @@ else
     rm -f "$HS/install.sh" 2>/dev/null || true
 fi
 
-# ── Step 3: Install Guardian Launch Agent ────────────────────────────────────
+# ── Step 4: Install Guardian Launch Agent ────────────────────────────────────
 
 echo ""
-echo "❸  Installing OS-level Guardian …"
+echo "❹  Installing OS-level Guardian …"
 if [ -f "$HS/bin/install_guardian_agent.sh" ]; then
     bash "$HS/bin/install_guardian_agent.sh"
     echo "   ✓ Guardian installed."
@@ -143,16 +170,16 @@ else
     echo "   ⚠  install_guardian_agent.sh not found — skipping."
 fi
 
-# ── Step 4: Lock init.lua ────────────────────────────────────────────────────
+# ── Step 5: Lock init.lua ────────────────────────────────────────────────────
 
 echo ""
-echo "❹  Locking bootstrap stub (chmod 444) …"
+echo "❺  Locking bootstrap stub (chmod 444) …"
 chmod 444 "$HS/init.lua" 2>/dev/null && echo "   ✓ init.lua locked." || echo "   ⚠  Could not chmod init.lua."
 
-# ── Step 5: Reload Hammerspoon ────────────────────────────────────────────────
+# ── Step 6: Reload Hammerspoon ────────────────────────────────────────────────
 
 echo ""
-echo "❺  Reloading Hammerspoon …"
+echo "❻  Reloading Hammerspoon …"
 if command -v open &>/dev/null; then
     open -g "hammerspoon://reload" 2>/dev/null && echo "   ✓ Hammerspoon reloaded." || echo "   ⚠  Reload manually (menubar icon → Reload)."
 else

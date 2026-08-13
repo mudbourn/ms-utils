@@ -90,8 +90,29 @@ YQIDAQAB
     -- END Helpers --
 
     -- Signature --
+        -- Resolve an external binary to an absolute path, cached. hs.execute
+        -- runs with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) — it does
+        -- NOT load the login shell — so a Homebrew-only tool like jq is invisible
+        -- to a bare `jq …` call on machines that lack the system copy. Check the
+        -- common absolute locations first, then fall back to a login-shell
+        -- lookup so a custom Homebrew prefix is still found. Returns a path or nil.
+        local _binCache = {}
+        local function resolveBin(name, candidates)
+            if _binCache[name] ~= nil then return _binCache[name] or nil end
+            for _, p in ipairs(candidates) do
+                local f = io.open(p, "r")
+                if f then f:close(); _binCache[name] = p; return p end
+            end
+            local out = hs.execute("command -v " .. name .. " 2>/dev/null", true)
+            out = out and out:gsub("%s+$", "") or ""
+            _binCache[name] = (out ~= "") and out or false
+            return _binCache[name] or nil
+        end
+
         -- [SECURITY] Rebuild the signer's exact bytes with `jq -c -S` (key-
         -- sorted); hs.json.encode alone won't — it does not sort keys.
+        -- Returns (ok, reason). A nil reason on failure means "not signed";
+        -- a string reason (e.g. jq missing) is a surfaceable, actionable error.
         local function verifySignature(doc)
             if type(doc) ~= "table" then return false end
             if type(doc.signature) ~= "string" or doc.signature == "" then
@@ -109,9 +130,14 @@ YQIDAQAB
             local okEncode, unsorted = pcall(hs.json.encode, payload)
             if not okEncode or not unsorted then return false end
 
+            local jq = resolveBin("jq", { "/usr/bin/jq", "/opt/homebrew/bin/jq", "/usr/local/bin/jq" })
+            if not jq then
+                return false, "jq is required to verify the registry. Install it with:  brew install jq"
+            end
+
             local sortSrc = tmpPath("sort")
             if not writeFile(sortSrc, unsorted) then return false end
-            local sortedOut = hs.execute("jq -c -S '.' " .. sq(sortSrc) .. " 2>/dev/null")
+            local sortedOut = hs.execute(sq(jq) .. " -c -S '.' " .. sq(sortSrc) .. " 2>/dev/null")
             os.remove(sortSrc)
 
             -- [SECURITY] Verify the jq output VERBATIM, including its trailing
@@ -186,9 +212,9 @@ YQIDAQAB
                 return false, "Unsupported index format: " .. tostring(doc.formatVersion)
             end
 
-            local signed = verifySignature(doc)
+            local signed, sigReason = verifySignature(doc)
             if requireSignature and not signed then
-                return false, "Index signature did not verify."
+                return false, sigReason or "Index signature did not verify."
             end
 
             local entries, byId, byHash = {}, {}, {}

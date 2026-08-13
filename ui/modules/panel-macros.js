@@ -1842,7 +1842,9 @@
         el.className = "tool-block" + (this._isSelected(step._sid)?" selected":"")
             + (isSetting ? " tool-block-setting" : "");
         el.setAttribute("data-sid", step._sid);
-        el.setAttribute("draggable","true");
+        // No draggable="true": reordering is pointer-based (see _wireDrag). The
+        // HTML5 DnD API dropped drops in this WKWebView, so blocks are dragged
+        // with plain mouse events instead.
 
         var h = document.createElement("div");
         h.className = "tool-drag-handle";
@@ -1947,7 +1949,7 @@
         var header = document.createElement("div");
         header.className = "tool-block" + (this._isSelected(step._sid)?" selected":"");
         header.setAttribute("data-sid", step._sid);
-        header.setAttribute("draggable","true");
+        // Pointer-based drag; no native draggable (see _wireDrag / _renderLeaf).
 
         var h = document.createElement("div");
         h.className = "tool-drag-handle";
@@ -2030,38 +2032,10 @@
             for (var i=0;i<steps.length;i++) body.appendChild(this._renderTool(steps[i]));
         }
 
-        body.addEventListener("dragenter", function(e) {
-            if (!self._dragId) return; e.preventDefault(); e.stopPropagation();
-        });
-        body.addEventListener("dragover", function(e) {
-            if (!self._dragId) return; e.preventDefault(); e.stopPropagation();
-            e.dataTransfer.dropEffect = "move"; body.classList.add("drag-target");
-        });
-        body.addEventListener("dragleave", function() { body.classList.remove("drag-target"); });
-        body.addEventListener("drop", function(e) {
-            e.preventDefault(); e.stopPropagation();
-            var group = self._dragGroup || (self._dragId ? [self._dragId] : []);
-            if (!group.length) return;
-            // Reject dropping the parent (or any dragged ancestor) into its own body.
-            for (var i = 0; i < group.length; i++) {
-                if (group[i] === parent._sid || self._isDesc(group[i], parent._sid)) {
-                    body.classList.remove("drag-target"); return;
-                }
-            }
-            var steps = [];
-            for (var g = 0; g < group.length; g++) {
-                var st = self._map[group[g]];
-                if (st) { steps.push(st); self._removeFrom(self._tools, group[g]); }
-            }
-            var dst = branch==="then" ? (parent.then||(parent.then=[]))
-                    : branch==="else" ? (parent.else||(parent.else=[]))
-                    : (parent.body||(parent.body=[]));
-            for (var k = 0; k < steps.length; k++) dst.push(steps[k]);
-            body.classList.remove("drag-target");
-            self._setSelection(group);
-            self._dragId = null; self._dragGroup = null;
-            self._render(); self._applySelectionClasses(); self._emitSelection(); self._fireChange();
-        });
+        // Dropping a block INTO this branch is handled by the pointer-drag
+        // hit-test (see _beginPointerDrag / _commitNest), which targets this
+        // element via its data-nest-parent / data-nest-branch attributes. No
+        // HTML5 drop wiring here — that API is unreliable in this WKWebView.
         return body;
     };
 
@@ -2195,120 +2169,200 @@
         return false;
     };
 
-    // TEMP drag instrumentation. Routes each DnD event to the Hammerspoon
-    // console via the same postMessage channel as _postJsError, so one drag
-    // tells us exactly where the chain breaks. Remove once the drag is fixed.
-    function _dragDbg(ev, sid, extra) {
-        try {
-            window.webkit.messageHandlers.msShell.postMessage(
-                JSON.stringify({ panel: "_shell", action: "jsError", body: {
-                    kind: "dragDbg",
-                    msg: "[drag] " + ev + " sid=" + sid + (extra ? " " + extra : ""),
-                    src: "panel-macros", line: 0, col: 0, stack: ""
-                } })
-            );
-        } catch(e) {}
-    }
-
+    // Pointer-based reorder (mousedown → mousemove → mouseup).
+    //
+    // The HTML5 Drag-and-Drop API does NOT reliably deliver `drop` inside this
+    // WKWebView: dragstart/dragover fired but the drop was swallowed, so a
+    // dragged block silently bounced back to its origin. Reordering is a pure
+    // in-webview interaction, so it can only ever be JavaScript — Lua/Hammerspoon
+    // lives outside the webview and never sees the drag (the macro reaches the
+    // host only on Save). The fix is to abandon the flaky native API and drive
+    // the drag with plain mouse events plus a hand-drawn ghost — the same move
+    // the shell already made when the native <select> misbehaved here.
     ToolCanvas.prototype._wireDrag = function(el, step) {
         var self = this;
-        el.addEventListener("dragstart", function(e) {
-            _dragDbg("dragstart", step._sid);
-            // If the grabbed block is part of a multi-selection, the whole
-            // selection travels together; otherwise this becomes a fresh
-            // single-block selection so the drag and the highlight agree.
+        el.addEventListener("mousedown", function(e) {
+            if (e.button !== 0) return;                          // left button only
+            if (e.target.closest(".tool-action-btn")) return;    // copy/paste/delete
+            if (e.target.closest(".tool-nest-toggle")) return;   // collapse arrow
+            self._beginPointerDrag(el, step, e);
+        });
+    };
+
+    // Runs a single reorder gesture. A drag only actually begins once the
+    // pointer crosses a small threshold, so a plain click still falls through
+    // to the click-select handler untouched.
+    ToolCanvas.prototype._beginPointerDrag = function(el, step, downEvt) {
+        var self = this;
+        var startX = downEvt.clientX, startY = downEvt.clientY;
+        var THRESH = 4;
+        var started = false;
+        var ghost = null, offX = 0, offY = 0;
+        var group = null;
+        var target = null;   // { kind:"block", sid, pos } | { kind:"nest", parent, branch }
+        var scroller = self._el;
+
+        function begin() {
+            started = true;
+            // Single block, or the whole multi-selection when the grabbed block
+            // is part of one — matching the old drag-group behaviour.
             if (self._isSelected(step._sid) && self._selCount() > 1) {
-                self._dragGroup = self._selList();
+                group = self._selList();
             } else {
-                self._dragGroup = [step._sid];
+                group = [step._sid];
                 if (!self._isSelected(step._sid)) self.select([step._sid]);
             }
             self._dragId = step._sid;
-            el.classList.add("dragging");
-            // Dim every block travelling with the group, not just the grabbed one.
-            self._dragGroup.forEach(function(sid) {
-                if (sid === step._sid) return;
+            self._dragGroup = group;
+            group.forEach(function(sid) {
                 var d = self._root.querySelector('.tool-block[data-sid="'+sid+'"]');
                 if (d) d.classList.add("dragging");
             });
-            e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("text/plain", step._sid);
-            var ghost = el.cloneNode(true);
-            ghost.style.width = el.offsetWidth + "px"; ghost.style.opacity = "0.7";
-            ghost.style.position = "absolute"; ghost.style.top = "-1000px";
-            // Badge the ghost with the count when dragging a group.
-            if (self._dragGroup.length > 1) {
+            ghost = el.cloneNode(true);
+            ghost.classList.add("tool-drag-ghost");
+            ghost.style.width = el.offsetWidth + "px";
+            var r = el.getBoundingClientRect();
+            offX = startX - r.left; offY = startY - r.top;
+            if (group.length > 1) {
                 var badge = document.createElement("div");
                 badge.className = "tool-drag-badge";
-                badge.textContent = self._dragGroup.length;
+                badge.textContent = group.length;
                 ghost.appendChild(badge);
             }
             document.body.appendChild(ghost);
-            e.dataTransfer.setDragImage(ghost, 10, 10);
-            requestAnimationFrame(function() { ghost.remove(); });
-        });
-        el.addEventListener("dragend", function() {
-            _dragDbg("dragend", step._sid);
-            self._dragId = null; self._dragGroup = null;
+            document.body.classList.add("tool-dragging-active");
+            moveGhost(startX, startY);
+            if (window.playSlot) playSlot("interact");
+        }
+
+        function moveGhost(x, y) {
+            if (ghost) { ghost.style.left = (x - offX) + "px"; ghost.style.top = (y - offY) + "px"; }
+        }
+
+        // Figure out where a drop at (x,y) would land and paint the marker.
+        // The ghost is pointer-events:none, so elementFromPoint sees through it.
+        function hitTest(x, y) {
+            self._clearDrops();
+            target = null;
+            var under = document.elementFromPoint(x, y);
+            if (!under || !under.closest) return;
+
+            var blockEl = under.closest(".tool-block[data-sid]");
+            if (blockEl && group.indexOf(blockEl.getAttribute("data-sid")) !== -1) {
+                blockEl = null;   // a block in the drag group is not a target
+            }
+            if (blockEl) {
+                var tid = blockEl.getAttribute("data-sid");
+                var tstep = self._map[tid];
+                var rect = blockEl.getBoundingClientRect();
+                var ry = y - rect.top, h = rect.height;
+                var pos;
+                if (tstep && self._isContainer(tstep) && ry > h*0.3 && ry < h*0.7) pos = "nest";
+                else if (ry < h/2) pos = "above";
+                else pos = "below";
+                if (pos === "nest") {
+                    for (var i = 0; i < group.length; i++) {
+                        if (group[i] === tid || self._isDesc(group[i], tid)) return;
+                    }
+                }
+                blockEl.classList.add(pos === "nest" ? "drag-over-nest"
+                    : pos === "above" ? "drag-over-above" : "drag-over-below");
+                target = { kind: "block", sid: tid, pos: pos };
+                return;
+            }
+
+            // Not over any block — maybe over an (empty) container branch.
+            var nestEl = under.closest(".tool-nest-body");
+            if (nestEl) {
+                var psid = nestEl.getAttribute("data-nest-parent");
+                for (var j = 0; j < group.length; j++) {
+                    if (group[j] === psid || self._isDesc(group[j], psid)) return;
+                }
+                nestEl.classList.add("drag-target");
+                target = { kind: "nest", parent: psid, branch: nestEl.getAttribute("data-nest-branch") };
+            }
+        }
+
+        function autoscroll(y) {
+            if (!scroller) return;
+            var r = scroller.getBoundingClientRect(), M = 28;
+            if (y < r.top + M) scroller.scrollTop -= 10;
+            else if (y > r.bottom - M) scroller.scrollTop += 10;
+        }
+
+        function onMove(e) {
+            if (!started) {
+                if (Math.abs(e.clientX - startX) < THRESH && Math.abs(e.clientY - startY) < THRESH) return;
+                begin();
+            }
+            e.preventDefault();
+            moveGhost(e.clientX, e.clientY);
+            autoscroll(e.clientY);
+            hitTest(e.clientX, e.clientY);
+        }
+
+        function commit() {
+            if (!target) return;
+            if (target.kind === "block") self.moveTools(group, target.sid, target.pos);
+            else self._commitNest(group, target.parent, target.branch);
+        }
+
+        function cleanup() {
+            document.removeEventListener("mousemove", onMove, true);
+            document.removeEventListener("mouseup", onUp, true);
+            document.removeEventListener("keydown", onKey, true);
+            if (ghost) ghost.remove();
+            ghost = null;
+            document.body.classList.remove("tool-dragging-active");
             self._root.querySelectorAll(".tool-block.dragging").forEach(function(d) {
                 d.classList.remove("dragging");
             });
             self._clearDrops();
-        });
-        // WKWebView will not fire `drop` unless the target cancels `dragenter`
-        // too — cancelling only `dragover` is enough in Chrome/Firefox but not
-        // here, which is why in-list reorder produced a drag image (dragstart
-        // fired) yet never dropped. Mirror the dragover guard.
-        el.addEventListener("dragenter", function(e) {
-            _dragDbg("dragenter", step._sid, "dragId=" + self._dragId);
-            if (!self._dragId || (self._dragGroup && self._dragGroup.indexOf(step._sid) !== -1)) return;
-            e.preventDefault(); e.stopPropagation();
-        });
-        el.addEventListener("dragover", function(e) {
-            if (!el._dbgOver) { el._dbgOver = true; _dragDbg("dragover", step._sid, "dragId=" + self._dragId); }
-            // Ignore hovering over any block that is itself part of the drag.
-            if (!self._dragId || (self._dragGroup && self._dragGroup.indexOf(step._sid) !== -1)) return;
-            // Stop the event bubbling to ancestor step elements. Without this,
-            // an enclosing container's dragover also fires and paints a region
-            // highlight computed against ITS box — an area the cursor isn't in —
-            // which then lingers because the pointer never leaves that ancestor.
-            e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move";
-            var rect = el.getBoundingClientRect();
-            var y = e.clientY - rect.top, h = rect.height;
-            var isC = self._isContainer(step);
-            el.classList.remove("drag-over-above","drag-over-below","drag-over-nest");
-            if (isC && y > h*0.3 && y < h*0.7) el.classList.add("drag-over-nest");
-            else if (y < h/2) el.classList.add("drag-over-above");
-            else el.classList.add("drag-over-below");
-        });
-        el.addEventListener("dragleave", function() {
-            el._dbgOver = false;
-            el.classList.remove("drag-over-above","drag-over-below","drag-over-nest");
-        });
-        el.addEventListener("drop", function(e) {
-            _dragDbg("drop", step._sid, "dragId=" + self._dragId);
-            el._dbgOver = false;
-            e.preventDefault(); e.stopPropagation();
-            var group = self._dragGroup || (self._dragId ? [self._dragId] : []);
-            if (!group.length || group.indexOf(step._sid) !== -1) { self._clearDrops(); return; }
-            var rect = el.getBoundingClientRect();
-            var y = e.clientY - rect.top, h = rect.height;
-            var isC = self._isContainer(step);
-            var pos;
-            if (isC && y > h*0.3 && y < h*0.7) pos = "nest";
-            else if (y < h/2) pos = "above";
-            else pos = "below";
-            // Never drop a block (or the group) into one of its own descendants.
-            if (pos === "nest") {
-                for (var i = 0; i < group.length; i++) {
-                    if (self._isDesc(group[i], step._sid) || group[i] === step._sid) {
-                        self._clearDrops(); return;
-                    }
-                }
+            self._dragId = null; self._dragGroup = null;
+        }
+
+        function onUp(e) {
+            if (started) {
+                e.preventDefault(); e.stopPropagation();
+                commit();
+                // Swallow the click that a mouseup would otherwise synthesise,
+                // so a drag never doubles as a select.
+                var swallow = function(ev) {
+                    ev.stopPropagation(); ev.preventDefault();
+                    document.removeEventListener("click", swallow, true);
+                };
+                document.addEventListener("click", swallow, true);
             }
-            self.moveTools(group, step._sid, pos);
-            self._clearDrops();
-        });
+            cleanup();
+        }
+        function onKey(e) { if (e.key === "Escape") { target = null; cleanup(); } }
+
+        document.addEventListener("mousemove", onMove, true);
+        document.addEventListener("mouseup", onUp, true);
+        document.addEventListener("keydown", onKey, true);
+    };
+
+    // Drop a group into a container branch (then/else/body). Mirrors moveTools
+    // for the nest case, but keeps the explicit branch — moveTools' "nest" can
+    // only reach a container's default branch, not an if-block's else.
+    ToolCanvas.prototype._commitNest = function(group, parentSid, branch) {
+        var parent = this._map[parentSid];
+        if (!parent) return;
+        for (var i = 0; i < group.length; i++) {
+            if (group[i] === parentSid || this._isDesc(group[i], parentSid)) return;
+        }
+        var steps = [];
+        for (var g = 0; g < group.length; g++) {
+            var st = this._map[group[g]];
+            if (st) { steps.push(st); this._removeFrom(this._tools, group[g]); }
+        }
+        if (!steps.length) return;
+        var dst = branch === "then" ? (parent.then || (parent.then = []))
+                : branch === "else" ? (parent.else || (parent.else = []))
+                : (parent.body || (parent.body = []));
+        for (var k = 0; k < steps.length; k++) dst.push(steps[k]);
+        this._setSelection(group);
+        this._render(); this._applySelectionClasses(); this._emitSelection(); this._fireChange();
     };
 
     ToolCanvas.prototype._clearDrops = function() {

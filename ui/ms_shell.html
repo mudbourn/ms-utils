@@ -927,6 +927,16 @@
         .tool-block.drag-over-below::after { content: ''; position: absolute; bottom: -3px; left: 4px; right: 4px; height: 2px; background: var(--accent); border-radius: 1px; z-index: 10; }
         .tool-block.drag-over-nest { border-color: var(--accent); background: var(--accent-glow-faint); }
         .tool-block.dragging { opacity: 0.4; }
+        /* Hand-drawn drag ghost: a floating clone that follows the cursor during
+           a pointer-based reorder. Fixed-position and click-through so it never
+           masks the element under the pointer (elementFromPoint hit-testing). */
+        .tool-drag-ghost { position: fixed; pointer-events: none; z-index: 99999;
+            opacity: 0.85; margin: 0; box-shadow: 0 6px 18px rgba(0,0,0,.45);
+            transform: rotate(-1deg); }
+        /* While a reorder is live, suppress text selection everywhere so the
+           drag doesn't paint a selection across the canvas. */
+        body.tool-dragging-active, body.tool-dragging-active * {
+            -webkit-user-select: none; user-select: none; cursor: grabbing !important; }
         /* A setting block references a shared tool rather than running code, so
            it reads with an accent-tinted, dashed edge to set it apart from
            action modules. */
