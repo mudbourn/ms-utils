@@ -37,6 +37,37 @@ YQIDAQAB
         return (out and #out >= 64) and out:sub(1, 64):lower() or nil
     end
 
+    -- Hash many files in ONE shasum invocation, returning { absPath = hash64 }.
+    --
+    -- The per-file _hashFile above spawns a subprocess each. Guardian runs at
+    -- pre-load and hashes every tracked file TWICE (trusted-manifest check +
+    -- signed file-manifest check), so a full boot is 60-100 synchronous process
+    -- spawns before anything else can run — and on a slow or busy machine that
+    -- spawn contention alone is a multi-second freeze. That is the long
+    -- startup/restart hang. One batched call computes the identical hashes with
+    -- a single spawn. A file shasum cannot read simply has no output line, so it
+    -- is absent from the map — the callers treat that as they did a nil hash.
+    local function _hashFilesBatch(paths)
+        local out = {}
+        if not paths or #paths == 0 then return out end
+        local quoted = {}
+        for i = 1, #paths do
+            quoted[i] = "'" .. paths[i]:gsub("'", "'\\''") .. "'"
+        end
+        local res = hs.execute("shasum -a 256 " .. table.concat(quoted, " ") .. " 2>/dev/null")
+        if not res then return out end
+        for line in res:gmatch("[^\n]+") do
+            -- shasum prints "<hash>  <path>" (two-space sep in text mode, " *"
+            -- in binary mode). The path is echoed verbatim from the argument, so
+            -- it may contain spaces — take everything after the separator.
+            local hash, path = line:match("^(%x+)%s+%*?(.+)$")
+            if hash and #hash >= 64 and path then
+                out[path] = hash:sub(1, 64):lower()
+            end
+        end
+        return out
+    end
+
     -- Returns: table {relativePath = hash64} or nil
     -- Handles both old single-hash format and new JSON manifest format
     local function _readTrustedManifest()
@@ -166,14 +197,19 @@ YQIDAQAB
     local function _checkAll(manifest)
         if not manifest then return "uninitialized" end
         local files = _trackedFiles()
+        -- Hash only the files the manifest vouches for, in one batched call.
+        local toHash = {}
         for _, absPath in ipairs(files) do
             local rel = absPath:gsub(".*/%.hammerspoon/", "")
-            local expected = manifest[rel]
-            if expected then
-                local cur = _hashFile(absPath)
-                if not cur then return "error", rel end
-                if cur ~= expected then return "mismatch", rel end
-            end
+            if manifest[rel] then toHash[#toHash + 1] = absPath end
+        end
+        local hashed = _hashFilesBatch(toHash)
+        -- Sorted (from _trackedFiles), so the first failure reported is stable.
+        for _, absPath in ipairs(toHash) do
+            local rel = absPath:gsub(".*/%.hammerspoon/", "")
+            local cur = hashed[absPath]
+            if not cur then return "error", rel end
+            if cur ~= manifest[rel] then return "mismatch", rel end
         end
         return "ok"
     end
@@ -299,15 +335,24 @@ YQIDAQAB
             return "tampered"
         end
 
+        -- Collect the existing files the manifest lists, then hash them in one
+        -- batched shasum call rather than a subprocess per file (see
+        -- _hashFilesBatch: this is the second of the two boot hashing passes).
+        local toHash, expectedFor = {}, {}
         for relPath, expected in pairs(fm.files) do
             if type(expected) == "string" and #expected == 64 then
                 local absPath = _home .. "/.hammerspoon/" .. relPath
                 if hs.fs.attributes(absPath) then
-                    local cur = _hashFile(absPath)
-                    if not cur then return "mismatch", relPath end
-                    if cur ~= expected:lower() then return "mismatch", relPath end
+                    toHash[#toHash + 1] = absPath
+                    expectedFor[absPath] = { rel = relPath, hash = expected:lower() }
                 end
             end
+        end
+        local hashed = _hashFilesBatch(toHash)
+        for _, absPath in ipairs(toHash) do
+            local want = expectedFor[absPath]
+            local cur  = hashed[absPath]
+            if not cur or cur ~= want.hash then return "mismatch", want.rel end
         end
 
         return "ok"

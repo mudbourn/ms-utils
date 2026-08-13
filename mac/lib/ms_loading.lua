@@ -68,7 +68,20 @@ return function(ms)
                 local ok, data = pcall(hs.json.decode, message.body)
                 if not ok or type(data) ~= "table" then return end
                 if data.action == "ready" then
-                    _startBootChoreography()
+                    if _G._bootChoreographyStarted then
+                        -- The 0.5s hard fallback (below) starts the choreography
+                        -- even when the page is slow to load — and its
+                        -- showBrand() then evaluates against a page whose JS does
+                        -- not exist yet, so it silently no-ops and the logo never
+                        -- appears. Now that the page has actually handshaked, its
+                        -- functions are defined, so re-assert the brand: the one
+                        -- reveal a premature start is most likely to have dropped.
+                        if _lWebView then
+                            pcall(function() _lWebView:evaluateJavaScript("showBrand()") end)
+                        end
+                    else
+                        _startBootChoreography()
+                    end
                 end
             end)
 
