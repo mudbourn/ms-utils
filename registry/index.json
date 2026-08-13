@@ -22,9 +22,9 @@
       "version": "1.0.0",
       "author": "mudbourn",
       "website": "https://mudbourn.info",
-      "sha256": "7720350333eecd0676d82f335b969b1332d477775c9d6c1dc2c0fbd707a14d5e",
+      "sha256": "60a868941d0be367e7569c58ba2a26eb20e29c4a5217ed8a295b428cae391e59",
       "url": "https://github.com/mudbourn/ms-utils/releases/download/packages/Combat.Warriors.Macros-profile.mspkg",
-      "size": 7368928,
+      "size": 7295339,
       "components": {
         "theme": {
           "includesSounds": false
