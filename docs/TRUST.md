@@ -6,7 +6,7 @@ There is one real risk, and it is not about the code. If you point input automat
 
 ---
 
-## What is good, in plain terms
+## Pros
 
 - **You can read all of it.** Every line is open source. No hidden code, no scrambled blobs, no "just trust me."
 - **The plain install keeps to itself.** `mac/install.sh` copies only the core. That is the macro engine, the interface, settings, and sounds. It does not include any game plugins or any input-injection code.
@@ -16,7 +16,7 @@ There is one real risk, and it is not about the code. If you point input automat
 
 ---
 
-## The scary-sounding parts, made plain
+## Concerns and Cons
 
 ### "It has a system watching my files."
 
