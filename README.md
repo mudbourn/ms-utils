@@ -10,12 +10,14 @@ The primary use case is game macros: automating repetitive actions, building com
 
 ---
 
-## What it does (After 1.3.0 Release)
+## What it does
 
 - **Write macros in plain Lua** (or AHK on Windows) — no proprietary scripting language to learn
 - **Visual macro builder** — drag-and-drop steps, inline editors, test-run with one click
 - **Live debugging** — console, macro monitor, input monitor, window monitor
 - **Profiles** — save, switch, export, and import macro packs
+- **Plugins** — opt-in bundles that set the target game and add live capabilities (Roblox, Minecraft, and more), each reviewed and removable
+- **Browse** — install profiles, themes, sounds, macros, and plugins from a signed package library, in whole or by the slice
 - **Theming** — customize colors, fonts, window radius
 - **Sound system** — assign sounds to macro events, import custom audio
 - **Settings panel** — everything in one place, no config file editing required
@@ -68,7 +70,7 @@ This installs mudscript to `~/.hammerspoon/`, sets up the Guardian, and reloads 
 
 ## Keybindings
 
-These work when your target app (Roblox by default) is focused:
+These work when your target app is focused. The target is set by an installed plugin (Roblox, Minecraft, and so on) — base mudscript ships without one:
 
 | Key | Action |
 |---|---|
@@ -102,7 +104,30 @@ Save and switch between macro packs:
 - **Export** a profile to share with others
 - **Import** profiles from `.mspkg` files
 
-Profiles include sounds, themes, and settings — everything you need to switch contexts.
+Profiles include sounds, themes, and settings — everything you need to switch contexts. Install them yourself, or pull them from **Browse** (below).
+
+---
+
+## Plugins
+
+Plugins are opt-in bundles that extend mudscript for a specific game. A plugin does two things: it declares the **target app** (the window whose focus arms your keybindings), and it adds **live capabilities** macros can read.
+
+- **Roblox** — targets Roblox, exposes its saved settings (sensitivity, framerate cap, graphics quality) to macros, plus an anti-timeout keep-alive.
+- **Minecraft** — targets Minecraft, exposes live client data (health, item durability, inventory) over a loopback bridge.
+- **HIDInject** — opt-in direct-to-process input for games that ignore global event posts (see the note below).
+
+Every plugin is written or personally reviewed before it can be published, and it registers only through mudscript's own API — so turning one **off** in Settings → **Plugins** cleanly removes everything it added, and uninstalling it removes the capability entirely. Nothing in base mudscript depends on any plugin.
+
+---
+
+## Browse
+
+Browse is the in-app package library. Open it with `Alt+P` → **Browse**.
+
+- **Install by type** — profiles, themes, sounds, macros, and plugins, each in its own section
+- **Whole or by the slice** — install a full profile, or pull just its theme, sounds, or macros without duplicating anything
+- **Signed and verified** — every package is checked against a signed registry index before it installs; a package that doesn't verify is never offered
+- **Curated** — published packages are author-reviewed, so what you install is what was released
 
 ---
 
@@ -158,7 +183,7 @@ HID injection is the ability to send input events directly to a specific applica
 My position:
 
 - **HID injection is not in base mudscript.** Core key and mouse functions post to the global event stream, full stop — there is no `hidinject` parameter and no direct-to-process path anywhere in the core API.
-- **It is available only as an opt-in, removable plugin.** Users who need it install the HIDInject plugin explicitly; uninstalling the plugin removes the capability entirely. Nothing in the base codebase references it.
+- **It is available only as an opt-in, removable plugin.** Users who need it install the HIDInject plugin explicitly (see [Plugins](#plugins)); uninstalling the plugin removes the capability entirely. Nothing in the base codebase references it.
 - **I don't condone using this to cheat.** If a game's terms of service prohibit input automation, don't use mudscript for that game. The tool exists for games where macros are welcome.
 - **I won't pretend the feature doesn't exist.** Keeping it a clearly-labelled, self-contained plugin is the honest arrangement: present for those who need it, absent for everyone else.
 
@@ -166,9 +191,10 @@ My position:
 
 ## Documentation
 
+- **[Is mudscript safe?](docs/TRUST.md)** — a plain-language look at what mudscript does and does not do
 - **[macOS API Reference](docs/DOCS_MAC.md)** — every `ms.*` function documented
 - **[Windows API Reference](docs/DOCS_WINDOWS.md)** — Windows-specific API
-- **[Function Index](docs/function-index.md)** — quick reference for all functions
+- **[Key Codes](docs/KEY_CODES.md)** — key name reference for binds and captures
 - **[Architecture](docs/ARCHITECTURE.md)** — technical details, directory layout, security model
 
 ---
