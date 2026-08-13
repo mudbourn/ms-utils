@@ -2215,6 +2215,14 @@
             if (e.button !== 0) return;                          // left button only
             if (e.target.closest(".tool-action-btn")) return;    // copy/paste/delete
             if (e.target.closest(".tool-nest-toggle")) return;   // collapse arrow
+            // Suppress the native text-selection drag. Without this, WKWebView
+            // treats a held-button move as a selection gesture and swallows every
+            // mousemove until release — so begin() (gated on the move threshold)
+            // never fires during the hold, and the ghost only latches to the
+            // cursor after mouseup, dropping on the next click ("sticky tape").
+            // preventDefault on mousedown blocks selection/focus but still lets
+            // the synthesised click through, so plain click-select is untouched.
+            e.preventDefault();
             self._beginPointerDrag(el, step, e);
         });
     };
@@ -3105,8 +3113,15 @@
         },
         onContext: function(sid) {
             if (!_toolEditor || !sid) return;
-            // Right-clicked a module: show just its parameters.
-            _toolEditor.open(sid);
+            // Right-click toggles the parameter editor: if this module's panel is
+            // already the open one, close it; otherwise open it. Without the
+            // toggle a second right-click just re-opened the same panel, so the
+            // menu felt impossible to dismiss by the gesture that summoned it.
+            if (_toolEditor._open && _toolEditor._toolSid === sid) {
+                _toolEditor.close();
+            } else {
+                _toolEditor.open(sid);
+            }
         }
     });
 

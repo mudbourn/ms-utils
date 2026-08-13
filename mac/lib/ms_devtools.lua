@@ -680,12 +680,34 @@ return function(ms)
                 elseif action == "ready" then
                     -- Panel handler is now registered — push current state so
                     -- the card fills immediately without requiring a tab-out.
+                    -- Also (re)load the event log from retained history: a popout
+                    -- fires ready only once its own webview has loaded, which is
+                    -- the reliable moment to seed it (the poppedOut handler's
+                    -- earlier push can lose the race against page load).
                     hs.timer.doAfter(0.05, function()
                         if _windowOpen then
                             local st = _winRead(hs.window.focusedWindow())
                             if st then _winPush("updateCurrentWindow", st) end
+                            if #_windowHistory > 0 then
+                                local ok, j = pcall(hs.json.encode, _windowHistory)
+                                if ok then pcall(function()
+                                    _pushToPanel(_windowPanel, "window", "loadHistory(" .. j .. ")")
+                                end) end
+                            end
                         end
                     end)
+                end
+            end)
+
+            -- Popping the Window panel into its own webview: it becomes live on
+            -- its own, so mark it open and (re)start the Window Spy engine. The
+            -- engine may have self-stopped as the inline panel hid during the
+            -- pop-out; without this restart the popout receives no pushes at all.
+            ms.bus.on("panel:poppedOut", function(_, body)
+                if not body or body.id ~= "window" then return end
+                _windowOpen = true
+                if not (_G.ms and _G.ms._octaneMode) then
+                    self:_winEngineStart()
                 end
             end)
 
@@ -2045,6 +2067,15 @@ return function(ms)
     -- is NOT a sufficient liveness test on its own.
     local function _winStillOpen()
         if _windowPanel ~= nil then return _windowOpen end  -- standalone webview
+        -- Popped out into its own webview: the panel is on screen on its own,
+        -- independent of the main shell's active panel or visibility. Without
+        -- this, the popout falls through to the shell-inline test below, which
+        -- fails the moment it detaches — stopping the engine and leaving the
+        -- popout dead (dashes, grey badges, empty log, inert Inspect).
+        local ms = _G.ms
+        if ms and ms.shell and ms.shell.isPoppedOut and ms.shell.isPoppedOut("window") then
+            return _windowOpen
+        end
         -- Shell-inline: only run while the Window panel is the active, visible one.
         if not (_windowOpen and _shellActive() and _activePanel == "window") then
             return false
