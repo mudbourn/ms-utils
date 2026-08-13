@@ -424,6 +424,8 @@ function injectCSS() {
     font-weight: 700;
 }
 .tool-ed-array-remove:hover { opacity: 1; background: var(--danger-bg); color: var(--danger); }
+.tool-ed-array-remove svg { width: 12px; height: 12px; }
+.tool-ed-array-remove svg path { stroke: currentColor; fill: none; }
 .tool-ed-array-add {
     display: inline-flex;
     align-items: center;
@@ -936,7 +938,7 @@ class ToolEditor {
         inp.setAttribute("autocapitalize", "off");
 
         inp.addEventListener("input", () => {
-            this._updateParam(sid, key, inp.value);
+            this._updateParam(sid, key, inp.value, true);
         });
         inp.addEventListener("keydown", (e) => e.stopPropagation());
 
@@ -969,7 +971,7 @@ class ToolEditor {
 
         const emit = () => {
             const v = parseFloat(inp.value) || 0;
-            this._updateParam(sid, key, v);
+            this._updateParam(sid, key, v, true);
         };
 
         inp.addEventListener("input", emit);
@@ -1128,7 +1130,7 @@ class ToolEditor {
         };
 
         ta.addEventListener("input", () => {
-            this._updateParam(sid, key, ta.value);
+            this._updateParam(sid, key, ta.value, true);
             autoResize();
         });
         ta.addEventListener("keydown", (e) => e.stopPropagation());
@@ -1165,14 +1167,14 @@ class ToolEditor {
                 inp.setAttribute("autocapitalize", "off");
                 inp.addEventListener("input", () => {
                     items[i] = inp.value;
-                    this._updateParam(sid, key, [...items]);
+                    this._updateParam(sid, key, [...items], true);
                 });
                 inp.addEventListener("keydown", (e) => e.stopPropagation());
                 itemRow.appendChild(inp);
 
                 const removeBtn = document.createElement("div");
                 removeBtn.className = "tool-ed-array-remove";
-                removeBtn.textContent = "×";
+                removeBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke-width="2" stroke-linecap="round"/></svg>';
                 _sfx(removeBtn, "back");
                 removeBtn.addEventListener("click", (e) => {
                     e.stopPropagation();
@@ -1208,9 +1210,12 @@ class ToolEditor {
     /**
      * Update a single parameter on the tool and notify the canvas.
      */
-    _updateParam(sid, key, value) {
+    _updateParam(sid, key, value, quiet) {
         if (!this._canvas) return;
-        this._canvas.updateTool(sid, { [key]: value });
+        // quiet=true for per-keystroke text/number/code/array edits: the canvas
+        // updates its model + block summary but does not re-render, so the
+        // focused field survives. Discrete edits (selects) omit it and repaint.
+        this._canvas.updateTool(sid, { [key]: value }, quiet ? { quiet: true } : undefined);
         this._onUpdate(sid, { [key]: value });
     }
 

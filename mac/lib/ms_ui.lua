@@ -268,12 +268,22 @@ return function(ms)
                 end
             end
 
+            -- Keys the user authored in the Setting Builder are the only ones
+            -- the UI may offer to delete (pack-declared settings are not ours
+            -- to unregister). Mark each serialized item so the Settings window
+            -- can surface a Delete affordance for authored tools only.
+            local _authoredKeys = {}
+            for _, ad in ipairs(ms._authoredSettings or {}) do
+                if ad.key then _authoredKeys[ad.key] = true end
+            end
+
             local function _serItem(d)
                 local it = {
-                    type    = d.type,
-                    key     = d.key,
-                    label   = d.label,
-                    hint    = d.hint,
+                    type     = d.type,
+                    key      = d.key,
+                    label    = d.label,
+                    hint     = d.hint,
+                    authored = d.key and _authoredKeys[d.key] or nil,
                 }
                 if d.type == "slider" then
                     it.min  = d.min;  it.max  = d.max
@@ -917,6 +927,24 @@ return function(ms)
                 -- them; a later in-session visual save (compiler.load) will yield
                 -- its ms.macroMeta to this. See ms.compiler.load / ms_core.
                 ms._macroMetaFromHand = ms.macroMeta ~= nil
+                -- Re-register builder-authored (visual) macros, exactly as boot
+                -- does after the handwritten pack runs (see ms_core Startup).
+                -- The registry was cleared in Phase 2, so without this every
+                -- visual macro vanishes on a macro reload — taking its saved
+                -- bind override with it, since loadSettings only restores a
+                -- bind for a still-registered def. That was the "builder bind
+                -- doesn't persist" bug: any reload silently dropped them.
+                if ms.compiler and ms.compiler.paths
+                    and hs.fs.attributes(ms.compiler.paths.json) then
+                    local rebOk, rebErr = pcall(ms.compiler.rebuild)
+                    if not rebOk then
+                        print("ms.compiler.rebuild (reload): " .. tostring(rebErr))
+                    end
+                    local ldOk, ldErr = pcall(ms.compiler.load)
+                    if not ldOk then
+                        print("ms.compiler.load (reload): " .. tostring(ldErr))
+                    end
+                end
                 for _, id in ipairs(ms.registry._defList) do
                     local def = ms.registry._defs[id]
                     if def and not (def.default and def.default.type) and ms.binds[id] == nil then
@@ -1608,7 +1636,18 @@ return function(ms)
             openConsole = function() hs.openConsole() end,
 
             editMacros = function()
-                os.execute("open " .. os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua")
+                -- `open -t` forces the default text editor: a bare `open` on a
+                -- .lua file does nothing when no app is registered for the
+                -- extension (the reported "button opens nothing"). This is the
+                -- HANDWRITTEN suite, not the visual builder's macro — the visual
+                -- macros live in data/ms_macros_visual.json — so say so.
+                local path = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
+                if ms.alert then
+                    ms.alert("Opening ms_macros.lua — the handwritten macro suite.\n"
+                        .. "Visual builder macros are stored separately and are\n"
+                        .. "not edited here.", 5)
+                end
+                os.execute("open -t '" .. path .. "'")
             end,
 
             editTheme = function()
@@ -1827,6 +1866,11 @@ return function(ms)
                             website     = e.website,
                             trust       = e.trust,
                             components  = e.components,
+                            -- url/sha256 travel through so the card can render a
+                            -- "View on GitHub" button and the virtual theme/sound
+                            -- slices inherit the profile's asset URL.
+                            url         = e.url,
+                            sha256      = e.sha256,
                         }
                     end
                     local ok, json = pcall(hs.json.encode, { entries = out })

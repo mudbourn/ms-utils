@@ -698,6 +698,14 @@ YQIDAQAB
 
             elseif body == "keepBlocked" then
                 pcall(function() if _guardianView then _guardianView:delete() end end)
+                -- Staying blocked means mudscript will not load. Rather than
+                -- leave Hammerspoon running in a half-dead state (menubar alive,
+                -- no core), quit it outright so the user makes a clean choice:
+                -- repair, or no Hammerspoon at all.
+                pcall(function()
+                    local app = hs.application.get("Hammerspoon")
+                    if app then app:kill() else os.exit(0) end
+                end)
 
             elseif body == "revealSpoons" then
                 hs.execute("/usr/bin/open '" .. _spoonsDir .. "'")

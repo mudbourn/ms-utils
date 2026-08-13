@@ -738,7 +738,43 @@
                     return false
                 end
 
+                local deleted = data.macros[macroId]
                 data.macros[macroId] = nil
+
+                -- Promote peers: any macro whose bind derives from the one being
+                -- deleted (bind = { type = <deletedId>, ... }) would otherwise be
+                -- orphaned — its trigger pointed at a macro that no longer exists.
+                -- Give each the deleted macro's concrete trigger plus its own
+                -- modifier, so a peer that fired on "mouse3 + V" becomes a
+                -- standalone "mouse3 + V" main macro. Only runs when the deleted
+                -- macro's own bind is concrete (a main), which is exactly the
+                -- "delete a main, promote its colleagues" case.
+                local pb = deleted and deleted.bind
+                local pbType = (type(pb) == "table") and pb.type or nil
+                local isConcrete = pbType == "key" or pbType == "mouse"
+                    or pbType == "scroll" or pbType == "gamepad" or pbType == "combo"
+                if isConcrete then
+                    for _, def in pairs(data.macros) do
+                        local b = def.bind
+                        if type(b) == "table" and b.type == macroId then
+                            local mods, seen = {}, {}
+                            for _, mm in ipairs(pb.mods or {}) do
+                                if not seen[mm] then seen[mm] = true; mods[#mods + 1] = mm end
+                            end
+                            for _, mm in ipairs(b.mods or {}) do
+                                if not seen[mm] then seen[mm] = true; mods[#mods + 1] = mm end
+                            end
+                            def.bind = {
+                                type      = pb.type,
+                                key       = pb.key,
+                                button    = pb.button,
+                                direction = pb.direction,
+                                keys      = pb.keys,
+                                mods      = mods,
+                            }
+                        end
+                    end
+                end
 
                 local jf = io.open(jsonPath, "w")
                 if not jf then

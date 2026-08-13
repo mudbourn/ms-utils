@@ -437,26 +437,12 @@ function createLogPanel(config) {
         });
     })();
 
-    // ── Minimum size enforcement ───────────────────────────────────────
-    (function () {
-        const MIN_W = 800, MIN_H = 500;
-        let _resizeTimer = null;
-        function checkSize() {
-            // Skip during active resize — the Lua eventtap handles clamping
-            if (window.__msResizing) return;
-            if (window.innerWidth < MIN_W || window.innerHeight < MIN_H) {
-                sendToHost({
-                    action: "clampSize",
-                    w: Math.max(window.innerWidth, MIN_W),
-                    h: Math.max(window.innerHeight, MIN_H),
-                });
-            }
-        }
-        window.addEventListener("resize", function() {
-            clearTimeout(_resizeTimer);
-            _resizeTimer = setTimeout(checkSize, 50);
-        });
-    })();
+    // ── Minimum size ───────────────────────────────────────────────────
+    // The floor is enforced entirely in the Lua resize math (_resizeEdgeMath),
+    // which clamps smoothly as you drag an edge. The old JS approach watched the
+    // resize event and asked Lua to grow the window back to a minimum, holding
+    // x/y fixed — which snapped a small window back to a "default" size and
+    // shimmied it sideways on a west-edge resize. Removed: one source of truth.
 
     // ── Default appendEntry / loadHistory (single #log) ────────────────
     let _lastEntry = null;

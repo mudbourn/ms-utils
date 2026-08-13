@@ -173,6 +173,7 @@ function injectCSS() {
     user-select: none;
 }
 .tool-canvas-empty .tool-canvas-empty-icon { font-size: 28px; opacity: 0.25; }
+.tool-canvas-empty .tool-canvas-empty-icon svg { width: 28px; height: 28px; }
 
 .tool-block {
     display: flex;
@@ -347,7 +348,7 @@ export class ToolCanvas {
     // ── Icon preloading ────────────────────────────────────────────────
 
     async _preloadIcons() {
-        const needed = new Set(["drag", "close", "chevdown", "chevup", "trash", "edit", "macros"]);
+        const needed = new Set(["drag", "close", "chevdown", "chevup", "trash", "edit", "macros", "tools"]);
         for (const action in ACTION_ICON_MAP) needed.add(ACTION_ICON_MAP[action]);
         for (const name of needed) await fetchSVG(this._svgBase, name);
     }
@@ -554,7 +555,7 @@ export class ToolCanvas {
         this._root.innerHTML = "";
         const d = document.createElement("div");
         d.className = "tool-canvas-empty";
-        d.innerHTML = '<span class="tool-canvas-empty-icon">▶</span>'
+        d.innerHTML = '<span class="tool-canvas-empty-icon">' + (_svgCache["tools"] || "▶") + '</span>'
             + 'No tools yet<br><span style="font-size:10px">Click <b>+ Add Tool</b> to begin</span>';
         this._root.appendChild(d);
     }

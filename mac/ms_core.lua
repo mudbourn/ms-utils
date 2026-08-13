@@ -3128,7 +3128,22 @@
 
             -- Multi-point drag: press at points[1], drag through points[2..N], release
             ms.dragPath = function(points, button, ref, delayMs)
-                if not points or #points < 2 then return end
+                -- Accept `points` as a table of {x,y} pairs OR a "x,y;x,y;…"
+                -- string. The visual builder and the drag recorder both author
+                -- the string form; parsing it here means one runtime serves
+                -- authored steps, recordings, and direct Lua callers alike.
+                -- Without this, a builder/recorded dragPath crashed on points[1]
+                -- (string-indexed as a table) — the feature never worked.
+                if type(points) == "string" then
+                    local parsed = {}
+                    for pair in points:gmatch("[^;]+") do
+                        local sx, sy = pair:match("^%s*(-?%d+%.?%d*)%s*,%s*(-?%d+%.?%d*)%s*$")
+                        local nx, ny = tonumber(sx), tonumber(sy)
+                        if nx and ny then parsed[#parsed + 1] = { nx, ny } end
+                    end
+                    points = parsed
+                end
+                if type(points) ~= "table" or #points < 2 then return end
                 button = button or "Left"
                 delayMs = delayMs or 10
                 local btnNum = button == "Right" and 1 or (button == "Middle" and 2 or 0)
@@ -3513,7 +3528,7 @@
                 label  = "Drag Path",
                 group  = "mouse",
                 info   = "Drag mouse through a series of points",
-                params = { {name = "points", type = "table"}, {name = "button", type = "string"}, {name = "ref", type = "string"}, {name = "delayMs", type = "number"} },
+                params = { {name = "points", type = "string"}, {name = "button", type = "string"}, {name = "ref", type = "string"}, {name = "delayMs", type = "number"} },
                 icon   = "move",
             })
             ms.fn.define("ms.cam", ms.cam, {
@@ -4426,6 +4441,75 @@
                                 types[#types + 1] = et.otherMouseDragged
                             end
 
+                            -- Ramer–Douglas–Peucker path decimation. A recorded
+                            -- drag arrives as a dense stream (~60–120 pts/sec);
+                            -- RDP keeps only points that change the path's shape,
+                            -- so a straight swipe collapses to its endpoints while
+                            -- a curve keeps just enough to hold its form — the
+                            -- point-minimising answer to "won't this flood the
+                            -- steps list?". `granularity` is the record-options
+                            -- slider (1 coarse … 10 fine): higher → smaller
+                            -- tolerance → more points → closer to 1:1. Output is
+                            -- hard-capped so no gesture can bloat the emitted step.
+                            local function resampleDrag(pts, granularity)
+                                local n = #pts
+                                if n <= 2 then return pts end
+                                local g = tonumber(granularity) or 5
+                                if g < 1 then g = 1 elseif g > 10 then g = 10 end
+                                local epsilon = 40 / g  -- gran 1 → 40px … gran 10 → 4px
+
+                                local keep = {}
+                                keep[1] = true; keep[n] = true
+                                local stack = { { 1, n } }
+                                while #stack > 0 do
+                                    local seg = table.remove(stack)
+                                    local first, last = seg[1], seg[2]
+                                    local ax, ay = pts[first][1], pts[first][2]
+                                    local bx, by = pts[last][1], pts[last][2]
+                                    local dx, dy = bx - ax, by - ay
+                                    local len2 = dx * dx + dy * dy
+                                    local maxD, idx = -1, nil
+                                    for i = first + 1, last - 1 do
+                                        local px, py = pts[i][1], pts[i][2]
+                                        local dist
+                                        if len2 == 0 then
+                                            local ex, ey = px - ax, py - ay
+                                            dist = math.sqrt(ex * ex + ey * ey)
+                                        else
+                                            local t = ((px - ax) * dx + (py - ay) * dy) / len2
+                                            if t < 0 then t = 0 elseif t > 1 then t = 1 end
+                                            local cx, cy = ax + t * dx, ay + t * dy
+                                            local ex, ey = px - cx, py - cy
+                                            dist = math.sqrt(ex * ex + ey * ey)
+                                        end
+                                        if dist > maxD then maxD, idx = dist, i end
+                                    end
+                                    if idx and maxD > epsilon then
+                                        keep[idx] = true
+                                        stack[#stack + 1] = { first, idx }
+                                        stack[#stack + 1] = { idx, last }
+                                    end
+                                end
+
+                                local out = {}
+                                for i = 1, n do if keep[i] then out[#out + 1] = pts[i] end end
+
+                                -- Absolute ceiling: an enormous, frantic path is
+                                -- thinned to evenly-spaced points so the emitted
+                                -- string stays bounded regardless of RDP's output.
+                                local CAP = 200
+                                if #out > CAP then
+                                    local trimmed, stepN, acc = {}, #out / CAP, 1
+                                    for i = 1, CAP do
+                                        trimmed[i] = out[math.floor(acc + 0.5)] or out[#out]
+                                        acc = acc + stepN
+                                    end
+                                    trimmed[1] = out[1]; trimmed[CAP] = out[#out]
+                                    out = trimmed
+                                end
+                                return out
+                            end
+
                             rec.tap = hs.eventtap.new(types, function(ev)
                                 local ok = pcall(function()
                                     local t = ev:getType()
@@ -4473,6 +4557,7 @@
                                             rec.drag = {
                                                 button = button, moved = false,
                                                 x1 = pt.x, y1 = pt.y, x2 = pt.x, y2 = pt.y,
+                                                points = { { pt.x, pt.y } },
                                             }
                                         elseif rec.opts.recordMouseButtons ~= false then
                                             maybeWait()
@@ -4488,6 +4573,14 @@
                                             local pt = ev:location()
                                             rec.drag.moved = true
                                             rec.drag.x2, rec.drag.y2 = pt.x, pt.y
+                                            -- Accumulate the real path for dragPath.
+                                            -- Bounded so a very long drag can't grow
+                                            -- memory without limit; RDP + the CAP
+                                            -- thin it down at emit time anyway.
+                                            local pts = rec.drag.points
+                                            if pts and #pts < 4000 then
+                                                pts[#pts + 1] = { pt.x, pt.y }
+                                            end
                                         end
                                         return
                                     end
@@ -4500,12 +4593,37 @@
                                         d.x2, d.y2 = pt.x, pt.y
                                         if d.moved then
                                             maybeWait()
-                                            pushStep("ms.Mouse", {
-                                                operation = "Drag", button = d.button,
-                                                reference = "Absolute",
-                                                x  = math.floor(d.x1 + 0.5), y  = math.floor(d.y1 + 0.5),
-                                                x2 = math.floor(d.x2 + 0.5), y2 = math.floor(d.y2 + 0.5),
-                                            })
+                                            -- Seal the path with the release point,
+                                            -- then decimate to the chosen fidelity.
+                                            if d.points then d.points[#d.points + 1] = { d.x2, d.y2 } end
+                                            local path = d.points
+                                                and resampleDrag(d.points, rec.opts.dragGranularity)
+                                                or nil
+                                            if path and #path >= 3 then
+                                                -- A genuine curve/path → one dragPath
+                                                -- step carrying the whole gesture, so
+                                                -- the steps list never floods.
+                                                local parts = {}
+                                                for _, p in ipairs(path) do
+                                                    parts[#parts + 1] = math.floor(p[1] + 0.5)
+                                                        .. "," .. math.floor(p[2] + 0.5)
+                                                end
+                                                pushStep("ms.dragPath", {
+                                                    points  = table.concat(parts, ";"),
+                                                    button  = d.button,
+                                                    ref     = "Absolute",
+                                                    delayMs = 10,
+                                                })
+                                            else
+                                                -- Straight two-point drag → the
+                                                -- existing compact Mouse Drag op.
+                                                pushStep("ms.Mouse", {
+                                                    operation = "Drag", button = d.button,
+                                                    reference = "Absolute",
+                                                    x  = math.floor(d.x1 + 0.5), y  = math.floor(d.y1 + 0.5),
+                                                    x2 = math.floor(d.x2 + 0.5), y2 = math.floor(d.y2 + 0.5),
+                                                })
+                                            end
                                         elseif rec.opts.recordMouseButtons ~= false
                                             and not inShell({ x = d.x1, y = d.y1 }) then
                                             -- Pressed and released in place — a click.

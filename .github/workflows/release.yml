@@ -123,12 +123,9 @@ jobs:
           # Include MANIFEST in the archive so auto-seed works on first load.
           cp MANIFEST.json "$DIST/"
 
-          # Build archives in both formats for backward compatibility.
-          # The .zip is the primary format; .tar.gz is for older installers.
+          # Build the release archive. .zip is the only supported format.
           ZIP_ARCHIVE="mudscript-macos-${VERSION}.zip"
-          TAR_ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
           zip -r "$ZIP_ARCHIVE" "$DIST"
-          tar czf "$TAR_ARCHIVE" "$DIST"
           BUNDLE_SHA=$(sha256sum "$ZIP_ARCHIVE" | awk '{print $1}')
 
           jq -n \
@@ -256,10 +253,6 @@ jobs:
           cp MANIFEST.json "$DIST/"
           rm -f "$ARCHIVE"
           zip -r "$ARCHIVE" "$DIST"
-          # Also rebuild tar.gz for backward compat
-          TAR_ARCHIVE="mudscript-macos-${VERSION}.tar.gz"
-          rm -f "$TAR_ARCHIVE"
-          tar czf "$TAR_ARCHIVE" "$DIST"
 
           echo "Per-file manifest: $MANIFEST_OUT ($FILE_COUNT files)"
 
@@ -284,7 +277,6 @@ jobs:
           name: macos-${{ inputs.version }}
           path: |
             mudscript-macos-${{ inputs.version }}.zip
-            mudscript-macos-${{ inputs.version }}.tar.gz
 
   # ────────────────────────────────────────────────────────────────────────────
   # Release — create GitHub Release and attach assets
@@ -322,10 +314,9 @@ jobs:
 
           ### Downloads
           - [mudscript-macos-${VERSION}.zip](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.zip)
-          - [mudscript-macos-${VERSION}.tar.gz](https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.tar.gz) (legacy)
 
           ### Install
-          Extract the zip (or tar.gz), run \`bash install.sh\`
+          Extract the zip, run \`bash install.sh\`
 
           > **Windows users:** The Windows build is in early testing.
           > Switch mudscript's update channel to **Testing** or grab a pre-release from the [Releases](https://github.com/${{ github.repository }}/releases) page.

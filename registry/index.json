@@ -3,15 +3,28 @@
   "generated": "2026-08-13T02:52:18Z",
   "entries": [
     {
+      "id": "plugin-roblox",
+      "type": "plugin",
+      "name": "Roblox",
+      "version": "0.1.0",
+      "author": "mudbourn",
+      "description": "Declares Roblox as the macro target and exposes Roblox's live saved settings (sensitivity, framerate cap, graphics quality) to macros, plus an anti-timeout keep-alive.",
+      "website": "https://mudbourn.info",
+      "sha256": "2297baacfc876b51a728559a6771b055d56334f5245b159ad4d4e16dca4357d0",
+      "url": "https://github.com/mudbourn/mudscript/releases/download/packages/Roblox.mspkg",
+      "size": 6355,
+      "trust": "trusted"
+    },
+    {
       "id": "profile-combat-warriors-macros-profile",
       "type": "profile",
       "name": "Combat Warriors Macros profile",
       "version": "1.0.0",
       "author": "mudbourn",
       "website": "https://mudbourn.info",
-      "sha256": "9dacfaf15af1329726b7afb7c9745dce720551e53648f5bb8659233c4bb5723e",
-      "url": "https://github.com/mudbourn/mudscript/releases/download/packages/Combat.Warriors.Macros-profile.mspkg",
-      "size": 3688748,
+      "sha256": "f50b61d0022b4e63448ac974c70f6ac61e64cc188617cd74a163d299087ae78d",
+      "url": "https://github.com/mudbourn/ms-utils/releases/download/packages/Combat.Warriors.Macros-profile.mspkg",
+      "size": 7368428,
       "components": {
         "theme": {
           "includesSounds": false
@@ -23,19 +36,6 @@
           "present": true
         }
       },
-      "trust": "trusted"
-    },
-    {
-      "id": "plugin-roblox",
-      "type": "plugin",
-      "name": "Roblox",
-      "version": "0.1.0",
-      "author": "mudbourn",
-      "description": "Declares Roblox as the macro target and exposes Roblox's live saved settings (sensitivity, framerate cap, graphics quality) to macros, plus an anti-timeout keep-alive.",
-      "website": "https://mudbourn.info",
-      "sha256": "2297baacfc876b51a728559a6771b055d56334f5245b159ad4d4e16dca4357d0",
-      "url": "https://github.com/mudbourn/mudscript/releases/download/packages/Roblox.mspkg",
-      "size": 6355,
       "trust": "trusted"
     }
   ],

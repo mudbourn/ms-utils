@@ -392,33 +392,38 @@ return function(ms)
                 data.macros[id] = data.macros[id] or {}
                 data.macros[id].enabled = enabled
             end
+            -- Canonical compare across every trigger shape — including derived
+            -- sub-bind modifier changes (type = <parentId>) and chords (type =
+            -- "combo", carrying `keys`), which the old per-field chain silently
+            -- treated as identical to default and never persisted.
+            local function canonBind(x)
+                if type(x) ~= "table" then return tostring(x) end
+                local mods = {}
+                for _, m in ipairs(x.mods or {}) do mods[#mods + 1] = m end
+                table.sort(mods)
+                local keys = {}
+                for _, k in ipairs(x.keys or {}) do keys[#keys + 1] = k end
+                table.sort(keys)
+                return table.concat({
+                    tostring(x.type), tostring(x.key), tostring(x.button),
+                    tostring(x.direction), table.concat(mods, "+"),
+                    table.concat(keys, "+"),
+                }, "|")
+            end
             for id, cfg in pairs(ms.bindConfig or {}) do
                 local regEntry = ms.registry._defs and ms.registry._defs[id]
                 local def = regEntry and regEntry.default
-                if def then
-                    -- Canonical compare across every trigger shape — including
-                    -- derived sub-bind modifier changes (type = <parentId>) and
-                    -- chords (type = "combo", carrying `keys`), which the old
-                    -- per-field chain silently treated as identical to default
-                    -- and never persisted. Persist only genuine overrides.
-                    local function canon(x)
-                        if type(x) ~= "table" then return tostring(x) end
-                        local mods = {}
-                        for _, m in ipairs(x.mods or {}) do mods[#mods + 1] = m end
-                        table.sort(mods)
-                        local keys = {}
-                        for _, k in ipairs(x.keys or {}) do keys[#keys + 1] = k end
-                        table.sort(keys)
-                        return table.concat({
-                            tostring(x.type), tostring(x.key), tostring(x.button),
-                            tostring(x.direction), table.concat(mods, "+"),
-                            table.concat(keys, "+"),
-                        }, "|")
-                    end
-                    if canon(cfg) ~= canon(def) then
-                        data.macros[id] = data.macros[id] or {}
-                        data.macros[id].bind = cfg
-                    end
+                -- Persist genuine overrides. When the macro HAS a compiled
+                -- default, only save a bind that differs from it. When it has
+                -- NO default (a visual-builder macro authored without a bind),
+                -- any configured bind is by definition an override — the old
+                -- `if def then` guard dropped these entirely, so builder binds
+                -- vanished on a full reload.
+                local persist = def and (canonBind(cfg) ~= canonBind(def))
+                    or (not def and cfg ~= nil)
+                if persist then
+                    data.macros[id] = data.macros[id] or {}
+                    data.macros[id].bind = cfg
                 end
             end
             for id, cooldown in pairs(ms.cooldowns or {}) do

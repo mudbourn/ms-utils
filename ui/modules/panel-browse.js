@@ -217,7 +217,7 @@
             const cb = h("input", { type: "checkbox" });
             cb.addEventListener("change", () => { includeThemeSounds = cb.checked; });
             bonus.appendChild(cb);
-            bonus.appendChild(h("span", {}, "Also install the profile's sounds"));
+            bonus.appendChild(h("span", {}, "Include sounds"));
             card.appendChild(bonus);
         }
 
@@ -301,9 +301,14 @@
     function ensureStyle() {
         if (document.getElementById("browse-style")) return;
         const css = `
-        #browse-root { display:flex; flex-direction:column; gap:0; }
+        /* Fill the stage so the results box below can own a bounded height and
+           actually scroll. Without min-height:0 a flex child refuses to shrink
+           and the overflow never engages. */
+        #browse-root { display:flex; flex-direction:column; gap:0;
+            height:100%; min-height:0; }
+        #browse-results-box { flex:1 1 auto; min-height:0; overflow-y:auto; }
         .browse-toolbar { display:flex; gap:8px; align-items:center;
-            padding:10px 14px; position:sticky; top:0; z-index:2;
+            padding:10px 14px; flex:0 0 auto;
             background:var(--bg); border-bottom:1px solid var(--border-dim); }
         .browse-search { flex:1 1 auto; min-width:0; padding:6px 10px;
             border:1px solid var(--border); border-radius:var(--radius-s);
@@ -325,7 +330,20 @@
         .browse-actions { display:flex; gap:8px; }
         .browse-bonus { display:flex; align-items:center; gap:6px;
             color:var(--text2); font-size:11px; cursor:pointer; user-select:none; }
-        .browse-bonus input { margin:0; cursor:pointer; }
+        /* Custom checkbox — the native macOS control ignores our theme, so we
+           strip its appearance and draw a themed box + check ourselves. */
+        .browse-bonus input[type="checkbox"] { -webkit-appearance:none;
+            appearance:none; margin:0; width:14px; height:14px; flex:0 0 14px;
+            border:1px solid var(--border); border-radius:3px;
+            background:var(--surface); cursor:pointer; position:relative;
+            transition:background 0.12s, border-color 0.12s; }
+        .browse-bonus input[type="checkbox"]:hover { border-color:var(--accent); }
+        .browse-bonus input[type="checkbox"]:checked { background:var(--accent);
+            border-color:var(--accent); }
+        .browse-bonus input[type="checkbox"]:checked::after { content:"";
+            position:absolute; left:4px; top:1px; width:4px; height:8px;
+            border:solid var(--bg); border-width:0 2px 2px 0;
+            transform:rotate(45deg); }
         .browse-empty { padding:40px 16px; text-align:center;
             color:var(--text2); }
         .browse-empty-sub { margin-top:8px; color:var(--text3);

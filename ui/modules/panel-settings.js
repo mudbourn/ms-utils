@@ -847,26 +847,51 @@
 
             // ── renderUserItem — shared renderer for user-defined items ─────────────
             // Used by both buildSettings (Settings section) and buildUserSection.
+            // Context-menu items shared by every user setting row. "Reset to
+            // default" appears when the def carries a default; "Delete tool"
+            // appears only for settings the user authored in the Setting
+            // Builder (item.authored, set by the host) — pack-declared settings
+            // are not ours to remove. Returns null when neither applies so the
+            // row menu stays hidden.
+            function userCtxItems(item) {
+                const out = [];
+                if (item.default !== undefined) {
+                    out.push({
+                        icon: "",
+                        label: "Reset to default",
+                        action: () =>
+                            sendToHost({ action: "resetUserSetting", key: item.key }),
+                    });
+                }
+                if (item.authored) {
+                    out.push({
+                        icon: "",
+                        label: "Delete tool",
+                        danger: true,
+                        action: async () => {
+                            const res = await openModal(
+                                "Delete Tool",
+                                `Delete "${item.label || item.key}"?\n\nThis removes the setting from your pack. This cannot be undone.`,
+                                "Delete",
+                            );
+                            if (res.confirmed)
+                                sendToHost({
+                                    action: "removeUserSetting",
+                                    key: item.key,
+                                });
+                        },
+                    });
+                }
+                return out.length ? out : null;
+            }
+
             function renderUserItem(body, item) {
                 if (item.type === "divider") {
                     body.appendChild(divider());
                 } else if (item.type === "groupLabel") {
                     body.appendChild(groupLabel(item.label || ""));
                 } else if (item.type === "toggle") {
-                    const ctxItems =
-                        item.default !== undefined
-                            ? [
-                                  {
-                                      icon: "",
-                                      label: "Reset to default",
-                                      action: () =>
-                                          sendToHost({
-                                              action: "resetUserSetting",
-                                              key: item.key,
-                                          }),
-                                  },
-                              ]
-                            : null;
+                    const ctxItems = userCtxItems(item);
                     body.appendChild(
                         row(
                             item.label || item.key,
@@ -883,20 +908,7 @@
                         ),
                     );
                 } else if (item.type === "slider") {
-                    const ctxItems =
-                        item.default !== undefined
-                            ? [
-                                  {
-                                      icon: "",
-                                      label: "Reset to default",
-                                      action: () =>
-                                          sendToHost({
-                                              action: "resetUserSetting",
-                                              key: item.key,
-                                          }),
-                                  },
-                              ]
-                            : null;
+                    const ctxItems = userCtxItems(item);
                     body.appendChild(
                         buildSlider(
                             item.label || item.key,
@@ -916,20 +928,7 @@
                         ),
                     );
                 } else if (item.type === "seg") {
-                    const ctxItems =
-                        item.default !== undefined
-                            ? [
-                                  {
-                                      icon: "",
-                                      label: "Reset to default",
-                                      action: () =>
-                                          sendToHost({
-                                              action: "resetUserSetting",
-                                              key: item.key,
-                                          }),
-                                  },
-                              ]
-                            : null;
+                    const ctxItems = userCtxItems(item);
                     body.appendChild(
                         row(
                             item.label || item.key,
@@ -960,7 +959,8 @@
                     );
                     if (item.label) {
                         body.appendChild(
-                            row(item.label, item.hint || null, btn, "", null),
+                            row(item.label, item.hint || null, btn, "",
+                                userCtxItems(item)),
                         );
                     } else {
                         body.appendChild(btnRow(btn));

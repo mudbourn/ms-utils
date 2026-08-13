@@ -776,12 +776,41 @@
                         .. 'width:100%%;height:100%%;'
                         .. 'background:var(--bg);border-radius:%dpx;overflow:hidden;}'
                         .. ':root{--ms-window-radius:%dpx;}'
+                        -- Resize grab zones — same geometry/hover-highlight as the
+                        -- main shell so a popout gets the same hot edges/corners.
+                        -- log-panel.js already wires .resize-zone → resizeStart;
+                        -- these are the elements + styling it was missing.
+                        .. '.resize-zone{position:fixed;z-index:9999;background:transparent;'
+                        .. 'transition:background 0.12s ease;}'
+                        .. '.resize-zone:hover{background:var(--accent-glow-faint);}'
+                        .. '.resize-n{top:0;left:18px;right:18px;height:9px;cursor:ns-resize;}'
+                        .. '.resize-s{bottom:0;left:18px;right:18px;height:9px;cursor:ns-resize;}'
+                        .. '.resize-e{right:0;top:18px;bottom:18px;width:9px;cursor:ew-resize;}'
+                        .. '.resize-w{left:0;top:18px;bottom:18px;width:9px;cursor:ew-resize;}'
+                        .. '.resize-ne{top:0;right:0;width:18px;height:18px;cursor:nesw-resize;}'
+                        .. '.resize-nw{top:0;left:0;width:18px;height:18px;cursor:nwse-resize;}'
+                        .. '.resize-se{bottom:0;right:0;width:18px;height:18px;cursor:nwse-resize;}'
+                        .. '.resize-sw{bottom:0;left:0;width:18px;height:18px;cursor:nesw-resize;}'
+                        .. 'body.resizing *{pointer-events:none!important;}'
                         .. '%s</style>',
                         r, r, themeCSS
                     )
                     html = html:gsub("</head>", inject:gsub("%%", "%%%%") .. "</head>", 1)
-                    -- Wrap body content in #popout-root (like #shell-root)
-                    html = html:gsub("(<body[^>]*>)", "%1<div id='popout-root'>")
+                    -- The eight resize grab zones, injected as body's first
+                    -- children (position:fixed, so they anchor to the viewport
+                    -- edges regardless of the popout-root wrapper).
+                    local resizeZones =
+                        '<div class="resize-zone resize-n" data-edge="n"></div>'
+                        .. '<div class="resize-zone resize-s" data-edge="s"></div>'
+                        .. '<div class="resize-zone resize-e" data-edge="e"></div>'
+                        .. '<div class="resize-zone resize-w" data-edge="w"></div>'
+                        .. '<div class="resize-zone resize-ne" data-edge="ne"></div>'
+                        .. '<div class="resize-zone resize-nw" data-edge="nw"></div>'
+                        .. '<div class="resize-zone resize-se" data-edge="se"></div>'
+                        .. '<div class="resize-zone resize-sw" data-edge="sw"></div>'
+                    -- Wrap body content in #popout-root (like #shell-root), with
+                    -- the resize zones as siblings ahead of it.
+                    html = html:gsub("(<body[^>]*>)", "%1" .. resizeZones .. "<div id='popout-root'>")
                     html = html:gsub("(</body>)", "</div>%1")
                     local tmpName = hs.configdir .. "/ui/_popout_" .. pid .. ".html"
                     local wf = io.open(tmpName, "w")
@@ -962,6 +991,12 @@
                         end
                         ms._shellDragging = false
                         pcall(function() popView:shadow(true) end)
+                        -- No rubber-band. The animated snap-back fought the user
+                        -- when repositioning and misbehaved on multi-monitor
+                        -- (wrong-screen frame, reverse-stick). The move handler
+                        -- already floors the top at the screen edge, so a popout
+                        -- can never lose its title bar; anything else stays where
+                        -- it is dropped.
                     end)
                     return
                 end
@@ -974,7 +1009,15 @@
                         local edge = body.edge
                         local startFrame = popView:frame()
                         local startMouse = hs.mouse.absolutePosition()
-                        local MIN_W, MIN_H = 400, 300
+                        -- Popouts are just debugging read-outs; let them get
+                        -- fairly small so they stay out of the way — a touch above
+                        -- the original 400x300 floor, well under the old JS 800x500.
+                        local MIN_W, MIN_H = 460, 320
+                        -- Same top gate the drag has: a north-edge resize must not
+                        -- push the title bar above the screen top (into the menu
+                        -- bar), where it can't be grabbed back.
+                        local resScreen = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
+                        local topLimit = resScreen:frame().y
                         pcall(function() popView:shadow(false) end)
                         local et = hs.eventtap.event.types
                         local tap = hs.eventtap.new(
@@ -994,6 +1037,11 @@
                                 local dx = mp.x - startMouse.x
                                 local dy = mp.y - startMouse.y
                                 local nf = ms._resizeEdgeMath(edge, startFrame, dx, dy, MIN_W, MIN_H)
+                                if nf.y < topLimit then
+                                    nf.h = nf.h - (topLimit - nf.y)
+                                    nf.y = topLimit
+                                    if nf.h < MIN_H then nf.h = MIN_H end
+                                end
                                 pcall(function() popView:frame(nf) end)
                                 return false
                             end)
@@ -1049,11 +1097,29 @@
             pcall(function() popView:minimumSize({ w = 400, h = 300 }) end)
             pcall(function() popView:allowResizing(true) end)
 
+            -- Grow-in, deferred until the page actually loads. Running the
+            -- animation right after url() meant it played over a still-blank,
+            -- async-loading webview and finished before any content rendered —
+            -- so the open looked instant while the close (content already up)
+            -- animated. navigationCallback is set BEFORE url() so the finish
+            -- event can't fire before we're listening; a timeout backstops a
+            -- missed callback so the popout can never stay stuck invisible.
+            local _grewIn = false
+            local function _growIn()
+                if _grewIn or not popView then return end
+                _grewIn = true
+                animatePopWindow(panelId, popView, startFrame, { x = x, y = y, w = w, h = h }, 0, 1, nil)
+            end
+            pcall(function()
+                popView:navigationCallback(function(act)
+                    if act == "didFinishNavigation" then _growIn() end
+                end)
+            end)
             -- Load via url() — document gets a real file URL
             popView:url("file://" .. tmpName)
             popView:alpha(0)
             ms.safeShow(popView)
-            animatePopWindow(panelId, popView, startFrame, { x = x, y = y, w = w, h = h }, 0, 1, nil)
+            hs.timer.doAfter(0.6, _growIn)
             -- Bring popout above the shell after window system settles
             hs.timer.doAfter(0.15, function()
                 pcall(function() popView:bringToFront(true) end)

@@ -1568,6 +1568,11 @@
         if (action === "comment") return params.text || "";
         if (action === "code") return (params.source||"").split("\n")[0] || "";
         if (action === "setting") return 'ms.settings.get("' + (params.key || "") + '")';
+        if (action === "ms.dragPath") {
+            var pts = (typeof params.points === "string" && params.points.trim())
+                ? params.points.split(";").filter(function(s){ return s.trim(); }).length : 0;
+            return (params.button || "Left") + " drag · " + pts + " pts";
+        }
         if (action === "var_set") return (params.name||"v") + " = " + (params.value!==undefined?params.value:"");
         if (action === "var_add" || action === "var_sub" || action === "var_mul") {
             var op = action==="var_add"?"+":action==="var_sub"?"-":"*";
@@ -1594,6 +1599,10 @@
         this._el = container;
         this._onChange = (opts && opts.onChange) || function(){};
         this._onSelect = (opts && opts.onSelect) || function(){};
+        // Opening the parameter editor is its own gesture (right-click a
+        // module) rather than a side effect of selecting one — selection alone
+        // no longer forces the params panel open, which read as persistent.
+        this._onContext = (opts && opts.onContext) || function(){};
         this._tools = [];
         this._map = {};
         // Selection model (Keyboard-Maestro style, text-like):
@@ -1869,6 +1878,14 @@
             if (window.playSlot) playSlot("interact");
             self._clickSelect(step._sid, e);
         });
+        // Right-click opens the parameter editor for just this module. Select
+        // it first so the editor and the highlight agree.
+        el.addEventListener("contextmenu", function(e) {
+            e.preventDefault();
+            if (window.playSlot) playSlot("interact");
+            self.select([step._sid]);
+            self._onContext(step._sid);
+        });
 
         this._wireDrag(el, step);
         return el;
@@ -1975,6 +1992,13 @@
             if (window.playSlot) playSlot("interact");
             self._clickSelect(step._sid, e);
         });
+        // Right-click opens the parameter editor for this container.
+        header.addEventListener("contextmenu", function(e) {
+            e.preventDefault();
+            if (window.playSlot) playSlot("interact");
+            self.select([step._sid]);
+            self._onContext(step._sid);
+        });
         this._wireDrag(header, step);
 
         wrap.appendChild(header);
@@ -2006,6 +2030,9 @@
             for (var i=0;i<steps.length;i++) body.appendChild(this._renderTool(steps[i]));
         }
 
+        body.addEventListener("dragenter", function(e) {
+            if (!self._dragId) return; e.preventDefault(); e.stopPropagation();
+        });
         body.addEventListener("dragover", function(e) {
             if (!self._dragId) return; e.preventDefault(); e.stopPropagation();
             e.dataTransfer.dropEffect = "move"; body.classList.add("drag-target");
@@ -2168,9 +2195,25 @@
         return false;
     };
 
+    // TEMP drag instrumentation. Routes each DnD event to the Hammerspoon
+    // console via the same postMessage channel as _postJsError, so one drag
+    // tells us exactly where the chain breaks. Remove once the drag is fixed.
+    function _dragDbg(ev, sid, extra) {
+        try {
+            window.webkit.messageHandlers.msShell.postMessage(
+                JSON.stringify({ panel: "_shell", action: "jsError", body: {
+                    kind: "dragDbg",
+                    msg: "[drag] " + ev + " sid=" + sid + (extra ? " " + extra : ""),
+                    src: "panel-macros", line: 0, col: 0, stack: ""
+                } })
+            );
+        } catch(e) {}
+    }
+
     ToolCanvas.prototype._wireDrag = function(el, step) {
         var self = this;
         el.addEventListener("dragstart", function(e) {
+            _dragDbg("dragstart", step._sid);
             // If the grabbed block is part of a multi-selection, the whole
             // selection travels together; otherwise this becomes a fresh
             // single-block selection so the drag and the highlight agree.
@@ -2205,13 +2248,24 @@
             requestAnimationFrame(function() { ghost.remove(); });
         });
         el.addEventListener("dragend", function() {
+            _dragDbg("dragend", step._sid);
             self._dragId = null; self._dragGroup = null;
             self._root.querySelectorAll(".tool-block.dragging").forEach(function(d) {
                 d.classList.remove("dragging");
             });
             self._clearDrops();
         });
+        // WKWebView will not fire `drop` unless the target cancels `dragenter`
+        // too — cancelling only `dragover` is enough in Chrome/Firefox but not
+        // here, which is why in-list reorder produced a drag image (dragstart
+        // fired) yet never dropped. Mirror the dragover guard.
+        el.addEventListener("dragenter", function(e) {
+            _dragDbg("dragenter", step._sid, "dragId=" + self._dragId);
+            if (!self._dragId || (self._dragGroup && self._dragGroup.indexOf(step._sid) !== -1)) return;
+            e.preventDefault(); e.stopPropagation();
+        });
         el.addEventListener("dragover", function(e) {
+            if (!el._dbgOver) { el._dbgOver = true; _dragDbg("dragover", step._sid, "dragId=" + self._dragId); }
             // Ignore hovering over any block that is itself part of the drag.
             if (!self._dragId || (self._dragGroup && self._dragGroup.indexOf(step._sid) !== -1)) return;
             // Stop the event bubbling to ancestor step elements. Without this,
@@ -2228,9 +2282,12 @@
             else el.classList.add("drag-over-below");
         });
         el.addEventListener("dragleave", function() {
+            el._dbgOver = false;
             el.classList.remove("drag-over-above","drag-over-below","drag-over-nest");
         });
         el.addEventListener("drop", function(e) {
+            _dragDbg("drop", step._sid, "dragId=" + self._dragId);
+            el._dbgOver = false;
             e.preventDefault(); e.stopPropagation();
             var group = self._dragGroup || (self._dragId ? [self._dragId] : []);
             if (!group.length || group.indexOf(step._sid) !== -1) { self._clearDrops(); return; }
@@ -2261,10 +2318,31 @@
         this._root.querySelectorAll(".drag-target").forEach(function(el) { el.classList.remove("drag-target"); });
     };
 
-    ToolCanvas.prototype.updateTool = function(sid, params) {
+    ToolCanvas.prototype.updateTool = function(sid, params, opts) {
         var s = this._map[sid]; if (!s) return;
         for (var k in params) { if (params.hasOwnProperty(k)) s.params[k] = params[k]; }
+        // Live typing passes { quiet:true }. A full _render() here rebuilds the
+        // canvas and (via the editor's render hook) the parameter form, tearing
+        // down the very input being typed into — so each keystroke kicked focus
+        // out of the field. Quiet updates patch only the block's on-canvas
+        // summary and leave the DOM (and focus) intact.
+        if (opts && opts.quiet) {
+            this._patchSummary(sid);
+            this._fireChange();
+            return;
+        }
         this._render(); this._fireChange();
+    };
+
+    // Update just the on-canvas parameter summary for one block, without
+    // re-rendering. Direct-child selector so a container's summary isn't
+    // confused with a nested child's.
+    ToolCanvas.prototype._patchSummary = function(sid) {
+        var s = this._map[sid]; if (!s || !this._root) return;
+        var block = this._root.querySelector('.tool-block[data-sid="' + sid + '"]');
+        if (!block) return;
+        var el = block.querySelector(":scope > .tool-params");
+        if (el) el.textContent = paramSummary(s.action, s.params);
     };
 
     ToolCanvas.prototype.getSelectedId = function() { return this._selId; };
@@ -2333,6 +2411,10 @@
         if (!entries.length) return false;
         var newIds = [];
         var insertAt = afterId ? this._findIdx(this._tools, afterId) : -1;
+        // No anchor (nothing selected) → paste at the TOP of the macro, the only
+        // way to insert above every existing module. With an anchor we insert
+        // directly after it, preserving group order.
+        var atTop = (insertAt === -1);
         for (var i = 0; i < entries.length; i++) {
             var clone = deepClone(entries[i]);
             clone._sid = nextToolId();
@@ -2340,8 +2422,8 @@
             if (clone.then) this._assignIds(clone.then);
             if (clone.else) this._assignIds(clone.else);
             if (clone.body) this._assignIds(clone.body);
-            if (insertAt !== -1) this._tools.splice(insertAt + 1 + i, 0, clone);
-            else this._tools.push(clone);
+            if (atTop) this._tools.splice(i, 0, clone);
+            else this._tools.splice(insertAt + 1 + i, 0, clone);
             newIds.push(clone._sid);
         }
         this._setSelection(newIds);
@@ -2889,7 +2971,7 @@
         var b = document.createElement("button");
         b.className = "mtab" + (id === "binds" ? " active" : "");
         b.setAttribute("data-mtab", id);
-        b.textContent = id === "builder" ? "Builder" : "Binds";
+        b.textContent = id === "builder" ? "Builder" : "Manager";
         b.addEventListener("mouseenter", function() {
             if (window.playSlot) playSlot("hover");
         });
@@ -2929,10 +3011,18 @@
         },
         onSelect: function(sid, step) {
             if (!_toolEditor) return;
-            // A single block shows its params; nothing (or a multi-selection)
-            // hides them — no stacked/duplicated parameter panels.
-            if (sid) _toolEditor.open(sid);
-            else _toolEditor.close();
+            // Selecting a block no longer opens its params — that panel stayed
+            // up persistently and got in the way. Selection only *closes* a
+            // stale editor: if the open block is no longer the sole selection,
+            // drop the panel. Opening is now the right-click gesture (onContext).
+            if (_toolEditor._open && (!sid || _toolEditor._toolSid !== sid)) {
+                _toolEditor.close();
+            }
+        },
+        onContext: function(sid) {
+            if (!_toolEditor || !sid) return;
+            // Right-clicked a module: show just its parameters.
+            _toolEditor.open(sid);
         }
     });
 
@@ -2996,6 +3086,11 @@
             }
             return null;
         }
+        canvasContainer.addEventListener("dragenter", function(e) {
+            if (!hasFn(e)) return;
+            e.preventDefault();
+            e.stopPropagation();
+        }, true);
         canvasContainer.addEventListener("dragover", function(e) {
             if (!hasFn(e)) return;
             e.preventDefault();
@@ -3251,6 +3346,20 @@
                     id:     m.id,
                 });
             }));
+
+            // Delete — a peer/sub macro is a real macro of its own (it just
+            // borrows another's trigger), so it deserves the same delete the
+            // main rows have. Guarded by a confirm like the main path.
+            if (m.group !== "system" && !m.systemBind) {
+                acts.appendChild(iconBtn("trash", "Delete macro", function() {
+                    if (typeof window.confirm === "function"
+                        && !window.confirm('Delete "' + (m.label || m.id) + '"? This cannot be undone.')) {
+                        return;
+                    }
+                    if (window.playSlot) playSlot("back");
+                    shellPost("macros", "deleteMacro", { id: m.id });
+                }));
+            }
         } else {
             acts.appendChild(bindPill(m.bind, function() {
                 shellPost("macros", "startRebind", {
@@ -3267,6 +3376,25 @@
                     systemBind: m.systemBind || false,
                 });
             }));
+
+            // Delete — only user-authored macros can be removed; system macros
+            // and the built-in system binds have no delete affordance. A single
+            // confirm guards against a misclick since the Manager list has no
+            // "currently editing" context to fall back on.
+            if (m.group !== "system" && !m.systemBind) {
+                acts.appendChild(iconBtn("trash", "Delete macro", function() {
+                    if (typeof window.confirm === "function"
+                        && !window.confirm('Delete "' + (m.label || m.id) + '"? This cannot be undone.')) {
+                        return;
+                    }
+                    if (window.playSlot) playSlot("back");
+                    shellPost("macros", "deleteMacro", { id: m.id });
+                    // Optimistic: drop it locally and repaint so the row leaves
+                    // immediately; the host refresh reconciles on its next push.
+                    _bindList = _bindList.filter(function(x) { return x.id !== m.id; });
+                    renderBindList();
+                }));
+            }
         }
 
         // System binds are always live; only real macros can be disabled.
@@ -3549,15 +3677,24 @@
     editFileBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
     editFileBtn.addEventListener("click", function() {
         if (window.playSlot) playSlot("interact");
-        if (window.shellPost) shellPost("macros", "editMacros", {});
+        // The action router keys on body.action (ms_ui _routeAction), so an
+        // empty body silently no-ops — every other macros action includes it.
+        if (window.shellPost) shellPost("macros", "editMacros", { action: "editMacros" });
     });
 
     /* ── Test Run ────────────────────────────────────────────────── */
     var _testRunning = false;
     var _testToastTimer = null;
 
-    function showTestToast(msg, type) {
-        testToast.textContent = msg;
+    function showTestToast(msg, type, iconName) {
+        // Icon path builds via DOM so msg stays inert text (some callers pass
+        // interpolated error strings) while the leading glyph becomes real SVG.
+        if (iconName && window.icon) {
+            testToast.innerHTML = window.icon(iconName);
+            testToast.appendChild(document.createTextNode(" " + msg));
+        } else {
+            testToast.textContent = msg;
+        }
         testToast.className = "macro-test-toast show"
             + (type === "error" ? " error-toast" : "")
             + (type === "success" ? " success-toast" : "");
@@ -3625,6 +3762,7 @@
         recordDelays:       true,   // emit ms.wait for idle gaps
         pressMode:          "type", // "type" | "press" | "pressRelease"
         recordDrags:        true,   // capture mouse drags as Drag ops
+        dragGranularity:    5,      // 1 (coarse) … 10 (near 1:1) path fidelity
         recordMouseButtons: true,   // capture mouse-button clicks
         recordWindowMove:   false,  // capture focused-window moves
         recordWindowResize: false,  // capture focused-window resizes
@@ -3653,7 +3791,7 @@
             recordBtn.className = "macro-toolbar-btn recording";
             recordBtn.innerHTML = menuLabel("stop", "Stop");
             recordBtn.title = "Stop recording";
-            showTestToast("\u23fa Recording — perform actions, then click Stop\u2026");
+            showTestToast("Recording — perform actions, then click Stop\u2026", null, "record");
         } else {
             recordBtn.className = "macro-toolbar-btn";
             recordBtn.innerHTML = menuLabel("record", "Record");
@@ -3757,6 +3895,34 @@
             return wrap;
         }
 
+        // Integer slider with a live value read-out. Used for drag fidelity:
+        // the value is the number of RDP retention steps the Lua recorder uses
+        // (higher = more points kept = closer to a 1:1 path). One dragPath step
+        // still results regardless, so a high value never floods the canvas.
+        function slider(key, min, max) {
+            var wrap = document.createElement("div");
+            wrap.style.cssText = "display:flex;align-items:center;gap:10px;";
+            var input = document.createElement("input");
+            input.type = "range";
+            input.min = String(min); input.max = String(max); input.step = "1";
+            input.value = String(_recOpts[key] != null ? _recOpts[key] : min);
+            input.style.cssText = "flex:1;min-width:110px;accent-color:var(--accent);";
+            var val = document.createElement("span");
+            val.style.cssText = "font-size:12px;color:var(--text2);min-width:20px;text-align:right;font-variant-numeric:tabular-nums;";
+            val.textContent = input.value;
+            input.addEventListener("input", function() {
+                val.textContent = input.value;
+            });
+            input.addEventListener("change", function() {
+                _recOpts[key] = parseInt(input.value, 10);
+                _saveRecOpts();
+                if (window.playSlot) playSlot("interact");
+            });
+            wrap.appendChild(input);
+            wrap.appendChild(val);
+            return wrap;
+        }
+
         function seg(key, opts) {
             var s = document.createElement("div");
             s.className = "seg";
@@ -3788,6 +3954,7 @@
             ]));
         row("Record mouse buttons", "Capture left/right/middle clicks.", toggle("recordMouseButtons"));
         row("Record mouse drags", "Capture press-move-release as a drag gesture.", toggle("recordDrags"));
+        row("Drag fidelity", "How closely a recorded drag follows your real path. Lower is coarser; higher tracks curves near 1:1. The whole gesture stays one module either way.", slider("dragGranularity", 1, 10));
         row("Record window moves", "Capture moving the focused window.", toggle("recordWindowMove"));
         var lastRow =
         row("Record window resizes", "Capture resizing the focused window.", toggle("recordWindowResize"));
