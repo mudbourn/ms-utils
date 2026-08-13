@@ -18,7 +18,7 @@ The primary use case is game macros: automating repetitive actions, building com
 - **Profiles**: save, switch, export, and import macro packs
 - **Plugins**: opt-in bundles that set the target game and add live capabilities (Roblox, Minecraft, and more), each reviewed and removable
 - **Browse**: install profiles, themes, sounds, macros, and plugins from a signed package library, in whole or by the slice
-- **Theming**: customize colors, fonts, window radius
+- **Theming**: customize colors, fonts, window radius (icons and language changes planned)
 - **Sound system**: assign sounds to macro events, import custom audio
 - **Settings panel**: everything in one place, no config file editing required
 
