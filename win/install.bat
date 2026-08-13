@@ -2,7 +2,7 @@
 REM install.bat — mudscript one-shot installer (Windows)
 REM
 REM Usage:
-REM   curl -LO https://raw.githubusercontent.com/mudbourn/ms-utils/main/install.bat
+REM   curl -LO https://raw.githubusercontent.com/mudbourn/mudscript/main/install.bat
 REM   install.bat
 REM
 REM Works whether you have the full repo or just this file.
@@ -19,7 +19,7 @@ powershell -NoProfile -Command ^
 
 setlocal enabledelayedexpansion
 
-set "REPO=mudbourn/ms-utils"
+set "REPO=mudbourn/mudscript"
 set "HS=%USERPROFILE%\.hammerspoon"
 set "SCRIPT_DIR=%~dp0"
 
@@ -79,9 +79,9 @@ powershell -NoProfile -Command ^
 if exist "%TEMP%\mudscript-main.zip" (
     powershell -NoProfile -Command ^
         "Expand-Archive '%TEMP%\mudscript-main.zip' '%TEMP%\mudscript-extracted' -Force"
-    REM The zip contains a folder ms-utils-main/
-    if exist "%TEMP%\mudscript-extracted\ms-utils-main" (
-        xcopy "%TEMP%\mudscript-extracted\ms-utils-main\*" "%HS%" /E /I /H /Y >nul 2>&1
+    REM The zip contains a folder mudscript-main/
+    if exist "%TEMP%\mudscript-extracted\mudscript-main" (
+        xcopy "%TEMP%\mudscript-extracted\mudscript-main\*" "%HS%" /E /I /H /Y >nul 2>&1
     ) else (
         xcopy "%TEMP%\mudscript-extracted\*" "%HS%" /E /I /H /Y >nul 2>&1
     )

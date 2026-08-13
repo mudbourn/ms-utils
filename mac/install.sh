@@ -2,7 +2,7 @@
 # install.sh — mudscript one-shot installer (macOS)
 #
 # Usage:
-#   curl -L https://raw.githubusercontent.com/mudbourn/ms-utils/main/install.sh | bash
+#   curl -L https://raw.githubusercontent.com/mudbourn/mudscript/main/install.sh | bash
 #   # or download and:
 #   bash install.sh
 #
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-REPO="mudbourn/ms-utils"
+REPO="mudbourn/mudscript"
 HS="$HOME/.hammerspoon"
 SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || pwd)"
 

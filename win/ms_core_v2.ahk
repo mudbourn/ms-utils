@@ -1162,7 +1162,7 @@ YQIDAQAB
 
         ;; Update Checker ;;
             static update() {
-                manifestURL := "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
+                manifestURL := "https://raw.githubusercontent.com/mudbourn/mudscript/main/MANIFEST.json"
                 if !RegExMatch(manifestURL, "^https://") {
                     ms.alert("Update URL must use HTTPS.", 6)
                     return

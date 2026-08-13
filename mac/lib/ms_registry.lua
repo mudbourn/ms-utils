@@ -5,7 +5,7 @@ return function(ms)
     local _home    = os.getenv("HOME")
     local _dataDir = _home .. "/.hammerspoon/data"
 
-    local INDEX_URL     = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/registry/index.json"
+    local INDEX_URL     = "https://raw.githubusercontent.com/mudbourn/mudscript/main/registry/index.json"
     local CACHE_PATH    = _dataDir .. "/ms_registry_cache.json"
     local BUNDLED_PATH  = _dataDir .. "/registry_index.json"
     local FORMAT_VERSION = 1

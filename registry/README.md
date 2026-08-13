@@ -18,9 +18,9 @@ paths to `ms.package.install`.
   "version":     "1.2.0",
   "author":      "mudbourn",
   "description": "Cool-toned dark theme.",
-  "website":     "https://github.com/mudbourn/ms-utils",
+  "website":     "https://github.com/mudbourn/mudscript",
   "sha256":      "<64-hex sha256 of the .mspkg>",
-  "url":         "https://github.com/mudbourn/ms-utils/releases/download/v1.2.0/aurora.mspkg",
+  "url":         "https://github.com/mudbourn/mudscript/releases/download/v1.2.0/aurora.mspkg",
   "size":        20481,
   "requires":    "1.4.0",
   "trust":       "trusted"

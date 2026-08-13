@@ -491,7 +491,7 @@ YQIDAQAB
 
         if onProgress then pcall(onProgress, "Fetching latest release info…") end
 
-        hs.http.asyncGet("https://api.github.com/repos/mudbourn/ms-utils/releases/latest", {
+        hs.http.asyncGet("https://api.github.com/repos/mudbourn/mudscript/releases/latest", {
             ["Accept"] = "application/vnd.github+json",
         }, function(code, body, _)
             if code ~= 200 or not body then

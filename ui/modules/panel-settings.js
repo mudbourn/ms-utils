@@ -1551,7 +1551,7 @@
                 const githubBtn = actionBtn("GitHub", "", () =>
                     sendToHost({
                         action: "openURL",
-                        url: "https://github.com/mudbourn/ms-utils",
+                        url: "https://github.com/mudbourn/mudscript",
                     }),
                 );
                 githubBtn.style.flex = "1";

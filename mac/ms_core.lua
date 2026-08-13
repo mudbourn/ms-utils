@@ -720,11 +720,11 @@
             -- END Sound Slot Registry --
 
             ms._docsURL           = "https://docs-ms.mudbourn.info"
-            ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/ms-utils/main/MANIFEST.json"
+            ms._updateManifestURL = "https://raw.githubusercontent.com/mudbourn/mudscript/main/MANIFEST.json"
             ms._updateChannel     = "stable"
             ms._branchTrace       = true
             ms._testingWorkflow   = "testing"
-            ms._testingRepo       = "mudbourn/ms-utils"
+            ms._testingRepo       = "mudbourn/mudscript"
 
             ms._updatePublicKey = [[
             -----BEGIN PUBLIC KEY-----

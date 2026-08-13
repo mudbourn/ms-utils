@@ -3486,7 +3486,7 @@ return function(ms)
 
         -- _fetchReleaseInfo [GitHub Releases API helper] --
         local function _fetchReleaseInfo(channel, callback)
-            local repo = ms._testingRepo or "mudbourn/ms-utils"
+            local repo = ms._testingRepo or "mudbourn/mudscript"
             local apiURL
             if channel == "stable" then
                 apiURL = "https://api.github.com/repos/" .. repo .. "/releases/latest"
@@ -3584,7 +3584,7 @@ return function(ms)
 
         -- _fetchArtifactInfo [GitHub Actions artifact helper] --
         local function _fetchArtifactInfo(callback)
-            local repo = ms._testingRepo or "mudbourn/ms-utils"
+            local repo = ms._testingRepo or "mudbourn/mudscript"
             local workflow = ms._testingWorkflow or "testing"
             -- Load token from restricted file if not in memory
             local token = ms._githubToken
@@ -5278,7 +5278,7 @@ return function(ms)
                     end },
                     { title = "GitHub", fn = function()
                         ms.playSlot("interact")
-                        hs.urlevent.openURL("https://github.com/mudbourn/ms-utils")
+                        hs.urlevent.openURL("https://github.com/mudbourn/mudscript")
                     end },
                     { title = "Documentation", fn = function()
                         ms.playSlot("interact")

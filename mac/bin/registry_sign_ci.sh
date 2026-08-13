@@ -26,7 +26,7 @@
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
-REPO="mudbourn/ms-utils"
+REPO="mudbourn/mudscript"
 BRANCH="main"
 RAW="https://raw.githubusercontent.com/$REPO/$BRANCH/registry/index.json"
 

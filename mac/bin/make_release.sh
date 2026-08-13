@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$SCRIPT_DIR/.."
 CORE="$ROOT/mac/ms_core.lua"
 MANIFEST="$ROOT/MANIFEST.json"
-URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua"
+URL="https://raw.githubusercontent.com/mudbourn/mudscript/main/mac/ms_core.lua"
 
 # ── Preflight ─────────────────────────────────────────────────────────────────
 

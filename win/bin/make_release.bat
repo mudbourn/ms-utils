@@ -16,7 +16,7 @@ set "SCRIPT_DIR=%~dp0"
 set "ROOT=%SCRIPT_DIR%.."
 set "CORE=%ROOT%\ms_core_v2.ahk"
 set "MANIFEST=%ROOT%\..\MANIFEST.json"
-set "URL=https://raw.githubusercontent.com/mudbourn/ms-utils/main/win/ms_core_v2.ahk"
+set "URL=https://raw.githubusercontent.com/mudbourn/mudscript/main/win/ms_core_v2.ahk"
 
 REM ── Preflight ─────────────────────────────────────────────────────────────────
 
