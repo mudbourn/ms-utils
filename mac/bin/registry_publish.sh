@@ -107,13 +107,17 @@ MANIFEST_ID="$(field id)"
 # theme's optional-sounds flag — so Browse can offer the install choices without
 # downloading first. The authoritative file map stays inside the package
 # manifest, which the client reads when it actually installs a slice.
+# Every value here MUST be a non-empty object. hs.json (the client) encodes an
+# empty Lua table as `[]`, not `{}`, so an empty component value would make the
+# client's re-canonicalization differ from the signed bytes and the whole index
+# would fail signature verification. Hence `{present:true}` rather than `{}`.
 COMPONENTS="$(printf '%s' "$MANIFEST" | jq -c '
     (.components // {}) as $c
     | reduce (["theme","sound","macro"][]) as $k ({};
         if $c[$k] != null then
             .[$k] = (if $k == "theme"
                      then {includesSounds: (($c.theme.includesSounds) == true)}
-                     else {} end)
+                     else {present: true} end)
         else . end)
 ' 2>/dev/null || echo '{}')"
 [ -n "$COMPONENTS" ] || COMPONENTS='{}'
