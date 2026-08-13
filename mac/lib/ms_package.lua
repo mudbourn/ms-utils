@@ -187,9 +187,22 @@ return function(ms)
         local _ledgerPath = _dataDir .. "/.ms_plugin_ledger.json"
 
         local function spoonTreeHash(absDir)
+            -- Two invariants keep this digest stable for the same bundle:
+            --   * LC_ALL=C pins the sort collation. Without it `sort` orders by
+            --     the process locale, so the tree hashes differently under C
+            --     (GUI launch) vs en_US (terminal launch) — e.g. README.md
+            --     sorts first under C, last under en_US.
+            --   * The ._* and __MACOSX excludes drop AppleDouble metadata that a
+            --     Finder-"Compress" package carries in. macOS reaps those files
+            --     out of the bundle at unpredictable times, so hashing them makes
+            --     the digest drift after install. They are inert (Hammerspoon
+            --     never executes them), so excluding them is safe.
+            -- Either drift shows up as Guardian's "Unrecognized Plugin" block.
+            -- MUST stay byte-identical to _hashSpoonTree in ms_guardian.lua.
             local out, ok = hs.execute(
                 "cd " .. sq(absDir) .. " && find . -type f ! -name '.DS_Store' " ..
-                "-exec shasum -a 256 {} + 2>/dev/null | sort -k2 | shasum -a 256"
+                "! -name '._*' ! -path './__MACOSX/*' " ..
+                "-exec shasum -a 256 {} + 2>/dev/null | LC_ALL=C sort -k2 | shasum -a 256"
             )
             if not ok or not out then return nil end
             return out:match("^(%x+)")

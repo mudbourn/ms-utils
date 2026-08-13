@@ -331,9 +331,20 @@ YQIDAQAB
     -- Deterministic hash of a .spoon tree: every file's hash, path-sorted, so
     -- the digest is stable across machines and insensitive to readdir order.
     local function _hashSpoonTree(absDir)
+        -- Two invariants keep this digest stable for the same bundle:
+        --   * LC_ALL=C pins the sort collation so it does not vary with the
+        --     process locale (C on GUI launch vs en_US on terminal launch).
+        --   * The ._* and __MACOSX excludes drop AppleDouble metadata that a
+        --     Finder-"Compress" package carries in; macOS reaps those files out
+        --     of the bundle later, so hashing them makes the digest drift after
+        --     install. They are inert (never executed), so excluding them is safe.
+        -- Either drift trips the Unrecognized Plugin block on a legitimately
+        -- installed plugin. MUST stay byte-identical to spoonTreeHash in
+        -- ms_package.lua.
         local out, ok = hs.execute(
             "cd '" .. absDir .. "' && find . -type f ! -name '.DS_Store' " ..
-            "-exec shasum -a 256 {} + 2>/dev/null | sort -k2 | shasum -a 256"
+            "! -name '._*' ! -path './__MACOSX/*' " ..
+            "-exec shasum -a 256 {} + 2>/dev/null | LC_ALL=C sort -k2 | shasum -a 256"
         )
         if not ok or not out then return nil end
         return out:match("^(%x+)")
