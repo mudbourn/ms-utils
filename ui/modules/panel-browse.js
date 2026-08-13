@@ -77,7 +77,7 @@
     // without a round-trip per keystroke: we narrow the last catalog locally
     // and only refetch on Refresh.
     function visible() {
-        const all = Array.isArray(S.entries) ? S.entries : [];
+        const all = expandForBrowse(S.entries);
         const q = S.query.trim().toLowerCase();
         return all.filter((e) => {
             if (S.type !== "all" && e.type !== S.type) return false;
@@ -86,6 +86,42 @@
                 || (e.author || "").toLowerCase().includes(q)
                 || (e.description || "").toLowerCase().includes(q);
         });
+    }
+
+    // Expand each profile that advertises components into virtual per-type
+    // entries (Theme / Sound / Macro), so those slices show up under their own
+    // filters and group headers — all installing from the profile's single
+    // download, no duplicated assets. The profile itself stays in the list too.
+    function expandForBrowse(list) {
+        const LABELS = { theme: "Theme", sound: "Sound", macro: "Macro" };
+        const out = [];
+        for (const e of (Array.isArray(list) ? list : [])) {
+            out.push(e);
+            const c = (e.type === "profile" && e.components
+                && typeof e.components === "object") ? e.components : null;
+            if (!c) continue;
+            const baseName = (e.name || e.id).replace(/\s+profile$/i, "");
+            for (const k of ["theme", "sound", "macro"]) {
+                if (!c[k]) continue;
+                out.push({
+                    id: e.id + "::" + k,   // synthetic — for keys/rendering only
+                    installId: e.id,       // the real registry id to download
+                    component: k,
+                    virtual: true,
+                    type: k,
+                    name: baseName + " — " + LABELS[k],
+                    version: e.version,
+                    author: e.author,
+                    website: e.website,
+                    url: e.url,            // shared asset → GitHub button works
+                    sha256: e.sha256,
+                    trust: e.trust,
+                    themeBonus: (k === "theme") && !!c.sound
+                        && !(c.theme && c.theme.includesSounds),
+                });
+            }
+        }
+        return out;
     }
 
     // Turn a package's asset URL into a human-facing GitHub page.
@@ -131,17 +167,28 @@
             card.appendChild(h("div", { cls: "browse-desc" }, e.description));
         }
 
-        // A profile that advertises components can be installed whole or one
-        // slice at a time — all from the same single download. `components` is
-        // the lightweight summary the index carries (present slices + the
-        // theme's optional-sounds flag); the real file map lives in the package.
-        const comps = (e.type === "profile" && e.components
-            && typeof e.components === "object") ? e.components : null;
-        const wholeLabel = comps ? "Install profile" : "Install";
+        // A virtual entry is one slice of a profile (theme / sound / macro),
+        // synthesised by expandForBrowse so it appears under its own type
+        // filter. It installs from the profile's single download (installId +
+        // component); everything else installs itself whole.
+        const isVirtual = !!e.virtual;
+        let includeThemeSounds = false;
+        const installLabel = (e.type === "profile" && !isVirtual)
+            ? "Install profile" : "Install";
 
         const actions = h("div", { cls: "browse-actions" });
-        actions.appendChild(actionBtn(wholeLabel, "accent", () =>
-            send("browseInstall", { id: e.id, label: e.name || e.id })));
+        actions.appendChild(actionBtn(installLabel, "accent", () => {
+            if (isVirtual) {
+                send("browseInstall", {
+                    id: e.installId,
+                    component: e.component,
+                    includeSounds: (e.component === "theme") ? includeThemeSounds : false,
+                    label: e.name || e.id,
+                });
+            } else {
+                send("browseInstall", { id: e.id, label: e.name || e.id });
+            }
+        }));
         if (e.website) {
             actions.appendChild(actionBtn("Website", "", () =>
                 send("openURL", { url: e.website })));
@@ -156,39 +203,14 @@
         }
         card.appendChild(actions);
 
-        if (comps) {
-            const LABELS = { theme: "Theme", sound: "Sound", macro: "Macro" };
-            const present = ["theme", "sound", "macro"].filter((k) => comps[k]);
-            if (present.length) {
-                // The theme's optional bonus: pull the profile's audio along
-                // with the theme, but only when the theme slice does not already
-                // bundle it and a separate sound slice actually exists.
-                const themeBundlesSounds = !!(comps.theme && comps.theme.includesSounds);
-                const themeHasBonus = !!(comps.theme && comps.sound && !themeBundlesSounds);
-                let includeThemeSounds = false;
-
-                const parts = h("div", { cls: "browse-parts" });
-                parts.appendChild(h("span", { cls: "browse-parts-label" }, "Or just a part:"));
-                for (const k of present) {
-                    parts.appendChild(actionBtn(LABELS[k], "", () =>
-                        send("browseInstall", {
-                            id: e.id,
-                            label: (e.name || e.id) + " — " + LABELS[k],
-                            component: k,
-                            includeSounds: (k === "theme") ? includeThemeSounds : false,
-                        })));
-                }
-                card.appendChild(parts);
-
-                if (themeHasBonus) {
-                    const bonus = h("label", { cls: "browse-bonus" });
-                    const cb = h("input", { type: "checkbox" });
-                    cb.addEventListener("change", () => { includeThemeSounds = cb.checked; });
-                    bonus.appendChild(cb);
-                    bonus.appendChild(h("span", {}, "Theme install also pulls the sounds"));
-                    card.appendChild(bonus);
-                }
-            }
+        // The theme slice's optional bonus: also pull the profile's audio.
+        if (isVirtual && e.component === "theme" && e.themeBonus) {
+            const bonus = h("label", { cls: "browse-bonus" });
+            const cb = h("input", { type: "checkbox" });
+            cb.addEventListener("change", () => { includeThemeSounds = cb.checked; });
+            bonus.appendChild(cb);
+            bonus.appendChild(h("span", {}, "Also install the profile's sounds"));
+            card.appendChild(bonus);
         }
 
         return card;
@@ -293,9 +315,6 @@
         .browse-meta { color:var(--text3); font-size:11px; margin-top:3px; }
         .browse-desc { color:var(--text2); font-size:12px; line-height:1.45; }
         .browse-actions { display:flex; gap:8px; }
-        .browse-parts { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-            margin-top:2px; }
-        .browse-parts-label { color:var(--text3); font-size:11px; }
         .browse-bonus { display:flex; align-items:center; gap:6px;
             color:var(--text2); font-size:11px; cursor:pointer; user-select:none; }
         .browse-bonus input { margin:0; cursor:pointer; }
