@@ -1,0 +1,29 @@
+{
+  "shell" : {
+    "lastPanel" : "macros",
+    "w" : 900,
+    "h" : 600,
+    "visible" : false
+  },
+  "socdMode" : "lastWins",
+  "soundEnabled" : true,
+  "sensitivity" : 1.5,
+  "soundVolume" : 100,
+  "trackpadHoldKeys" : {
+    "right" : "j",
+    "left" : "n"
+  },
+  "bundleSoundsWithTheme" : true,
+  "trackpadMode" : false,
+  "gamepadEnabled" : false,
+  "macroLabEnabled" : true,
+  "socdEnabled" : false,
+  "macros" : {
+    "spawnAlt" : {
+      "enabled" : false
+    }
+  },
+  "soundAssign" : [
+
+  ]
+}

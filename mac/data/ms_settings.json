@@ -1,0 +1,75 @@
+{
+  "soundEnabled" : true,
+  "consoleDangerAck" : true,
+  "socdMode" : "lastWins",
+  "octaneMuteSounds" : false,
+  "soundAssign" : {
+    "reset" : "d_Reset",
+    "restart" : "d_Restart",
+    "back" : "d_Back",
+    "updateAvailable" : "d_UpdateAvailable",
+    "hover" : "d_Hover",
+    "toggleOn" : "d_ToggleOn",
+    "disabled" : "d_MacrosOff",
+    "settingsClose" : "d_SettingsClose",
+    "update" : "d_Update",
+    "themeLoaded" : "d_ThemeLoaded",
+    "shutdown" : "d_Shutdown",
+    "settingsOpen" : "d_SettingsOpen",
+    "interact" : "d_Interact",
+    "enabled" : "d_MacrosOn",
+    "load" : "d_LoadEnd",
+    "toggleOff" : "d_ToggleOff",
+    "alert" : "d_Alert",
+    "launch" : "d_Launch"
+  },
+  "qrOptions" : {
+    "settings" : true,
+    "ui" : true,
+    "theme" : true,
+    "macros" : true
+  },
+  "trackpadMode" : false,
+  "socdEnabled" : false,
+  "macros" : {
+    "spawnAlt" : {
+      "enabled" : false
+    }
+  },
+  "octaneMode" : false,
+  "customThemeDisabled" : false,
+  "testingSource" : "release",
+  "bundleSoundsWithTheme" : true,
+  "devArchiveLimit" : 15,
+  "shell" : {
+    "y" : 614,
+    "w" : 820,
+    "visible" : true,
+    "x" : 420,
+    "h" : 521,
+    "lastPanel" : "macros"
+  },
+  "trackpadHoldKeys" : {
+    "right" : "j",
+    "left" : "n"
+  },
+  "systemBinds" : [
+
+  ],
+  "soundPreset" : "default",
+  "soundVolume" : 100,
+  "user" : {
+    "TestSetting" : 5
+  },
+  "swallowHotkeys" : false,
+  "macroLabEnabled" : true,
+  "pluginsDisabled" : [
+
+  ],
+  "importedSounds" : [
+
+  ],
+  "quickReloaded" : 0,
+  "gamepadEnabled" : false,
+  "updateChannel" : "stable"
+}
