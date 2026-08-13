@@ -16,8 +16,15 @@ obj.license = "MIT"
     local CACHE_LABEL  = "com.mudscript.cache-cleaner"
 -- END Paths --
 
--- Live sensitivity poll timer; started in :init, cancelled in :stop.
-local _sensTimer = nil
+-- Live sensitivity sync handles; started in :init, torn down in :stop.
+--   _sensWatcher — fires the instant Roblox rewrites the settings file, so a
+--                  change shows up as soon as Roblox flushes it (menu close /
+--                  focus loss), with no poll lag. We cannot make Roblox flush
+--                  on demand — it owns that — so we react to it instead.
+--   _sensTimer   — slow backstop: catches a flush the watcher missed (e.g. an
+--                  atomic rename-replace the file-path watcher didn't see).
+local _sensWatcher = nil
+local _sensTimer   = nil
 
 -- Settings Reader --
     local function readSetting(key)
@@ -205,11 +212,21 @@ function obj:init()
             onChange = function() pcall(syncSensitivity) end,
         })
 
-        -- Roblox only flushes GlobalBasicSettings to disk when its menu closes,
-        -- so a few-second poll catches a sensitivity change shortly after the
-        -- player makes it. Cheap: a ~4 KB file read.
+        -- Primary: react the instant Roblox flushes the settings file (on its
+        -- menu close / focus loss — Roblox controls when, we cannot force it).
+        -- A file-path watch fires on in-place writes; the poll below backstops
+        -- the atomic-rename case FSEvents may report differently.
+        if _sensWatcher then _sensWatcher:stop() end
+        _sensWatcher = hs.pathwatcher.new(SETTINGS_XML, function()
+            pcall(syncSensitivity)
+        end)
+        if _sensWatcher then _sensWatcher:start() end
+
+        -- Backstop poll. Slow, because the watcher carries the responsiveness;
+        -- this only has to catch a write the watcher didn't see. Cheap either
+        -- way — a ~4 KB file read, and syncSensitivity no-ops when unchanged.
         if _sensTimer then _sensTimer:stop() end
-        _sensTimer = hs.timer.doEvery(3, function() pcall(syncSensitivity) end)
+        _sensTimer = hs.timer.doEvery(10, function() pcall(syncSensitivity) end)
         pcall(syncSensitivity)   -- seed immediately at load
     -- END Sensitivity Tether --
 
@@ -274,6 +291,7 @@ function obj:init()
 end
 
 function obj:stop()
+    if _sensWatcher then _sensWatcher:stop(); _sensWatcher = nil end
     if _sensTimer then _sensTimer:stop(); _sensTimer = nil end
     pcall(function() ms.antiTimeoutStop() end)
     if ms._targetApp == "Roblox" then
