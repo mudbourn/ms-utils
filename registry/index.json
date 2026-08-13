@@ -16,8 +16,12 @@
         "theme": {
           "includesSounds": false
         },
-        "sound": {},
-        "macro": {}
+        "sound": {
+          "present": true
+        },
+        "macro": {
+          "present": true
+        }
       },
       "trust": "trusted"
     }
