@@ -40,9 +40,7 @@ Its two features that can write anything are both normal and both off until you 
 - A **cache cleaner** that only removes throwaway Roblox cache and log files. It sets up a small helper under **your own** `~/Library/LaunchAgents/` folder. It never touches the game, your settings, or anything Roblox cares about. I have personally seen it save gigabytes of storage that would be hard to track down and free without special tools built for looking around your entire drive.
 - An **anti-timeout** helper that sends one harmless `F15` key press on a timer to avoid the idle kick. Off unless you turn it on.
 
----
-
-## The one real risk, and why it is your call
+### Punishment Risks (per-game)
 
 Everything above is about whether the software can be trusted. It can. This part is the real risk, and it has nothing to do with the code being safe.
 
