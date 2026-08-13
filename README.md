@@ -50,7 +50,7 @@ I'm not interested in building a tool that hides what it does. If you can't unde
 
 ## Video Preview
 
-[mudscript utilities 1.3 UI preview](https://share.mudbourn.info/s/5ZYMkZPYyFAiPtg)
+[mudscript utilities 1.3 UI preview](https://www.youtube.com/watch?v=6tPdLf3M5QY)
 
 ---
 
