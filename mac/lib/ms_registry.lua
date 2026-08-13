@@ -154,9 +154,14 @@ YQIDAQAB
             local sortedOut = hs.execute("jq -c -S '.' " .. sq(sortSrc) .. " 2>/dev/null")
             os.remove(sortSrc)
 
+            -- Verify the jq output VERBATIM, including its trailing newline. The
+            -- signer (bin/registry_sign.sh) signs `jq -c -S … > msg.bin` as-is,
+            -- so the signed bytes end in "\n". Stripping it here made the message
+            -- one byte short of what was signed, and RSA rejected every index as
+            -- "bad signature" — the library then served zero entries. Do not
+            -- trim: match the signer's bytes exactly.
             local minified = sortedOut
-            if minified and minified:sub(-1) == "\n" then minified = minified:sub(1, -2) end
-            if not minified or minified == "" then return false end
+            if not minified or minified == "" or minified == "\n" then return false end
 
             local keyPath = tmpPath("pub")
             local sigPath = tmpPath("sig")
