@@ -88,6 +88,19 @@
         });
     }
 
+    // Turn a package's asset URL into a human-facing GitHub page.
+    // …/releases/download/<tag>/<asset>  →  …/releases/tag/<tag>
+    // Any other github.com URL falls back to the owner/repo root. Non-GitHub
+    // (or missing) URLs return null so the button simply does not appear.
+    function githubPageFor(url) {
+        if (typeof url !== "string") return null;
+        let m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/releases\/download\/([^/]+)\//);
+        if (m) return "https://github.com/" + m[1] + "/" + m[2] + "/releases/tag/" + m[3];
+        m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)/);
+        if (m) return "https://github.com/" + m[1] + "/" + m[2];
+        return null;
+    }
+
     // ── Card ─────────────────────────────────────────────────────────────
     function packageCard(e) {
         const { h, actionBtn } = ui();
@@ -132,6 +145,14 @@
         if (e.website) {
             actions.appendChild(actionBtn("Website", "", () =>
                 send("openURL", { url: e.website })));
+        }
+        // "View on GitHub" — the asset URL is a release download link; turn it
+        // into the human-facing release page (…/releases/tag/<tag>), else fall
+        // back to the repo root. Only shown for github.com-hosted packages.
+        const ghHref = githubPageFor(e.url);
+        if (ghHref) {
+            actions.appendChild(actionBtn("GitHub", "", () =>
+                send("openURL", { url: ghHref })));
         }
         card.appendChild(actions);
 
