@@ -1,6 +1,6 @@
 # Is mudscript safe?
 
-Short answer: yes, the software is safe to run. You can read all of it, it keeps to itself, and it does what it says. Nothing calls home, nothing hides from you, and the plain install does not include any of the scary-sounding parts.
+**Short answer: yes, the software is safe to run.** You can read all of it, it keeps to itself, and it does what it says. Nothing calls home, nothing hides from you, and the plain install does not include any of the scary-sounding parts.
 
 There is one real risk, and it is not about the code. If you point input automation at a game that does not allow it, you can get your **game account** banned. That is a choice you make. It is not something the tool does to you. The rest of this page keeps the two things apart so you can tell them apart too.
 
