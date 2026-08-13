@@ -1,4 +1,3 @@
--- MsAlert — converted from a Spoon; Spoons/ is reserved for plugins.
 return function(ms)
 -- MsAlert --
     local MsAlert = {}
@@ -69,9 +68,24 @@ return function(ms)
         local cx    = x + (w - cw) / 2
 
         local theme      = ms._theme or {}
-        local bgColor     = hexToColor(theme.surface2, { red = 0.11, green = 0.063, blue = 0.047, alpha = 1 })
-        local txtColor    = hexToColor(theme.text,     { red = 0.94, green = 0.87, blue = 0.69, alpha = 1 })
-        local accentColor = hexToColor(theme.accent,   { red = 0.77, green = 0.10, blue = 0.10, alpha = 1 })
+        local bgColor     = hexToColor(theme.surface2, {
+            red   = 0.11,
+            green = 0.063,
+            blue  = 0.047,
+            alpha = 1,
+        })
+        local txtColor    = hexToColor(theme.text, {
+            red   = 0.94,
+            green = 0.87,
+            blue  = 0.69,
+            alpha = 1,
+        })
+        local accentColor = hexToColor(theme.accent, {
+            red   = 0.77,
+            green = 0.10,
+            blue  = 0.10,
+            alpha = 1,
+        })
         local radius      = type(theme.radius) == "number" and math.max(0, theme.radius) or 3
 
         local font = "Helvetica"
@@ -83,15 +97,13 @@ return function(ms)
 
         bgColor.alpha = 0.88
 
-        local c = hs.canvas.new({ x = cx, y = y, w = cw, h = ch })
+        local c = hs.canvas.new({
+            x = cx,
+            y = y,
+            w = cw,
+            h = ch,
+        })
 
-        -- The shell/popouts force themselves above the screenSaver level via
-        -- bringToFront(true) on show and on interaction, so any move/resize
-        -- re-asserts the shell over a plain screenSaver-level toast. The only
-        -- level proven to sit above that force-front is the exit curtain at
-        -- screenSaver+1, so toasts live there too. Tying with the curtain is
-        -- safe: exit both clears existing toasts (expireAll) and seals against
-        -- new ones (_sealed), so no toast is ever alive when the curtain shows.
         c:level((hs.canvas.windowLevels.screenSaver or 1000) + 1)
         c:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
         c:alpha(alpha or 0)
@@ -103,7 +115,10 @@ return function(ms)
                 fillColor           = bgColor,
                 strokeColor         = accentColor,
                 strokeWidth         = 1,
-                roundedRectRadii    = { xRadius = radius, yRadius = radius },
+                roundedRectRadii    = {
+                    xRadius = radius,
+                    yRadius = radius,
+                },
                 trackMouseEnterExit = true,
             },
             {
@@ -113,24 +128,50 @@ return function(ms)
                 textSize      = 13,
                 textColor     = txtColor,
                 textAlignment = "center",
-                frame         = { x = 0, y = padding + 4, w = cw, h = textH },
+                frame         = {
+                    x = 0,
+                    y = padding + 4,
+                    w = cw,
+                    h = textH,
+                },
             },
             {
                 type          = "text",
                 text          = "\xe2\x9c\x95",
                 textFont      = "Helvetica",
                 textSize      = 10,
-                textColor     = { red = txtColor.red, green = txtColor.green, blue = txtColor.blue, alpha = 0 },
+                textColor     = {
+                    red   = txtColor.red,
+                    green = txtColor.green,
+                    blue  = txtColor.blue,
+                    alpha = 0,
+                },
                 textAlignment = "center",
-                frame         = { x = cw - closeW, y = 5, w = closeW - 4, h = 14 },
+                frame         = {
+                    x = cw - closeW,
+                    y = 5,
+                    w = closeW - 4,
+                    h = 14,
+                },
                 trackMouseDown = true,
             }
         )
 
         c:show()
 
-        local xShowColor = { red = txtColor.red, green = txtColor.green, blue = txtColor.blue, alpha = 0.45 }
-        local xHideColor = { red = txtColor.red, green = txtColor.green, blue = txtColor.blue, alpha = 0 }
+        local xShowColor = {
+            red   = txtColor.red,
+            green = txtColor.green,
+            blue  = txtColor.blue,
+            alpha = 0.45,
+        }
+
+        local xHideColor = {
+            red   = txtColor.red,
+            green = txtColor.green,
+            blue  = txtColor.blue,
+            alpha = 0,
+        }
 
         local function showX()
             pcall(function() c:elementAttribute(3, "textColor", xShowColor) end)
@@ -152,7 +193,12 @@ return function(ms)
         if ms and ms._octaneMode then
             if entry.canvas then
                 local f = entry.canvas:frame()
-                entry.canvas:frame({ x = f.x, y = toY, w = f.w, h = f.h })
+                entry.canvas:frame({
+                    x = f.x,
+                    y = toY,
+                    w = f.w,
+                    h = f.h,
+                })
                 entry.canvas:alpha(toAlpha)
             end
             if onDone then onDone() end
@@ -174,7 +220,12 @@ return function(ms)
             if entry.canvas then
                 local f = entry.canvas:frame()
 
-                entry.canvas:frame({ x = f.x, y = y, w = f.w, h = f.h })
+                entry.canvas:frame({
+                    x = f.x,
+                    y = y,
+                    w = f.w,
+                    h = f.h,
+                })
                 entry.canvas:alpha(alpha)
             end
 
@@ -223,13 +274,6 @@ return function(ms)
     end
 
     -- Expire every toast on screen right now, animated.
-    --
-    -- The exit paths call this: a toast still sitting there when the curtain
-    -- comes down outlives the app that put it there, and dismissAll below
-    -- deletes canvases outright, so the toasts would vanish mid-air. This
-    -- runs each one through the same fade the hold expiring would have, so
-    -- they leave the way toasts normally leave — just now instead of later.
-    --
     -- Backwards over the queue because dismissEntry removes as it goes.
     function MsAlert:expireAll()
         for i = #queue, 1, -1 do
@@ -237,9 +281,6 @@ return function(ms)
             if e then pcall(function() dismissEntry(e) end) end
         end
 
-        -- Last step, after the sweep: everything already queued gets its
-        -- fade, and nothing new is accepted after it. From here the screen
-        -- only empties.
         MsAlert._sealed = true
     end
 
@@ -257,9 +298,24 @@ return function(ms)
 
     function MsAlert:recolor()
         local theme      = ms._theme or {}
-        local bgColor    = hexToColor(theme.surface2, { red = 0.11, green = 0.063, blue = 0.047, alpha = 1 })
-        local txtColor   = hexToColor(theme.text,     { red = 0.94, green = 0.87, blue = 0.69, alpha = 1 })
-        local accentColor = hexToColor(theme.accent,   { red = 0.77, green = 0.10, blue = 0.10, alpha = 1 })
+        local bgColor    = hexToColor(theme.surface2, {
+            red   = 0.11,
+            green = 0.063,
+            blue  = 0.047,
+            alpha = 1,
+        })
+        local txtColor   = hexToColor(theme.text, {
+            red   = 0.94,
+            green = 0.87,
+            blue  = 0.69,
+            alpha = 1,
+        })
+        local accentColor = hexToColor(theme.accent, {
+            red   = 0.77,
+            green = 0.10,
+            blue  = 0.10,
+            alpha = 1,
+        })
         bgColor.alpha = 0.88
 
         for _, e in ipairs(queue) do
@@ -285,8 +341,7 @@ return function(ms)
         end
     end
 
-    -- Dismisses any queued entry sharing the given id, animated the same
-    -- way the x button does, so a fresh alert with that id can replace it.
+    -- Dismiss any queued entry with this id, animated like the x button.
     local function dismissByIdAnimated(id)
         for _, e in ipairs(queue) do
             if e.id == id then
@@ -371,11 +426,7 @@ return function(ms)
         -- Suppress all toasts until loading screen completes
         if not ms._startupSoundDone then return end
 
-        -- ...and once the exit has cleared the screen. Without this, anything
-        -- that toasts during teardown lands *after* expireAll and sits there
-        -- through the whole send-off, which is the one thing expireAll exists
-        -- to prevent. There is no un-gating: the only paths that set it end in
-        -- a quit or a reload, and both take this state with them.
+        -- Suppress toasts once the exit has sealed the screen.
         if MsAlert._sealed then return end
 
         duration = duration or 5
@@ -383,8 +434,7 @@ return function(ms)
         local src = opts and opts.source or "system"
         local id  = opts and opts.id or nil
 
-        -- Auto-replace: dismiss any existing toast with this id (same as the
-        -- x button) so the new one is sent as a brand new, sequential alert.
+        -- Auto-replace: dismiss any existing toast with this id.
         if id then
             dismissByIdAnimated(id)
         end
@@ -432,9 +482,6 @@ return function(ms)
             priority = opts and opts.priority or "normal",
         }
 
-        -- Alerts appear sequentially in send order.
-        -- _redraw iterates #queue→1, positioning from bottom to top,
-        -- so appending keeps the newest alert nearest the bottom.
         table.insert(queue, entry)
         self:_redraw(entry)
 

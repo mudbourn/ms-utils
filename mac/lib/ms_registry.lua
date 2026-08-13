@@ -1,33 +1,5 @@
 -- ms_registry — Package Registry Client --
---
--- Fetches, verifies and caches the signed package index, and answers two
--- questions about it: "what packages exist?" and "is this hash one of ours?"
---
--- It deliberately does not install anything. `download` hands back a path on
--- disk and stops; the caller passes that path to ms.package.install. Keeping
--- the two apart means a compromised index can, at worst, offer a package the
--- normal verify → trust → install path still has to accept.
---
--- The index is a single JSON document living in-tree at registry/index.json
--- and served from the repo's default branch. Package binaries are release
--- assets, so the index stays small and reviewable in a diff.
---
--- Trust comes from the index and only from the index:
---
---   trusted     the hash is listed and the entry is author-published
---   community   the hash is listed and the entry is third-party
---   unsigned    the hash is not listed, or there is no usable index
---
--- "unsigned" is the answer for every degraded case — no cache, no network, a
--- malformed document, a bad signature. None of those raise; a registry that is
--- simply absent must leave the rest of mudscript working, so every path here
--- ends in an empty index rather than an error.
---
--- The index signature covers `jq -c -S '{formatVersion, generated, entries}'`
--- signed with the same RSA-2048 key Guardian checks MANIFEST.json against. An
--- index whose signature does not verify is discarded whole rather than served
--- with its trust stripped: a forged document should not get to choose which of
--- its own claims we believe.
+-- Design notes, trust model & signature invariants: docs/notes/ms_registry.md
 return function(ms)
 
     local _home    = os.getenv("HOME")
@@ -39,7 +11,7 @@ return function(ms)
     local FORMAT_VERSION = 1
     local CACHE_TTL      = 6 * 60 * 60   -- seconds before refresh() refetches
 
-    -- RSA-2048 public key for index signature verification.
+    -- [SECURITY] RSA-2048 index-signature public key.
     -- Must match _publicKey in lib/ms_guardian.lua and ms._updatePublicKey.
     local PUBLIC_KEY = [[
 -----BEGIN PUBLIC KEY-----
@@ -53,15 +25,11 @@ YQIDAQAB
 -----END PUBLIC KEY-----
 ]]
 
-    -- ms.registry is shared: ms_core.lua creates it as the bind registry
-    -- (_defs/_defList) at boot, and we add the package-registry API onto that
-    -- same table. Reassigning it here would silently drop every bind
-    -- definition, so extend in place. The two namespaces do not overlap —
-    -- binds own the _-prefixed internals, the package client owns the rest.
+    -- Shared table (bind registry lives here too) — extend in place, never
+    -- reassign, or every bind definition is dropped.
     ms.registry = ms.registry or {}
 
-    -- Live state. `_index` is always a table of the empty shape below, never
-    -- nil, so every reader can index it without a guard.
+    -- `_index` is never nil (always the empty shape) so readers need no guard.
     local function emptyIndex()
         return { formatVersion = FORMAT_VERSION, generated = nil, entries = {} }
     end
@@ -103,8 +71,8 @@ YQIDAQAB
             return type(s) == "string" and #s == 64 and s:match("^%x+$") ~= nil
         end
 
-        -- Only http(s), and only hosts we publish from. An index entry is data,
-        -- not instruction: it does not get to point the downloader anywhere.
+        -- [SECURITY] Only hosts we publish from; an index entry can't redirect
+        -- the downloader elsewhere.
         local ALLOWED_HOSTS = {
             ["github.com"]                = true,
             ["objects.githubusercontent.com"] = true,
@@ -122,25 +90,17 @@ YQIDAQAB
     -- END Helpers --
 
     -- Signature --
-        -- Mirrors Guardian's per-file manifest check: CI signs the minified,
-        -- key-sorted JSON of the payload directly, so we rebuild exactly that
-        -- byte sequence with `jq -c -S` before verifying. hs.json.encode alone
-        -- will not do — it does not sort keys.
+        -- [SECURITY] Rebuild the signer's exact bytes with `jq -c -S` (key-
+        -- sorted); hs.json.encode alone won't — it does not sort keys.
         local function verifySignature(doc)
             if type(doc) ~= "table" then return false end
             if type(doc.signature) ~= "string" or doc.signature == "" then
                 return false
             end
 
-            -- `generated` must be present and non-empty in any document that
-            -- claims a signature. A nil here is dropped by hs.json.encode,
-            -- where the signer's `jq -c -S '{formatVersion, generated,
-            -- entries}'` writes an explicit null — two different byte
-            -- sequences over the same document, so the signature fails to
-            -- verify and the index is discarded whole. That reads as a bad
-            -- signature and sends you looking for a key problem that is not
-            -- there. bin/registry_sign.sh refuses to produce such a document;
-            -- this is the other half of that contract.
+            -- [SECURITY] `generated` must be non-empty: a nil is dropped by
+            -- hs.json.encode but written as null by the signer, so the bytes
+            -- diverge and every index reads as a bad signature.
             local payload = {
                 formatVersion = doc.formatVersion,
                 generated     = doc.generated,
@@ -154,12 +114,8 @@ YQIDAQAB
             local sortedOut = hs.execute("jq -c -S '.' " .. sq(sortSrc) .. " 2>/dev/null")
             os.remove(sortSrc)
 
-            -- Verify the jq output VERBATIM, including its trailing newline. The
-            -- signer (bin/registry_sign.sh) signs `jq -c -S … > msg.bin` as-is,
-            -- so the signed bytes end in "\n". Stripping it here made the message
-            -- one byte short of what was signed, and RSA rejected every index as
-            -- "bad signature" — the library then served zero entries. Do not
-            -- trim: match the signer's bytes exactly.
+            -- [SECURITY] Verify the jq output VERBATIM, including its trailing
+            -- newline — the signer signs those exact bytes. Do not trim.
             local minified = sortedOut
             if not minified or minified == "" or minified == "\n" then return false end
 
@@ -188,12 +144,7 @@ YQIDAQAB
     -- END Signature --
 
     -- Parse --
-        -- A bad row rejects the whole document, same as a bad signature. The
-        -- alternative — skipping it — fails invisibly: the package simply is
-        -- not in the library and nobody can tell whether that was intended.
-        -- Rows only ever land here through a signed, reviewed commit, so a
-        -- malformed one is a publishing mistake worth failing loudly on.
-        --
+        -- A bad row rejects the whole document (fail loud, not a silent drop).
         -- Returns nil plus a reason naming the offending row.
         local function normalise(raw, i)
             local function bad(why)
@@ -218,10 +169,7 @@ YQIDAQAB
                 url         = raw.url,
                 size        = tonumber(raw.size) or nil,
                 requires    = type(raw.requires) == "string" and raw.requires or nil,
-                -- A profile row may carry a lightweight components summary
-                -- (which slices the one asset offers) so Browse can present the
-                -- install choices without downloading first. Kept verbatim; the
-                -- authoritative file map still lives in the package manifest.
+                -- Keep a profile row's lightweight components summary verbatim.
                 components  = type(raw.components) == "table" and raw.components or nil,
                 -- Anything not explicitly marked author-published is community.
                 trust       = raw.trust == "trusted" and "trusted" or "community",
@@ -247,8 +195,7 @@ YQIDAQAB
             for i, raw in ipairs(doc.entries) do
                 local e, why = normalise(raw, i)
                 if not e then return false, why end
-                -- A duplicate is ambiguous about which row's trust applies, so
-                -- it is rejected rather than resolved by ordering.
+                -- Duplicate id/hash is ambiguous about trust — reject, don't order.
                 if byId[e.id] then
                     return false, "entry #" .. i .. ": duplicate id " .. e.id
                 end
@@ -260,7 +207,11 @@ YQIDAQAB
                 byHash[e.sha256]      = e
             end
 
-            _index     = { formatVersion = FORMAT_VERSION, generated = doc.generated, entries = entries }
+            _index     = {
+                formatVersion = FORMAT_VERSION,
+                generated     = doc.generated,
+                entries       = entries,
+            }
             _byId      = byId
             _byHash    = byHash
             _signed    = signed
@@ -278,9 +229,7 @@ YQIDAQAB
     -- END Parse --
 
     -- Load --
-        -- Cache first, then the copy that shipped with the install. Both are
-        -- signature-checked; neither failing is an error worth surfacing,
-        -- because the next refresh() is the real answer.
+        -- Cache first, then the bundled copy; both signature-checked, failures silent.
         local function loadLocal()
             local cached = decode(readFile(CACHE_PATH))
             if cached and adopt(cached, "cache", true) then return true end
@@ -322,8 +271,7 @@ YQIDAQAB
             _loading = true
             hs.http.asyncGet(INDEX_URL, nil, function(code, body, _)
                 if code ~= 200 then
-                    -- Network failure is not fatal: whatever we already had,
-                    -- cached or bundled, stays serving.
+                    -- Network failure is not fatal; keep serving what we had.
                     _error = "Could not reach the registry (HTTP " .. tostring(code) .. ")."
                     if #_index.entries == 0 then loadLocal() end
                     return done(false, _error)
@@ -374,18 +322,15 @@ YQIDAQAB
             return _byHash[hash:lower()]
         end
 
-        -- The seam ms.package.verify already takes. Signature is fixed:
-        -- (hash, manifest) -> "trusted" | "community" | "unsigned".
-        --
-        -- An unsigned index can never elevate anything, and a hash nobody
-        -- listed is "unsigned" — never an error, never a nil.
+        -- trustLookup for ms.package.verify:
+        -- (hash, manifest) -> "trusted" | "community" | "unsigned". Never nil.
         ms.registry.trustLookup = function(hash, manifest)
             if not _signed then return "unsigned" end
             local entry = ms.registry.find(hash)
             if not entry then return "unsigned" end
 
-            -- The index vouches for a hash under a declared type. A package
-            -- claiming to be something else is not the thing that was listed.
+            -- [SECURITY] The index vouches for a hash under a declared type;
+            -- a package claiming another type is not what was listed.
             if type(manifest) == "table" and manifest.type and manifest.type ~= entry.type then
                 return "unsigned"
             end
@@ -408,12 +353,8 @@ YQIDAQAB
     -- END read --
 
     -- Public: download --
-        -- Fetches an entry's binary to a temp path and verifies its hash
-        -- against the index before handing the path back. It does not install:
-        -- the caller passes the path to ms.package.install, which re-verifies
-        -- with trustLookup on its own terms.
-        --
-        -- cb(path, err) — exactly one of the two is non-nil.
+        -- Fetch an entry's binary to a temp path, hash-verify against the index,
+        -- and hand back the path (does not install). cb(path, err) — one non-nil.
         ms.registry.download = function(idOrEntry, cb)
             local done = function(path, err)
                 if type(cb) == "function" then pcall(cb, path, err) end
@@ -448,8 +389,7 @@ YQIDAQAB
     -- END download --
 
     -- Boot --
-        -- Load whatever is on disk now so trustLookup answers immediately;
-        -- the network refresh is best-effort and silent.
+        -- Load disk now so trustLookup answers immediately; refresh is silent.
         loadLocal()
     -- END Boot --
 

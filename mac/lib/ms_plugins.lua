@@ -1,41 +1,11 @@
 -- ms_plugins — Plugin Loading & Teardown --
---
--- Spoons/ is the only place third-party code enters the process. This module
--- decides which of them run, and — the harder half — how to make one stop.
---
--- Hammerspoon has no unload. `require` caches the module, and anything the
--- code registered on its way in (hotkeys, timers, eventtaps, bus handlers)
--- is held by whoever it registered with, not by the module table. So a plugin
--- switched off at the settings level keeps firing until the next reload, and
--- an off switch that does nothing for a minute is worse than no off switch.
---
--- The fix is to know what each plugin registered. Every plugin is loaded with
--- an `ms` of its own: a proxy that forwards everything to the real one, but
--- records an undo closure for each registration it sees pass through. Turning
--- the plugin off replays that list backwards.
---
--- The proxy reaches the plugin through `_ENV`, not through a swapped global.
--- hs.loadSpoon loads Spoons with `require`, so package.preload is the seam:
--- a preload entry compiles the Spoon's init.lua against an environment whose
--- `ms` is the proxy. Closures defined in that chunk capture the environment as
--- an upvalue, so a callback that fires an hour later still registers against
--- the plugin that owns it. Hammerspoon still does everything else — meta.json,
--- :init(), docs, the spoon.<Name> global — because loadSpoon still runs.
---
--- What this cannot see is a plugin calling hs.hotkey.bind or hs.timer.new
--- directly, behind mudscript's back. Nothing in-process can: those register
--- with Hammerspoon itself. That is why "register through ms, implement
--- :stop()" is a library requirement rather than a hope — every plugin in the
--- validated library is reviewed, so it is enforceable at the door.
+-- Design notes: docs/notes/ms_plugins.md
 return function(ms)
 
     local _home    = os.getenv("HOME")
     local _hsDir   = _home .. "/.hammerspoon"
     local _spoons  = _hsDir .. "/Spoons"
 
-    -- loaded: dir -> true, for plugins whose code is in the process now.
-    -- failed: dir -> error string.
-    -- _undo:  dir -> array of teardown closures, newest last.
     ms.plugins = {
         loaded = {},
         failed = {},
@@ -60,10 +30,6 @@ return function(ms)
     -- END Helpers --
 
     -- Recording Proxy --
-        -- Forwards to `real`, except for the keys in `overrides`. Writes go
-        -- straight through: a plugin setting ms.something is configuring the
-        -- real install, and pretending otherwise would give it a private copy
-        -- of state that nothing else reads.
         local function subProxy(real, overrides)
             return setmetatable({}, {
                 __index = function(_, k)
@@ -75,20 +41,9 @@ return function(ms)
             })
         end
 
-        -- The wrapped surfaces. Each one calls straight through and then
-        -- records how to take it back out again.
-        --
-        -- Only surfaces that keep *executing* after teardown matter for
-        -- correctness — binds, bus handlers, key and mouse callbacks. The
-        -- settings and tools definitions are cleaned up too, but that is so
-        -- a disabled plugin's rows leave the settings panel; a stale row is
-        -- cosmetic, a stale keybind is not.
         local function makeProxy(dir)
             local overrides = {}
 
-            -- ms.bind.define(id, ...) — the dispatcher reads _wires and _defs
-            -- at fire time, so clearing them stops the bind on the very next
-            -- keystroke. No unregistration with the OS is involved.
             overrides.bind = subProxy(ms.bind, {
                 define = function(id, a, b)
                     local out = ms.bind.define(id, a, b)
@@ -113,8 +68,6 @@ return function(ms)
                 end,
             })
 
-            -- ms.key already hands back a handle with :delete(), which is
-            -- exactly the undo closure this needs.
             overrides.key = function(...)
                 local handle = ms.key(...)
                 if type(handle) == "table" and type(handle.delete) == "function" then
@@ -123,10 +76,6 @@ return function(ms)
                 return handle
             end
 
-            -- ms.mouse keeps one callback per button and returns nothing, so
-            -- the undo has to find its own registration again. The identity
-            -- check matters: if something else has since claimed the button,
-            -- clearing it would disable a binding this plugin does not own.
             overrides.mouse = function(button, ...)
                 local out = ms.mouse(button, ...)
                 local mine = ms._mouseCallbacks and ms._mouseCallbacks[button]
@@ -139,9 +88,6 @@ return function(ms)
                 return out
             end
 
-            -- Same handle shape as ms.key, but the callback is per-direction
-            -- rather than per-registration: deleting blindly would clear
-            -- whatever registered last, so the undo checks it is still ours.
             overrides.scrollBind = function(direction, fn)
                 local handle = ms.scrollBind(direction, fn)
                 record(dir, function()
@@ -201,12 +147,8 @@ return function(ms)
     -- END Recording Proxy --
 
     -- Load --
-        -- Loads one plugin by bundle dir name ("Alpha.spoon"). Returns
-        -- true, or false plus a message.
-        --
-        -- Nothing is verified here. Guardian refuses to reach ms_core at all
-        -- if Spoons/ holds anything the ledger does not vouch for, so by the
-        -- time this runs every bundle on disk arrived through install.
+        -- Load one plugin by bundle dir name ("Alpha.spoon"). Returns true, or
+        -- false plus a message. No verification here — Guardian gates Spoons/.
         ms.plugins.load = function(dir)
             if not (ms.package and ms.package.validSpoonName
                 and ms.package.validSpoonName(dir)) then
@@ -222,17 +164,14 @@ return function(ms)
 
             ms.plugins._undo[dir] = {}
 
-            -- The environment the plugin sees. Reads fall through to _G, so
-            -- hs and the standard library are all present; only `ms` is
-            -- swapped. Writes go to _G, because a plugin declaring a global
-            -- is doing something visible and should not get a private one.
             local env = setmetatable(
                 { ms = makeProxy(dir) },
-                { __index = _G, __newindex = _G }
+                {
+                    __index    = _G,
+                    __newindex = _G,
+                }
             )
 
-            -- require checks package.preload before searching the path, so
-            -- this hands loadSpoon our chunk without reimplementing it.
             local prevPreload = package.preload[short]
             package.preload[short] = function()
                 local chunk, err = loadfile(init, "t", env)
@@ -245,9 +184,7 @@ return function(ms)
             package.preload[short] = prevPreload
 
             if not ok then
-                -- A plugin that threw halfway through may already have
-                -- registered. Replay what it managed before giving up, or the
-                -- failure leaves live binds nothing will ever clean up.
+                -- Replay whatever a mid-load throw already registered.
                 ms.plugins.unload(dir, { quiet = true })
                 ms.plugins.failed[dir] = tostring(err)
                 return false, tostring(err)
@@ -262,8 +199,7 @@ return function(ms)
             if not (ms.package and ms.package.listPlugins) then return end
             for _, p in ipairs(ms.package.listPlugins()) do
                 if p.enabled and p.status == "ok" then
-                    -- pcall per plugin: a third-party error costs that plugin,
-                    -- not the rest of the boot.
+                    -- pcall per plugin: one plugin's error must not fail boot.
                     local ok, err = ms.plugins.load(p.dir)
                     if not ok then
                         print("Plugin " .. p.dir .. " failed to load: " .. tostring(err))
@@ -274,14 +210,8 @@ return function(ms)
     -- END Load --
 
     -- Unload --
-        -- Stops a plugin as far as it can be stopped in a live process.
-        --
-        -- Three steps, in order. The Spoon's own :stop() first, because it is
-        -- the only one that knows about state this module never saw. Then the
-        -- recorded undo list, newest first, so a plugin that registered and
-        -- re-registered the same id unwinds in the order it wound up. Then the
-        -- module caches, so re-enabling actually re-runs the file instead of
-        -- handing back the warm copy require kept.
+        -- Stop a plugin: its :stop(), then the recorded undo list (newest
+        -- first), then the module caches.
         ms.plugins.unload = function(dir, opts)
             opts = opts or {}
             if not (ms.package and ms.package.validSpoonName
@@ -312,17 +242,13 @@ return function(ms)
             if _G.spoon then _G.spoon[short] = nil end
             ms.plugins.loaded[dir] = nil
 
-            -- The settings panel may have just lost rows, and the bind list
-            -- may have just lost entries.
             if ms.ui and ms.ui.markDirty then pcall(ms.ui.markDirty) end
             return true
         end
     -- END Unload --
 
     -- Apply --
-        -- Brings the running set in line with what is enabled on disk. This is
-        -- what the panel's toggle calls: it does not need to know which way
-        -- the switch went, only that the answer may have changed.
+        -- Reconcile the running set with what is enabled on disk.
         ms.plugins.apply = function()
             if not (ms.package and ms.package.listPlugins) then return end
             for _, p in ipairs(ms.package.listPlugins()) do
@@ -334,9 +260,7 @@ return function(ms)
                     ms.plugins.unload(p.dir)
                 end
             end
-            -- A plugin removed from disk is gone from listPlugins entirely,
-            -- so the loop above never sees it. Sweep anything still marked
-            -- running whose bundle no longer exists.
+            -- Sweep anything still marked running whose bundle is gone from disk.
             for dir in pairs(ms.plugins.loaded) do
                 if not hs.fs.attributes(_spoons .. "/" .. dir) then
                     ms.plugins.unload(dir, { quiet = true })

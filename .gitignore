@@ -1,27 +1,20 @@
-# Runtime files — generated per-user, never commit
+# Runtime files
 data/*
 !data/ms_settings_default.json
 
 # Backup archives
 backups/
 
-# Development artifacts / agent notes
+# Development artifacts
 ignore/
-.hermes/
-.hermes-skills
 
 # macOS
 .DS_Store
 
-# Key files — never commit.
-# Deliberately blanket: this catches a stray private key before it is staged,
-# and the cost is that a *public* key file is swallowed just as silently.
-# Public keys therefore live in source, not in .pem files — PUBLIC_KEY in
-# lib/ms_registry.lua and lib/ms_guardian.lua is the only copy, and CI reads
-# it out of there. Add no exception here; add no second copy.
+# Key files
 *.pem
 
-# Compiled AHK binary — not tracked
+# Compiled AHK binary
 *.exe
 *.exe.manifest
 
@@ -32,4 +25,3 @@ docs/icon-requirements.md
 ui/_build_shell_v2.py
 ui/_build_shell.py
 mac/ms_core_pre_pivot.lua.bak
-.claude/

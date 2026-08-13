@@ -1,4 +1,5 @@
 -- ms_compiler — Visual Macro Compiler --
+-- Design notes: docs/notes/ms_compiler.md
     return function(ms)
 
         local home       = os.getenv("HOME")
@@ -9,15 +10,8 @@
         ms.compiler = {}
 
         -- Helpers --
-            -- A parameter can be wired to a live "tool" (an authored setting)
-            -- instead of a literal. The builder sends such a binding as the
-            -- table { __toolRef = "settingKey" }; it compiles to a
-            -- ms.settings.get("settingKey") call so the macro reads the tool's
-            -- current value at run time — the whole point of the feature is to
-            -- make a macro configurable from the Settings panel without editing
-            -- and reloading its source. Anything else is not a binding.
-            -- The key is validated as an identifier so a hostile JSON payload
-            -- can never break out of the string into arbitrary Lua.
+            -- Compile a { __toolRef = "key" } binding to ms.settings.get("key").
+            -- [SECURITY] key must match an identifier so JSON can't inject Lua.
             local function toolRef(val)
                 if type(val) == "table"
                     and type(val.__toolRef) == "string"
@@ -58,18 +52,14 @@
                 return tostring(val)
             end
 
-            -- An unset identifier arrives from the builder as "" (not nil),
-            -- which is truthy in Lua — `p.name or "v"` would keep the empty
-            -- string and emit invalid code (`local  = 1`). Fall back explicitly.
+            -- Unset identifier arrives as "" (truthy in Lua); fall back explicitly.
             local function ident(v, default)
                 if v == nil or v == "" then return default end
                 return v
             end
 
-            -- A numeric argument that may instead be a tool binding. The plain
-            -- numeric emitters (waits, camera deltas, coordinates) drop values
-            -- in with tostring() rather than serialize(), so they need their
-            -- own funnel to honour a binding. Returns a Lua expression string.
+            -- A numeric argument that may instead be a tool binding. Returns a
+            -- Lua expression string (plain numeric emitters use tostring()).
             local function numArg(v, default)
                 local ref = toolRef(v)
                 if ref then return ref end
@@ -172,9 +162,7 @@
             emitters["ms.scroll"] = function(step, lvl)
                 local p = step.params or {}
                 local dir = serialize(p.direction or "up")
-                -- A bound clicks count is always emitted (its value is unknown
-                -- at compile time); a literal one is only emitted when > 1, the
-                -- pre-binding behaviour.
+                -- Bound click count always emitted; literal only when > 1.
                 if toolRef(p.clicks) then
                     return indent(lvl) .. "ms.scroll(" .. dir .. ", " .. numArg(p.clicks, 1) .. ")"
                 end
@@ -199,9 +187,7 @@
                 parts[#parts + 1] = serialize(p.reference or "Mouse")
                 parts[#parts + 1] = numArg(p.x, 0)
                 parts[#parts + 1] = numArg(p.y, 0)
-                -- Drags carry a second point (start → end). Emit x2/y2 whenever
-                -- the step supplies them — the recorder does for Drag ops — so
-                -- the gesture round-trips instead of collapsing to a click.
+                -- Emit the drag's second point (x2/y2) whenever supplied.
                 local op = tostring(p.operation or ""):lower()
                 if op == "drag" or p.x2 ~= nil or p.y2 ~= nil then
                     parts[#parts + 1] = numArg(p.x2, 0)
@@ -237,20 +223,16 @@
 
             local _flowCounter = 0
 
-            -- The visual canvas (ToolCanvas) is the canonical shape: it stores
-            -- branches as step.then / step.else / step.body and the condition in
-            -- step.params.condition. Older/hand-authored JSON used step.condition
-            -- and step.then_steps / step.else_steps. Read both, canvas first.
+            -- Read both branch shapes, canvas first: step.then/.else/.body +
+            -- step.params.condition (canvas), then legacy step.then_steps etc.
             local function stepCond(step)
                 local c = step.condition
                 if c == nil then c = step.params and step.params.condition end
-                -- An empty string is truthy in Lua and would emit `if  then`;
-                -- fall back to `true` so an unset condition is still valid code.
+                -- Empty condition is truthy in Lua; fall back to `true`.
                 if c == nil or c == "" then c = "true" end
                 return c
             end
-            -- `then`/`else` are reserved words, so the canvas keys must be
-            -- reached with bracket syntax rather than dot access.
+            -- `then`/`else` are reserved words — reach the keys with brackets.
             local function thenSteps(step) return step["then"] or step.then_steps end
             local function elseSteps(step) return step["else"] or step.else_steps end
 
@@ -353,14 +335,10 @@
                 return table.concat(lines, "\n")
             end
 
-            -- A "setting" block is a reference to a globally-shared tool (an
-            -- authored setting), not a code action. Macros and tools are
-            -- independent: the setting is defined once in the Tools panel and
-            -- read live via ms.settings.get(key). So this emits only an inert,
-            -- single-line comment documenting which shared setting the macro
-            -- uses — never a re-definition. The key is identifier-validated and
-            -- the label stripped of newlines so nothing can break out of the
-            -- comment into executable Lua.
+            -- A "setting" block emits only an inert comment naming the shared
+            -- tool it references — never a re-definition.
+            -- [SECURITY] key identifier-validated, label newline-stripped, so
+            -- nothing breaks out of the comment into executable Lua.
             emitters["setting"] = function(step, lvl)
                 local p = step.params or {}
                 local key = type(p.key) == "string"
@@ -461,10 +439,8 @@
         -- END Compile --
 
         -- Write File --
-            -- Quote a string as a Lua literal, escaping anything that could
-            -- break out of the generated source (the file is loaded, so an
-            -- unescaped quote/backslash/newline would be a syntax or injection
-            -- hazard). Non-strings fall back to an empty literal.
+            -- [SECURITY] Quote a string as a Lua literal, escaping quote/
+            -- backslash/newline (the file is loaded — injection hazard).
             local function luaStr(v)
                 if type(v) ~= "string" then return '""' end
                 return string.format("%q", v)
@@ -537,7 +513,10 @@
                         src = "-- [COMPILE ERROR for " .. id .. "]\n"
                         .. "-- " .. tostring(src) .. "\n"
                     end
-                    sources[#sources + 1] = { id = id, source = src }
+                    sources[#sources + 1] = {
+                        id     = id,
+                        source = src,
+                    }
                     count = count + 1
                 end
 
@@ -552,12 +531,8 @@
 
         -- Load --
             ms.compiler.load = function()
-                -- Idempotent re-load: an in-session save calls this again after
-                -- boot already registered the visual macros. ms.bind.define
-                -- appends to ms.registry._defList unconditionally, so without
-                -- purging first every save would duplicate the macro in the
-                -- bind list. Remove the previously-registered ids before the
-                -- compiled chunk re-defines them.
+                -- Idempotent re-load: purge previously-registered ids before
+                -- re-defining, or an in-session save duplicates the bind list.
                 local prev = ms.compiler._registeredIds
                 if prev then
                     for id in pairs(prev) do
@@ -620,11 +595,8 @@
                     return false
                 end
 
-                -- Handwritten credits win. The compiled chunk assigns
-                -- ms.macroMeta; if the handwritten pack already provided its own,
-                -- lock it so the sandbox's __newindex drops the visual write
-                -- (see ms_core). A pure-visual profile (no handwritten meta)
-                -- leaves the flag false, so its meta lands and stays editable.
+                -- Handwritten credits win: lock ms.macroMeta so the sandbox's
+                -- __newindex drops the visual write. Pure-visual stays editable.
                 ms._macroMetaLocked = ms._macroMetaFromHand == true
                 local ok, runErr = pcall(chunk)
                 ms._macroMetaLocked = false
@@ -634,8 +606,7 @@
                     return false
                 end
 
-                -- Remember what was registered so the next re-load (after an
-                -- in-session save/delete) can purge exactly these ids.
+                -- Remember registered ids so the next re-load purges exactly these.
                 local reg = {}
                 for _, id in ipairs(ms.compiler.list()) do reg[id] = true end
                 ms.compiler._registeredIds = reg
@@ -646,17 +617,8 @@
         -- END Load --
 
         -- Test Run --
-            -- Compile only the step body (no ms.bind.define wrapper) and run it
-            -- once in the macro sandbox. Used by the builder's Test Run button.
-            --
-            -- The run happens inside a coroutine, exactly as a bound macro does
-            -- through ms.fn — so ms.wait yields (and resumes on its timer)
-            -- instead of block-sleeping, and the test is a faithful preview of
-            -- the real thing. Because the run is async, the result is delivered
-            -- through onDone(ok, err) rather than a return value: compile/setup
-            -- failures fire it synchronously, a real run fires it when the
-            -- coroutine finishes. onDone is optional; without it the macro still
-            -- runs, just with nowhere to report to.
+            -- Test Run: compile only the step body and run it once in the macro
+            -- sandbox. Async — result comes via onDone(ok, err), not a return.
             ms.compiler.testRun = function(macroDef, onDone)
                 local reported = false
                 local function done(ok, err)
@@ -694,12 +656,8 @@
                 local fn = fnOrErr
                 if type(fn) ~= "function" then return done(false, "compiled body is not a function") end
 
-                -- Run in a coroutine so ms.wait's yield/resume path is exercised
-                -- (see ms.wait in ms_core). Registering a context in
-                -- ms._coroContext gives it the same cancel/pause hooks and the
-                -- dead-coroutine cleanup a bound macro gets. xpcall inside the
-                -- body catches errors across the yields (pcall/xpcall are
-                -- yieldable in Lua 5.4) and hands them to done().
+                -- Coroutine + ms._coroContext so ms.wait yields and the run gets
+                -- the same cancel/pause/cleanup hooks a bound macro does.
                 local ctx = { cancelled = false, paused = false,
                               callStack = { "test:" .. (macroDef.id or "macro") } }
                 local co = coroutine.create(function()
@@ -711,8 +669,7 @@
 
                 local resok, reserr = coroutine.resume(co)
                 if not resok then
-                    -- An error escaping the coroutine body itself (not caught by
-                    -- the inner xpcall) — surface it rather than lose it.
+                    -- Surface an error escaping the coroutine body itself.
                     return done(false, tostring(reserr))
                 end
             end
@@ -828,14 +785,10 @@
         -- END Get --
 
         -- Meta (pack credits: name / author / website) --
-            -- The visual pack's ms.macroMeta lives at data.meta in the JSON and
-            -- is emitted verbatim into the compiled file's ms.macroMeta table.
+            -- The visual pack's meta lives at data.meta, emitted verbatim.
             ms.compiler.getMeta = function()
-                -- When a handwritten ms_macros.lua supplied credits, it owns
-                -- them (its ms.macroMeta wins at load; the visual copy is inert).
-                -- Source the editor straight from the live handwritten meta and
-                -- flag it `owned` so the panel can show it read-only instead of
-                -- maintaining a second, clashing set the runtime ignores.
+                -- Handwritten meta owns credits: source the editor from the live
+                -- meta and flag `owned` so the panel shows it read-only.
                 if ms._macroMetaFromHand and type(ms.macroMeta) == "table" then
                     return {
                         name    = ms.macroMeta.name    or "",
@@ -864,9 +817,7 @@
             ms.compiler.setMeta = function(meta)
                 assert(type(meta) == "table", "ms.compiler.setMeta: meta must be a table")
 
-                -- Handwritten meta wins and cannot be overridden from the visual
-                -- editor: writing here would be silently ignored at load, so
-                -- refuse rather than persist a value that never takes effect.
+                -- Refuse visual writes to handwritten-owned meta (ignored at load).
                 if ms._macroMetaFromHand then
                     print("ms.compiler.setMeta: ignored — handwritten ms_macros.lua owns the pack credits")
                     return false, "handwritten"

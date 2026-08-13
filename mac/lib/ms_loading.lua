@@ -9,7 +9,10 @@ return function(ms)
     -- Update --
         ms.loading.update = function(pct, msg)
             if not _lWebView then
-                _lMsgBuffer[#_lMsgBuffer + 1] = { pct = pct, msg = msg }
+                _lMsgBuffer[#_lMsgBuffer + 1] = {
+                    pct = pct,
+                    msg = msg,
+                }
                 return
             end
             local encoded = msg and ('"' .. msg:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"') or "null"
@@ -72,7 +75,12 @@ return function(ms)
             local htmlPath = hs.configdir .. "/ui/ms_loading.html"
             local baseURL  = "file://" .. hs.configdir .. "/ui/"
 
-            _lWebView = hs.webview.new({ x=lx, y=ly, w=lw, h=lh }, {}, _ucLoad)
+            _lWebView = hs.webview.new({
+                x = lx,
+                y = ly,
+                w = lw,
+                h = lh,
+            }, {}, _ucLoad)
             pcall(function() _lWebView:windowStyle(0) end)
             pcall(function() _lWebView:transparent(true) end)
             pcall(function() _lWebView:level(hs.canvas.windowLevels.popUpMenu or 25) end)
