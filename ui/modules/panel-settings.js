@@ -1034,7 +1034,7 @@
                         h(
                             "small",
                             {},
-                            "Use ms.settings.define() in your macro pack.",
+                            "Use ms.settings.define() in ms_macros.lua, or build settings with the builder.",
                         ),
                     );
                     r.appendChild(lbl);
