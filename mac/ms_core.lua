@@ -4750,6 +4750,13 @@
                                     unit    = def.unit,
                                     options = def.options,
                                     default = def.default,
+                                    -- The setting's section becomes its heading
+                                    -- in the picker's Tools list, so a plugin
+                                    -- (or pack) that tags its settings with a
+                                    -- section — e.g. the Roblox plugin's
+                                    -- section="roblox" — gets its own named
+                                    -- group there, like LUA / FLOW / UTILITIES.
+                                    section = def.section,
                                     -- Authored tools can be deleted from the
                                     -- builder; pack-declared ones live in the
                                     -- source file and are reference-only.

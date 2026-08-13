@@ -16,6 +16,9 @@ obj.license = "MIT"
     local CACHE_LABEL  = "com.mudscript.cache-cleaner"
 -- END Paths --
 
+-- Live sensitivity poll timer; started in :init, cancelled in :stop.
+local _sensTimer = nil
+
 -- Settings Reader --
     local function readSetting(key)
         if type(key) ~= "string" then return nil end
@@ -35,6 +38,34 @@ obj.license = "MIT"
         local v = readSetting(key)
         if v == nil then return nil end
         return v == "true"
+    end
+
+    -- Roblox stores per-view sensitivity as a Vector2, e.g.
+    --   <Vector2 name="MouseSensitivityThirdPerson"><X>1.5</X><Y>1.5</Y></Vector2>
+    -- readSetting's single-line regex can't reach the nested <X>, so this pulls
+    -- the block for `key` and returns its X component.
+    local function readVectorX(key)
+        if type(key) ~= "string" then return nil end
+        local f = io.open(SETTINGS_XML, "r")
+        if not f then return nil end
+        local data = f:read("*a")
+        f:close()
+        if not data then return nil end
+        local block = data:match('name="' .. key .. '">(.-)</Vector2>')
+        if not block then return nil end
+        return tonumber(block:match('<X>%s*([%-%d%.eE]+)%s*</X>'))
+    end
+
+    -- The sensitivity that actually governs camera rotation. In-game the slider
+    -- writes the legacy scalar `MouseSensitivity`, which Roblox mirrors into the
+    -- per-view Vector2s; we read the scalar first and fall back to the Vector2
+    -- X (third-person is Combat Warriors' default) only if the scalar is absent.
+    -- NOTE: if a live change to the in-game slider does NOT move `curSens` in
+    -- mudscript, the effective key is the Vector2 instead — swap the order here.
+    local function effectiveSensitivity()
+        return readNumber("MouseSensitivity")
+            or readVectorX("MouseSensitivityThirdPerson")
+            or readVectorX("MouseSensitivityFirstPerson")
     end
 -- END Settings Reader --
 
@@ -87,7 +118,7 @@ function obj:init()
             settingNumber   = readNumber,
             settingBool     = readBool,
 
-            sensitivity     = function() return readNumber("MouseSensitivity") end,
+            sensitivity     = function() return effectiveSensitivity() end,
             gamepadSens     = function() return readNumber("GamepadCameraSensitivity") end,
             framerateCap    = function() return readNumber("FramerateCap") end,
             graphicsQuality = function() return readNumber("GraphicsQualityLevel") end,
@@ -140,6 +171,47 @@ function obj:init()
             onChange = function() armAntiTimeout() end,
         })
     -- END Anti-Timeout --
+
+    -- Sensitivity Tether --
+        -- The combat macros scale every camera move by refSens / curSens, where
+        -- curSens is ms._camSens. On its own that only tracks the manual "Camera
+        -- Sensitivity" slider, so a player whose real in-game sensitivity differs
+        -- silently mis-rotates every spin — the classic "super jump won't land."
+        -- This keeps ms._camSens tied to Roblox's live saved sensitivity, so the
+        -- calibration is always correct for the setting actually in effect.
+        local function syncSensitivity()
+            if ms.settings.get("robloxSyncSensitivity") == false then return end
+            local sens = effectiveSensitivity()
+            if type(sens) ~= "number" or sens <= 0 then return end   -- Roblox not run yet / no file
+            if ms._camSens ~= sens then
+                ms._camSens = sens
+                -- Mirror onto the visible slider when the pack defines one, so
+                -- the UI shows the value the macros are really using. A pack
+                -- without cameraSensitivity is left untouched.
+                if ms.settings.get("cameraSensitivity") ~= nil then
+                    pcall(ms.settings.set, "cameraSensitivity", sens)
+                end
+            end
+        end
+
+        ms.settings.define({
+            type    = "toggle",
+            key     = "robloxSyncSensitivity",
+            label   = "Sync Sensitivity From Roblox",
+            hint    = "Tie the macro camera sensitivity to Roblox's live in-game sensitivity so spins stay calibrated (turn off to set it manually)",
+            default = true,
+            save    = true,
+            section = "roblox",
+            onChange = function() pcall(syncSensitivity) end,
+        })
+
+        -- Roblox only flushes GlobalBasicSettings to disk when its menu closes,
+        -- so a few-second poll catches a sensitivity change shortly after the
+        -- player makes it. Cheap: a ~4 KB file read.
+        if _sensTimer then _sensTimer:stop() end
+        _sensTimer = hs.timer.doEvery(3, function() pcall(syncSensitivity) end)
+        pcall(syncSensitivity)   -- seed immediately at load
+    -- END Sensitivity Tether --
 
     -- Cache Cleaner Toggle --
         ms.settings.define({
@@ -202,6 +274,7 @@ function obj:init()
 end
 
 function obj:stop()
+    if _sensTimer then _sensTimer:stop(); _sensTimer = nil end
     pcall(function() ms.antiTimeoutStop() end)
     if ms._targetApp == "Roblox" then
         pcall(function() ms.setTargetApp(nil) end)

@@ -707,23 +707,89 @@
         // is rendered on its own. Every tool is a row you can inspect; a final
         // "New Tool…" row opens the creator. A module parameter is wired to a
         // tool from that parameter's own field, not from here.
+        // Build one draggable tool row (a shared-setting reference).
+        function makeToolRow(t) {
+            var row = document.createElement("div");
+            row.className = "fn-entry fn-tool-entry"
+                + (_view === "tool" && _selectedId === t.key ? " active" : "");
+            row.setAttribute("data-tool-key", t.key);
+
+            var sig = document.createElement("span");
+            sig.className = "fn-entry-sig";
+            sig.textContent = t.label || t.key;
+            row.appendChild(sig);
+
+            var tag = document.createElement("span");
+            tag.className = "fn-tool-tag fn-tool-tag-" + (t.source || "pack");
+            tag.textContent = t.type;
+            row.appendChild(tag);
+
+            // Draggable onto the canvas as a shared-setting reference block,
+            // mirroring the module rows. The canvas drop wiring reads this MIME
+            // type and inserts a { action:"setting" } step.
+            row.setAttribute("draggable", "true");
+            row.addEventListener("dragstart", function(e) {
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData("application/x-ms-tool", t.key);
+                e.dataTransfer.setData("text/plain", t.label || t.key);
+            });
+            row.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
+            row.addEventListener("click", function() {
+                if (window.playSlot) playSlot("interact");
+                selectTool(t.key);
+            });
+            return row;
+        }
+
+        // The Tools live above the module categories (they are settings, not
+        // code the compiler emits). Each tool's `section` becomes its own
+        // collapsible heading here — so a plugin that tags its settings with a
+        // section (e.g. the Roblox plugin's section="roblox") gets its own named
+        // group alongside the module categories, exactly like LUA / FLOW /
+        // UTILITIES. Tools with no section fall under a default "tools" group.
         function renderToolsGroup(filter, searching) {
             var q = (filter || "").toLowerCase();
             var matches = _tools.filter(function(t) {
                 if (!q) return true;
                 return (t.label || "").toLowerCase().indexOf(q) !== -1
                     || (t.key || "").toLowerCase().indexOf(q) !== -1
+                    || (t.section || "").toLowerCase().indexOf(q) !== -1
                     || "tool".indexOf(q) !== -1;
             });
-            // During a search that matches no tool (and isn't the word "tool"),
-            // hide the group entirely so results stay tight. With no query the
-            // group always shows — even empty — so tools stay discoverable.
             var searchingTools = q && "tool".indexOf(q) === -1;
-            if (matches.length === 0 && searchingTools) return;
 
-            // Categories default to collapsed: an unset entry reads as folded,
-            // so the picker opens with every section closed until clicked open.
-            var collapsed = searching ? false : (_catCollapsed["__tools"] !== false);
+            // With no tools at all, keep the single default header + a hint so
+            // tools stay discoverable; a no-match search just hides the group.
+            if (matches.length === 0) {
+                if (searchingTools) return;
+                renderToolSection("tools", [], filter, searching, true);
+                return;
+            }
+
+            // Group by section, preserving first-seen order. The default "tools"
+            // group, when present, is emitted first so ungrouped tools lead.
+            var order = [];
+            var groups = {};
+            matches.forEach(function(t) {
+                var s = (t.section && String(t.section)) || "tools";
+                if (!groups[s]) { groups[s] = []; order.push(s); }
+                groups[s].push(t);
+            });
+            if (groups["tools"]) {
+                order = ["tools"].concat(order.filter(function(s) { return s !== "tools"; }));
+            }
+            order.forEach(function(s) {
+                renderToolSection(s, groups[s], filter, searching, false);
+            });
+        }
+
+        // Render one Tools sub-section: a category-style header keyed by section
+        // name, with its own independent collapse state, then its tool rows.
+        function renderToolSection(section, rows, filter, searching, emptyHint) {
+            var key = "__tools:" + section;
+            var collapsed = searching ? false : (_catCollapsed[key] !== false);
 
             var head = document.createElement("div");
             head.className = "fn-cat-head fn-cat-tools" + (collapsed ? " collapsed" : "");
@@ -737,12 +803,12 @@
 
             var name = document.createElement("span");
             name.className = "fn-cat-name";
-            name.textContent = "tools";
+            name.textContent = section;
             head.appendChild(name);
 
             var count = document.createElement("span");
             count.className = "fn-cat-count";
-            count.textContent = String(matches.length);
+            count.textContent = String(rows.length);
             head.appendChild(count);
 
             head.addEventListener("mouseenter", function() {
@@ -751,7 +817,7 @@
             if (!searching) {
                 head.addEventListener("click", function() {
                     if (window.playSlot) playSlot("interact");
-                    _catCollapsed["__tools"] = !(_catCollapsed["__tools"] !== false);
+                    _catCollapsed[key] = !(_catCollapsed[key] !== false);
                     renderList(filter);
                 });
             }
@@ -759,47 +825,11 @@
 
             if (collapsed) return;
 
-            matches.forEach(function(t) {
-                var row = document.createElement("div");
-                row.className = "fn-entry fn-tool-entry"
-                    + (_view === "tool" && _selectedId === t.key ? " active" : "");
-                row.setAttribute("data-tool-key", t.key);
-
-                var sig = document.createElement("span");
-                sig.className = "fn-entry-sig";
-                sig.textContent = t.label || t.key;
-                row.appendChild(sig);
-
-                var tag = document.createElement("span");
-                tag.className = "fn-tool-tag fn-tool-tag-" + (t.source || "pack");
-                tag.textContent = t.type;
-                row.appendChild(tag);
-
-                // Draggable onto the canvas as a shared-setting reference block,
-                // mirroring the module rows. The canvas drop wiring reads this
-                // MIME type and inserts a { action:"setting" } step.
-                row.setAttribute("draggable", "true");
-                row.addEventListener("dragstart", function(e) {
-                    e.dataTransfer.effectAllowed = "copy";
-                    e.dataTransfer.setData("application/x-ms-tool", t.key);
-                    e.dataTransfer.setData("text/plain", t.label || t.key);
-                });
-
-                row.addEventListener("mouseenter", function() {
-                    if (window.playSlot) playSlot("hover");
-                });
-                row.addEventListener("click", function() {
-                    if (window.playSlot) playSlot("interact");
-                    selectTool(t.key);
-                });
-                entriesDiv.appendChild(row);
-            });
+            rows.forEach(function(t) { entriesDiv.appendChild(makeToolRow(t)); });
 
             // Tools are authored in the dedicated Tools panel (Setting Builder),
-            // not here — the macro builder only references them. When none exist
-            // yet, a hint row points at where to make one instead of an inert
-            // empty section.
-            if (matches.length === 0) {
+            // not here. When none exist yet, a hint points at where to make one.
+            if (emptyHint && rows.length === 0) {
                 var hint = document.createElement("div");
                 hint.className = "fn-entry fn-tool-hint";
                 hint.innerHTML = '<span class="fn-entry-sig">No tools — add one in the Tools panel</span>';
