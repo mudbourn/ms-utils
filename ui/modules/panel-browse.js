@@ -93,13 +93,14 @@
     // filters and group headers — all installing from the profile's single
     // download, no duplicated assets. The profile itself stays in the list too.
     function expandForBrowse(list) {
-        const LABELS = { theme: "Theme", sound: "Sound", macro: "Macro" };
         const out = [];
         for (const e of (Array.isArray(list) ? list : [])) {
             out.push(e);
             const c = (e.type === "profile" && e.components
                 && typeof e.components === "object") ? e.components : null;
             if (!c) continue;
+            // The card appends "[Type]" itself, so the virtual entry just
+            // carries the profile's base name (its "profile" suffix stripped).
             const baseName = (e.name || e.id).replace(/\s+profile$/i, "");
             for (const k of ["theme", "sound", "macro"]) {
                 if (!c[k]) continue;
@@ -109,7 +110,7 @@
                     component: k,
                     virtual: true,
                     type: k,
-                    name: baseName + " — " + LABELS[k],
+                    name: baseName,
                     version: e.version,
                     author: e.author,
                     website: e.website,
@@ -145,14 +146,24 @@
             onmouseenter: () => playSlot("hover"),
         });
 
-        const name = h("div", { cls: "browse-name" }, e.name || e.id);
+        // Unified display name: "<base>  [Type]" for every kind — the profile
+        // and its slices read the same way. Strip any type word the source name
+        // already carries (a trailing "profile", or a " — Theme" from a virtual
+        // entry) so it is never doubled.
+        const typeLabel = String((TYPES.find((x) => x.value === e.type) || {}).label
+            || e.type).replace(/s$/, ""); // "Themes" → "Theme"
+        const baseName = (e.name || e.id)
+            .replace(/\s*[—–-]\s*(Theme|Sound|Macro|Profile|Plugin)\s*$/i, "")
+            .replace(/\s+(profile|theme|sound|macro|plugin)$/i, "")
+            .trim() || (e.name || e.id);
+        const displayName = baseName + "  [" + typeLabel + "]";
+
+        const name = h("div", { cls: "browse-name" }, displayName);
         const t = TRUST[e.trust] || TRUST.community;
         name.appendChild(h("span", { cls: "pill " + t.pill }, t.label));
 
         const bits = [];
-        const typeLabel = (TYPES.find((x) => x.value === e.type) || {}).label
-            || e.type;
-        bits.push(String(typeLabel).replace(/s$/, "")); // "Themes" → "Theme"
+        bits.push(typeLabel);
         if (e.version) bits.push("v" + e.version);
         if (e.author)  bits.push("by " + e.author);
 
