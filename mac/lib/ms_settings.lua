@@ -1478,7 +1478,7 @@ return function(ms)
         -- Grace periods sit above _exit's EXIT_WATCHDOG_S (6s) so the backstop
         -- only ever bites a genuine hang, never a slow-but-progressing exit.
         local RESTART_SENTINEL   = hs.configdir .. "/data/.ms_restart_pending"
-        local HARDKILL_SHUTDOWN_S = 10
+        local HARDKILL_SHUTDOWN_S = 4
         local HARDKILL_RESTART_S  = 15
 
         local function _resolvePid()
