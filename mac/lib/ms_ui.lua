@@ -1809,6 +1809,26 @@ return function(ms)
                 ms.ui.show()
                 if not path then return end
 
+                -- Shared completion: the same repaint whether the package
+                -- installed on the first try or after the unsigned-import
+                -- confirm below.
+                local function finish(result, err)
+                    hs.timer.doAfter(0.15, function()
+                        if not result then
+                            ms.alert("Import failed:\n" .. tostring(err), 5)
+                            return
+                        end
+                        if ms._soundsDirty then ms._discoverSounds() end
+                        if ms.loadTheme then ms.loadTheme() end
+                        ms.playSlot("update")
+                        ms.alert(
+                            (result.manifest.name or "Package") .. " imported (" ..
+                            #result.installed .. " files).", 4, true
+                        )
+                        ms.ui.refresh()
+                    end)
+                end
+
                 local result, err = ms.package.install(path)
                 -- An unsigned package is the normal case until the validated
                 -- library lands; confirm rather than refuse. Plugins are the
@@ -1817,29 +1837,24 @@ return function(ms)
                 local _peek = ms.package.inspect(path)
                 local _isPlugin = type(_peek) == "table" and _peek.type == "plugin"
                 if not result and not _isPlugin and tostring(err):find("validated library") then
-                    local answer = hs.dialog.blockAlert(
-                        "This package is not in the validated library.",
-                        "Import " .. path:match("([^/]+)$") .. " anyway?",
-                        "Import", "Cancel"
-                    )
-                    if answer ~= "Import" then return end
-                    result, err = ms.package.install(path, { force = true })
+                    -- Themed shell modal, not a native blockAlert: a native
+                    -- window draws behind the always-on-top shell and can
+                    -- softlock the instance. The confirm is async, so the
+                    -- forced install runs in the callback.
+                    ms.ui.modal({
+                        title   = "This package is not in the validated library.",
+                        msg     = "Import " .. path:match("([^/]+)$") .. " anyway?",
+                        confirm = "Import",
+                        cancel  = "Cancel",
+                    }, function(res)
+                        if not (res and res.confirmed) then return end
+                        local r2, e2 = ms.package.install(path, { force = true })
+                        finish(r2, e2)
+                    end)
+                    return
                 end
 
-                hs.timer.doAfter(0.15, function()
-                    if not result then
-                        ms.alert("Import failed:\n" .. tostring(err), 5)
-                        return
-                    end
-                    if ms._soundsDirty then ms._discoverSounds() end
-                    if ms.loadTheme then ms.loadTheme() end
-                    ms.playSlot("update")
-                    ms.alert(
-                        (result.manifest.name or "Package") .. " imported (" ..
-                        #result.installed .. " files).", 4, true
-                    )
-                    ms.ui.refresh()
-                end)
+                finish(result, err)
             end,
 
             -- Browse --

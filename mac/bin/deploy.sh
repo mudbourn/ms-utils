@@ -8,6 +8,20 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 HS="$HOME/.hammerspoon"
 SENTINEL="$HS/data/.ms_update_pending"
 
+# Preflight: no native macOS dialogs in the shell UI. A native window
+# (hs.dialog.blockAlert / hs.alert.show / hs.chooser) draws BEHIND the
+# always-on-top shell and can softlock the instance — every confirm must
+# go through ms.ui.modal, which renders inside the shell webview. Guardian
+# is the one exception: it runs when the shell may be untrusted, so it is
+# allowed native dialogs and is excluded from this scan.
+NATIVE_UI_RE='hs\.dialog\.blockAlert|hs\.dialog\.textPrompt|hs\.alert\.show|hs\.chooser'
+if hits=$(grep -rnE "$NATIVE_UI_RE" "$REPO/mac/lib" "$REPO/mac"/*.lua 2>/dev/null \
+        | grep -v '/ms_guardian\.lua:'); then
+    echo "deploy: native macOS dialog in shell UI — use ms.ui.modal instead:" >&2
+    echo "$hits" >&2
+    exit 1
+fi
+
 mkdir -p "$HS/data"
 
 # Signal the guardian agent to stand down.
