@@ -2,7 +2,7 @@
 REM install_guardian_agent.bat — installs the mudscript OS-level Guardian as a
 REM Windows Scheduled Task.
 REM
-REM Run once from an Administrator Command Prompt after cloning / updating ms-utils:
+REM Run once from an Administrator Command Prompt after cloning / updating mudscript:
 REM   cd %USERPROFILE%\.hammerspoon
 REM   bin\install_guardian_agent.bat
 REM
@@ -32,14 +32,14 @@ if %errorlevel% neq 0 (
 REM ── Preflight checks ────────────────────────────────────────────────────────
 if not exist "%AGENT%" (
     echo ERROR: Agent script not found at %AGENT%
-    echo        Make sure ms-utils is installed properly.
+    echo        Make sure mudscript is installed properly.
     pause
     exit /b 1
 )
 
 if not exist "%CORE%" (
     echo ERROR: ms_core.ahk not found at %CORE%
-    echo        Make sure ms-utils is installed properly.
+    echo        Make sure mudscript is installed properly.
     pause
     exit /b 1
 )

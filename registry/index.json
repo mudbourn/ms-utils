@@ -11,7 +11,7 @@
       "description": "Declares Roblox as the macro target and exposes Roblox's live saved settings (sensitivity, framerate cap, graphics quality) to macros, plus an anti-timeout keep-alive.",
       "website": "https://mudbourn.info",
       "sha256": "7f8541e1a7d56b54cffe63e6f1d594e22889009223113b0c5ce5334f763e7251",
-      "url": "https://github.com/mudbourn/ms-utils/releases/download/packages/Roblox.mspkg",
+      "url": "https://github.com/mudbourn/mudscript/releases/download/packages/Roblox.mspkg",
       "size": 7949,
       "trust": "trusted"
     },
@@ -23,7 +23,7 @@
       "author": "mudbourn",
       "website": "https://mudbourn.info",
       "sha256": "33f4dd2701fecf13cd10ccb5ae39f9fcfa437e8337ad99c88002051fe7ad28c7",
-      "url": "https://github.com/mudbourn/ms-utils/releases/download/packages/Combat.Warriors.Macros-profile.mspkg",
+      "url": "https://github.com/mudbourn/mudscript/releases/download/packages/Combat.Warriors.Macros-profile.mspkg",
       "size": 7295356,
       "components": {
         "theme": {

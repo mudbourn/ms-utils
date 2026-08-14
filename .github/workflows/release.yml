@@ -102,7 +102,7 @@ jobs:
           VERSION="${{ inputs.version }}"
           LEGACY_SHA="${{ steps.build.outputs.legacy_sha }}"
           DIST="${{ steps.build.outputs.dist }}"
-          LEGACY_URL="https://raw.githubusercontent.com/mudbourn/ms-utils/main/mac/ms_core.lua"
+          LEGACY_URL="https://raw.githubusercontent.com/mudbourn/mudscript/main/mac/ms_core.lua"
           BUNDLE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mudscript-macos-${VERSION}.zip"
 
           # Write a placeholder MANIFEST (no bundle hash yet) to compute the archive hash.

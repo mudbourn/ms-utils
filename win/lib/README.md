@@ -1,6 +1,6 @@
 # lib/
 
-Required libraries for the Windows version of ms-utils.
+Required libraries for the Windows version of mudscript.
 
 ## Quick install
 

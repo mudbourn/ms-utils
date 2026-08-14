@@ -5,7 +5,7 @@ REM Downloads and installs the dependencies needed by mudscript:
 REM   - WebView2.ahk  (with ComVar.ahk, Promise.ahk, WebView2/ DLLs)  from thqby/ahk2_lib
 REM   - Jxon.ahk                                                        from TheArkive/JXON_ahk2
 REM
-REM Run once after cloning ms-utils:
+REM Run once after cloning mudscript:
 REM   bin\install_deps.bat
 
 setlocal enabledelayedexpansion

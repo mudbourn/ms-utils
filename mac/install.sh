@@ -2,7 +2,7 @@
 # install.sh — mudscript one-shot installer (macOS)
 #
 # Usage:
-#   curl -L https://raw.githubusercontent.com/mudbourn/mudscript/main/install.sh | bash
+#   curl -L https://raw.githubusercontent.com/mudbourn/mudscript/main/mac/install.sh | bash
 #   # or download and:
 #   bash install.sh
 #

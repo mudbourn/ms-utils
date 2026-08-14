@@ -18,7 +18,7 @@ REM ── Preflight ───────────────────�
 
 if not exist "%INIT%" (
     echo ERROR: init.ahk not found at %INIT%
-    echo        Make sure ms-utils is installed to %%USERPROFILE%%\.hammerspoon\
+    echo        Make sure mudscript is installed to %%USERPROFILE%%\.hammerspoon\
     pause
     exit /b 1
 )

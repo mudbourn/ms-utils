@@ -2,7 +2,7 @@
 # install_guardian_agent.sh — installs the mudscript OS-level Guardian as a
 # macOS Launch Agent.
 #
-# Run once after cloning / updating ms-utils:
+# Run once after cloning / updating mudscript:
 #   bash ~/.hammerspoon/bin/install_guardian_agent.sh
 #
 # To uninstall:
@@ -21,7 +21,7 @@ PLIST_DST="$HOME/Library/LaunchAgents/com.mudscript.guardian.plist"
 # ── Preflight checks ──────────────────────────────────────────────────────────
 if [ ! -f "$PLIST_TEMPLATE" ]; then
     echo "ERROR: plist template not found at $PLIST_TEMPLATE"
-    echo "       Make sure ms-utils is installed to ~/.hammerspoon/"
+    echo "       Make sure mudscript is installed to ~/.hammerspoon/"
     exit 1
 fi
 
