@@ -66,7 +66,7 @@ This installs mudscript to `~/.hammerspoon/`, sets up the Guardian, and reloads 
 
 > **Existing Hammerspoon users, be careful!** The mudscript installer command clears out the install directory. If you don't want to lose your macros, **back up your existing setup by selecting everything in the directory and compressing it into a zip file.** Feel free to leave that zip file somewhere safe outside of the directory afterwards.
 
-**Requirements:** [Hammerspoon](https://www.hammerspoon.org/) (free, open-source)
+**Requirements:** [cURL](https://curl.se/) (free, open-source)
 
 ---
 
