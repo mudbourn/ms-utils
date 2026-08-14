@@ -896,6 +896,13 @@ return function(ms)
 
             -- 4. Close every window so the desktop is clear before the exit.
             step("windows", function()
+                -- Retract any popped-out panels into the shell first, while the
+                -- shell frame is still placed to animate home toward — otherwise
+                -- these standalone webviews sit on screen until hs.reload()/quit
+                -- destroys them live (they are not covered by the exit curtain,
+                -- which only stands over the shell). The EXIT_HOLD_S window keeps
+                -- the runloop alive long enough for the retract fade to finish.
+                if ms.shell and ms.shell.closePopOuts then ms.shell.closePopOuts() end
                 if ms.shell and ms.shell.hide then ms.shell.hide() end
                 if ms.ui and ms.ui.hide then ms.ui.hide() end
                 pcall(function() ms.dev.console.hide() end)

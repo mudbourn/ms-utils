@@ -1183,5 +1183,46 @@
         ms.shell.isPoppedOut = function(panelId)
             return _popouts[panelId] ~= nil
         end
+
+        --- closePopOuts: retract every popped-out panel back into the shell
+        --- frame, fading it out, then hide and delete its webview. The exit
+        --- teardown calls this so popouts leave *with* the shell instead of
+        --- being destroyed live on screen when hs.reload()/quit nukes their
+        --- webviews. Unlike popIn, it does no shell round-trip (no poppedIn /
+        --- history reload) — the shell is on its way out too.
+        ms.shell.closePopOuts = function()
+            local shellFrame = nil
+            if _shellView then pcall(function() shellFrame = _shellView:frame() end) end
+            for panelId, pop in pairs(_popouts) do
+                -- Stop this popout's own drag/resize taps first.
+                if _popResizeTaps[panelId] then
+                    pcall(function() _popResizeTaps[panelId]:stop() end); _popResizeTaps[panelId] = nil
+                end
+                if _popDragTaps[panelId] then
+                    pcall(function() _popDragTaps[panelId]:stop() end); _popDragTaps[panelId] = nil
+                end
+                local view = pop.view
+                local target = shellFrame
+                if view and not target then pcall(function() target = view:frame() end) end
+                local function _kill()
+                    pcall(function() view:hide() end)
+                    pcall(function() view:delete() end)
+                end
+                if view and target then
+                    local from = nil
+                    pcall(function() from = view:frame() end)
+                    if from then
+                        pcall(function()
+                            animatePopWindow(panelId, view, from, target, 1, 0, _kill)
+                        end)
+                    else
+                        _kill()
+                    end
+                elseif view then
+                    _kill()
+                end
+                _popouts[panelId] = nil
+            end
+        end
     end
 -- END ms_shell --
