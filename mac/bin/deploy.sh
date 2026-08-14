@@ -15,8 +15,11 @@ SENTINEL="$HS/data/.ms_update_pending"
 # is the one exception: it runs when the shell may be untrusted, so it is
 # allowed native dialogs and is excluded from this scan.
 NATIVE_UI_RE='hs\.dialog\.blockAlert|hs\.dialog\.textPrompt|hs\.alert\.show|hs\.chooser'
+# Exclude Guardian (allowed native dialogs) and full-line Lua comments, so a
+# comment that names one of these functions doesn't read as a call.
 if hits=$(grep -rnE "$NATIVE_UI_RE" "$REPO/mac/lib" "$REPO/mac"/*.lua 2>/dev/null \
-        | grep -v '/ms_guardian\.lua:'); then
+        | grep -v '/ms_guardian\.lua:' \
+        | grep -vE ':[0-9]+:[[:space:]]*--'); then
     echo "deploy: native macOS dialog in shell UI — use ms.ui.modal instead:" >&2
     echo "$hits" >&2
     exit 1

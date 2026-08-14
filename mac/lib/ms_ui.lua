@@ -1636,18 +1636,79 @@ return function(ms)
             openConsole = function() hs.openConsole() end,
 
             editMacros = function()
-                -- `open -t` forces the default text editor: a bare `open` on a
-                -- .lua file does nothing when no app is registered for the
-                -- extension (the reported "button opens nothing"). This is the
-                -- HANDWRITTEN suite, not the visual builder's macro — the visual
-                -- macros live in data/ms_macros_visual.json — so say so.
-                local path = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
-                if ms.alert then
-                    ms.alert("Opening ms_macros.lua — the handwritten macro suite.\n"
-                        .. "Visual builder macros are stored separately and are\n"
-                        .. "not edited here.", 5)
+                -- This is the HANDWRITTEN suite, not the visual builder's macro
+                -- — the visual macros live in data/ms_macros_visual.json — so
+                -- the confirm below says so before anything launches.
+                local path       = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
+                local editorFile = os.getenv("HOME") .. "/.hammerspoon/data/.ms_editor"
+
+                -- The remembered editor is a .app bundle path, one per line,
+                -- alongside the other data/ prefs. nil until the user picks one,
+                -- or if the saved app has since been moved/deleted.
+                local function savedEditor()
+                    local f = io.open(editorFile, "r")
+                    if not f then return nil end
+                    local p = f:read("*l"); f:close()
+                    if p and p ~= "" and hs.fs.attributes(p) then return p end
+                    return nil
                 end
-                os.execute("open -t '" .. path .. "'")
+
+                -- open -a launches the chosen app; open -t (default text editor)
+                -- is the fallback for a picker the user backed out of. A bare
+                -- `open` on a .lua does nothing when no app claims the extension
+                -- (the original "button opens nothing"), so never use it.
+                local function openIn(app)
+                    if app then
+                        os.execute("open -a '" .. app .. "' '" .. path .. "'")
+                    else
+                        os.execute("open -t '" .. path .. "'")
+                    end
+                end
+
+                -- Native app picker at /Applications. This is the file-picker
+                -- exception: it is app-modal and fronts above the shell (unlike
+                -- hs.dialog.blockAlert, which draws behind and softlocks), and
+                -- there is no themed equivalent. The choice is remembered.
+                local function pickEditor(after)
+                    ms.ui.hide()
+                    local chosen = hs.dialog.chooseFileOrFolder(
+                        "Choose your text editor", "/Applications",
+                        true, false, false, { "app" }
+                    )
+                    ms.ui.show()
+                    local app
+                    for _, v in pairs(chosen or {}) do
+                        if type(v) == "string" then app = v; break end
+                    end
+                    if not app then return end
+                    local f = io.open(editorFile, "w")
+                    if f then f:write(app); f:close() end
+                    if after then after(app) end
+                end
+
+                local editor     = savedEditor()
+                local editorName = editor and editor:match("([^/]+)%.app$") or nil
+
+                -- Themed confirm modal, not the old discreet ms.alert: the user
+                -- acknowledges which macro file is opening — and, on the first
+                -- run, is sent to pick an editor — before anything launches.
+                ms.playSlot("alert")
+                ms.ui.modal({
+                    title   = "Edit handwritten macros",
+                    msg     = "Opens ms_macros.lua — the handwritten macro suite. "
+                        .. "Visual builder macros are stored separately and are "
+                        .. "not edited here."
+                        .. (editorName and ("\n\nEditor: " .. editorName) or ""),
+                    confirm = editorName and ("Open in " .. editorName) or "Choose editor…",
+                    cancel  = "Cancel",
+                }, function(res)
+                    if not (res and res.confirmed) then return end
+                    if editor then
+                        openIn(editor)
+                    else
+                        pickEditor(function(app) openIn(app) end)
+                    end
+                end)
             end,
 
             editTheme = function()
