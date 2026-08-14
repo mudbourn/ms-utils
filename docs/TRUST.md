@@ -34,7 +34,7 @@ It is real, and the project does not pretend it is not. Its own README warns tha
 
 ### "The Roblox plugin reads my Roblox settings. What is it doing with them?"
 
-Reading them, and nothing more. The Roblox plugin opens your saved-settings file **read only**. That is your sensitivity, FPS cap, graphics quality, volume, fullscreen, and camera setting. Macros use them to match your real settings. There is no code that writes to that file. You can check this in the source. It would also be pointless, since you cannot change change those settings mid-game.
+Reading them, and nothing more. The Roblox plugin opens your saved-settings file **read only**. That is your sensitivity, FPS cap, graphics quality, volume, fullscreen, and camera setting. Macros use them to match your real settings. There is no code that writes to that file. You can check this in the source. It would also be pointless, since you cannot change those settings mid-game.
 
 Its two features that can write anything are both normal and both off until you turn them on:
 - A **cache cleaner** that only removes throwaway Roblox cache and log files. It sets up a small helper under **your own** `~/Library/LaunchAgents/` folder. It never touches the game, your settings, or anything Roblox cares about. I have personally seen it save gigabytes of storage that would be hard to track down and free without special tools built for looking around your entire drive.

@@ -86,8 +86,7 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 │   │   ├── step-block.js       StepCanvas — drag-and-drop macro builder
 │   │   └── step-editor.js      Inline parameter editors
 │   ├── svg/                    Theme-compliant SVG icons (currentColor)
-│   ├── fonts/                  Bundled fonts — auto-installed on startup.
-│   └── icons/                  Menu bar / tray icons.
+│   └── fonts/                  Bundled fonts — auto-installed on startup.
 │
 ├── data/                       Per-user runtime files — all gitignored.
 │   ├── ms_settings.json        Live settings (binds, sensitivity, sound, etc.)
@@ -114,7 +113,8 @@ Both platforms share the same directory layout and identical `ms.*` API, so macr
 ├── docs/
 │   ├── DOCS_MAC.md             macOS API reference (~1,600 lines)
 │   ├── DOCS_WINDOWS.md         Windows API reference
-│   ├── function-index.md       Quick reference for all ms.* functions
+│   ├── TRUST.md                Plain-language look at what mudscript does and does not do
+│   ├── KEY_CODES.md            Key name reference for binds and captures
 │   └── ARCHITECTURE.md         This file
 │
 ├── MANIFEST.json               Update manifest — version, sha256, url, bundle, signature.

@@ -35,7 +35,7 @@ end)
 ms.bind.define("myMacro", MyFunction, { group="main", label="My Macro" })
 ```
 
-See **Section 21** for the full User Settings & Menu API reference.
+See **Section 22** for the full User Settings & Menu API reference.
 
 ---
 
@@ -269,6 +269,19 @@ ms.type("e", nil, 5)          -- 5 ms hold
 
 ---
 
+### `ms.hold(key, mods, durationMs)`
+
+Presses and holds a key. With a `durationMs`, it also reproduces OS key-repeat the way a real physical hold does — a synthetic key-down does not auto-repeat on its own, so without this a "hold to spam a key" step would only ever type one character. Without a `durationMs`, it just holds indefinitely, leaving the matching release to the caller (e.g. a movement hold paired with a later `ms.release`).
+
+```lua
+ms.hold("w", nil, 500)         -- hold W for 500ms, with repeat events, then release
+ms.hold("space", nil)          -- hold space indefinitely — call ms.release("space") later
+```
+
+The first repeat begins after a 250 ms initial delay (macOS's default), then repeats every ~33 ms (~30/s), matching the default OS repeat rate.
+
+---
+
 ### `ms.key(mods, key, swallow, pressFn, releaseFn)`
 
 Registers a persistent keybind listener. Returns a handle with a `delete()` method.
@@ -291,6 +304,22 @@ handle:delete()
 ```
 
 Macro binds registered through `ms.bind.define` use this internally; you rarely need to call it directly.
+
+---
+
+### `ms.keyCombo(mods, keys, swallow, pressFn)`
+
+Registers a chord: fires when the **last** key of `keys` goes down while every other key in the chord (and any required `mods`) is already held. Order-independent — whichever key completes the chord is the one that fires. Returns a handle with a `delete()` method.
+
+```lua
+local handle = ms.keyCombo(nil, {"v", "k"}, true, function()
+    -- fires when V and K are both held, however they were pressed
+end)
+
+handle:delete()
+```
+
+`hs.hotkey` can't express a two-normal-key chord like V+K; `ms.keyCombo` bypasses it entirely by matching off the same live key-tracking table `ms.keystate` and the SOCD/trackpad holds read. A `keys` table with fewer than two entries falls back to a plain `ms.key` bind.
 
 ---
 
@@ -467,6 +496,45 @@ ms.restoreCursor()           -- move cursor back
 
 ---
 
+### `ms.scrollBind(direction, fn)`
+
+Registers a callback that fires whenever the scroll wheel moves in the given `direction` (`"up"` or `"down"`). Returns a handle with a `delete()` method. Only one callback can be registered per direction at a time — binding the same direction again replaces the previous callback.
+
+```lua
+local handle = ms.scrollBind("up", function()
+    ms.type("e")   -- scroll up triggers E
+end)
+
+handle:delete()
+```
+
+Each callback runs in its own coroutine, so it can safely call `ms.wait` and other yielding functions.
+
+---
+
+### Gamepad — `ms.gamepadStart()` / `ms.gamepadStop()` / `ms.gamepadBind(button, fn)`
+
+Reads gamepad input via a background helper process (`ms_gc_read`) and dispatches button presses to registered callbacks.
+
+```lua
+ms.gamepadStart()   -- start the background reader (no-op if already running)
+ms.gamepadStop()    -- stop it and clear all registered callbacks
+
+local handle = ms.gamepadBind("a", function()
+    ms.type("space")   -- gamepad A button triggers Space
+end)
+
+handle:delete()
+```
+
+- **`ms.gamepadStart()`** launches the reader task if it isn't already running. It parses each JSON line the helper emits, tracking connect/disconnect events (`ms._gamepadConnected`) and routing `press` events to the callback registered for that button.
+- **`ms.gamepadStop()`** terminates the reader task and clears all registered callbacks and connection state.
+- **`ms.gamepadBind(button, fn)`** registers a callback for a named button. Requires `ms.gamepadEnabled` to be set — returns an inert handle (`delete()` is a no-op) otherwise. Automatically calls `ms.gamepadStart()` on first use if the reader isn't already running. Returns a handle with a `delete()` method that unregisters just that button's callback.
+
+Each button callback runs in its own coroutine, same as `ms.scrollBind`. While a rebind capture is active, button-press events are routed to the capture instead of any bound callback.
+
+---
+
 ## 7. Camera Engine — `ms.cam`
 
 The camera engine drives Roblox's camera using synthetic button-5 drag events, bypassing the user's mouse entirely. All macros that move the camera use this.
@@ -509,6 +577,27 @@ Debounced `updateAnchor` — waits 0.5 s before calling it. Used by the UI watch
 
 ---
 
+### `ms.flick(dx, dy, opts)`
+
+Posts a deterministic, tightly-bunched burst of camera deltas that sum exactly to `(dx, dy)` — a synchronous alternative to `ms.cam.sweep` for snap-turns and flicks where you want the whole movement to land in one uninterrupted burst rather than spread across an async pump.
+
+```lua
+ms.flick(1200, 0)                       -- flick right, delta count auto-derived from dx
+ms.flick(-800, 40, { count = 12 })      -- flick left+down over exactly 12 deltas
+ms.flick(600, 0,  { gapUs = 500 })      -- tighter spacing between deltas (500 µs)
+```
+
+Options (`opts`, all optional):
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `count` | `max(1, round(\|dx\| / 100))` | Number of individual `ms.cam` deltas to split the movement into |
+| `gapUs` | `ms._flickGapUs` or `1000` | Microseconds to sleep between each delta |
+
+The total is split Bresenham-style so the emitted deltas sum to exactly `dx`/`dy` — no rounding drift even with an odd `count`. Unlike `ms.wait`, this runs synchronously via `hs.timer.usleep` and does **not** yield, so it blocks the calling coroutine for the full duration of the burst; it does not need to run inside an `ms.fn`-wrapped function the way `ms.wait` does.
+
+---
+
 ## 8. Timing — `ms.wait`
 
 ```lua
@@ -526,7 +615,7 @@ ms.wait(2000)  -- 2 seconds
 
 Must be called from a coroutine context (i.e. inside an `ms.fn`-wrapped function). Outside a coroutine it falls back to a blocking `usleep`.
 
-> **Macro Monitor integration.** When the Macro Monitor panel is open, every `ms.wait` call produces a dim step trace entry in the log regardless of duration — there is no minimum threshold. See **Section 24** for the full list of functions that generate step traces.
+> **Macro Monitor integration.** When the Macro Monitor panel is open, every `ms.wait` call produces a dim step trace entry in the log regardless of duration — there is no minimum threshold. See **Section 25** for the full list of functions that generate step traces.
 
 ### `ms.after(milliseconds, fn)`
 
@@ -641,6 +730,20 @@ Pass `true` as the second argument to treat the first argument as a raw keycode:
 ```lua
 ms.keystate(56, true)   -- checks shift by keycode
 ```
+
+---
+
+### `ms.held(id)`
+
+Returns `true` only if **every** identifier modifier of the bind `id` is currently held — used to route a shared trigger among multiple binds that claim it. A bind with no identifier modifiers (the fallback bind) always returns `false`.
+
+```lua
+if ms.held("sprint") then
+    -- the modifiers that identify the "sprint" bind are all currently held
+end
+```
+
+Reads the same effective bind config as `ms.bind.define` (via `ms.effectiveBind`), so it stays in sync with rebinds made from the settings panel.
 
 ---
 
@@ -1077,7 +1180,7 @@ ms.notify("Update available", "", "v1.4.0 is ready to install")
 
 ---
 
-## 13. Settings & Defaults
+## 14. Settings & Defaults
 
 ### `ms.saveSettings()`
 
@@ -1146,7 +1249,7 @@ Settings declared with `ms.settings.define` are persisted under a `user` sub-tab
 
 ---
 
-## 14. SOCD Engine
+## 15. SOCD Engine
 
 Simultaneous Opposing Cardinal Directions cleaning. When enabled, prevents both keys in an axis pair (`W`/`S`, `A`/`D`) from being registered as held at the same time.
 
@@ -1172,7 +1275,7 @@ Starts or stops the SOCD listener based on `ms.socdEnabled`. Call this after cha
 
 ---
 
-## 15. Trackpad / Pen Mode
+## 16. Trackpad / Pen Mode
 
 When enabled, re-routes root macro binds through `ms.trackpadBindOverrides` instead of their normal `default` bind. The default overrides move `superJump` from mouse button 3 to a keyboard key.
 
@@ -1187,7 +1290,7 @@ The trackpad hold listeners (`ms._trackpadLeftListener`, `ms._trackpadRightListe
 
 ---
 
-## 16. Profiles
+## 17. Profiles
 
 A profile is a folder in `~/.hammerspoon/profiles/<name>/` containing `ms_macros.lua` and optionally `ms_settings.json`, `ms_settings_default.json`, and `ms_theme.json`.
 
@@ -1224,7 +1327,7 @@ Any sounds in `sounds/` are added to the user's library on import. If a sound wi
 
 ---
 
-## 17. Utility Functions
+## 18. Utility Functions
 
 ### `ms.alert(msg [, duration [, noDefaultSound]])`
 
@@ -1248,21 +1351,22 @@ Instantly clears all active toasts without animation. Used internally by the mac
 
 ---
 
-### `ms.debugRoblox()`
+### `ms.debugTarget()`
 
-Prints Roblox window info (resolution, position, aspect ratio, sensitivity) to the Hammerspoon console and shows alerts. Also warns if the aspect ratio is too narrow for macros to work correctly. Available as a Lua call; the **Settings › Developer** button now opens the **Window Monitor** instead.
+Prints target window info (resolution, position, aspect ratio, sensitivity) to the Hammerspoon console and shows alerts. Also warns if the aspect ratio is too narrow for macros to work correctly. Available as a Lua call; the **Settings › Developer** button now opens the **Window Monitor** instead.
 
 ---
 
-## 18. Global Hotkeys
+## 19. Global Hotkeys
 
 These hotkeys only fire when the **target application** is focused (set via `ms.setTargetApp()`). They are silently ignored in all other apps.
 
 | Hotkey | Action |
 |--------|--------|
-| `alt+[` | Reload Hammerspoon (`hs.reload()`) |
-| `alt+]` | Reload settings from disk and rebind |
+| `alt+[` | Quick Reload — granular reload of macros/theme/settings/UI per the Quick Reload dropdown options |
+| `alt+]` | Full Reload — tears down and restarts Hammerspoon (`ms.restart()`, falling back to `hs.reload()`) |
 | `alt+p` | Toggle the Settings panel |
+| `alt+o` | Toggle Octane Mode |
 | `alt+F10` | Emergency reset — disables macros immediately |
 
 ### Tap resilience
@@ -1287,9 +1391,30 @@ Two recoveries cover it:
 
 Neither recovery can double-fire a bind: a genuine held key produces autorepeat key-downs, which are left latched.
 
+### Octane Mode — `ms.octane`
+
+A low-overhead performance toggle, bound to `alt+o`. Octane Mode strips logging, animations, idle pollers, and (optionally) sounds while macros keep running unchanged — for when the developer panels and UI polish aren't worth their overhead.
+
+```lua
+ms.octane.on()       -- enable
+ms.octane.off()      -- disable
+ms.octane.toggle()   -- flip current state
+```
+
+Turning it on:
+
+- Pauses all `ms.dev.log` channels
+- Stops idle pollers (mouse, shell mouse, window spy)
+- Stops the menu hover watcher
+- Forces Window Monitor element-inspect off (expensive pixel + AX reads)
+
+Turning it off restores all of the above — logging resumes, pollers restart for any panel that's currently active, and the menu hover watcher restarts if the menu is visible.
+
+The toggle state (`ms._octaneMode`) persists across reloads via settings, so it's re-applied automatically on load if it was left on. A separate **Octane mute sounds** setting (`ms._octaneMuteSounds`) can additionally silence sound playback while Octane is active, independent of the master toggle.
+
 ---
 
-## 19. Global Constants
+## 20. Global Constants
 
 ### Camera / scaling
 
@@ -1358,7 +1483,7 @@ These are plain globals available from `ms_macros.lua`.
 | `ms.bind._wires` | Registered functions by id |
 
 
-## 20. System Integrity & Updates
+## 21. System Integrity & Updates
 
 ### Overview
 
@@ -1476,7 +1601,7 @@ Paste the contents of `public.pem` into `ms._updatePublicKey` in `ms_core.lua`, 
 
 ---
 
-## 21. User Settings & Menu API
+## 22. User Settings & Menu API
 
 Macro packs can declare their own settings, panel sections, and hide unused built-in features. These calls belong in the **Pack Settings** zone of `ms_macros.lua` — after `ms.macroMeta`, before macro functions.
 
@@ -1672,7 +1797,7 @@ ms.features.hide("independentBinds")  -- Independent Binds row in Tools
 
 ---
 
-## 22. Theme System
+## 23. Theme System
 
 The panel UI is fully themeable via `~/.hammerspoon/data/ms_theme.json`. Edit the file directly, then use **Developer › Reload Theme** in the settings panel (or `hs.reload()`) to apply changes.
 
@@ -1682,20 +1807,21 @@ The panel UI is fully themeable via `~/.hammerspoon/data/ms_theme.json`. Edit th
 
 ```json
 {
-    "bg":       "#060402",
-    "surface":  "#100806",
-    "surface2": "#1c100c",
-    "hover":    "#301610",
-    "accent":   "#c41a1a",
-    "accentHi": "#e52424",
-    "success":  "#4a7820",
-    "dangerBg": "#1e0608",
-    "danger":   "#d42020",
-    "warning":  "#c47820",
-    "text":     "#f0ddb0",
-    "radius":   3,
-    "font":     "Almendra",
-    "fadeMs":   150
+    "bg":           "#0d0f09",
+    "surface":      "#141810",
+    "surface2":     "#1c2116",
+    "hover":        "#2d3523",
+    "accent":       "#6b8c3a",
+    "accentHi":     "#8db84e",
+    "success":      "#7aa63c",
+    "dangerBg":     "#1c130f",
+    "danger":       "#c0492e",
+    "warning":      "#c4a030",
+    "text":         "#d4cfb6",
+    "radius":       8,
+    "windowRadius": 8,
+    "font":         "Arial",
+    "fadeMs":       250
 }
 ```
 
@@ -1707,23 +1833,23 @@ All color values must be valid hex strings (`#rgb`, `#rrggbb`, or `#rrggbbaa`). 
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `bg` | `#060402` | Panel background (void) |
-| `surface` | `#100806` | Section / card surface |
-| `surface2` | `#1c100c` | Raised surface (rows, inputs) |
-| `hover` | `#301610` | Row hover state |
-| `accent` | `#c41a1a` | Primary accent — active borders, chevrons |
-| `accentHi` | `#e52424` | Accent highlight (focus, flash) |
-| `success` | `#4a7820` | Success state (active profile pill) |
-| `dangerBg` | `#1e0608` | Danger element background |
-| `danger` | `#d42020` | Danger foreground (destructive buttons) |
-| `warning` | `#c47820` | Warning / notice colour |
-| `text` | `#f0ddb0` | Primary text |
+| `bg` | `#0d0f09` | Panel background (void) |
+| `surface` | `#141810` | Section / card surface |
+| `surface2` | `#1c2116` | Raised surface (rows, inputs) |
+| `hover` | `#2d3523` | Row hover state |
+| `accent` | `#6b8c3a` | Primary accent — active borders, chevrons |
+| `accentHi` | `#8db84e` | Accent highlight (focus, flash) |
+| `success` | `#7aa63c` | Success state (active profile pill) |
+| `dangerBg` | `#1c130f` | Danger element background |
+| `danger` | `#c0492e` | Danger foreground (destructive buttons) |
+| `warning` | `#c4a030` | Warning / notice colour |
+| `text` | `#d4cfb6` | Primary text |
 
 ---
 
 ### `radius`
 
-Integer, `0`–`40`. Controls `--radius` (and derives `--radius-s` as `radius - 1`). Default: `3`.
+Integer, `0`–`40`. Controls `--radius` (and derives `--radius-s` as `radius - 1`). Default: `8`.
 
 ```json
 { "radius": 8 }
@@ -1731,9 +1857,19 @@ Integer, `0`–`40`. Controls `--radius` (and derives `--radius-s` as `radius - 
 
 ---
 
+### `windowRadius`
+
+Integer, `0`–`40`. Controls the actual rounded corner applied to each webview panel window (via `ms.theme.applyWindowRadius`), separate from the CSS `--radius` used inside the panel content. Default: `8`.
+
+```json
+{ "windowRadius": 8 }
+```
+
+---
+
 ### `fadeMs`
 
-Integer, `0`–`500`. Duration in milliseconds for panel fade-in / fade-out animations. Affects the settings panel, all four developer panels, and the startup loading screen. Set to `0` to disable fades completely. Default: `150`.
+Integer, `0`–`500`. Duration in milliseconds for panel fade-in / fade-out animations. Affects the settings panel, all four developer panels, and the startup loading screen. Set to `0` to disable fades completely. Default: `250`.
 
 ```json
 { "fadeMs": 300 }
@@ -1760,7 +1896,7 @@ Reads and validates `data/ms_theme.json`. Called automatically at startup after 
 
 ---
 
-## 23. Capability Detection — `ms.has`
+## 24. Capability Detection — `ms.has`
 
 `ms.has(feature)` returns `true` if the named feature is present and configured. Call it from anywhere in `ms_macros.lua` to guard optional behaviour so packs degrade gracefully when a user hasn't set something up, or when running on an older mudscript install.
 
@@ -1791,7 +1927,7 @@ end
 
 ---
 
-## 24. Developer Tools — `ms.dev`
+## 25. Developer Tools — `ms.dev`
 
 Four floating panels for live monitoring and interactive debugging. Open them from **Settings › Developer** or call the API directly. All panels share the active `data/ms_theme.json` theme — colors, font, and radius update automatically when the panel first loads.
 
