@@ -1451,32 +1451,88 @@ return function(ms)
         -- The send-off is owned by `_exit`, not by the panel and not by this
         -- function: the panel's copy died with its window, and the sample has
         -- to start with the curtain's fade rather than ahead of it.
-        -- Runloop-independent hard-kill backstop. Every timer in _exit rides
-        -- the Hammerspoon runloop the teardown runs on, so a teardown step that
+        -- Runloop-independent backstop. Every timer in _exit rides the
+        -- Hammerspoon runloop the teardown runs on, so a teardown step that
         -- blocks it under load (a slow save, a webview :delete) freezes the
         -- watchdog with it and the exit hangs with nothing left to fire. This
-        -- spawns an OUTSIDE process that kill -9's Hammerspoon after a grace
-        -- period no matter what the runloop is doing — the one backstop a
+        -- spawns an OUTSIDE process that forces the exit's outcome after a
+        -- grace period no matter what the runloop is doing — the one backstop a
         -- wedged runloop cannot defeat. Spawned before the teardown so it is
         -- already running when the block would happen; the child is reparented
-        -- to launchd and survives even a clean exit (a kill -9 on an
-        -- already-dead pid is a harmless no-op). The grace period sits well
-        -- above _exit's own EXIT_WATCHDOG_S (6s) so it only ever bites a
-        -- genuine hang, never a merely slow-but-progressing exit.
-        local EXIT_HARDKILL_S = 12
-        local function _armExternalHardKill()
+        -- to launchd and survives even a clean exit.
+        --
+        --   shutdown: unconditional `kill -9 <pid>` — shutdown's whole intent
+        --             is termination, and a kill on an already-dead pid (the
+        --             clean os.exit having won) is a harmless no-op.
+        --   restart : `hs.reload()` keeps the SAME pid, so an unconditional
+        --             kill would take out a healthy reloaded instance. Instead
+        --             it is guarded by a sentinel file: the fresh boot clears
+        --             it in init.lua within a moment of process start, so a
+        --             reload that completes leaves nothing for the watchdog to
+        --             act on. Only a reload that never boots (the hang) leaves
+        --             the sentinel in place, and then the watchdog kills the
+        --             wedged process and relaunches — which is the restart the
+        --             user asked for. The relaunched instance clears the
+        --             sentinel on its own boot, so there is no kill loop.
+        --
+        -- Grace periods sit above _exit's EXIT_WATCHDOG_S (6s) so the backstop
+        -- only ever bites a genuine hang, never a slow-but-progressing exit.
+        local RESTART_SENTINEL   = hs.configdir .. "/data/.ms_restart_pending"
+        local HARDKILL_SHUTDOWN_S = 10
+        local HARDKILL_RESTART_S  = 15
+
+        local function _resolvePid()
+            local pid = hs.processInfo and hs.processInfo.processID
+            if pid then return pid end
+            local ok, app = pcall(hs.application.get, "Hammerspoon")
+            if ok and app then
+                local ok2, p = pcall(function() return app:pid() end)
+                if ok2 then return p end
+            end
+            return nil
+        end
+
+        local WATCHDOG_SCRIPT = hs.configdir .. "/data/.ms_exit_watchdog.sh"
+
+        -- Written to a script and launched fully detached with `nohup … &`, NOT
+        -- via hs.task: on restart, hs.reload() wipes the Lua state and could
+        -- collect an hs.task handle and take its child with it — exactly when
+        -- the backstop is needed most. A nohup'd subprocess is reparented to
+        -- launchd and outlives the reload or the kill. os.execute returns the
+        -- instant `&` backgrounds it, so it adds nothing to the stall.
+        local function _spawnDetached(cmd)
+            local f = io.open(WATCHDOG_SCRIPT, "w")
+            if not f then error("cannot write watchdog script") end
+            f:write("#!/bin/sh\n" .. cmd .. "\n"); f:close()
+            os.execute("nohup sh '" .. WATCHDOG_SCRIPT .. "' >/dev/null 2>&1 &")
+        end
+
+        local function _armExternalHardKill(mode)
             local ok = pcall(function()
-                local pid = hs.processInfo and hs.processInfo.processID
-                if not pid then return end
-                hs.task.new("/bin/sh", nil, {
-                    "-c",
-                    "sleep " .. EXIT_HARDKILL_S ..
-                        "; kill -9 " .. tostring(pid) .. " 2>/dev/null",
-                }):start()
+                local pid = _resolvePid()
+                if not pid then error("no pid") end
+                if mode == "restart" then
+                    -- Mark the restart in flight, then guard the kill on it.
+                    local f = io.open(RESTART_SENTINEL, "w")
+                    if f then f:write(tostring(pid)); f:close() end
+                    _spawnDetached(
+                        "sleep " .. HARDKILL_RESTART_S ..
+                        "; if [ -f '" .. RESTART_SENTINEL .. "' ]; then " ..
+                            "kill -9 " .. pid .. " 2>/dev/null; " ..
+                            "rm -f '" .. RESTART_SENTINEL .. "'; " ..
+                            "sleep 1; open -a Hammerspoon; " ..
+                        "fi"
+                    )
+                else
+                    _spawnDetached(
+                        "sleep " .. HARDKILL_SHUTDOWN_S ..
+                        "; kill -9 " .. pid .. " 2>/dev/null"
+                    )
+                end
             end)
             if not ok then
                 pcall(function()
-                    ms.dev.log({ type = "error", event = "hardkill_arm_failed" })
+                    ms.dev.log({ type = "error", event = mode .. "_hardkill_arm_failed" })
                 end)
             end
         end
@@ -1488,7 +1544,7 @@ return function(ms)
 
             -- Guarantee the process actually dies even if the runloop wedges
             -- mid-teardown; the clean os.exit below still wins the normal race.
-            _armExternalHardKill()
+            _armExternalHardKill("shutdown")
 
             _exit("shutdown", "shutdown", function()
                 -- kill() is a *request* to terminate, and a request can be
@@ -1514,6 +1570,12 @@ return function(ms)
             if ms._restarting or ms._shuttingDown then return end
             ms._restarting = true
             ms.dev.log({ type = "system", event = "restart_start" })
+
+            -- Runloop-independent backstop: if the reload wedges and never
+            -- boots, an outside process kills the wedged instance and relaunches
+            -- it. The fresh boot clears the sentinel in init.lua, so a reload
+            -- that completes disarms this on its own.
+            _armExternalHardKill("restart")
 
             -- A restart is not a goodbye, so it gets its own slot — which
             -- ships unassigned and falls through to the shutdown sound rather
