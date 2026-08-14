@@ -833,6 +833,39 @@ return function(ms)
             startCapture()
         end
 
+        -- Shared by editMacros and chooseMacroEditor. The chosen text editor is
+        -- a .app bundle path remembered in data/ (one line), alongside the other
+        -- data/ prefs. _pickEditor fronts HS first (hs.focus) so the open
+        -- panel's sidebar isn't greyed out, then writes the pick.
+        local _editorPrefFile = os.getenv("HOME") .. "/.hammerspoon/data/.ms_editor"
+        local function _savedEditor()
+            local f = io.open(_editorPrefFile, "r")
+            if not f then return nil end
+            local p = f:read("*l"); f:close()
+            if p and p ~= "" and hs.fs.attributes(p) then return p end
+            return nil
+        end
+        local function _editorName(app)
+            return app and app:match("([^/]+)%.app$") or nil
+        end
+        local function _pickEditor(after)
+            ms.ui.hide()
+            hs.focus()  -- front HS so the open panel's sidebar isn't greyed out
+            local chosen = hs.dialog.chooseFileOrFolder(
+                "Choose your text editor", "/Applications",
+                true, false, false, { "app" }
+            )
+            ms.ui.show()
+            local app
+            for _, v in pairs(chosen or {}) do
+                if type(v) == "string" then app = v; break end
+            end
+            if not app then return end
+            local f = io.open(_editorPrefFile, "w")
+            if f then f:write(app); f:close() end
+            if after then after(app) end
+        end
+
         ms.ui._actions = {
             ready = function() ms.ui.refresh() end,
 
@@ -1325,6 +1358,7 @@ return function(ms)
             importSounds = function()
                 ms.playSlot("alert")
                 local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
+                hs.focus()  -- front HS so the open panel's sidebar isn't greyed out
                 local result = hs.dialog.chooseFileOrFolder(
                     "Select one or more sound files to add to your library",
                     hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
@@ -1408,6 +1442,7 @@ return function(ms)
                 local slot = data.slot
                 ms.playSlot("alert")
                 local slibDir = SoundLib:match("^(.-)[/\\]*$") or SoundLib
+                hs.focus()  -- front HS so the open panel's sidebar isn't greyed out
                 local result = hs.dialog.chooseFileOrFolder(
                     "Select a sound file for \"" .. (data.label or slot) .. "\"",
                     hs.fs.attributes(slibDir) and SoundLib or os.getenv("HOME"),
@@ -1639,19 +1674,7 @@ return function(ms)
                 -- This is the HANDWRITTEN suite, not the visual builder's macro
                 -- — the visual macros live in data/ms_macros_visual.json — so
                 -- the confirm below says so before anything launches.
-                local path       = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
-                local editorFile = os.getenv("HOME") .. "/.hammerspoon/data/.ms_editor"
-
-                -- The remembered editor is a .app bundle path, one per line,
-                -- alongside the other data/ prefs. nil until the user picks one,
-                -- or if the saved app has since been moved/deleted.
-                local function savedEditor()
-                    local f = io.open(editorFile, "r")
-                    if not f then return nil end
-                    local p = f:read("*l"); f:close()
-                    if p and p ~= "" and hs.fs.attributes(p) then return p end
-                    return nil
-                end
+                local path = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
 
                 -- open -a launches the chosen app; open -t (default text editor)
                 -- is the fallback for a picker the user backed out of. A bare
@@ -1665,29 +1688,8 @@ return function(ms)
                     end
                 end
 
-                -- Native app picker at /Applications. This is the file-picker
-                -- exception: it is app-modal and fronts above the shell (unlike
-                -- hs.dialog.blockAlert, which draws behind and softlocks), and
-                -- there is no themed equivalent. The choice is remembered.
-                local function pickEditor(after)
-                    ms.ui.hide()
-                    local chosen = hs.dialog.chooseFileOrFolder(
-                        "Choose your text editor", "/Applications",
-                        true, false, false, { "app" }
-                    )
-                    ms.ui.show()
-                    local app
-                    for _, v in pairs(chosen or {}) do
-                        if type(v) == "string" then app = v; break end
-                    end
-                    if not app then return end
-                    local f = io.open(editorFile, "w")
-                    if f then f:write(app); f:close() end
-                    if after then after(app) end
-                end
-
-                local editor     = savedEditor()
-                local editorName = editor and editor:match("([^/]+)%.app$") or nil
+                local editor     = _savedEditor()
+                local editorName  = _editorName(editor)
 
                 -- Themed confirm modal, not the old discreet ms.alert: the user
                 -- acknowledges which macro file is opening — and, on the first
@@ -1706,8 +1708,30 @@ return function(ms)
                     if editor then
                         openIn(editor)
                     else
-                        pickEditor(function(app) openIn(app) end)
+                        _pickEditor(function(app) openIn(app) end)
                     end
+                end)
+            end,
+
+            -- Change (or first set) the remembered text editor without opening a
+            -- file. Fired by the macros toolbar's "Change Editor" button; the
+            -- editMacros confirm only re-picks when nothing is set yet, so this
+            -- is the way to switch a wrong or stale choice.
+            chooseMacroEditor = function()
+                ms.playSlot("interact")
+                local current = _editorName(_savedEditor())
+                ms.ui.modal({
+                    title   = "Change macro editor",
+                    msg     = "Pick the app mudscript opens ms_macros.lua in."
+                        .. (current and ("\n\nCurrent: " .. current) or "\n\nNo editor set yet."),
+                    confirm = "Choose editor…",
+                    cancel  = "Cancel",
+                }, function(res)
+                    if not (res and res.confirmed) then return end
+                    _pickEditor(function(app)
+                        ms.playSlot("update")
+                        ms.alert("Macro editor set to " .. (_editorName(app) or "your pick") .. ".", 4, true)
+                    end)
                 end)
             end,
 
@@ -1770,6 +1794,7 @@ return function(ms)
                 end
 
                 ms.playSlot("alert")
+                hs.focus()  -- front HS so the open panel's sidebar isn't greyed out
                 local chosen = hs.dialog.chooseFileOrFolder(
                     "Choose where to save the " .. kind .. " package",
                     os.getenv("HOME") .. "/Documents", false, true, false
@@ -1819,6 +1844,7 @@ return function(ms)
             splitProfile = function()
                 if not (ms.package and ms.package.split) then return end
                 ms.playSlot("alert")
+                hs.focus()  -- front HS so the open panel's sidebar isn't greyed out
                 local pick = hs.dialog.chooseFileOrFolder(
                     "Select a profile .mspkg to split into packages",
                     os.getenv("HOME") .. "/Documents", true, false, false, { "mspkg" }
@@ -1827,6 +1853,7 @@ return function(ms)
                 for _, v in pairs(pick or {}) do if type(v) == "string" then path = v; break end end
                 if not path then ms.ui.show(); return end
 
+                hs.focus()  -- front HS so the open panel's sidebar isn't greyed out
                 local dest = hs.dialog.chooseFileOrFolder(
                     "Choose where to save the component packages",
                     os.getenv("HOME") .. "/Documents", false, true, false
@@ -1859,6 +1886,7 @@ return function(ms)
             importPackage = function()
                 if not (ms.package and ms.package.install) then return end
                 ms.playSlot("alert")
+                hs.focus()  -- front HS so the open panel's sidebar isn't greyed out
                 local chosen = hs.dialog.chooseFileOrFolder(
                     "Select a .mspkg package to import",
                     os.getenv("HOME") .. "/Documents", true, false, false

@@ -136,7 +136,7 @@
 
         /* ── Close Button ── */
         .btn-close {
-            width: 28px; height: 28px; border-radius: 50%;
+            width: 28px; height: 28px; border-radius: var(--radius);
             background: var(--surface2); color: var(--text2);
             display: flex; align-items: center; justify-content: center;
             flex-shrink: 0;
@@ -147,7 +147,7 @@
 
         /* ── Pop-out Button ── */
         .btn-popout {
-            width: 28px; height: 28px; border-radius: 50%;
+            width: 28px; height: 28px; border-radius: var(--radius);
             background: var(--surface2); color: var(--text2);
             display: flex; align-items: center; justify-content: center;
             flex-shrink: 0;
@@ -158,7 +158,7 @@
 
         /* ── Macro Button ── */
         .btn-macro {
-            padding: 3px 10px; border-radius: 20px; font-size: 11px;
+            padding: 3px 10px; border-radius: var(--radius); font-size: 11px;
             font-weight: 600; transition: opacity 0.15s;
         }
         .btn-macro:hover { opacity: 0.8; }
@@ -228,7 +228,7 @@
         /* ── Pill ── */
         .pill {
             display: inline-flex; align-items: center; padding: 1px 7px;
-            border-radius: 20px; font: 700 10px var(--font-mono);
+            border-radius: var(--radius); font: 700 10px var(--font-mono);
             background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
             flex-shrink: 0;
         }
@@ -313,7 +313,7 @@
 
         /* ═══ KEYS-SPECIFIC ═══════════════════════════════════════════════════ */
         #flag-row { display: flex; align-items: center; padding: 7px 12px; gap: 8px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        .flag-pill { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 20px; background: var(--surface2); border: 1px solid var(--border); font-size: 11px; color: var(--text2); transition: border-color 0.2s, color 0.2s; flex: 1; }
+        .flag-pill { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: var(--radius); background: var(--surface2); border: 1px solid var(--border); font-size: 11px; color: var(--text2); transition: border-color 0.2s, color 0.2s; flex: 1; }
         .flag-pill.flag-recent { border-color: var(--accent); color: var(--text); }
         .flag-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; }
         #flag-key-name, #flag-mouse-name { font: 12px var(--font-mono); }
@@ -324,7 +324,7 @@
         .state-section { padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
         .section-label { font: 700 9px var(--font-mono); letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; margin-bottom: 5px; }
         #keys-pills, #mouse-pills { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
-        .panel-keys .pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-family: inherit; white-space: nowrap; }
+        .panel-keys .pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--radius); font-size: 12px; font-family: inherit; white-space: nowrap; }
         .pill-key { background: color-mix(in srgb, var(--key, var(--accent)) 15%, transparent); border: 1px solid var(--key, var(--accent)); color: var(--key, var(--accent)); }
         .pill-mouse { background: color-mix(in srgb, var(--warning) 15%, transparent); border: 1px solid var(--warning); color: var(--warning); }
         .pill-empty { opacity: 0.4; }
@@ -478,7 +478,7 @@
         .panel-window .kv-val { font: 12px var(--font-mono); color: var(--text); word-break: break-word; min-width: 0; }
         .panel-window .kv-val.empty { color: var(--text3); opacity: 0.5; }
         .panel-window .flags-row { display: flex; flex-wrap: wrap; gap: 4px; }
-        .panel-window .flag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 3px; font: 11px var(--font-mono); background: var(--surface2); border: 1px solid var(--border); color: var(--text3); transition: all 0.15s; }
+        .panel-window .flag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--radius); font: 11px var(--font-mono); background: var(--surface2); border: 1px solid var(--border); color: var(--text3); transition: all 0.15s; }
         .panel-window .flag-chip::before { content: "\25CB"; font-size: 9px; }
         .panel-window .flag-chip.on { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: var(--accent); color: var(--accent); }
         .panel-window .flag-chip.on::before { content: "\25CF"; }
@@ -874,7 +874,7 @@
         .bind-row-sub .bind-label { color: var(--text2); font-size: 12px; }
         .bind-label { flex: 1; min-width: 0; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .bind-acts { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-        .bind-pill { padding: 2px 8px; border-radius: 3px; font: 12px var(--font-mono); color: var(--text); background: var(--surface2); border: 1px solid var(--border); cursor: pointer; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
+        .bind-pill { padding: 2px 8px; border-radius: var(--radius); font: 12px var(--font-mono); color: var(--text); background: var(--surface2); border: 1px solid var(--border); cursor: pointer; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
         .bind-pill:hover { color: var(--accent); border-color: var(--accent); }
         .bind-pill.unset { color: var(--text3); font-style: italic; }
         .bind-act { width: 22px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); cursor: pointer; transition: color 0.15s, border-color 0.15s; }

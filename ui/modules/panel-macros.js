@@ -2844,6 +2844,15 @@
     editFileBtn.title = "Open ms_macros.lua in your editor";
     overflowMenu.appendChild(editFileBtn);
 
+    // Change the app "Edit File" opens in. The editMacros confirm only offers a
+    // picker when no editor is set yet, so this is how a wrong/stale choice is
+    // switched.
+    var editorBtn = document.createElement("button");
+    editorBtn.className = "macro-toolbar-btn";
+    editorBtn.innerHTML = menuLabel("settings", "Change Editor");
+    editorBtn.title = "Pick which app opens ms_macros.lua";
+    overflowMenu.appendChild(editorBtn);
+
     actions.appendChild(overflowWrap);
     toolbar.appendChild(actions);
 
@@ -3779,6 +3788,12 @@
         // The action router keys on body.action (ms_ui _routeAction), so an
         // empty body silently no-ops — every other macros action includes it.
         if (window.shellPost) shellPost("macros", "editMacros", { action: "editMacros" });
+    });
+
+    editorBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+    editorBtn.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
+        if (window.shellPost) shellPost("macros", "chooseMacroEditor", { action: "chooseMacroEditor" });
     });
 
     /* ── Test Run ────────────────────────────────────────────────── */

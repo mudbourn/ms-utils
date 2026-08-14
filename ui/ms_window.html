@@ -37,10 +37,10 @@
             }
             #panel-title { flex: 1; font-weight: 600; font-size: 13px; }
             .header-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
-            .btn-ghost { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text2); transition: opacity 0.15s, background 0.15s, color 0.15s; }
+            .btn-ghost { padding: 3px 10px; border-radius: var(--radius); font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text2); transition: opacity 0.15s, background 0.15s, color 0.15s; }
             .btn-ghost:hover { opacity: 0.8; }
             .btn-ghost.active { background: var(--accent); color: var(--bg); }
-            .btn-close { width: 28px; height: 28px; border-radius: 50%; background: var(--surface2); color: var(--text2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
+            .btn-close { width: 28px; height: 28px; border-radius: var(--radius); background: var(--surface2); color: var(--text2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
             .btn-close .icon { width: 14px; height: 14px; display: block; }
             .btn-close:hover { background: var(--hover); color: var(--text); }
 
@@ -50,7 +50,7 @@
                 background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
             }
             .flag-pill {
-                display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 20px;
+                display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: var(--radius);
                 background: var(--surface2); border: 1px solid var(--border); font-size: 11px;
                 color: var(--text2); transition: border-color 0.2s, color 0.2s; flex: 1; min-width: 0;
             }
@@ -71,7 +71,7 @@
             /* ── Flag pills (window boolean flags) ──────────────────────────── */
             .flags-row { display: flex; flex-wrap: wrap; gap: 4px; }
             .flag-chip {
-                display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 3px;
+                display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--radius);
                 font: 11px "SF Mono", Menlo, monospace; background: var(--surface2);
                 border: 1px solid var(--border); color: var(--text3); transition: all 0.15s;
             }
