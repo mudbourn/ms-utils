@@ -2175,6 +2175,15 @@ return function(ms)
                     end,
                     apply    = function(parsed)
                         ms.bindConfig[data.id] = parsed
+                        -- Assigning a trigger implies intent to use the macro,
+                        -- so enable it in the same step. setMacroEnabled refuses
+                        -- to enable an unbound macro (a bind is required first),
+                        -- which left a freshly-bound builder macro stranded
+                        -- "bound but off" — the bind saved, but the disabled
+                        -- macro never fired, so it read as the bind not
+                        -- persisting. Only flip macros that own an enabled flag
+                        -- (system binds are always active and have none).
+                        if not def.system then ms.binds[data.id] = true end
                         ms.saveSettings()
                         ms.playSlot("update")
                         ms.bind.rebind()
