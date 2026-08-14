@@ -59,7 +59,7 @@ I'm not interested in building a tool that hides what it does. If you can't unde
 ### macOS
 
 ```bash
-curl -L https://raw.githubusercontent.com/mudbourn/mudscript/main/mac/install.sh | bash
+curl -L https://raw.githubusercontent.com/mudbourn/mudscript/main/install.sh | bash
 ```
 
 This installs mudscript to `~/.hammerspoon/`, sets up the Guardian, and reloads Hammerspoon. You'll be up and running in under a minute.

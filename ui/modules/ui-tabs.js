@@ -3,7 +3,7 @@
 
     /* ── ui-tabs.js ────────────────────────────────────────────────────── */
 /**
- * createTabs — shared tab-strip factory for ms-utils panels.
+ * createTabs — shared tab-strip factory for mudscript panels.
  *
  * Every tabbed surface had its own copy of the same switchTab(): toggle
  * .active on the buttons, toggle .active on the sections, then do one

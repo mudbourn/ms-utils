@@ -1,96 +1,29 @@
 {
-  "customThemeDisabled" : false,
+  "shell" : {
+    "lastPanel" : "macros",
+    "w" : 900,
+    "h" : 600,
+    "visible" : false
+  },
   "socdMode" : "lastWins",
-  "socdEnabled" : false,
-  "trackpadMode" : false,
   "soundEnabled" : true,
-  "importedSounds" : [
-
-  ],
   "sensitivity" : 1.5,
   "soundVolume" : 100,
-  "soundAssign" : {
-    "launch" : "d_Launch",
-    "updateAvailable" : "d_UpdateAvailable",
-    "hover" : "d_Hover",
-    "back" : "d_Back",
-    "settingsClose" : "d_SettingsClose",
-    "disabled" : "d_MacrosOff",
-    "update" : "d_Update",
-    "themeLoaded" : "d_ThemeLoaded",
-    "settingsOpen" : "d_SettingsOpen",
-    "interact" : "d_Interact",
-    "enabled" : "d_MacrosOn",
-    "load" : "d_LoadEnd",
-    "alert" : "d_Alert",
-    "reset" : "d_Reset"
-  },
-  "soundPreset" : "default",
-  "qrOptions" : {
-    "settings" : true,
-    "ui" : true,
-    "theme" : true,
-    "macros" : true
-  },
-  "quickReloaded" : 0,
-  "updateChannel" : "stable",
   "trackpadHoldKeys" : {
     "right" : "j",
     "left" : "n"
   },
-  "independentBinds" : false,
+  "bundleSoundsWithTheme" : true,
+  "trackpadMode" : false,
+  "gamepadEnabled" : false,
+  "macroLabEnabled" : true,
+  "socdEnabled" : false,
   "macros" : {
-    "__quickReload" : {
-      "bind" : {
-        "type" : "key",
-        "mods" : [
-
-        ],
-        "key" : "g"
-      }
-    },
-    "__fullReload" : {
-      "bind" : {
-        "type" : "key",
-        "mods" : [
-
-        ],
-        "key" : "n"
-      }
-    },
-    "__panicButton" : {
-      "bind" : {
-        "type" : "key",
-        "mods" : [
-
-        ],
-        "key" : "l"
-      }
-    },
     "spawnAlt" : {
       "enabled" : false
-    },
-    "NewMacro1" : {
-      "enabled" : true
     }
   },
-  "user" : [
+  "soundAssign" : [
 
-  ],
-  "systemBinds" : [
-
-  ],
-  "devArchiveLimit" : 15,
-  "octaneMode" : false,
-  "octaneMuteSounds" : false,
-  "windowRadius" : 4,
-  "macroLabEnabled" : true,
-  "shell" : {
-    "x" : null,
-    "y" : null,
-    "w" : 900,
-    "h" : 600,
-    "lastPanel" : "macros",
-    "visible" : false
-  }
+  ]
 }

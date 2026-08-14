@@ -3,7 +3,7 @@
 
     /* ── log-panel.js ──────────────────────────────────────────────────── */
 /**
- * LogPanel — shared factory for ms-utils dev-tool log panels.
+ * LogPanel — shared factory for mudscript dev-tool log panels.
  *
  * Encapsulates the near-identical boilerplate copied across Console, Watcher,
  * Keys, and Window panels: pause toggle, entry selection, copy, context menu,
