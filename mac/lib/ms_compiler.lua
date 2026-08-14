@@ -196,6 +196,22 @@
                 return indent(lvl) .. "ms.Mouse(" .. table.concat(parts, ", ") .. ")"
             end
 
+            -- A recorded or authored freehand drag: the whole gesture rides in
+            -- one step as a "x,y;x,y;…" point string. ms.dragPath takes
+            -- POSITIONAL args, so it needs a real emitter — without one the
+            -- generic fallback passed the params as a single table, ms.dragPath
+            -- saw a table where it wanted the string, hit #points == 0, and
+            -- returned silently. That is why recorded drags never executed.
+            emitters["ms.dragPath"] = function(step, lvl)
+                local p = step.params or {}
+                local pts   = serialize(p.points or "")
+                local btn   = serialize(p.button or "Left")
+                local ref   = serialize(p.ref or p.reference or "Absolute")
+                local delay = numArg(p.delayMs, 10)
+                return indent(lvl) .. "ms.dragPath("
+                    .. pts .. ", " .. btn .. ", " .. ref .. ", " .. delay .. ")"
+            end
+
             emitters["var_set"] = function(step, lvl)
                 local p = step.params or {}
                 local name  = ident(p.name, "v")

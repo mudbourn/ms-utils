@@ -110,6 +110,31 @@
                 transform: translate(-187px, -62px) scale(0.643);
             }
 
+            /* ── Compatibility title ─────────────────────────────────────────
+               A plain fallback title docked where the real brand lands. Shown
+               (by ensureBrandFallback, at content-reveal time) ONLY when the
+               animated #brand never became visible — under heavy load the boot
+               choreography can start before the page's JS/fonts are ready, so
+               showBrand() no-ops and the title never appears. Deliberately
+               uses a guaranteed system font, not the themed web font that may
+               be the thing that failed to load, so it always renders. */
+            #brand-compat {
+                position: absolute;
+                top: 14px;
+                left: 18px;
+                font-family: Georgia, "Times New Roman", serif;
+                font-size: 18px;
+                font-weight: 700;
+                color: var(--text);
+                white-space: nowrap;
+                z-index: 9;
+                opacity: 0;
+                transition: opacity 0.4s ease;
+            }
+            #brand-compat.visible {
+                opacity: 1;
+            }
+
             /* ── Profile name (top-right, above creator) ──────────────────────── */
             #profile-name {
                 position: absolute;
@@ -237,6 +262,7 @@
     <body>
         <div id="panel">
             <div id="brand">mudscript</div>
+            <div id="brand-compat">mudscript</div>
             <div id="profile-name"></div>
             <div id="macro-name"></div>
             <div id="divider"></div>
@@ -278,6 +304,10 @@
             /* ── Animation controls ──────────────────────────────────────────── */
             function showBrand() {
                 document.getElementById("brand").classList.add("visible");
+                // If the compatibility title stood in earlier (brand was late),
+                // retract it now that the real one is up — no double title.
+                var compat = document.getElementById("brand-compat");
+                if (compat) compat.classList.remove("visible");
             }
 
             function shiftBrand() {
@@ -298,6 +328,21 @@
 
             function showContent() {
                 document.getElementById("content").classList.add("visible");
+                // The theme-effects reveal is also our last chance to notice the
+                // animated title never showed (slow/heavy-load boot) and put up
+                // the plain compatibility title in its place.
+                ensureBrandFallback();
+            }
+
+            // Reveal the compatibility title only if the animated #brand never
+            // faded in. Safe to call more than once — idempotent, and a no-op
+            // once the real brand is visible.
+            function ensureBrandFallback() {
+                var brand = document.getElementById("brand");
+                var compat = document.getElementById("brand-compat");
+                if (!compat) return;
+                if (brand && brand.classList.contains("visible")) return;
+                compat.classList.add("visible");
             }
 
             /* ── Progress ────────────────────────────────────────────────────── */

@@ -1154,6 +1154,46 @@
                     ms.devtools:setTraceSuppress(_saved)  -- restore rather than reset; safe across cancellation
                 end
 
+                -- ms.hold(key, mods, durationMs)
+                -- Press and HOLD a key. The compiler emits this for a builder
+                -- "Hold" step, yet the runtime never defined it — so a Hold step
+                -- compiled to a nil call. With a duration it also reproduces the
+                -- OS key-repeat a real hold gives: a synthetic keyDown does not
+                -- auto-repeat on its own, so "hold to spam a key" only ever typed
+                -- one character. With no duration it just holds (paired with a
+                -- later ms.release / an explicit Release step, e.g. a movement
+                -- hold), leaving overlapping holds to the caller.
+                local HOLD_INITIAL_MS = 250   -- macOS default initial repeat delay
+                local HOLD_REPEAT_MS  = 33    -- ~30/s, near the default repeat rate
+                ms.hold = function(key, mods, durationMs)
+                    local keyCode = getCode(key)
+                    if not keyCode then
+                        print("Error: Could not find keyCode for " .. tostring(key))
+                        return
+                    end
+                    ms.press(key, mods)
+                    local dur = tonumber(durationMs)
+                    if not dur or dur <= 0 then return end  -- indefinite hold
+
+                    -- First char is the initial press above; repeats begin only
+                    -- after the initial delay, exactly like a physical hold.
+                    if dur <= HOLD_INITIAL_MS then
+                        ms.wait(dur)
+                    else
+                        ms.wait(HOLD_INITIAL_MS)
+                        local elapsed = HOLD_INITIAL_MS
+                        while elapsed < dur do
+                            local ev = hs.eventtap.event.newKeyEvent(mods or {}, keyCode, true)
+                            ev:setProperty(hs.eventtap.event.properties.keyboardEventAutorepeat, 1)
+                            ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                            ev:post()
+                            ms.wait(HOLD_REPEAT_MS)
+                            elapsed = elapsed + HOLD_REPEAT_MS
+                        end
+                    end
+                    ms.release(key, mods)
+                end
+
                 ms.key = function(mods, key, swallow, pressFn, releaseFn, isSystem)
                     local keyCode = getCode(key)
                     if not keyCode then
@@ -3146,7 +3186,11 @@
                 if type(points) ~= "table" or #points < 2 then return end
                 button = button or "Left"
                 delayMs = delayMs or 10
-                local btnNum = button == "Right" and 1 or (button == "Middle" and 2 or 0)
+                -- "Center" is what the recorder and ms.Mouse emit for the middle
+                -- button; accept it alongside "Middle" so a middle-button drag
+                -- doesn't silently play back as a left drag.
+                local btnNum = button == "Right" and 1
+                    or ((button == "Middle" or button == "Center") and 2 or 0)
                 local downType = btnNum == 1 and hs.eventtap.event.types.rightMouseDown
                     or (btnNum == 2 and hs.eventtap.event.types.otherMouseDown
                     or hs.eventtap.event.types.leftMouseDown)
@@ -4518,14 +4562,18 @@
                                     if t == et.keyDown then
                                         local key = hs.keycodes.map[ev:getKeyCode()]
                                         if type(key) ~= "string" or key == "" then return end
-                                        -- In hold-oriented modes a held key auto-repeats
-                                        -- keyDowns; capturing each would emit a run of
-                                        -- duplicate presses. The real down/up pair is
-                                        -- what matters, so drop the repeats.
-                                        if mode ~= "type" and ev:getProperty(
-                                            hs.eventtap.event.properties.keyboardEventAutorepeat) == 1 then
-                                            return
-                                        end
+                                        -- Keep the OS auto-repeat keyDowns rather
+                                        -- than dropping them: reproducing them is
+                                        -- the whole point of a "hold to spam a
+                                        -- key" recording. In type mode each repeat
+                                        -- is another ms.type; in press/pressRelease
+                                        -- it is another ms.press — a repeat keyDown
+                                        -- while the key stays held, so a text field
+                                        -- keeps typing and a game (which ignores
+                                        -- autorepeat keyDowns) still reads one
+                                        -- continuous hold. The key only lifts on the
+                                        -- keyUp below, so overlapping holds (e.g. a
+                                        -- W+A diagonal) are still captured intact.
                                         local mods = modsOf(ev)
                                         maybeWait()
                                         if mode == "press" or mode == "pressRelease" then

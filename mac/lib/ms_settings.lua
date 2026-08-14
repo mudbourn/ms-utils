@@ -1451,10 +1451,44 @@ return function(ms)
         -- The send-off is owned by `_exit`, not by the panel and not by this
         -- function: the panel's copy died with its window, and the sample has
         -- to start with the curtain's fade rather than ahead of it.
+        -- Runloop-independent hard-kill backstop. Every timer in _exit rides
+        -- the Hammerspoon runloop the teardown runs on, so a teardown step that
+        -- blocks it under load (a slow save, a webview :delete) freezes the
+        -- watchdog with it and the exit hangs with nothing left to fire. This
+        -- spawns an OUTSIDE process that kill -9's Hammerspoon after a grace
+        -- period no matter what the runloop is doing — the one backstop a
+        -- wedged runloop cannot defeat. Spawned before the teardown so it is
+        -- already running when the block would happen; the child is reparented
+        -- to launchd and survives even a clean exit (a kill -9 on an
+        -- already-dead pid is a harmless no-op). The grace period sits well
+        -- above _exit's own EXIT_WATCHDOG_S (6s) so it only ever bites a
+        -- genuine hang, never a merely slow-but-progressing exit.
+        local EXIT_HARDKILL_S = 12
+        local function _armExternalHardKill()
+            local ok = pcall(function()
+                local pid = hs.processInfo and hs.processInfo.processID
+                if not pid then return end
+                hs.task.new("/bin/sh", nil, {
+                    "-c",
+                    "sleep " .. EXIT_HARDKILL_S ..
+                        "; kill -9 " .. tostring(pid) .. " 2>/dev/null",
+                }):start()
+            end)
+            if not ok then
+                pcall(function()
+                    ms.dev.log({ type = "error", event = "hardkill_arm_failed" })
+                end)
+            end
+        end
+
         ms.shutdown = function()
             if ms._shuttingDown or ms._restarting then return end
             ms._shuttingDown = true
             ms.dev.log({ type = "system", event = "shutdown_start" })
+
+            -- Guarantee the process actually dies even if the runloop wedges
+            -- mid-teardown; the clean os.exit below still wins the normal race.
+            _armExternalHardKill()
 
             _exit("shutdown", "shutdown", function()
                 -- kill() is a *request* to terminate, and a request can be
