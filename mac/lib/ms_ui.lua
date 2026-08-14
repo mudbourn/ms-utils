@@ -1951,30 +1951,35 @@ return function(ms)
                 local dir = data.dir
 
                 ms.playSlot("alert")
-                local answer = hs.dialog.blockAlert(
-                    "Remove " .. (data.label or dir) .. "?",
-                    "The plugin's files are deleted from Spoons/. This cannot be undone.",
-                    "Remove", "Cancel"
-                )
-                if answer ~= "Remove" then return end
+                -- Themed shell modal, not a native blockAlert: the confirm is
+                -- async, so the teardown/delete runs inside the callback rather
+                -- than after a blocking return.
+                ms.ui.modal({
+                    title   = "Remove " .. (data.label or dir) .. "?",
+                    msg     = "The plugin's files are deleted from Spoons/. This cannot be undone.",
+                    confirm = "Remove",
+                    cancel  = "Cancel",
+                }, function(res)
+                    if not (res and res.confirmed) then return end
 
-                -- Teardown first, delete second. The undo list is only good
-                -- while the plugin is still loaded, and running it after the
-                -- files are gone would mean stopping a plugin that can no
-                -- longer be asked to stop itself.
-                if ms.plugins and ms.plugins.unload then
-                    pcall(ms.plugins.unload, dir)
-                end
+                    -- Teardown first, delete second. The undo list is only good
+                    -- while the plugin is still loaded, and running it after the
+                    -- files are gone would mean stopping a plugin that can no
+                    -- longer be asked to stop itself.
+                    if ms.plugins and ms.plugins.unload then
+                        pcall(ms.plugins.unload, dir)
+                    end
 
-                local ok, err = ms.package.removePlugin(dir)
-                if not ok then
-                    ms.alert("Could not remove plugin:\n" .. tostring(err), 5)
-                    return
-                end
+                    local ok, err = ms.package.removePlugin(dir)
+                    if not ok then
+                        ms.alert("Could not remove plugin:\n" .. tostring(err), 5)
+                        return
+                    end
 
-                ms.ui.markDirty()
-                ms.ui.refresh()
-                ms.alert((data.label or dir) .. " removed.", 4, true)
+                    ms.ui.markDirty()
+                    ms.ui.refresh()
+                    ms.alert((data.label or dir) .. " removed.", 4, true)
+                end)
             end,
 
             openPluginsFolder = function()
