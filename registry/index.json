@@ -6,25 +6,23 @@
       "id": "plugin-roblox",
       "type": "plugin",
       "name": "Roblox",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "author": "mudbourn",
-      "description": "Declares Roblox as the macro target and exposes Roblox's live saved settings (sensitivity, framerate cap, graphics quality) to macros, plus an anti-timeout keep-alive.",
-      "website": "https://mudbourn.info",
-      "sha256": "7f8541e1a7d56b54cffe63e6f1d594e22889009223113b0c5ce5334f763e7251",
+      "sha256": "fca4690694d61127d4b4a4458cb2ad6732792c13ba2e535bc6088b01554ab2f8",
       "url": "https://github.com/mudbourn/mudscript/releases/download/packages/Roblox.mspkg",
-      "size": 7949,
+      "size": 7316,
       "trust": "trusted"
     },
     {
       "id": "profile-combat-warriors-macros-profile",
       "type": "profile",
       "name": "Combat Warriors Macros profile",
-      "version": "1.0.1",
+      "version": "1.0.3",
       "author": "mudbourn",
       "website": "https://mudbourn.info",
-      "sha256": "33f4dd2701fecf13cd10ccb5ae39f9fcfa437e8337ad99c88002051fe7ad28c7",
+      "sha256": "ddb5f8692b12866994ab031ad487be7d9eac38aaedc5ff15edcb7fd063bd5d32",
       "url": "https://github.com/mudbourn/mudscript/releases/download/packages/Combat.Warriors.Macros-profile.mspkg",
-      "size": 7295356,
+      "size": 7293983,
       "components": {
         "theme": {
           "includesSounds": false
