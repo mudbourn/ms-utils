@@ -591,6 +591,72 @@
         local _popouts = {}
         local _popResizeTaps = {}
         local _popDragTaps = {}
+
+        -- finderInterlude --
+        -- Run `fn` (a blocking Finder open/save panel) with the shell fully out
+        -- of the way, then put it back. The shell is always-on-top, so without
+        -- this it occludes the native panel — sidebar greys out, and a blocking
+        -- alert can even softlock behind it. The panel blocks the runloop, so
+        -- the hide/restore MUST be synchronous (an async fade never renders);
+        -- hence view:hide()/safeShow rather than ms.shell.hide()/show(), which
+        -- also keeps it silent — no open/close chime around a transient blink.
+        -- Only touches things that were actually visible, so it can't reveal a
+        -- shell the person had closed. Returns whatever `fn` returns.
+        ms.shell.finderInterlude = function(fn)
+            local restore = {}
+            if _shellView and ms._shellState and ms._shellState.visible then
+                if _shellFadeTimer then _shellFadeTimer:stop(); _shellFadeTimer = nil end
+                pcall(function() _shellView:hide() end)
+                restore.shell = true
+            end
+            for _, pop in pairs(_popouts) do
+                if pop and pop.view then
+                    local vis = false
+                    pcall(function()
+                        local w = pop.view:hswindow()
+                        vis = w ~= nil and w:isVisible()
+                    end)
+                    if vis then
+                        pcall(function() pop.view:hide() end)
+                        restore[#restore + 1] = pop.view
+                    end
+                end
+            end
+
+            hs.focus()  -- bring the panel's host (Hammerspoon) frontmost
+            local ok, a, b, c = pcall(fn)
+
+            if restore.shell then
+                pcall(function() ms.safeShow(_shellView) end)
+                pcall(function() _shellView:bringToFront(true) end)
+            end
+            for _, view in ipairs(restore) do
+                pcall(function() ms.safeShow(view) end)
+                pcall(function() view:bringToFront(true) end)
+            end
+
+            if not ok then error(a) end
+            return a, b, c
+        end
+
+        -- Route every Finder file/folder panel through the interlude so the
+        -- shell hides itself whenever one opens (import/export pickers), without
+        -- each call site having to remember. The wrapper looks up finderInterlude
+        -- on the live `ms` table at call time, so a quick reload (which rebuilds
+        -- ms in place but keeps hs) picks up the fresh shell state. Guard on a
+        -- marker on the function itself, not an ms flag, so the same reload does
+        -- not wrap an already-wrapped function and nest interludes.
+        if hs.dialog and type(hs.dialog.chooseFileOrFolder) == "function"
+            and not hs.dialog._msFinderShimInstalled then
+            local _origChoose = hs.dialog.chooseFileOrFolder
+            hs.dialog.chooseFileOrFolder = function(...)
+                local args = table.pack(...)
+                return ms.shell.finderInterlude(function()
+                    return _origChoose(table.unpack(args, 1, args.n))
+                end)
+            end
+            hs.dialog._msFinderShimInstalled = true
+        end
         local _panelFiles = {
             console = "ms_console.html",
             watcher = "ms_watcher.html",

@@ -61,11 +61,14 @@
         send("browseList", Object.assign({ query: S.query, type: S.type }, opts || {}));
     }
 
-    // Called by the rail button the first time this stage is shown.
-    function ensureLoaded() {
-        if (S.loadedOnce) return;
+    // Called by the rail button every time this stage is shown. Forces a fetch
+    // so newly published packages and version bumps appear without a manual
+    // Refresh. Still lazy — nothing loads until Browse is actually opened — and
+    // a fetch already in flight is left to finish rather than stacking another.
+    function refreshOnOpen() {
+        if (S.loading) return;
         S.loadedOnce = true;
-        requestCatalog();
+        requestCatalog({ force: true });
     }
 
     // -- Filtering --
@@ -405,11 +408,12 @@
         });
     }
 
-    // Lazy first load: fetch the catalog the first time the stage is opened,
-    // not at boot, the registry is a network document and most sessions
-    // never open Browse.
+    // Lazy + refresh-on-open: nothing loads at boot (the registry is a network
+    // document and most sessions never open Browse), but each time the Browse
+    // rail button is clicked we refetch so the catalog reflects the latest
+    // published updates.
     const railBtn = document.querySelector('.rail-item[data-panel="browse"]');
-    if (railBtn) railBtn.addEventListener("click", ensureLoaded);
+    if (railBtn) railBtn.addEventListener("click", refreshOnOpen);
 
     window.renderBrowsePanel = render;
 
