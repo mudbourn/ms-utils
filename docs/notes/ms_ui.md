@@ -156,3 +156,17 @@ Shell messages route to the same action handlers, topic shape
 and browse stages send on their own channels so their actions read as plugin/
 browse actions in the log, but they resolve in the same set. See project memory:
 ms-bus-emits-topic-payload.
+
+## Browse refresh and Update state
+
+`browseList` merges the plugin ledger and the content ledger
+(`ms.package.listContent`) into an installed-by-id map, so an entry already on
+disk carries `installed` and `installedVersion`. The card reads that as "Update"
+instead of "Install". Virtual profile slices inherit the parent profile's flag,
+so they read "Update" once the profile is installed. See MsPackage,
+Install-vs-Update ledger.
+
+Browse refetches on every open, not just the first. The rail button forces a
+catalog refresh so newly published packages and version bumps appear without the
+manual Refresh. It stays lazy (nothing loads until Browse is opened) and skips a
+refetch while one is already in flight.

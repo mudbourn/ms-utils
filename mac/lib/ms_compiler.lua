@@ -179,13 +179,10 @@
                 parts[#parts + 1] = serialize(p.operation or "Click")
                 parts[#parts + 1] = serialize(p.button or "Left")
                 parts[#parts + 1] = serialize(p.reference or "Mouse")
-                -- Optional Unscaled flag: raw pixels, bypassing REF-space scaling.
-                -- ms.Mouse reads a leading boolean vararg as this flag.
+                -- Unscaled flag and x/y fallback: see docs/notes/ms_compiler.md.
                 if p.unscaled == true then
                     parts[#parts + 1] = "true"
                 end
-                -- Builder blocks store coords as x1/y1/x2/y2; older hand-authored
-                -- steps used x/y. Accept both so the start point isn't dropped.
                 local x1 = p.x1 ~= nil and p.x1 or p.x
                 local y1 = p.y1 ~= nil and p.y1 or p.y
                 parts[#parts + 1] = numArg(x1, 0)
@@ -235,15 +232,14 @@
 
             local _flowCounter = 0
 
-            -- Per-block action delay (Keyboard-Maestro style): an "action_delay"
-            -- step sets this, and every subsequent leaf step gets a trailing
-            -- ms.wait until another action_delay step changes it. Reset at the
-            -- start of each compile so it never leaks between macros. Container
-            -- steps are skipped — their own children already carry the delay.
+            -- Ongoing inter-step delay set by an action_delay step. See
+            -- docs/notes/ms_compiler.md, Per-block action delay.
             local _actionDelay = 0
             local _CONTAINER = {
-                ["if"] = true, ["for"] = true,
-                ["while"] = true, ["repeat"] = true,
+                ["if"]     = true,
+                ["for"]    = true,
+                ["while"]  = true,
+                ["repeat"] = true,
             }
 
             local function stepCond(step)
@@ -388,9 +384,7 @@
                 return indent(lvl) .. action .. "(" .. serialize(p) .. ")"
             end
 
-            -- Sets the ongoing inter-step delay; emits only a marker comment.
-            -- A literal number is required — a tool-bound delay can't be known
-            -- at compile time and is treated as 0 (off).
+            -- Sets _actionDelay and emits only a marker comment.
             emitters["action_delay"] = function(step, lvl)
                 local p = step.params or {}
                 local n = tonumber(p.delayMs) or 0

@@ -108,7 +108,7 @@
                 // Compiler construct (see ms_compiler.lua): sets an ongoing delay
                 // automatically inserted after every following step, until
                 // another action_delay changes it. 0 turns it off. Use a literal
-                // number — a tool-bound value can't be resolved at compile time.
+                // number. A tool-bound value can't be resolved at compile time.
                 id: "action_delay",
                 name: "action_delay",
                 sig: "set action delay (ms)",

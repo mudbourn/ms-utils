@@ -11,7 +11,7 @@
 #   bash mac/bin/registry_publish.sh aurora.mspkg --dry-run      # print the row, touch nothing
 #   bash mac/bin/registry_publish.sh aurora.mspkg --no-upload    # asset already uploaded
 #
-# A .spoon plugin bundle can be published directly — the script packs it into a
+# A .spoon plugin bundle can be published directly. The script packs it into a
 # temporary plugin .mspkg (type "plugin", files under Spoons/) and publishes
 # that. Metadata is sniffed from the Spoon's init.lua (version/name/author/
 # homepage) and can be overridden per field:
@@ -126,7 +126,7 @@ case "$PKG" in
         cp -R "$SPOON_DIR" "$STAGE/Spoons/$SPOON_NAME"
         find "$STAGE/Spoons/$SPOON_NAME" \( -name '.DS_Store' -o -name '._*' \) -delete 2>/dev/null || true
 
-        # contents: { "Spoons/Foo.spoon/rel": sha256 } — the client re-verifies
+        # contents: { "Spoons/Foo.spoon/rel": sha256 }. The client re-verifies
         # each of these on install, so the hashes must match the staged bytes.
         CONTENTS="$(cd "$STAGE" && find Spoons -type f | LC_ALL=C sort | while IFS= read -r rel; do
             h="$(shasum -a 256 "$rel" | cut -c1-64 | tr '[:upper:]' '[:lower:]')"
@@ -226,11 +226,11 @@ SIZE="$(wc -c < "$PKG" | tr -d ' ')"
 # the repo registry_sign_ci.sh signs and the client fetches from). Do NOT derive
 # it from the local git origin: mudscript is checked out inside ms-utils, so the
 # origin is mudbourn/ms-utils and every asset URL would point at the wrong repo.
-# Default to the canonical repo; --repo still overrides for a one-off.
+# Default to the canonical repo. --repo still overrides for a one-off.
 REPO="${REPO:-mudbourn/mudscript}"
 case "$REPO" in
     */*) ;;
-    *) echo "ERROR: invalid --repo '$REPO' — expected owner/name."; exit 1 ;;
+    *) echo "ERROR: invalid --repo '$REPO', expected owner/name."; exit 1 ;;
 esac
 
 ASSET_URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"

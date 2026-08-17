@@ -63,8 +63,8 @@
 
     // Called by the rail button every time this stage is shown. Forces a fetch
     // so newly published packages and version bumps appear without a manual
-    // Refresh. Still lazy — nothing loads until Browse is actually opened — and
-    // a fetch already in flight is left to finish rather than stacking another.
+    // Refresh. Still lazy, nothing loads until Browse is actually opened, and a
+    // fetch already in flight is left to finish rather than stacking another.
     function refreshOnOpen() {
         if (S.loading) return;
         S.loadedOnce = true;
@@ -98,8 +98,8 @@
             const c = (e.type === "profile" && e.components
                 && typeof e.components === "object") ? e.components : null;
             if (!c) continue;
-            // The card appends "[Type]" itself, so the virtual entry just
-            // carries the profile's base name (its "profile" suffix stripped).
+            // The virtual entry carries the profile's base name with its
+            // "profile" suffix stripped. The card shows it without a type suffix.
             const baseName = (e.name || e.id).replace(/\s+profile$/i, "");
             for (const k of ["theme", "sound", "macro"]) {
                 if (!c[k]) continue;
@@ -116,6 +116,11 @@
                     url: e.url,            // shared asset -> GitHub button works
                     sha256: e.sha256,
                     trust: e.trust,
+                    // Inherit the parent profile's install state: installing the
+                    // profile installs its components, so a slice reads "Update"
+                    // whenever the profile it belongs to is already installed.
+                    installed:        e.installed,
+                    installedVersion: e.installedVersion,
                     themeBonus: (k === "theme") && !!c.sound
                         && !(c.theme && c.theme.includesSounds),
                 });
@@ -145,7 +150,7 @@
             onmouseenter: () => playSlot("hover"),
         });
 
-        // Display name is just the base name — the type is already conveyed by
+        // Display name is just the base name. The type is already conveyed by
         // the group header (when browsing "all"), the type filter, and the type
         // word in the meta line, so a "[Type]" suffix on the title only repeats
         // it. Strip any type word the source name carries (a trailing "profile",
@@ -188,7 +193,9 @@
         // A whole (non-virtual) entry already on disk offers an update, not a
         // first install. Only plugins report installed state today (they carry
         // a versioned ledger record); everything else stays "Install".
-        const isUpdate = !isVirtual && !!e.installed;
+        // Virtual slices inherit the parent profile's installed flag (see
+        // expandForBrowse), so they read "Update" once the profile is installed.
+        const isUpdate = !!e.installed;
         const installLabel = isUpdate ? "Update" : "Install";
 
         const actions = h("div", { cls: "browse-actions" });

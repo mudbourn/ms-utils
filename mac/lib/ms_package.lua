@@ -174,8 +174,7 @@ return function(ms)
         end
 
         ms.package.recordPlugins = function(names, manifest, id)
-            -- `id` is the registry entry id (see recordContent); the manifest
-            -- does not carry one, so Browse's Update check needs it recorded.
+            -- `id` is the registry entry id (see recordContent).
             id = (type(id) == "string" and id ~= "" and id)
                 or (manifest and manifest.id) or nil
             local ledger = readLedger() or {
@@ -202,11 +201,8 @@ return function(ms)
             return writeLedger(ledger)
         end
 
-        -- Content ledger: installed-version record for non-plugin content
-        -- (themes, sounds, macros, profiles, packages). Plugins keep their own
-        -- hash-verified ledger above; this one is keyed by manifest id and only
-        -- tracks the version, so Browse can show Install vs Update and the
-        -- update-alert system can diff against a registry version.
+        -- Installed-version record for non-plugin content, keyed by registry id.
+        -- See docs/notes/ms_package.md, Install-vs-Update ledger.
         local _contentLedgerPath = _dataDir .. "/.ms_content_ledger.json"
 
         local function readContentLedger()
@@ -219,10 +215,8 @@ return function(ms)
             return nil
         end
 
-        -- `id` is the registry entry id (the stable handle). It is NOT carried
-        -- in the package manifest — ms.package.pack never writes one — so the
-        -- caller must pass the id it downloaded by. Falls back to manifest.id
-        -- only for the rare package that does embed one.
+        -- `id` is the registry entry id, which the manifest does not carry, so
+        -- the caller passes it. See docs/notes/ms_package.md.
         ms.package.recordContent = function(manifest, id)
             id = (type(id) == "string" and id ~= "" and id)
                 or (type(manifest) == "table" and manifest.id) or nil
@@ -805,10 +799,8 @@ return function(ms)
                     pcall(function() ms.package.recordPlugins(names, manifest, opts.id) end)
                 end
             else
-                -- Every other content type records its installed version so
-                -- Browse can offer Update. A component slice (opts.component) is
-                -- a partial profile install, not the whole entry, so skip it —
-                -- it stays "Install" and doesn't claim the profile is installed.
+                -- Record the installed version for Update detection. A component
+                -- slice is a partial install, so it is not recorded.
                 if not opts.component then
                     pcall(function() ms.package.recordContent(manifest, opts.id) end)
                 end

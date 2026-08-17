@@ -593,15 +593,8 @@
         local _popDragTaps = {}
 
         -- finderInterlude --
-        -- Run `fn` (a blocking Finder open/save panel) with the shell fully out
-        -- of the way, then put it back. The shell is always-on-top, so without
-        -- this it occludes the native panel — sidebar greys out, and a blocking
-        -- alert can even softlock behind it. The panel blocks the runloop, so
-        -- the hide/restore MUST be synchronous (an async fade never renders);
-        -- hence view:hide()/safeShow rather than ms.shell.hide()/show(), which
-        -- also keeps it silent — no open/close chime around a transient blink.
-        -- Only touches things that were actually visible, so it can't reveal a
-        -- shell the person had closed. Returns whatever `fn` returns.
+        -- Runs `fn` (a blocking Finder panel) with the shell and popouts hidden,
+        -- then restores them. See docs/notes/ms_shell.md.
         ms.shell.finderInterlude = function(fn)
             local restore = {}
             if _shellView and ms._shellState and ms._shellState.visible then
@@ -639,13 +632,8 @@
             return a, b, c
         end
 
-        -- Route every Finder file/folder panel through the interlude so the
-        -- shell hides itself whenever one opens (import/export pickers), without
-        -- each call site having to remember. The wrapper looks up finderInterlude
-        -- on the live `ms` table at call time, so a quick reload (which rebuilds
-        -- ms in place but keeps hs) picks up the fresh shell state. Guard on a
-        -- marker on the function itself, not an ms flag, so the same reload does
-        -- not wrap an already-wrapped function and nest interludes.
+        -- Route every Finder file/folder panel through the interlude, once.
+        -- See docs/notes/ms_shell.md.
         if hs.dialog and type(hs.dialog.chooseFileOrFolder) == "function"
             and not hs.dialog._msFinderShimInstalled then
             local _origChoose = hs.dialog.chooseFileOrFolder

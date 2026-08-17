@@ -108,3 +108,25 @@ reload) because the shell is on its way out too.
 
 Lua-to-JS panel notifications call `shellReceive`; `shellDispatch` loops back to
 Lua. See project memory: shell-push-shellreceive-not-shelldispatch.
+
+## Finder panels hide the shell (`finderInterlude`)
+
+Every `hs.dialog.chooseFileOrFolder` call routes through `finderInterlude`,
+installed once as a shim on `hs.dialog`. The always-on-top shell otherwise
+occludes the native open/save panel, greying its sidebar, and a blocking alert
+can softlock behind it. See project memory:
+native-modal-occluded-by-shell-softlock, hs-openpanel-sidebar-greyed-needs-focus.
+
+The panel blocks the runloop, so the hide and restore are synchronous. An async
+fade would never render, which is why it uses `view:hide()` and `safeShow`
+directly rather than `ms.shell.hide()`/`show()`. That also keeps it silent, with
+no chime around a transient blink. It only hides windows that were visible, so it
+cannot reveal a shell the person had closed, and it restores any popouts it hid.
+
+The shim marks `hs.dialog` (not `ms`) once installed, so a quick reload that
+rebuilds `ms` in place does not wrap an already-wrapped function and nest
+interludes. The wrapper resolves `finderInterlude` on the live `ms` at call time,
+so the fresh shell state is used after a reload.
+
+This covers import and export file panels only. Reveal-in-Finder utilities that
+run `open <folder>` are separate and not routed through it.

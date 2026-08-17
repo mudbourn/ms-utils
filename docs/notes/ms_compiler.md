@@ -122,3 +122,29 @@ hooks and dead-coroutine cleanup a bound macro gets. `xpcall` inside the body
 catches errors across the yields (pcall/xpcall are yieldable in Lua 5.4) and
 hands them to `done()`. An error escaping the coroutine body itself (not caught
 by the inner xpcall) is surfaced rather than lost.
+
+## Per-block action delay
+
+An `action_delay` step sets an ongoing inter-step pause, Keyboard-Maestro style.
+It emits only a marker comment and stores the value in a compile-scoped
+`_actionDelay`. Every following leaf step then gets a trailing `ms.wait` appended
+in `emitStep`, until another `action_delay` changes the value. Because every
+step, nested or not, routes through `emitStep`, the delay reaches into
+`if`/`for`/`while`/`repeat` bodies with no per-container work. Container steps
+themselves are skipped (`_CONTAINER`), since their children already carry it.
+`_actionDelay` resets at the top of each compile so it never leaks between macros.
+
+The delay must be a literal number. A tool-bound value cannot be resolved at
+compile time and is treated as 0 (off).
+
+## ms.Mouse coordinates and the Unscaled flag
+
+The `ms.Mouse` emitter reads the builder's `x1`/`y1`/`x2`/`y2` params, and also
+accepts the older `x`/`y` names so hand-authored steps are not dropped. Reading
+only `x`/`y` had meant every builder-authored `ms.Mouse` emitted a `(0, 0)` start
+point.
+
+An `unscaled` boolean param inserts the leading `true` that `ms.Mouse` reads as
+its Unscaled argument, so coordinates are raw pixels bypassing REF-space scaling.
+Only `ms.Mouse` takes the flag. `moveMouse` and `dragPath` do not, so the builder
+does not offer it on those blocks.

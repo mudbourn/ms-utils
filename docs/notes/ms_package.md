@@ -145,3 +145,36 @@ opt-in. `selfTest` round-trips the live theme through pack, verify and install
 (theme is the smallest type, and its install leg rewrites `ms_theme.json` with
 the bytes it packed from, so a pass leaves the install as it found it);
 `backup = false` there because `.bak` copies of identical bytes would be litter.
+
+## Install-vs-Update ledger
+
+Browse shows "Update" rather than "Install" for content already on disk. The
+signal is a per-content ledger, `.ms_content_ledger.json`, written by
+`recordContent` on every non-plugin install and read by `listContent`. Plugins
+keep their own hash-verified ledger, this one only needs the version.
+
+The ledger is keyed by the registry entry id, not by anything inside the package.
+A `.mspkg` manifest carries no id, because the registry id is assigned at publish
+time and lives only in the index row. So the caller passes the id it downloaded
+by: `browseInstall` threads `data.id` into `install`, which forwards `opts.id` to
+`recordContent` and `recordPlugins`. Keying by manifest id silently recorded
+nothing, because that field is absent.
+
+A component slice (`opts.component`, a theme/sound/macro carved out of a profile)
+is a partial install, so it is not recorded and stays "Install". Installing the
+whole profile records the profile id, and Browse treats the profile's slices as
+installed by inheriting that flag.
+
+Content installed before the ledger existed is not detected retroactively, since
+its version was never recorded. It reads "Install" until reinstalled once.
+
+## Publishing a `.spoon`
+
+`registry_publish.sh` accepts a `.spoon` bundle directly and packs it into a
+temporary plugin `.mspkg` before publishing, so plugins do not need a
+pre-built package. The staged manifest matches `ms.package.pack`'s plugin output
+(type `plugin`, files under `Spoons/`, each hashed into `contents`) so the client
+validates it identically on install. Metadata is read from the Spoon's `init.lua`
+(`name`, `version`, `author`, `homepage`) and overridable by flag. The registry
+id defaults to a slug of the name, and the asset repo defaults to the canonical
+registry repo rather than the ambient git origin, which points at ms-utils.

@@ -1816,8 +1816,8 @@ return function(ms)
                             end
                         end
                     end
-                    -- Non-plugin content (themes/sounds/macros/profiles/packages)
-                    -- reports its installed version from the content ledger.
+                    -- Non-plugin content reports its version from the content
+                    -- ledger. See docs/notes/ms_ui.md, Browse refresh.
                     if ms.package and ms.package.listContent then
                         local okC, content = pcall(ms.package.listContent)
                         if okC and type(content) == "table" then
@@ -1879,11 +1879,8 @@ return function(ms)
                         trustLookup   = ms.registry.trustLookup,
                         component     = (data.component ~= "" and data.component) or nil,
                         includeSounds = data.includeSounds == true,
-                        -- The registry id we downloaded by: recorded into the
-                        -- ledger so Browse can offer Update next time. The
-                        -- manifest itself carries no id. For a component slice
-                        -- data.id is the profile's id; install skips recording
-                        -- those, so it stays "Install".
+                        -- Registry id, recorded for Update detection.
+                        -- See docs/notes/ms_package.md.
                         id            = data.id,
                     })
                     hs.timer.doAfter(0.15, function()

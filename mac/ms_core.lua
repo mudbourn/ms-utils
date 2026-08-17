@@ -1408,8 +1408,11 @@
             -- These magic codes let ms.keystate / ms.mousestate read live button
             -- state the same way keyboard keys are tracked.
             local _MOUSE_TRACK_CODE = {
-                [0] = 997, [1] = 999, [2] = 998,  -- left / right / middle
-                [3] = 996, [4] = 995,             -- thumb back / forward
+                [0] = 997,  -- left
+                [1] = 999,  -- right
+                [2] = 998,  -- middle
+                [3] = 996,  -- thumb back
+                [4] = 995,  -- thumb forward
             }
 
             ms._ensureMouseListener = function()
@@ -1490,11 +1493,23 @@
             -- Live mouse button state, mirroring ms.keystate for the keyboard.
             -- Accepts "left"/"right"/"middle", 0/1/2, or the click aliases.
             local _MOUSE_NAME_CODE = {
-                left = 997, l = 997, ["0"] = 997,
-                right = 999, r = 999, ["1"] = 999,
-                middle = 998, center = 998, m = 998, ["2"] = 998,
-                back = 996, thumb = 996, thumb1 = 996, ["3"] = 996,
-                forward = 995, thumb2 = 995, ["4"] = 995,
+                left    = 997,
+                l       = 997,
+                ["0"]   = 997,
+                right   = 999,
+                r       = 999,
+                ["1"]   = 999,
+                middle  = 998,
+                center  = 998,
+                m       = 998,
+                ["2"]   = 998,
+                back    = 996,
+                thumb   = 996,
+                thumb1  = 996,
+                ["3"]   = 996,
+                forward = 995,
+                thumb2  = 995,
+                ["4"]   = 995,
             }
             ms.mousestate = function(...)
                 ms._ensureMouseListener()
