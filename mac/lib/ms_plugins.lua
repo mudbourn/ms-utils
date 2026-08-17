@@ -1,4 +1,4 @@
--- ms_plugins — Plugin Loading & Teardown --
+-- ms_plugins (Plugin Loading & Teardown) --
 -- Design notes: docs/notes/ms_plugins.md
 return function(ms)
 
@@ -20,11 +20,13 @@ return function(ms)
             if list then list[#list + 1] = fn end
         end
 
-        -- Removes the first identity match from an array, in place.
         local function removeValue(list, value)
             if type(list) ~= "table" then return end
             for i, v in ipairs(list) do
-                if v == value then table.remove(list, i); return end
+                if v == value then
+                    table.remove(list, i)
+                    return
+                end
             end
         end
     -- END Helpers --
@@ -147,8 +149,6 @@ return function(ms)
     -- END Recording Proxy --
 
     -- Load --
-        -- Load one plugin by bundle dir name ("Alpha.spoon"). Returns true, or
-        -- false plus a message. No verification here — Guardian gates Spoons/.
         ms.plugins.load = function(dir)
             if not (ms.package and ms.package.validSpoonName
                 and ms.package.validSpoonName(dir)) then
@@ -184,7 +184,6 @@ return function(ms)
             package.preload[short] = prevPreload
 
             if not ok then
-                -- Replay whatever a mid-load throw already registered.
                 ms.plugins.unload(dir, { quiet = true })
                 ms.plugins.failed[dir] = tostring(err)
                 return false, tostring(err)
@@ -199,7 +198,6 @@ return function(ms)
             if not (ms.package and ms.package.listPlugins) then return end
             for _, p in ipairs(ms.package.listPlugins()) do
                 if p.enabled and p.status == "ok" then
-                    -- pcall per plugin: one plugin's error must not fail boot.
                     local ok, err = ms.plugins.load(p.dir)
                     if not ok then
                         print("Plugin " .. p.dir .. " failed to load: " .. tostring(err))
@@ -210,8 +208,6 @@ return function(ms)
     -- END Load --
 
     -- Unload --
-        -- Stop a plugin: its :stop(), then the recorded undo list (newest
-        -- first), then the module caches.
         ms.plugins.unload = function(dir, opts)
             opts = opts or {}
             if not (ms.package and ms.package.validSpoonName
@@ -248,7 +244,6 @@ return function(ms)
     -- END Unload --
 
     -- Apply --
-        -- Reconcile the running set with what is enabled on disk.
         ms.plugins.apply = function()
             if not (ms.package and ms.package.listPlugins) then return end
             for _, p in ipairs(ms.package.listPlugins()) do
@@ -260,7 +255,6 @@ return function(ms)
                     ms.plugins.unload(p.dir)
                 end
             end
-            -- Sweep anything still marked running whose bundle is gone from disk.
             for dir in pairs(ms.plugins.loaded) do
                 if not hs.fs.attributes(_spoons .. "/" .. dir) then
                     ms.plugins.unload(dir, { quiet = true })

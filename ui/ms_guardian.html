@@ -43,7 +43,7 @@
                 overflow: hidden;
             }
 
-            /* ── Drag region ────────────────────────────────────────────────── */
+            /* -- Drag region -- */
             #titlebar {
                 height: 36px;
                 -webkit-app-region: drag;
@@ -62,7 +62,7 @@
                 color: var(--text2);
             }
 
-            /* ── Layout ─────────────────────────────────────────────────────── */
+            /* -- Layout -- */
             #wrap {
                 display: flex;
                 flex-direction: column;
@@ -72,7 +72,7 @@
                 overflow: hidden;
             }
 
-            /* ── Icon + heading ─────────────────────────────────────────────── */
+            /* -- Icon + heading -- */
             #heading {
                 display: flex;
                 align-items: flex-start;
@@ -98,7 +98,7 @@
                 color: var(--text2);
             }
 
-            /* ── Hash box ───────────────────────────────────────────────────── */
+            /* -- Hash box -- */
             #hashes {
                 background: var(--surface2);
                 border: 1px solid var(--border);
@@ -124,7 +124,7 @@
                 letter-spacing: 0.5px;
             }
 
-            /* ── Warning text ───────────────────────────────────────────────── */
+            /* -- Warning text -- */
             #warning {
                 font-size: 12px;
                 color: var(--text2);
@@ -155,7 +155,7 @@
                 color: var(--text);
             }
 
-            /* ── Buttons ────────────────────────────────────────────────────── */
+            /* -- Buttons -- */
             #buttons {
                 display: flex;
                 gap: 8px;
@@ -204,7 +204,7 @@
                 background: color-mix(in srgb, var(--accent) 40%, transparent);
             }
 
-            /* ── Preview badge (hidden by default, shown via setPreviewMode()) ── */
+            /* -- Preview badge (hidden by default, shown via setPreviewMode()) -- */
             #preview-badge {
                 display: none;
                 position: absolute;
@@ -225,7 +225,7 @@
                 display: block;
             }
 
-            /* ── Steps ────────────────────────────────────────────── */
+            /* -- Steps -- */
             .step {
                 display: none;
                 flex-direction: column;
@@ -260,11 +260,11 @@
                 <div id="hashes">
                     <div>
                         <span class="label">Expected</span>
-                        <span class="hash" id="hash-trusted">—</span>
+                        <span class="hash" id="hash-trusted">,</span>
                     </div>
                     <div>
                         <span class="label">Current</span>
-                        <span class="hash" id="hash-current">—</span>
+                        <span class="hash" id="hash-current">,</span>
                     </div>
                 </div>
 
@@ -317,7 +317,7 @@
         <script>
             "use strict";
 
-            // ── Theme ─────────────────────────────────────────────────────────
+            // -- Theme --
             // Called by the Spoon via evaluateJavaScript once the page loads,
             // with the parsed ms_theme.json object as the argument.
             function applyTheme(t) {
@@ -358,7 +358,7 @@
                 }
             }
 
-            // ── Drag to move window ───────────────────────────────────────────
+            // -- Drag to move window --
             let _drag = null;
             document.addEventListener("mousedown", (e) => {
                 if (e.button !== 0 || e.target.tagName === "BUTTON") return;
@@ -392,12 +392,12 @@
                 if (c) c.textContent = current;
             }
 
-            // ── Dynamic failure copy ──────────────────────────────────────────
+            // -- Dynamic failure copy --
             // This window started as the integrity screen and its markup is
             // still that screen's default, so a host that says nothing gets
             // exactly what it always got. setFailure retargets it: same frame,
             // same theming, different failure. Everything below writes through
-            // textContent — the copy is host-supplied, so it is never markup.
+            // textContent, the copy is host-supplied, so it is never markup.
             function setFailure(spec) {
                 if (typeof spec === "string") {
                     try {
@@ -437,7 +437,7 @@
                         if (r.mono !== false) value.className = "hash";
                         value.textContent =
                             r.value === undefined || r.value === null
-                                ? "—"
+                                ? ","
                                 : String(r.value);
                         row.appendChild(label);
                         row.appendChild(value);

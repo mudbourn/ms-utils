@@ -7,7 +7,6 @@ return function(ms)
 
     MsAlert.maxAlerts    = 4
     MsAlert.bottomY      = 150
-    -- Animation settings read from theme at runtime (defaults if theme not loaded)
     MsAlert.getAnimDuration = function()
         return (ms._theme and ms._theme.alertAnimMs or 250) / 1000
     end
@@ -189,7 +188,6 @@ return function(ms)
     local function animateEntry(entry, fromY, toY, fromAlpha, toAlpha, onDone)
         if entry._animTimer then entry._animTimer:stop() end
 
-        -- Octane: snap to final state, no animation timer
         if ms and ms._octaneMode then
             if entry.canvas then
                 local f = entry.canvas:frame()
@@ -252,11 +250,13 @@ return function(ms)
 -- END Animation --
 
 -- Dismiss --
-    -- Forward-declared so redraw's mouseCallback closure can reference it.
     local dismissEntry
 
     dismissEntry = function(entry)
-        if entry.timer then entry.timer:stop(); entry.timer = nil end
+        if entry.timer then
+            entry.timer:stop()
+            entry.timer = nil
+        end
 
         for i, e in ipairs(queue) do
             if e == entry then
@@ -273,8 +273,6 @@ return function(ms)
         end
     end
 
-    -- Expire every toast on screen right now, animated.
-    -- Backwards over the queue because dismissEntry removes as it goes.
     function MsAlert:expireAll()
         for i = #queue, 1, -1 do
             local e = queue[i]
@@ -288,9 +286,18 @@ return function(ms)
         for i = #queue, 1, -1 do
             local e = queue[i]
 
-            if e.timer      then e.timer:stop();      e.timer      = nil end
-            if e._animTimer then e._animTimer:stop(); e._animTimer = nil end
-            if e.canvas     then pcall(function() e.canvas:delete() end); e.canvas = nil end
+            if e.timer then
+                e.timer:stop()
+                e.timer = nil
+            end
+            if e._animTimer then
+                e._animTimer:stop()
+                e._animTimer = nil
+            end
+            if e.canvas then
+                pcall(function() e.canvas:delete() end)
+                e.canvas = nil
+            end
         end
 
         queue = {}
@@ -332,16 +339,24 @@ return function(ms)
             local e = queue[i]
 
             if e.id == id then
-                if e.timer      then e.timer:stop();      e.timer      = nil end
-                if e._animTimer then e._animTimer:stop(); e._animTimer = nil end
-                if e.canvas     then pcall(function() e.canvas:delete() end); e.canvas = nil end
+                if e.timer then
+                    e.timer:stop()
+                    e.timer = nil
+                end
+                if e._animTimer then
+                    e._animTimer:stop()
+                    e._animTimer = nil
+                end
+                if e.canvas then
+                    pcall(function() e.canvas:delete() end)
+                    e.canvas = nil
+                end
 
                 table.remove(queue, i)
             end
         end
     end
 
-    -- Dismiss any queued entry with this id, animated like the x button.
     local function dismissByIdAnimated(id)
         for _, e in ipairs(queue) do
             if e.id == id then
@@ -389,7 +404,10 @@ return function(ms)
                         if msg == "mouseEnter" then
                             entry._hovered = true
 
-                            if entry.timer then entry.timer:stop(); entry.timer = nil end
+                            if entry.timer then
+                                entry.timer:stop()
+                                entry.timer = nil
+                            end
                             if entry._showX then entry._showX() end
 
                         elseif msg == "mouseExit" and id == 1 then
@@ -423,10 +441,8 @@ return function(ms)
 
 -- Call --
     function MsAlert:__call(msg, duration, noDefaultSound, opts)
-        -- Suppress all toasts until loading screen completes
         if not ms._startupSoundDone then return end
 
-        -- Suppress toasts once the exit has sealed the screen.
         if MsAlert._sealed then return end
 
         duration = duration or 5
@@ -434,7 +450,6 @@ return function(ms)
         local src = opts and opts.source or "system"
         local id  = opts and opts.id or nil
 
-        -- Auto-replace: dismiss any existing toast with this id.
         if id then
             dismissByIdAnimated(id)
         end

@@ -2,10 +2,10 @@
     (function() {
     "use strict";
 
-    /* ── panel-theme.js ─────────────────────────────────────────────────────
+    /* -- panel-theme.js --
      *
      * The Theme & Sound panel. This was a forty-line renderThemePanel() at the
-     * bottom of panel-settings.js — a custom-theme toggle, an "Edit Theme File"
+     * bottom of panel-settings.js, a custom-theme toggle, an "Edit Theme File"
      * button that opened JSON in a text editor, and the sound section.
      *
      * It is now three tabs off the shared ui-tabs.js factory:
@@ -19,16 +19,16 @@
      * Lua. So a drag is never a round-trip per frame, but what you see during
      * the drag is exactly what settingsApplyTheme will render afterwards.
      *
-     * Backgrounds and gradients are deliberately absent — that model is still
+     * Backgrounds and gradients are deliberately absent, that model is still
      * undecided, and it is not going to be UIFC's.
      *
      * Building blocks come from window.msUI (panel-settings.js). This panel
      * owns no widget vocabulary of its own beyond the colour field.
      */
 
-    // ── State ────────────────────────────────────────────────────────────
+    // -- State --
     let S = {};
-    // Local edits not yet reflected back in S — the theme repaints from
+    // Local edits not yet reflected back in S, the theme repaints from
     // S.theme + this, so a second colour tweak doesn't undo the first.
     let _pending = {};
     let _openSoundPicker = null;
@@ -38,10 +38,10 @@
     function playSlot(slot) { if (window.playSlot) window.playSlot(slot); }
     function sendToHost(msg) { if (window.sendToHost) window.sendToHost(msg); }
 
-    // ── Theme keys ───────────────────────────────────────────────────────
+    // -- Theme keys --
     // The eleven colours loadTheme() accepts. Everything else the theme can
     // carry (text2, border, the glows) is derived from these unless the user
-    // has hand-written an override into ms_theme.json — the editor doesn't
+    // has hand-written an override into ms_theme.json, the editor doesn't
     // offer those, because deriving them is what makes a theme cohere.
     const COLOR_KEYS = [
         { key: "bg",       label: "Background",    hint: "Panel backdrop" },
@@ -57,7 +57,7 @@
         { key: "dangerBg", label: "Danger (bg)",   hint: "Backdrop behind danger text" },
     ];
 
-    // ── Live preview ─────────────────────────────────────────────────────
+    // -- Live preview --
     // The merged theme as it would look with the pending edits applied.
     function previewTheme() {
         const t = Object.assign({}, S.theme || {}, _pending);
@@ -68,10 +68,10 @@
         else if (window.settingsApplyTheme) window.settingsApplyTheme(t);
     }
 
-    // ── Committing ───────────────────────────────────────────────────────
+    // -- Committing --
     // macOS keeps the system colour panel open and fires `change` alongside
     // `input` the whole time you drag in it, so a naive commit-on-change would
-    // be one Lua write and one full re-render per frame — with the swatch you
+    // be one Lua write and one full re-render per frame, with the swatch you
     // are dragging replaced out from under you. Writes are therefore debounced,
     // and the incoming state push is ignored while an edit is in flight.
     const SETTLE_MS = 350;
@@ -100,14 +100,14 @@
 
     function isHex(s) { return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s); }
 
-    // #rgb → #rrggbb, because <input type="color"> only accepts the long form.
+    // #rgb -> #rrggbb, because <input type="color"> only accepts the long form.
     function longHex(s) {
         if (!isHex(s)) return null;
         const b = s.slice(1);
         return b.length === 3 ? "#" + b[0]+b[0]+b[1]+b[1]+b[2]+b[2] : "#" + b.toLowerCase();
     }
 
-    // ── Colour field ─────────────────────────────────────────────────────
+    // -- Colour field --
     // A swatch and a hex box over the same value. The swatch previews as it
     // drags and commits when released; the box commits on change.
     function colorField(key, current) {
@@ -143,7 +143,7 @@
         return wrap;
     }
 
-    // ── Sections ─────────────────────────────────────────────────────────
+    // -- Sections --
     // Every tab in this panel is laid out the way the settings panel is: a
     // sticky heading naming the group, and its controls in a card. The tabs
     // used to be one flat run of rows with uppercase labels floating in it,
@@ -152,7 +152,7 @@
         root.appendChild(ui().section(id, title, buildFn, desc));
     }
 
-    // ── Theme tab ────────────────────────────────────────────────────────
+    // -- Theme tab --
     function buildTheme(root) {
         const { h, row, toggle, btnRow, actionBtn } = ui();
         const theme = Object.assign({}, S.theme || {}, _pending);
@@ -196,7 +196,7 @@
             }
         });
 
-        // ── Radius ───────────────────────────────────────────────────────
+        // -- Radius --
         sec(root, "shape", "Shape", "Corner rounding across every panel", (body) => {
             const radius = theme.radius ?? 8;
             const radWrap = h("div", { cls: "row slider-row", onmouseenter: () => playSlot("hover") });
@@ -229,7 +229,7 @@
             body.appendChild(radWrap);
         });
 
-        // ── Font ─────────────────────────────────────────────────────────
+        // -- Font --
         // Values are what ms_theme.json stores: a path under ui/fonts/ for a
         // font file (Lua turns it into an @font-face), or a bare family name.
         sec(root, "type", "Type", "The face the whole shell is set in", (body) => {
@@ -238,7 +238,7 @@
 
             // createSelect, not <select>: the closed control takes CSS but the
             // *open* native popup is drawn by macOS and no stylesheet reaches it,
-            // so it broke out of the shell's look mid-interaction — on the one
+            // so it broke out of the shell's look mid-interaction, on the one
             // panel whose whole subject is how the shell looks.
             const options = [];
             // A font set by hand in ms_theme.json that is not in the folder listing
@@ -263,30 +263,30 @@
             );
         });
 
-        // ── Escape hatches ───────────────────────────────────────────────
+        // -- Escape hatches --
         sec(root, "themefile", "Theme File", "Editing ms_theme.json by hand", (body) => {
             body.appendChild(
                 btnRow(
-                    actionBtn("Edit Theme File…", "", () =>
+                    actionBtn("Edit Theme File...", "", () =>
                         sendToHost({ action: "editTheme" })),
                     actionBtn("Reset Theme", "danger", () =>
                         sendToHost({ action: "resetTheme" })),
                 ),
             );
             body.appendChild(h("div", { cls: "theme-note" },
-                "Overrides the editor doesn't offer — text2, border, the glow "
-                + "colours — can be hand-written into ms_theme.json and win over "
+                "Overrides the editor doesn't offer, text2, border, the glow "
+                + "colours, can be hand-written into ms_theme.json and win over "
                 + "the values derived here."));
         });
     }
 
-    // ── Sound picker ─────────────────────────────────────────────────────
+    // -- Sound picker --
     // Moved verbatim from panel-settings.js, with one fix: the reposition
     // handler now attaches to whichever scroll container the picker was
-    // rendered into, rather than to the settings panel's #scroll — which is
+    // rendered into, rather than to the settings panel's #scroll, which is
     // not the element these rows have scrolled inside since the sound section
     // moved out of the settings list.
-    // Custom theme off means the sound set is stock, same as the colours —
+    // Custom theme off means the sound set is stock, same as the colours ,
     // so everything that could move a slot off its default is inert, not just
     // ignored. Read through a function: S is replaced on every render.
     const themeLocked = () => S.customThemeEnabled === false;
@@ -435,18 +435,18 @@
         }
     });
 
-    // ── Sound tab ────────────────────────────────────────────────────────
+    // -- Sound tab --
     // The slots, their labels, their grouping and the samples the "Default"
     // preset restores all arrive in the state payload from ms.soundSlots.
     // This panel keeps no list of its own: it used to, and it was one of four
     // hand-written copies that had to agree.
     //
-    // Read through functions rather than consts — S is replaced on every
+    // Read through functions rather than consts, S is replaced on every
     // render, so a const captured at module load would freeze the first one.
     const slotsIn = (group) => (S.soundSlots || []).filter((s) => s.group === group);
 
     // A slot with no `d` ships unassigned (restart), so the Default preset has
-    // nothing to say about it and leaves it empty — which is what makes it
+    // nothing to say about it and leaves it empty, which is what makes it
     // fall through to the sound its registry entry points at.
     function defaultAssignsFor(slots) {
         const out = {};
@@ -524,7 +524,7 @@
         wrap.appendChild(mk("download", "⤓", "Import a file for this slot",
             () => sendToHost({ action: "importSoundForSlot", slot: slotId, label: label }),
             themeLocked()));
-        // Removes the file this slot points at, not the slot itself — the
+        // Removes the file this slot points at, not the slot itself, the
         // slot is fixed, and afterwards it shows its default.
         wrap.appendChild(removeBtn((S.soundAssign || {})[slotId] || ""));
         return wrap;
@@ -537,7 +537,7 @@
         ctl.appendChild(soundPicker(slotId, assigned, names, scrollEl));
         ctl.appendChild(slotButtons(slotId, label));
         // The context menu is the same set of actions as the buttons, so it
-        // locks with them — otherwise right-click is a way around the lock.
+        // locks with them, otherwise right-click is a way around the lock.
         return row(label, null, ctl, "", [
             { icon: "", label: "Play",
               action: () => sendToHost({ action: "playSlot", slot: slotId }) },
@@ -568,7 +568,7 @@
                 ),
             );
 
-            // ── Volume ───────────────────────────────────────────────────
+            // -- Volume --
             const volWrap = h("div", { cls: "row slider-row", onmouseenter: () => playSlot("hover") });
             volWrap.addEventListener("contextmenu", (e) => {
                 e.preventDefault();
@@ -601,11 +601,11 @@
             body.appendChild(volWrap);
         });
 
-        // ── Presets ──────────────────────────────────────────────────────
+        // -- Presets --
         const presets   = S.soundPresets || [];
         const ALL_SLOTS = S.soundSlots || [];
 
-        // Only the slots a preset actually speaks about — the same test
+        // Only the slots a preset actually speaks about, the same test
         // buildSoundPresets() applies on the Lua side. A slot with no series
         // of its own borrows from another slot, and a preset has nothing to
         // say about a borrower: it cannot match the Default map (which has no
@@ -618,7 +618,7 @@
 
         const defaultAssigns = defaultAssignsFor(ALL_SLOTS);
 
-        // Which preset is live is inferred from the assignments themselves —
+        // Which preset is live is inferred from the assignments themselves ,
         // any hand-edit away from a preset lands you back on "Custom".
         const sa = S.soundAssign || {};
         let activePreset = null;
@@ -675,7 +675,7 @@
             ));
         });
 
-        // ── Slots ────────────────────────────────────────────────────────
+        // -- Slots --
         // Each group of slots is its own section, so the heading naming it
         // stays on screen while a long list of slots scrolls under it.
         const names = S.soundNames || [];
@@ -705,8 +705,8 @@
             });
         }
 
-        // ── Sound library ────────────────────────────────────────────────
-        // The sections above list *slots* — a fixed set of events, each
+        // -- Sound library --
+        // The sections above list *slots*, a fixed set of events, each
         // pointing at a file. This lists the files themselves, one row per
         // sound, so a sound that no slot uses is still visible and still
         // removable. Adding a sound adds a row here; removing one takes its
@@ -718,7 +718,7 @@
             const ctl = h("div", { cls: "slot-ctl" });
             // Every sound you own gets to say what it is; only defaults are
             // fixed, because they are the fallback floor. An import has no
-            // type yet, so neither option reads as selected — picking one is
+            // type yet, so neither option reads as selected, picking one is
             // what moves it out of Imported and into that group.
             const selected = e.imported ? null : e.role;
             if (e.role === "default") {
@@ -760,7 +760,7 @@
             ]);
         };
 
-        // Active sounds had no group of their own — they were only reachable
+        // Active sounds had no group of their own, they were only reachable
         // through the slot pickers above. That was survivable while nothing
         // could become one, but assigning a sound "active" has to put it
         // somewhere visible or the click looks like it deleted it.
@@ -769,7 +769,7 @@
         // and an a_ active sample, so an "Active Sounds" section standing
         // alongside "Event Slots" read as a second kind of sound when it is
         // the pool those same slots draw from. They are sub-groups of one
-        // Sound Library section instead — which also retires a section that
+        // Sound Library section instead, which also retires a section that
         // was called "Library" while sitting next to the actual library.
         sec(root, "library", "Sound Library",
             "The files themselves, whether or not a slot uses them", (body) => {
@@ -789,7 +789,7 @@
             if (macroEntries.length === 0) {
                 body.appendChild(h("div", { cls: "theme-note" },
                     "Sounds in sounds/macro/ appear here, one row each. Macros play "
-                    + "them by name with ms.sound(\"m_Name\") — they have no slot, "
+                    + "them by name with ms.sound(\"m_Name\"), they have no slot, "
                     + "because a macro chooses its own sound at the call."));
             } else {
                 for (const e of macroEntries) body.appendChild(soundEntryRow(e));
@@ -804,7 +804,7 @@
 
             body.appendChild(divider());
             body.appendChild(
-                btnRow(actionBtn("Import Sound Files…", "", () =>
+                btnRow(actionBtn("Import Sound Files...", "", () =>
                     sendToHost({ action: "importSounds" }))),
             );
         });
@@ -822,7 +822,7 @@
         });
     }
 
-    // ── Share tab ────────────────────────────────────────────────────────
+    // -- Share tab --
     // Sound is a theme aspect: a theme is the whole sensory surface, so a
     // theme package carries its audio and the slot map that gives that audio
     // meaning. The sound package still exists for sharing a set on its own,
@@ -833,14 +833,14 @@
         sec(root, "export", "Export", "Package what you have made", (body) => {
             body.appendChild(h("div", { cls: "theme-note" },
                 "A theme package carries ms_theme.json, any font files in "
-                + "ui/fonts/, and — unless you turn it off under Sounds — your "
+                + "ui/fonts/, and, unless you turn it off under Sounds, your "
                 + "sounds and their slot assignments. Export Sounds is for "
                 + "sharing a sound set on its own, without the colours."));
 
             body.appendChild(btnRow(
-                actionBtn("Export Theme…", "", () =>
+                actionBtn("Export Theme...", "", () =>
                     sendToHost({ action: "exportPackage", type: "theme" })),
-                actionBtn("Export Sounds…", "", () =>
+                actionBtn("Export Sounds...", "", () =>
                     sendToHost({ action: "exportPackage", type: "sound" })),
             ));
         });
@@ -851,13 +851,13 @@
                 + "of anything it overwrites. A package outside the validated "
                 + "library asks before it installs."));
             body.appendChild(btnRow(
-                actionBtn("Import Package…", "", () =>
+                actionBtn("Import Package...", "", () =>
                     sendToHost({ action: "importPackage" })),
             ));
         });
     }
 
-    // ── Tabs ─────────────────────────────────────────────────────────────
+    // -- Tabs --
     function tabs() {
         if (_tabs) return _tabs;
         const panel = document.querySelector(".panel-theme");
@@ -880,7 +880,7 @@
     }
     window.switchThemeTab = switchThemeTab;
 
-    // ── Render ───────────────────────────────────────────────────────────
+    // -- Render --
     function renderInto(id, buildFn) {
         const el = document.getElementById(id);
         if (!el) return;
@@ -900,7 +900,7 @@
 
         // The theme tab holds live controls. Rebuilding it during a drag would
         // swap out the swatch or slider the user is still holding, so the push
-        // is deferred until the edit settles — the panel is already showing the
+        // is deferred until the edit settles, the panel is already showing the
         // right thing locally in the meantime.
         if (editing()) {
             clearTimeout(_rerenderTimer);

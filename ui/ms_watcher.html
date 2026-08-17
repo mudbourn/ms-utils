@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <style>
-            /* ── Fonts ──────────────────────────────────────────────────────── */
+            /* -- Fonts -- */
             @font-face {
                 font-family: "Almendra";
                 src: url("./fonts/Almendra-Regular.ttf") format("truetype");
@@ -29,7 +29,7 @@
                 font-style: italic;
             }
 
-            /* ── Tokens ─────────────────────────────────────────────────────── */
+            /* -- Tokens -- */
             :root {
                 --bg: #0d0f09;
                 --surface: #141810;
@@ -55,7 +55,7 @@
                 --shadow-panel: rgba(0, 0, 0, 0.4);
             }
 
-            /* ── Reset ──────────────────────────────────────────────────────── */
+            /* -- Reset -- */
             *,
             *::before,
             *::after {
@@ -91,7 +91,7 @@
                 font: inherit;
             }
 
-            /* ── Header ─────────────────────────────────────────────────────── */
+            /* -- Header -- */
             #header {
                 display: flex;
                 align-items: center;
@@ -142,7 +142,7 @@
                 color: var(--accent);
             }
 
-            /* ── Log area ───────────────────────────────────────────────────── */
+            /* -- Log area -- */
             #log {
                 flex: 1;
                 overflow-y: auto;
@@ -160,7 +160,7 @@
                 border-radius: 3px;
             }
 
-            /* ── Entry rows ─────────────────────────────────────────────────── */
+            /* -- Entry rows -- */
             .entry {
                 display: flex;
                 align-items: flex-start;
@@ -247,7 +247,7 @@
                 flex-shrink: 0;
             }
 
-            /* ── Step rows ──────────────────────────────────────────────────── */
+            /* -- Step rows -- */
             .step {
                 display: flex;
                 align-items: flex-start;
@@ -273,7 +273,7 @@
                 flex: 1;
             }
 
-            /* ── Mute rules — toggled by classes on #log ────────────────────── */
+            /* -- Mute rules, toggled by classes on #log -- */
             #log.mute-wait .step[data-cat="wait"] {
                 display: none;
             }
@@ -296,7 +296,7 @@
                 display: none;
             }
 
-            /* ── Filter panel ───────────────────────────────────────────────── */
+            /* -- Filter panel -- */
             #filter-panel {
                 position: absolute;
                 bottom: 0;
@@ -339,7 +339,7 @@
                     background 0.1s,
                     opacity 0.1s;
             }
-            /* Higher specificity wins — grays out the dot when muted */
+            /* Higher specificity wins, grays out the dot when muted */
             .filter-row.muted .filter-dot {
                 background: var(--border);
                 opacity: 0.6;
@@ -365,7 +365,7 @@
                 color: var(--text);
             }
 
-            /* ── Context menu ─────────────────────────────────────────────── */
+            /* -- Context menu -- */
             #ctx-menu {
                 position: fixed;
                 min-width: 140px;
@@ -402,7 +402,7 @@
     </head>
     <body>
         <div id="header">
-            <span id="panel-title">mudscript — macro monitor</span>
+            <span id="panel-title">mudscript, macro monitor</span>
             <div class="header-btns">
                 <button
                     id="pause-btn"
@@ -451,7 +451,7 @@
 
         <div id="log"></div>
 
-        <!-- Filter panel — absolute bottom-right, injected by JS -->
+        <!-- Filter panel, absolute bottom-right, injected by JS -->
         <div id="filter-panel"></div>
 
         <div id="ctx-menu"></div>
@@ -460,7 +460,7 @@
         <script>
             "use strict";
 
-            // ── Step categories ─────────────────────────────────────────────
+            // -- Step categories --
             const CATS = [
                 { id: "wait", label: "Waits", regex: /\] wait / },
                 { id: "sound", label: "Sound calls", regex: /\] sound / },
@@ -482,7 +482,7 @@
                 return "other";
             }
 
-            // ── Mute state ──────────────────────────────────────────────────
+            // -- Mute state --
             const _muted = new Set();
 
             function isMuted(cat) { return _muted.has(cat); }
@@ -515,7 +515,7 @@
                 }
             }
 
-            // ── Build filter panel ──────────────────────────────────────────
+            // -- Build filter panel --
             (function buildFilterPanel() {
                 const CAT_DOT_COLORS = {
                     wait: "var(--text3)",
@@ -590,7 +590,7 @@
                 }
             });
 
-            // ── Watcher buildRow ────────────────────────────────────────────
+            // -- Watcher buildRow --
             function buildRow(entry) {
                 if (entry.type === "step") {
                     const row = document.createElement("div");
@@ -635,7 +635,7 @@
                         );
                         const sep = document.createElement("span");
                         sep.className = "sub-sep";
-                        sep.textContent = "›";
+                        sep.textContent = ">";
                         const sub = document.createElement("span");
                         sub.className = "sub-name";
                         sub.textContent = entry.label || entry.id || "";
@@ -668,7 +668,7 @@
                 return row;
             }
 
-            // ── Create LogPanel ─────────────────────────────────────────────
+            // -- Create LogPanel --
             const lp = createLogPanel({
                 channel: "watcher",
                 buildRow,
@@ -677,25 +677,25 @@
                 clearAction: "clearLog",
             });
 
-            // ── Expose globals for inline handlers ──────────────────────────
+            // -- Expose globals for inline handlers --
             window.togglePause       = lp.togglePause;
             window.playSlot          = lp.playSlot;
             window.toggleFilterPanel = toggleFilterPanel;
             window.closePanel        = lp.closePanel;
             window.applyTheme        = lp.applyTheme;
 
-            // ── Watcher clearLog ────────────────────────────────────────────
+            // -- Watcher clearLog --
             function clearLog() {
                 document.getElementById("log").innerHTML = "";
                 lp.sendToHost({ action: "clear" });
             }
             window.clearLog = clearLog;
 
-            // ── Expose for Lua evaluateJavaScript ───────────────────────────
+            // -- Expose for Lua evaluateJavaScript --
             window.appendEntry = lp.appendEntry;
             window.loadHistory = lp.loadHistory;
 
-            // ── Init ────────────────────────────────────────────────────────
+            // -- Init --
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("watcher", function(action, body) {

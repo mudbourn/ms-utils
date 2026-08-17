@@ -1,9 +1,9 @@
     (function() {
     "use strict";
 
-    /* ── log-panel.js ──────────────────────────────────────────────────── */
+    /* -- log-panel.js -- */
 /**
- * LogPanel — shared factory for mudscript dev-tool log panels.
+ * LogPanel, shared factory for mudscript dev-tool log panels.
  *
  * Encapsulates the near-identical boilerplate copied across Console, Watcher,
  * Keys, and Window panels: pause toggle, entry selection, copy, context menu,
@@ -34,7 +34,7 @@
  *   window.playSlot    = lp.playSlot;
  */
 
-// ── Theme ────────────────────────────────────────────────────────────────
+// -- Theme --
 function hexToRgb(hex) {
     hex = hex.replace(/^#/, "");
     if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
@@ -120,7 +120,7 @@ function applyTheme(t) {
     }
 }
 
-// ── Default copy text extractor ──────────────────────────────────────────
+// -- Default copy text extractor --
 function defaultExtractCopyText(el) {
     const ts = el.querySelector(".ts")?.textContent || "";
     const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
@@ -142,7 +142,7 @@ function defaultExtractCopyText(el) {
     return msg ? `${prefix} ${msg}${suffix}` : `${prefix}${suffix}`;
 }
 
-// ── Time helpers ─────────────────────────────────────────────────────────
+// -- Time helpers --
 function pad2(n) { return String(n).padStart(2, "0"); }
 
 function nowTs() {
@@ -154,7 +154,7 @@ function nowTs() {
     );
 }
 
-// ── Scroll primitives ────────────────────────────────────────────────────
+// -- Scroll primitives --
 function _isNearBottom(logEl, thresh) {
     if (!logEl) return false;
     return (
@@ -169,7 +169,7 @@ function _trimLog(logEl, max) {
     }
 }
 
-// ── Factory ──────────────────────────────────────────────────────────────
+// -- Factory --
 /**
  * @param {Object} config
  * @param {string} config.channel        - WebKit message handler name
@@ -193,17 +193,17 @@ function createLogPanel(config) {
         scrollThresh = 48,
     } = config;
 
-    // Scoped DOM queries — container.querySelector finds the right #log
+    // Scoped DOM queries, container.querySelector finds the right #log
     // even when multiple panels share the same id="log"
     const _root = container || document;
     function _byId(id) { return _root.querySelector('#' + id); }
     function _queryAll(sel) { return _root.querySelectorAll(sel); }
 
-    // ── Host bridge ────────────────────────────────────────────────────
+    // -- Host bridge --
     function sendToHost(msg) {
         const s = typeof msg === "string" ? msg : JSON.stringify(msg);
         if (window.shellPost) {
-            // Running inside the Macro Lab shell — route through msShell channel
+            // Running inside the Macro Lab shell, route through msShell channel
             const data = typeof msg === "string" ? JSON.parse(msg) : msg;
             window.shellPost(channel, data.action || "unknown", data);
         } else {
@@ -218,7 +218,7 @@ function createLogPanel(config) {
         sendToHost({ action: "playSlot", slot });
     }
 
-    // ── Pause state ────────────────────────────────────────────────────
+    // -- Pause state --
     let _paused = false;
     function togglePause() {
         _paused = !_paused;
@@ -226,7 +226,7 @@ function createLogPanel(config) {
         if (btn) btn.textContent = _paused ? "Resume" : "Pause";
     }
 
-    // ── Selection state ────────────────────────────────────────────────
+    // -- Selection state --
     const _selected = new Set();
     let _lastClicked = null;
 
@@ -296,7 +296,7 @@ function createLogPanel(config) {
         _updateSelectionVisuals();
     }
 
-    // ── Context menu ───────────────────────────────────────────────────
+    // -- Context menu --
     function closeCtxMenu() {
         const el = _byId("ctx-menu");
         if (el) el.classList.remove("open");
@@ -376,7 +376,7 @@ function createLogPanel(config) {
 
     document.addEventListener("click", () => closeCtxMenu());
 
-    // ── Keyboard shortcuts ─────────────────────────────────────────────
+    // -- Keyboard shortcuts --
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeCtxMenu();
         // Only handle shortcuts when this panel is visible
@@ -393,7 +393,7 @@ function createLogPanel(config) {
         }
     });
 
-    // ── Window drag (title header + rail top strip) ────────────────────
+    // -- Window drag (title header + rail top strip) --
     // A webview reports pointer coords relative to its own (moving) window, so any
     // JS-side delta feeds back and flings the panel off-screen. We only tell Lua
     // when the drag starts/ends; it tracks the real OS mouse position itself.
@@ -417,7 +417,7 @@ function createLogPanel(config) {
         });
     })();
 
-    // ── Resize grab zones ──────────────────────────────────────────────
+    // -- Resize grab zones --
     (function () {
         document.querySelectorAll(".resize-zone").forEach(function(zone) {
             zone.addEventListener("mousedown", function(e) {
@@ -437,16 +437,16 @@ function createLogPanel(config) {
         });
     })();
 
-    // ── Minimum size ───────────────────────────────────────────────────
+    // -- Minimum size --
     // The floor is enforced entirely in the Lua resize math (_resizeEdgeMath),
     // which clamps smoothly as you drag an edge. The old JS approach watched the
     // resize event and asked Lua to grow the window back to a minimum, holding
-    // x/y fixed — which snapped a small window back to a "default" size and
+    // x/y fixed, which snapped a small window back to a "default" size and
     // shimmied it sideways on a west-edge resize. Removed: one source of truth.
 
-    // ── Default appendEntry / loadHistory (single #log) ────────────────
+    // -- Default appendEntry / loadHistory (single #log) --
     let _lastEntry = null;
-    const _pendingHolds = {}; // label+key → { row, ts }
+    const _pendingHolds = {}; // label+key -> { row, ts }
 
     function _entryBadge(entry) {
         if (entry.type === 'step') {
@@ -477,7 +477,7 @@ function createLogPanel(config) {
     }
 
     function _holdKey(entry) {
-        // Extract key name from "[label] ↓ W" → "W"
+        // Extract key name from "[label] ↓ W" -> "W"
         const m = (entry.msg || '').match(/\] [↓↑]\s+(.+)$/);
         return m ? m[1] : null;
     }
@@ -559,7 +559,7 @@ function createLogPanel(config) {
         log.scrollTop = log.scrollHeight;
     }
 
-    // ── Actions ────────────────────────────────────────────────────────
+    // -- Actions --
     function clearLog() {
         const log = _byId("log");
         if (log) log.innerHTML = "";
@@ -570,7 +570,7 @@ function createLogPanel(config) {
         sendToHost({ action: "close" });
     }
 
-    // ── Controller ─────────────────────────────────────────────────────
+    // -- Controller --
     return {
         sendToHost,
         playSlot,

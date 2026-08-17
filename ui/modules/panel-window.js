@@ -1,7 +1,7 @@
     /* panel: window */
     (function() {
     "use strict";
-// ── Window buildRow ─────────────────────────────────────────────
+// -- Window buildRow --
             const BADGE = { focus:"badge-focus", move:"badge-move", resize:"badge-resize",
                 minimize:"badge-state", unminimize:"badge-state", fullscreen:"badge-state" };
             const LABEL = { focus:"focused", move:"moved", resize:"resized",
@@ -105,7 +105,7 @@
                         cell.classList.remove("empty");
                     } else {
                         if (sw) sw.style.display = "none";
-                        if (hx) hx.textContent = "—";
+                        if (hx) hx.textContent = ",";
                         cell.classList.add("empty");
                     }
                 }
@@ -132,7 +132,7 @@
                 if (pill) pill.classList.add("flag-recent");
             }
 
-            // Built on first use — _panel and lp are both defined below this point.
+            // Built on first use, _panel and lp are both defined below this point.
             let _wtabs = null;
             function _tabs() {
                 if (!_wtabs && _panel) {
@@ -160,7 +160,7 @@
             }
             window.switchWindowTab = switchWindowTab;
 
-            // ── Inspect toggle ─────────────────────────────────────────────
+            // -- Inspect toggle --
             let inspectOn = false;
             function toggleInspect() {
                 inspectOn = !inspectOn;
@@ -170,7 +170,7 @@
             }
             window.toggleInspect = toggleInspect;
 
-            // ── Create LogPanel ─────────────────────────────────────────────
+            // -- Create LogPanel --
             const _panel = document.querySelector('.panel-window');
             const lp = createLogPanel({
                 channel: "window",
@@ -190,14 +190,14 @@
                 },
             });
 
-            // ── Expose globals for inline handlers ──────────────────────────
+            // -- Expose globals for inline handlers --
             window._panelPauseFns['window'] = lp.togglePause;
             window.playSlot    = lp.playSlot;
             window._panelClearFns['window'] = lp.clearLog;
             window.closePanel  = lp.closePanel;
             window.windowApplyTheme = lp.applyTheme;
 
-            // ── Event log ───────────────────────────────────────────────────
+            // -- Event log --
             // lp.appendEntry/loadHistory target document.getElementById("log");
             // this panel's log is `.log` scoped under .panel-window (no #log), so
             // we build rows into it directly via the shared primitives. Delegating
@@ -231,7 +231,7 @@
                 flagEvent(capped[capped.length - 1]);
             }
 
-            // ── Init ────────────────────────────────────────────────────────
+            // -- Init --
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("window", function(action, body) {

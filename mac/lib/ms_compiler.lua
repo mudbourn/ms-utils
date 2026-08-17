@@ -1,4 +1,4 @@
--- ms_compiler — Visual Macro Compiler --
+-- ms_compiler (Visual Macro Compiler) --
 -- Design notes: docs/notes/ms_compiler.md
     return function(ms)
 
@@ -10,8 +10,6 @@
         ms.compiler = {}
 
         -- Helpers --
-            -- Compile a { __toolRef = "key" } binding to ms.settings.get("key").
-            -- [SECURITY] key must match an identifier so JSON can't inject Lua.
             local function toolRef(val)
                 if type(val) == "table"
                     and type(val.__toolRef) == "string"
@@ -52,14 +50,11 @@
                 return tostring(val)
             end
 
-            -- Unset identifier arrives as "" (truthy in Lua); fall back explicitly.
             local function ident(v, default)
                 if v == nil or v == "" then return default end
                 return v
             end
 
-            -- A numeric argument that may instead be a tool binding. Returns a
-            -- Lua expression string (plain numeric emitters use tostring()).
             local function numArg(v, default)
                 local ref = toolRef(v)
                 if ref then return ref end
@@ -162,7 +157,6 @@
             emitters["ms.scroll"] = function(step, lvl)
                 local p = step.params or {}
                 local dir = serialize(p.direction or "up")
-                -- Bound click count always emitted; literal only when > 1.
                 if toolRef(p.clicks) then
                     return indent(lvl) .. "ms.scroll(" .. dir .. ", " .. numArg(p.clicks, 1) .. ")"
                 end
@@ -187,7 +181,6 @@
                 parts[#parts + 1] = serialize(p.reference or "Mouse")
                 parts[#parts + 1] = numArg(p.x, 0)
                 parts[#parts + 1] = numArg(p.y, 0)
-                -- Emit the drag's second point (x2/y2) whenever supplied.
                 local op = tostring(p.operation or ""):lower()
                 if op == "drag" or p.x2 ~= nil or p.y2 ~= nil then
                     parts[#parts + 1] = numArg(p.x2, 0)
@@ -196,12 +189,6 @@
                 return indent(lvl) .. "ms.Mouse(" .. table.concat(parts, ", ") .. ")"
             end
 
-            -- A recorded or authored freehand drag: the whole gesture rides in
-            -- one step as a "x,y;x,y;…" point string. ms.dragPath takes
-            -- POSITIONAL args, so it needs a real emitter — without one the
-            -- generic fallback passed the params as a single table, ms.dragPath
-            -- saw a table where it wanted the string, hit #points == 0, and
-            -- returned silently. That is why recorded drags never executed.
             emitters["ms.dragPath"] = function(step, lvl)
                 local p = step.params or {}
                 local pts   = serialize(p.points or "")
@@ -239,16 +226,13 @@
 
             local _flowCounter = 0
 
-            -- Read both branch shapes, canvas first: step.then/.else/.body +
-            -- step.params.condition (canvas), then legacy step.then_steps etc.
             local function stepCond(step)
                 local c = step.condition
                 if c == nil then c = step.params and step.params.condition end
-                -- Empty condition is truthy in Lua; fall back to `true`.
                 if c == nil or c == "" then c = "true" end
                 return c
             end
-            -- `then`/`else` are reserved words — reach the keys with brackets.
+
             local function thenSteps(step) return step["then"] or step.then_steps end
             local function elseSteps(step) return step["else"] or step.else_steps end
 
@@ -351,10 +335,6 @@
                 return table.concat(lines, "\n")
             end
 
-            -- A "setting" block emits only an inert comment naming the shared
-            -- tool it references — never a re-definition.
-            -- [SECURITY] key identifier-validated, label newline-stripped, so
-            -- nothing breaks out of the comment into executable Lua.
             emitters["setting"] = function(step, lvl)
                 local p = step.params or {}
                 local key = type(p.key) == "string"
@@ -365,7 +345,7 @@
                 local label = type(p.label) == "string"
                     and p.label:gsub("[\r\n]", " ") or key
                 return indent(lvl) .. '-- setting "' .. label
-                    .. '" — shared, read via ms.settings.get("' .. key .. '")'
+                    .. '" (shared, read via ms.settings.get("' .. key .. '"))'
             end
 
             local function genericEmitter(step, lvl)
@@ -455,8 +435,6 @@
         -- END Compile --
 
         -- Write File --
-            -- [SECURITY] Quote a string as a Lua literal, escaping quote/
-            -- backslash/newline (the file is loaded — injection hazard).
             local function luaStr(v)
                 if type(v) ~= "string" then return '""' end
                 return string.format("%q", v)
@@ -465,11 +443,10 @@
             ms.compiler._writeFile = function(sources, meta)
                 meta = type(meta) == "table" and meta or {}
                 local lines = {}
-                lines[#lines + 1] = "-- ══════════════════════════════════════════════════════════════"
-                lines[#lines + 1] = "-- AUTO-GENERATED by ms.compiler — DO NOT EDIT BY HAND"
+                lines[#lines + 1] = "-- AUTO-GENERATED by ms.compiler (DO NOT EDIT BY HAND) --"
                 lines[#lines + 1] = "-- Source: data/ms_macros_visual.json"
                 lines[#lines + 1] = "-- Rebuild: ms.compiler.rebuild()"
-                lines[#lines + 1] = "-- ══════════════════════════════════════════════════════════════"
+                lines[#lines + 1] = "-- END AUTO-GENERATED --"
                 lines[#lines + 1] = ""
                 lines[#lines + 1] = "-- Creator Credits --"
                 lines[#lines + 1] = "    ms.macroMeta = {"
@@ -540,15 +517,13 @@
 
                 ms.compiler._writeFile(sources, data.meta)
 
-                print("ms.compiler.rebuild: compiled " .. count .. " macro(s) → " .. luaPath)
+                print("ms.compiler.rebuild: compiled " .. count .. " macro(s) -> " .. luaPath)
                 return count
             end
         -- END Rebuild --
 
         -- Load --
             ms.compiler.load = function()
-                -- Idempotent re-load: purge previously-registered ids before
-                -- re-defining, or an in-session save duplicates the bind list.
                 local prev = ms.compiler._registeredIds
                 if prev then
                     for id in pairs(prev) do
@@ -566,7 +541,7 @@
                 end
 
                 if not hs.fs.attributes(luaPath) then
-                    print("ms.compiler.load: no compiled file at " .. luaPath .. " — skipping")
+                    print("ms.compiler.load: no compiled file at " .. luaPath .. " (skipping)")
                     return false
                 end
 
@@ -585,10 +560,10 @@
                             .. #auditErrs .. " violation"
                             .. (#auditErrs > 1 and "s" or "") .. "):\n"
                         for _, e in ipairs(auditErrs) do
-                            msg = msg .. "  • " .. e .. "\n"
+                            msg = msg .. "  - " .. e .. "\n"
                         end
                         print(msg)
-                        ms.alert("Visual macros audit failed — see console", 6)
+                        ms.alert("Visual macros audit failed. See console.", 6)
                         return false
                     end
                 end
@@ -607,22 +582,19 @@
                 end
                 if not chunk then
                     print("ms.compiler.load: failed to load: " .. tostring(loadErr))
-                    ms.alert("Visual macros load error — see console", 6)
+                    ms.alert("Visual macros load error. See console.", 6)
                     return false
                 end
 
-                -- Handwritten credits win: lock ms.macroMeta so the sandbox's
-                -- __newindex drops the visual write. Pure-visual stays editable.
                 ms._macroMetaLocked = ms._macroMetaFromHand == true
                 local ok, runErr = pcall(chunk)
                 ms._macroMetaLocked = false
                 if not ok then
                     print("ms.compiler.load: execution error: " .. tostring(runErr))
-                    ms.alert("Visual macros runtime error — see console", 6)
+                    ms.alert("Visual macros runtime error. See console.", 6)
                     return false
                 end
 
-                -- Remember registered ids so the next re-load purges exactly these.
                 local reg = {}
                 for _, id in ipairs(ms.compiler.list()) do reg[id] = true end
                 ms.compiler._registeredIds = reg
@@ -633,8 +605,6 @@
         -- END Load --
 
         -- Test Run --
-            -- Test Run: compile only the step body and run it once in the macro
-            -- sandbox. Async — result comes via onDone(ok, err), not a return.
             ms.compiler.testRun = function(macroDef, onDone)
                 local reported = false
                 local function done(ok, err)
@@ -672,10 +642,11 @@
                 local fn = fnOrErr
                 if type(fn) ~= "function" then return done(false, "compiled body is not a function") end
 
-                -- Coroutine + ms._coroContext so ms.wait yields and the run gets
-                -- the same cancel/pause/cleanup hooks a bound macro does.
-                local ctx = { cancelled = false, paused = false,
-                              callStack = { "test:" .. (macroDef.id or "macro") } }
+                local ctx = {
+                    cancelled = false,
+                    paused = false,
+                    callStack = { "test:" .. (macroDef.id or "macro") },
+                }
                 local co = coroutine.create(function()
                     local rok, rerr = xpcall(fn, debug.traceback)
                     done(rok, rok and nil or rerr)
@@ -685,7 +656,6 @@
 
                 local resok, reserr = coroutine.resume(co)
                 if not resok then
-                    -- Surface an error escaping the coroutine body itself.
                     return done(false, tostring(reserr))
                 end
             end
@@ -701,7 +671,8 @@
                 local data = { macros = {} }
                 local f = io.open(jsonPath, "r")
                 if f then
-                    local raw = f:read("*all"); f:close()
+                    local raw = f:read("*all")
+                    f:close()
                     local ok, parsed = pcall(hs.json.decode, raw)
                     if ok and type(parsed) == "table" then
                         data = parsed
@@ -742,7 +713,8 @@
                     print("ms.compiler.delete: no JSON file found")
                     return false
                 end
-                local raw = f:read("*all"); f:close()
+                local raw = f:read("*all")
+                f:close()
                 local ok, data = pcall(hs.json.decode, raw)
                 if not ok or type(data) ~= "table" then
                     error("ms.compiler.delete: invalid JSON")
@@ -757,14 +729,6 @@
                 local deleted = data.macros[macroId]
                 data.macros[macroId] = nil
 
-                -- Promote peers: any macro whose bind derives from the one being
-                -- deleted (bind = { type = <deletedId>, ... }) would otherwise be
-                -- orphaned — its trigger pointed at a macro that no longer exists.
-                -- Give each the deleted macro's concrete trigger plus its own
-                -- modifier, so a peer that fired on "mouse3 + V" becomes a
-                -- standalone "mouse3 + V" main macro. Only runs when the deleted
-                -- macro's own bind is concrete (a main), which is exactly the
-                -- "delete a main, promote its colleagues" case.
                 local pb = deleted and deleted.bind
                 local pbType = (type(pb) == "table") and pb.type or nil
                 local isConcrete = pbType == "key" or pbType == "mouse"
@@ -775,10 +739,16 @@
                         if type(b) == "table" and b.type == macroId then
                             local mods, seen = {}, {}
                             for _, mm in ipairs(pb.mods or {}) do
-                                if not seen[mm] then seen[mm] = true; mods[#mods + 1] = mm end
+                                if not seen[mm] then
+                                    seen[mm] = true
+                                    mods[#mods + 1] = mm
+                                end
                             end
                             for _, mm in ipairs(b.mods or {}) do
-                                if not seen[mm] then seen[mm] = true; mods[#mods + 1] = mm end
+                                if not seen[mm] then
+                                    seen[mm] = true
+                                    mods[#mods + 1] = mm
+                                end
                             end
                             def.bind = {
                                 type      = pb.type,
@@ -809,7 +779,8 @@
             ms.compiler.list = function()
                 local f = io.open(jsonPath, "r")
                 if not f then return {} end
-                local raw = f:read("*all"); f:close()
+                local raw = f:read("*all")
+                f:close()
                 local ok, data = pcall(hs.json.decode, raw)
                 if not ok or type(data) ~= "table" or type(data.macros) ~= "table" then
                     return {}
@@ -825,7 +796,8 @@
             ms.compiler.get = function(macroId)
                 local f = io.open(jsonPath, "r")
                 if not f then return nil end
-                local raw = f:read("*all"); f:close()
+                local raw = f:read("*all")
+                f:close()
                 local ok, data = pcall(hs.json.decode, raw)
                 if not ok or type(data) ~= "table" or type(data.macros) ~= "table" then
                     return nil
@@ -837,10 +809,7 @@
         -- END Get --
 
         -- Meta (pack credits: name / author / website) --
-            -- The visual pack's meta lives at data.meta, emitted verbatim.
             ms.compiler.getMeta = function()
-                -- Handwritten meta owns credits: source the editor from the live
-                -- meta and flag `owned` so the panel shows it read-only.
                 if ms._macroMetaFromHand and type(ms.macroMeta) == "table" then
                     return {
                         name    = ms.macroMeta.name    or "",
@@ -852,7 +821,8 @@
                 end
                 local f = io.open(jsonPath, "r")
                 if not f then return {} end
-                local raw = f:read("*all"); f:close()
+                local raw = f:read("*all")
+                f:close()
                 local ok, data = pcall(hs.json.decode, raw)
                 if not ok or type(data) ~= "table" or type(data.meta) ~= "table" then
                     return {}
@@ -869,16 +839,16 @@
             ms.compiler.setMeta = function(meta)
                 assert(type(meta) == "table", "ms.compiler.setMeta: meta must be a table")
 
-                -- Refuse visual writes to handwritten-owned meta (ignored at load).
                 if ms._macroMetaFromHand then
-                    print("ms.compiler.setMeta: ignored — handwritten ms_macros.lua owns the pack credits")
+                    print("ms.compiler.setMeta: ignored, handwritten ms_macros.lua owns the pack credits")
                     return false, "handwritten"
                 end
 
                 local data = { macros = {} }
                 local f = io.open(jsonPath, "r")
                 if f then
-                    local raw = f:read("*all"); f:close()
+                    local raw = f:read("*all")
+                f:close()
                     local ok, parsed = pcall(hs.json.decode, raw)
                     if ok and type(parsed) == "table" then
                         data = parsed

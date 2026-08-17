@@ -1,4 +1,4 @@
--- MsSettings — converted from a Spoon; Spoons/ is reserved for plugins.
+-- MsSettings --
 return function(ms)
 -- MsSettings --
     local MsSettings = {}
@@ -18,7 +18,6 @@ return function(ms)
         local ms = _G.ms
         if ms.checkGuardian and not ms.checkGuardian("MsSettings") then return end
 
-        -- Run the settings menu initialization
         self:_initSettingsMenu(ms)
     end
 -- END Start --
@@ -29,12 +28,6 @@ return function(ms)
         local settingsPath    = os.getenv("HOME") .. "/.hammerspoon/ms_settings.txt"
         local jsonPath        = os.getenv("HOME") .. "/.hammerspoon/data/ms_settings.json"
         local defaultPath     = os.getenv("HOME") .. "/.hammerspoon/data/ms_settings_default.json"
-        -- Settings authored from the Tools panel's Setting Builder. Kept in
-        -- their own file, not the pack (ms_macros.lua) and not the main
-        -- settings JSON: definitions here are re-applied via ms.settings.define
-        -- after the pack loads, while their VALUES ride the usual data.user
-        -- path. Separating the two keeps Save/Reset-as-Default (which only
-        -- touch values) from ever dropping an authored definition.
         local authoredPath    = os.getenv("HOME") .. "/.hammerspoon/data/ms_authored.json"
         local archivePath     = os.getenv("HOME") .. "/.hammerspoon/backups/"
         local macrosPath      = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
@@ -48,11 +41,20 @@ return function(ms)
 
         ms.parseBind = function(str)
             local btn = str:match("^mouse:(%d+)$")
-            if btn then return {type="mouse", button=tonumber(btn)} end
+            if btn then return {
+                type="mouse",
+                button=tonumber(btn),
+            } end
             local dir = str:match("^scroll:(%w+)$")
-            if dir and (dir == "up" or dir == "down") then return {type="scroll", direction=dir} end
+            if dir and (dir == "up" or dir == "down") then return {
+                type="scroll",
+                direction=dir,
+            } end
             local gp = str:match("^gamepad:(%w+)$")
-            if gp then return {type="gamepad", button=gp} end
+            if gp then return {
+                type="gamepad",
+                button=gp,
+            } end
             local mods = {}
             local parts = {}
             for part in str:gmatch("[^+]+") do
@@ -81,12 +83,16 @@ return function(ms)
         end
     -- END Panel State & Builders --
 
-    -- User Settings — validation helpers --
+    -- User Settings validation helpers --
         local _SETTING_TYPES = {
-            toggle = true, slider    = true, seg       = true,
-            action = true, divider   = true, groupLabel = true,
-            soundSlot = true,  -- user-defined sound event slot
-            group     = true,  -- collapsible group of nested settings
+            toggle = true,
+            slider    = true,
+            seg       = true,
+            action = true,
+            divider   = true,
+            groupLabel = true,
+            soundSlot = true,
+            group     = true,
         }
         local _HIDEABLE_FEATURES = {
             socd             = true,
@@ -112,7 +118,6 @@ return function(ms)
 
         ms._applySettings = function(data)
             if not data then return end
-            -- Migrate sensitivity to pendingUserSettings for macro profile ownership
             if data.sensitivity ~= nil then
                 local num = tonumber(data.sensitivity)
                 if num and num >= 0.1 and num <= 4 then
@@ -182,9 +187,6 @@ return function(ms)
                 if data.qrOptions.settings ~= nil then qr.settings = (data.qrOptions.settings == true) end
                 if data.qrOptions.ui       ~= nil then qr.ui       = (data.qrOptions.ui       == true) end
             end
-            -- Only `true` is stored, and only for a well-formed bundle name:
-            -- the file is the one place this list can be hand-edited, and a
-            -- stray key here would otherwise decide whether code runs.
             if data.pluginsDisabled and type(data.pluginsDisabled) == "table" then
                 local off = {}
                 for k, v in pairs(data.pluginsDisabled) do
@@ -209,8 +211,6 @@ return function(ms)
             if data.octaneMode ~= nil then ms._octaneMode = (data.octaneMode == true) end
             if data.octaneMuteSounds ~= nil then ms._octaneMuteSounds = (data.octaneMuteSounds == true) end
             if data.swallowHotkeys ~= nil then ms._swallowHotkeys = (data.swallowHotkeys == true) end
-            -- Legacy migration: antiTimeoutEnabled moved from system to user settings
-            -- Preserves existing toggle value for macro profiles that define it via ms.settings.define
             if data.antiTimeoutEnabled ~= nil then
                 ms._pendingUserSettings = ms._pendingUserSettings or {}
                 ms._pendingUserSettings["antiTimeoutEnabled"] = (data.antiTimeoutEnabled == true)
@@ -229,12 +229,6 @@ return function(ms)
                         ms.binds[id] = entry.enabled
                     end
                     if entry.bind then
-                        -- Restore any saved override for a still-registered bind.
-                        -- The old guard skipped every bind whose default had a
-                        -- `.type` — i.e. all of them — so confirmed rebinds were
-                        -- dropped on the next boot/macro-reload and appeared not
-                        -- to take. Derived binds (sub-bind modifier changes and
-                        -- full-rebind severs) load here too.
                         local def = ms.registry._defs and ms.registry._defs[id]
                         if def and type(entry.bind) == "table" and entry.bind.type then
                             ms.bindConfig[id] = entry.bind
@@ -263,8 +257,6 @@ return function(ms)
                 if s.w ~= nil then ms._shellState.w = tonumber(s.w) end
                 if s.h ~= nil then ms._shellState.h = tonumber(s.h) end
                 if s.lastPanel ~= nil then ms._shellState.lastPanel = tostring(s.lastPanel) end
-                -- Always start hidden — the webview is recreated fresh on reload.
-                -- The persisted `visible` flag is stale after any restart.
                 ms._shellState.visible = false
             end
             if data.user and type(data.user) == "table" then
@@ -279,7 +271,6 @@ return function(ms)
                             end
                         end
                     else
-                        -- Not yet defined — store for later apply at define-time
                         ms._pendingUserSettings = ms._pendingUserSettings or {}
                         ms._pendingUserSettings[key] = value
                     end
@@ -396,10 +387,6 @@ return function(ms)
                 data.macros[id] = data.macros[id] or {}
                 data.macros[id].enabled = enabled
             end
-            -- Canonical compare across every trigger shape — including derived
-            -- sub-bind modifier changes (type = <parentId>) and chords (type =
-            -- "combo", carrying `keys`), which the old per-field chain silently
-            -- treated as identical to default and never persisted.
             local function canonBind(x)
                 if type(x) ~= "table" then return tostring(x) end
                 local mods = {}
@@ -417,12 +404,6 @@ return function(ms)
             for id, cfg in pairs(ms.bindConfig or {}) do
                 local regEntry = ms.registry._defs and ms.registry._defs[id]
                 local def = regEntry and regEntry.default
-                -- Persist genuine overrides. When the macro HAS a compiled
-                -- default, only save a bind that differs from it. When it has
-                -- NO default (a visual-builder macro authored without a bind),
-                -- any configured bind is by definition an override — the old
-                -- `if def then` guard dropped these entirely, so builder binds
-                -- vanished on a full reload.
                 local persist = def and (canonBind(cfg) ~= canonBind(def))
                     or (not def and cfg ~= nil)
                 if persist then
@@ -434,17 +415,18 @@ return function(ms)
                 data.macros[id] = data.macros[id] or {}
                 data.macros[id].cooldown = cooldown
             end
-            -- Handwritten macros the user "deleted" in the shell UI (see
-            -- ms.suppressMacro). Persist the flag so they stay hidden and unbound
-            -- across reloads without touching ms_macros.lua.
             for id in pairs(ms._suppressedMacros or {}) do
                 data.macros[id] = data.macros[id] or {}
                 data.macros[id].suppressed = true
             end
             -- Phase 6: Macro Lab & Shell State --
             data.shell = ms._shellState or {
-                x = nil, y = nil, w = 900, h = 600,
-                lastPanel = "macros", visible = false,
+                x = nil,
+                y = nil,
+                w = 900,
+                h = 600,
+                lastPanel = "macros",
+                visible = false,
             }
             -- END Phase 6 --
             local f = io.open(jsonPath, "w")
@@ -454,13 +436,13 @@ return function(ms)
             end
         end
 
-        -- ── Authored settings (Tools > Setting Builder) ──────────────────────
-        -- Normalise a definition posted by the builder into a clean, trusted
-        -- def. The UI is untrusted input, so every field is re-derived and
-        -- clamped here rather than taken on faith. Returns (def) or (nil, err).
         local _AUTHORED_TYPES = {
-            toggle = true, slider = true, seg = true,
-            action = true, groupLabel = true, divider = true,
+            toggle = true,
+            slider = true,
+            seg = true,
+            action = true,
+            groupLabel = true,
+            divider = true,
         }
         local function _trim(s)
             return (type(s) == "string") and s:match("^%s*(.-)%s*$") or ""
@@ -470,7 +452,10 @@ return function(ms)
             local t = raw.type
             if not _AUTHORED_TYPES[t] then return nil, "unsupported type" end
 
-            local def = { type = t, authored = true }
+            local def = {
+                type = t,
+                authored = true,
+            }
             if raw.target == "calibration" then def.section = "calibration" end
 
             if t == "divider" then return def end
@@ -480,7 +465,6 @@ return function(ms)
                 return def
             end
 
-            -- Everything past here is keyed and carries a value or an action.
             local key = _trim(raw.key)
             if key == "" then return nil, "a key is required" end
             if not key:match("^[%a_][%w_]*$") then
@@ -513,7 +497,10 @@ return function(ms)
                         if type(o) == "table" and _trim(o.label) ~= "" then
                             local val = o.value
                             if val == nil or val == "" then val = _trim(o.label) end
-                            table.insert(opts, { label = _trim(o.label), value = val })
+                            table.insert(opts, {
+                                label = _trim(o.label),
+                                value = val,
+                            })
                         end
                     end
                 end
@@ -524,20 +511,16 @@ return function(ms)
                 local bl = _trim(raw.btnLabel)
                 def.btnLabel = bl ~= "" and bl or "Run"
                 def.danger   = raw.danger == true
-                -- Authored actions carry no onAction — there is nowhere safe to
-                -- run arbitrary UI-supplied code — so the button renders and is
-                -- a deliberate no-op until wired up in the pack.
             end
             return def
         end
 
-        -- Read the authored-settings file into ms._authoredSettings. Never
-        -- throws: a missing or corrupt file just yields an empty list.
         ms._loadAuthoredSettings = function()
             ms._authoredSettings = {}
             local f = io.open(authoredPath, "r")
             if not f then return end
-            local content = f:read("*all"); f:close()
+            local content = f:read("*all")
+            f:close()
             local ok, data = pcall(hs.json.decode, content)
             if ok and type(data) == "table" then
                 for _, def in ipairs(data) do
@@ -555,25 +538,19 @@ return function(ms)
             end
         end
 
-        -- Register every authored setting via the normal define() path, so it
-        -- lands in ms._userSettingDefs and renders like any pack setting. Runs
-        -- after the pack and after loadSettings, so saved values are waiting in
-        -- ms._pendingUserSettings and get picked up at define time. Keys that
-        -- already exist (a pack setting claimed the name) are skipped, not
-        -- fatal — an authored name can be shadowed but never crash the boot.
         ms._defineAuthoredSettings = function()
             for _, def in ipairs(ms._authoredSettings or {}) do
                 local key = def.key
                 if not (key and ms._userSettingIndex[key]) then
-                    -- define() stores the table by reference; hand it a copy so
-                    -- a later reset/reload can't accumulate runtime state on the
-                    -- persisted definition.
                     local copy = {}
                     for k, v in pairs(def) do copy[k] = v end
                     if def.options then
                         copy.options = {}
                         for i, o in ipairs(def.options) do
-                            copy.options[i] = { label = o.label, value = o.value }
+                            copy.options[i] = {
+                                label = o.label,
+                                value = o.value,
+                            }
                         end
                     end
                     pcall(ms.settings.define, copy)
@@ -581,8 +558,6 @@ return function(ms)
             end
         end
 
-        -- Public: add a setting authored in the builder. Sanitises, checks the
-        -- key is free, defines it live, then persists. Returns (ok, err).
         ms.addAuthoredSetting = function(raw)
             local def, err = ms._sanitizeAuthoredDef(raw)
             if not def then return false, err end
@@ -598,20 +573,10 @@ return function(ms)
             end
             ms._saveAuthoredSettings()
             ms.saveSettings()
-            -- Nudge an open macro builder to re-pull its tool list so a
-            -- just-created tool appears at once, without reopening the builder.
-            -- The ui:macros:listTools handler rebuilds from ms._userSettingDefs
-            -- and pushes setToolList to the shell.
             if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
             return true
         end
 
-        -- Public: remove a setting authored in the builder. Only authored
-        -- settings can be pulled — a key the pack declared in ms_macros.lua is
-        -- not ours to unregister — so a key that is not in ms._authoredSettings
-        -- is refused. Unregisters live (index, def list, stored value) so the
-        -- Settings panel and any tool picker drop it without a reload, then
-        -- persists the shortened authored list. Returns (ok, err).
         ms.removeAuthoredSetting = function(key)
             if type(key) ~= "string" or key == "" then
                 return false, "a key is required"
@@ -619,7 +584,8 @@ return function(ms)
             ms._authoredSettings = ms._authoredSettings or {}
             local foundAt
             for i, def in ipairs(ms._authoredSettings) do
-                if def.key == key then foundAt = i; break end
+                if def.key == key then foundAt = i
+                break end
             end
             if not foundAt then
                 return false, "'" .. key .. "' is not an authored setting"
@@ -627,8 +593,6 @@ return function(ms)
 
             table.remove(ms._authoredSettings, foundAt)
 
-            -- Live unregister. define() stored the def by reference in both the
-            -- index and the ordered def list; drop it from each, plus its value.
             if ms._userSettingIndex then ms._userSettingIndex[key] = nil end
             if ms._userSettingVals  then ms._userSettingVals[key]  = nil end
             if ms._userSettingDefs then
@@ -642,14 +606,15 @@ return function(ms)
 
             ms._saveAuthoredSettings()
             ms.saveSettings()
-            -- Refresh an open macro builder so the removed tool drops from its
-            -- picker without a reload (mirror of addAuthoredSetting).
             if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
             return true
         end
 
         ms.loadSettings = function()
-            ms.dev.log({ type = "system", event = "settings_load_start" })
+            ms.dev.log({
+                type = "system",
+                event = "settings_load_start",
+            })
             if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
             local f = io.open(jsonPath, "r")
             if f then
@@ -657,10 +622,10 @@ return function(ms)
                 f:close()
                 local data = hs.json.decode(content)
                 if data then
-                    -- Merge defaults for any missing critical fields
                     local df = io.open(defaultPath, "r")
                     if df then
-                        local defContent = df:read("*all"); df:close()
+                        local defContent = df:read("*all")
+                        df:close()
                         local defData = hs.json.decode(defContent)
                         if defData then
                             if (not data.soundAssign or next(data.soundAssign) == nil)
@@ -715,7 +680,8 @@ return function(ms)
             ms._buildDefaultSettings()
             local df2 = io.open(defaultPath, "r")
             if df2 then
-                local content2 = df2:read("*all"); df2:close()
+                local content2 = df2:read("*all")
+                df2:close()
                 local data2 = hs.json.decode(content2)
                 if data2 then ms._applySettings(data2) end
             end
@@ -725,7 +691,8 @@ return function(ms)
         ms.saveDefault = function()
             ms.saveSettings()
             local sf = io.open(jsonPath, "r")
-            if not sf then ms.alert("Could not read current settings.", 3); return end
+            if not sf then ms.alert("Could not read current settings.", 3)
+            return end
             local content = sf:read("*all")
             sf:close()
             local existingDf = io.open(defaultPath, "r")
@@ -736,7 +703,8 @@ return function(ms)
                 local timestamp = os.date("%Y-%m-%d_%H%M")
                 local archiveFile = archivePath .. "ms_settings_default_" .. timestamp .. ".json"
                 local af = io.open(archiveFile, "w")
-                if af then af:write(oldContent); af:close() end
+                if af then af:write(oldContent)
+                af:close() end
             end
             local df = io.open(defaultPath, "w")
             if df then
@@ -788,10 +756,6 @@ return function(ms)
 
         ms.reloadUI = function()
             ms.bind.teardown()
-            -- Clear in place, never reassign: ms.registry also carries the
-            -- package client API (list/refresh/download from lib/ms_registry.lua).
-            -- A fresh table drops it and empties the Browse stage. See the
-            -- contract note in ms_registry.lua.
             ms.registry._defs    = {}
             ms.registry._defList = {}
             ms.bind._wires    = {}
@@ -800,12 +764,13 @@ return function(ms)
             ms._userSettingDefs  = {}
             ms._userSettingIndex = {}
             ms._userSettingVals  = {}
-            ms._pendingUserSettings = {}  -- raw saved values from file, applied at define-time
+            ms._pendingUserSettings = {}
 
             local macrosPath = os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua"
             local af = io.open(macrosPath, "r")
             if af then
-                local rawSrc = af:read("*all"); af:close()
+                local rawSrc = af:read("*all")
+                af:close()
                 local chunk = load(
                     rawSrc,
                     "@ms_macros.lua",
@@ -852,19 +817,7 @@ return function(ms)
             end
         end
 
-        -- ── Teardown ──────────────────────────────────────────────────────
-        -- Shared by shutdown and restart: both are the same act of putting
-        -- mudscript down cleanly, and differ only in what happens after.
-        -- Every step is pcall'd on its own — a teardown that aborts halfway
-        -- is worse than one that skips a step, because it leaves taps and
-        -- timers live with no UI left to reach them from.
-        --
-        -- `reason` only labels the error events, so a failure in the log is
-        -- attributable to the path that hit it.
         local function _teardown(reason)
-            -- Suppress the toasts and sounds every teardown step would
-            -- otherwise fire on the way out. Callers that want a send-off
-            -- sound must start it before calling this.
             ms._quickReloading = true
 
             local function step(name, fn)
@@ -879,25 +832,16 @@ return function(ms)
                 end
             end
 
-            -- 1. Stop macros first: cancels running macros and releases any
-            --    key or button still held down. Nothing below should be able
-            --    to leave a modifier stuck.
             step("macros", function() ms.setMacros(0, true) end)
             step("binds", function() ms.bind.teardown() end)
 
-            -- 2. Persist before anything that could fault takes the process.
             step("save", function() ms.saveSettings() end)
 
-            -- 3. Drop the input taps and pollers ms owns. Named individually
-            --    rather than swept, so a handle added later shows up here as
-            --    a deliberate omission instead of silently surviving.
             local handles = {
                 "_keyListener", "_mouseListener", "_scrollListener",
                 "_trackpadLeftListener", "_trackpadRightListener",
                 "_appWatcher", "_tapWatchdog", "_menuHoverWatcher",
             }
-            -- _gamepadTask is an hs.task, which has neither :stop nor
-            -- :delete; ms.bind.teardown above already ran ms.gamepadStop().
             for _, key in ipairs(handles) do
                 step(key, function()
                     local h = ms[key]
@@ -913,15 +857,7 @@ return function(ms)
                 end
             end)
 
-            -- 4. Close every window so the desktop is clear before the exit.
             step("windows", function()
-                -- Retract any popped-out panels into the shell first, while the
-                -- shell frame is still placed to animate home toward — otherwise
-                -- these standalone webviews sit on screen until hs.reload()/quit
-                -- destroys them live (they are not covered by the exit curtain,
-                -- which only stands over the shell). The exit's hold (max of the
-                -- send-off sound and EXIT_CLEANUP_S) keeps the runloop alive long
-                -- enough for the retract fade to finish.
                 if ms.shell and ms.shell.closePopOuts then ms.shell.closePopOuts() end
                 if ms.shell and ms.shell.hide then ms.shell.hide() end
                 if ms.ui and ms.ui.hide then ms.ui.hide() end
@@ -931,24 +867,9 @@ return function(ms)
                 pcall(function() ms.dev.window.hide() end)
             end)
 
-            -- 5. Flush the log handles last, so the steps above are on disk.
             step("logs", function() ms.dev:closeLogHandles() end)
         end
 
-        -- How long to hold before the exit, so a send-off sample is not cut
-        -- off mid-note. 0.25s floor so the window teardown is on screen.
-        --
-        -- This used to have no upper bound at all, on the reasoning that a
-        -- send-off is a send-off and the sample's own length is the only
-        -- honest limit. The bound exists now only as a backstop: it is not
-        -- here to shorten the exit, it is here so a sample that is absurdly
-        -- long — or a duration that lies — cannot leave a torn-down app
-        -- sitting behind a curtain indefinitely.
-        --
-        -- Set above the shipped 2.7s sample on purpose, so in normal use it
-        -- never binds and the sample still plays to its end. Anything at or
-        -- below the sample length is a decision to truncate the send-off, so
-        -- move it with that in mind rather than as a latency knob.
         local SLOT_HOLD_MAX = 4.0
 
         local function _waitForSlot(slotId)
@@ -958,10 +879,6 @@ return function(ms)
 
             if sound and began then
                 local ok, dur = pcall(function() return sound:duration() end)
-                -- dur ~= dur is the nan test; nan compares false to everything.
-                -- inf and nan would schedule a timer that never fires and
-                -- leave a torn-down app running; the cap below would now catch
-                -- inf as well, but the test stays — a nan slips past a cap.
                 if ok and type(dur) == "number" and dur == dur
                     and dur > 0 and dur < math.huge then
                     local left = dur - (hs.timer.secondsSinceEpoch() - began)
@@ -972,12 +889,6 @@ return function(ms)
             return math.min(wait, SLOT_HOLD_MAX)
         end
 
-        -- Seconds of the send-off sample still to play, measured from now, or 0
-        -- if it has already finished (or never had a real duration). Unlike
-        -- _waitForSlot there is no 0.25 floor: the exit sequence adds its own
-        -- fixed tail, so a sound that is already done should contribute nothing.
-        -- Still capped by SLOT_HOLD_MAX so a lying/huge duration can't hang the
-        -- exit.
         local function _slotRemaining(slotId)
             local sound = (ms._slotHandles or {})[slotId]
             local began = (ms._slotStartedAt or {})[slotId]
@@ -992,63 +903,13 @@ return function(ms)
             return 0
         end
 
-        -- ── Exit curtain ──────────────────────────────────────────────────
-        -- One curtain for both exits, owned by the host rather than by the
-        -- shell's page.
-        --
-        -- It cannot live in the shell for two reasons. The restart hotkey
-        -- fires whether or not the shell is open, so a curtain inside that
-        -- page shows nothing most of the time; and on both paths the shell is
-        -- the very window `_teardown` closes, so a curtain inside it went
-        -- dark long before the send-off ended. That was the shutdown bug —
-        -- the curtain and the hold sat on opposite sides of the teardown.
-        --
-        -- It is a webview rather than a canvas because a canvas cannot do
-        -- the fades, and a hand-rolled alpha timer next to the loading
-        -- screen's CSS is exactly how the two drifted apart in the first
-        -- place. Same page, same theme payload, same tokens.
-        --
-        -- The curtain's entrance and exit, in milliseconds. Both mirror the
-        -- page's own CSS — a duration here and a duration there are two clocks
-        -- describing one fade, so they are wrong the moment either moves
-        -- alone. Change both or neither.
-        --
-        -- IN covers the sheet's 0.35s fade plus the mark and wording arriving
-        -- 0.12s behind it: "fully visible" means all of it, not just the
-        -- background, because the shell is still showing through until then.
         local CURTAIN_IN_MS   = 600
         local CURTAIN_FADE_MS = 350
 
-        -- How long to let a resized curtain settle before revealing it. Short
-        -- enough not to read as a delay, long enough for WKWebView to finish
-        -- the layout a frame change triggers. Only ever paid when the frame
-        -- actually moved.
         local CURTAIN_SETTLE_MS = 60
 
-        -- Backstop for the send-off. The page normally triggers it the instant
-        -- the fade starts; this only fires if that message never comes, so it
-        -- is long enough to lose every race against a page that is merely slow
-        -- and still short enough that the exit is not silent.
-        --
-        -- It was 500ms, and that was not long enough. The curtain's webview is
-        -- prewarmed but hidden, so its rendering is suspended and showing it
-        -- has to resume the compositor before anything can fade — routinely
-        -- longer than half a second on a cold view. This fired first, the
-        -- send-off started against a curtain that was not on screen yet, and
-        -- the two came apart. A backstop that wins a race it was never meant
-        -- to enter is indistinguishable from no sync at all. Sits above the
-        -- page's own 1000ms floor so the page is what gives up first.
         local CURTAIN_SOUND_FALLBACK_MS = 1400
 
-        -- It takes the shell's frame rather than the screen's: this is the
-        -- shell going quiet, not the desktop being covered. The shell's own
-        -- window is the thing being replaced, so standing exactly in its
-        -- place is what makes the handover invisible.
-        --
-        -- Live frame first, persisted frame second, shell defaults last. The
-        -- restart hotkey fires whether or not the shell is open, and a
-        -- restart with no shell still needs to show something — so there is
-        -- always a frame, even when there is no window to read one from.
         local function _shellFrame()
             local view = ms.shell and ms.shell.webview and ms.shell.webview()
             if view then
@@ -1058,8 +919,6 @@ return function(ms)
                 end
             end
 
-            -- Same numbers as ms.shell.init: 820×520, capped to 85% of the
-            -- screen for low-res displays, centred.
             local sf = hs.screen.mainScreen():frame()
             local w  = math.min(820, math.floor(sf.w * 0.85))
             local h  = math.min(520, math.floor(sf.h * 0.85))
@@ -1071,49 +930,22 @@ return function(ms)
             local x = sf.x + math.floor((sf.w - w) / 2)
             local y = sf.y + math.floor((sf.h - h) / 2)
             if st and st.x and st.y then
-                -- Clamped on-screen for the same reason _restoreFrame clamps:
-                -- a frame left behind by a disconnected display must not put
-                -- the curtain somewhere nobody can see it.
                 x = math.max(sf.x, math.min(st.x, sf.x + sf.w - w))
                 y = math.max(sf.y, math.min(st.y, sf.y + sf.h - h))
             end
 
-            return { x = x, y = y, w = w, h = h }
+            return {
+                x = x,
+                y = y,
+                w = w,
+                h = h,
+            }
         end
 
-        -- Above everything, not one step above the shell.
-        --
-        -- It used to be popUpMenu + 1, which is exactly one level of headroom
-        -- over the shell — and the shell does not stay in its level: its show
-        -- calls bringToFront(true), the above-everything variant, which
-        -- promotes it past that margin. So the curtain came up *behind* the
-        -- visible shell and faded in where nobody could see it, becoming
-        -- visible only when the teardown hid the shell at the end of the hold.
-        --
-        -- That is the whole reason the exit looked slow whenever the shell was
-        -- open, in both exits, and looked fine whenever it was closed. The
-        -- curtain was never late — the log has it fading 78ms in — it was
-        -- occluded. A curtain that something else can get in front of is not a
-        -- curtain, so this stops negotiating for one level and takes the top.
         local _CURTAIN_LEVEL = (hs.canvas.windowLevels.screenSaver or 1000) + 1
 
-        -- The curtain page, built once and kept loaded.
-        --
-        -- It used to be built at exit time, and that was the whole latency:
-        -- WKWebView's html() is async, so the send-off started, and then the
-        -- screen sat there doing nothing while the page loaded and handshook
-        -- before the fade could even begin. Loading it during boot means the
-        -- exit path only has to move a window and set a class, so the curtain
-        -- starts arriving with the sound rather than well after it.
-        --
-        -- Not shown until it is needed: an unshown webview still loads its
-        -- page, which is the only part that was ever slow.
         local _warmView, _warmLive
 
-        -- Set for the duration of one exit, and consumed by the page's
-        -- "fading" message. This is what keeps the send-off honest: the sound
-        -- is started by the fade actually beginning, not by the host asking
-        -- for it. See the note in ms_curtain.html's showCurtain.
         local _onFading
 
         local function _fading()
@@ -1129,7 +961,6 @@ return function(ms)
                 local decoded, data = pcall(hs.json.decode, message.body)
                 if not decoded or type(data) ~= "table" then return end
                 if data.action == "ready" then
-                    -- Only a real handshake proves there is a page to fade.
                     _warmLive = true
                 elseif data.action == "fading" then
                     _fading()
@@ -1138,17 +969,15 @@ return function(ms)
 
             local sf = _shellFrame()
             local v = hs.webview.new(
-                { x = sf.x, y = sf.y, w = sf.w, h = sf.h }, {}, uc
+                {
+                    x = sf.x,
+                    y = sf.y,
+                    w = sf.w,
+                    h = sf.h,
+                }, {}, uc
             )
             pcall(function() v:windowStyle(0) end)
-            -- Transparent, and it stays transparent through the fade — that is
-            -- the whole takeover: the shell is still lit underneath and shows
-            -- through the curtain until the curtain is opaque.
             pcall(function() v:transparent(true) end)
-            -- One level above the shell rather than level with it. Two windows
-            -- on the same level are ordered by whatever AppKit feels like, and
-            -- a curtain that comes up *behind* the window it is covering for
-            -- is not a curtain.
             pcall(function() v:level(_CURTAIN_LEVEL) end)
             pcall(function() v:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces) end)
             pcall(function() v:allowTextEntry(false) end)
@@ -1158,27 +987,19 @@ return function(ms)
             local baseURL  = "file://" .. hs.configdir .. "/ui/"
             local f = io.open(htmlPath, "r")
             if not f then return nil end
-            local html = f:read("*all"); f:close()
+            local html = f:read("*all")
+            f:close()
             v:html(html, baseURL)
 
             return v
         end
 
-        -- Called once from the tail of boot. Failing here costs nothing but
-        -- the latency it was meant to save — the exit path still builds one
-        -- on demand — so it never propagates.
         ms.prewarmExitCurtain = function()
             if _warmView then return end
             local ok, v = pcall(_buildCurtain)
             if ok and v then _warmView = v end
         end
 
-        -- Put the curtain where the shell is. Returns whether it had to move.
-        --
-        -- Moving a webview makes WKWebView lay out again, and a reveal issued
-        -- into that lands late: the page accepts the JS but does not paint
-        -- until the layout settles. So this wants to run at any time except
-        -- the one moment it used to — the exit itself.
         local function _matchShellFrame(view)
             local moved = false
             pcall(function()
@@ -1188,49 +1009,28 @@ return function(ms)
                     or math.abs(cur.x - sf.x) > 1 or math.abs(cur.y - sf.y) > 1
                     or math.abs(cur.w - sf.w) > 1 or math.abs(cur.h - sf.h) > 1
                 then
-                    view:frame({ x = sf.x, y = sf.y, w = sf.w, h = sf.h })
+                    view:frame({
+                        x = sf.x,
+                        y = sf.y,
+                        w = sf.w,
+                        h = sf.h,
+                    })
                     moved = true
                 end
             end)
             return moved
         end
 
-        -- Keep the prewarmed curtain on the shell's frame, so the exit never
-        -- has to move it.
-        --
-        -- This is the whole reason shutdown and restart behaved differently.
-        -- Shutdown is clicked in an open shell, so the shell had almost always
-        -- moved or resized since the prewarm and the exit paid a relayout at
-        -- the worst possible moment; the restart hotkey usually fires with the
-        -- shell closed and the prewarmed frame already correct, which is why
-        -- the path that never moves is the path that behaved. Doing it here
-        -- means the relayout is paid while the user is dragging a window and
-        -- both exits arrive at a curtain that is already in the right place.
-        --
-        -- Called from the shell's saveState — the single funnel for move-end,
-        -- resize-end and hide — and from its show, after the frame is
-        -- restored. Inert during an exit: _warmView is handed over and cleared
-        -- the moment one starts, so there is nothing here to move.
         ms.syncExitCurtainFrame = function()
             if not _warmView then return end
             _matchShellFrame(_warmView)
         end
 
-        -- `onShow` fires at the exact moment the curtain is told to fade
-        -- in. The send-off sound is started from there rather than before the
-        -- exit, so the sample and the fade begin together no matter how long
-        -- the window and the page took to get ready — the sound follows the
-        -- curtain instead of the curtain chasing the sound.
         local function _exitCurtain(mode, onShow, onReady)
             local function finishReady()
                 pcall(onReady)
             end
 
-            -- How long the curtain took to report its fade. Kept because it is
-            -- the one number that distinguishes a curtain that is slow to
-            -- appear from a send-off that is early, and the two are
-            -- indistinguishable by watching — assuming it was the former cost
-            -- three changes before this said otherwise.
             local _t0 = hs.timer.secondsSinceEpoch()
 
             local function armFading()
@@ -1254,8 +1054,6 @@ return function(ms)
             local view    = _warmView
             local wasWarm = view ~= nil
             if not view then
-                -- Prewarm never ran, or failed. Build one now and take the
-                -- load latency — a late curtain still beats none.
                 local ok, v = pcall(_buildCurtain)
                 if not ok or not v then
                     ms.dev.log({
@@ -1263,8 +1061,6 @@ return function(ms)
                         event = mode .. "_curtain_error",
                         msg   = tostring(v),
                     })
-                    -- No curtain to sync to, so the send-off still has to
-                    -- start — silence is not the fallback.
                     pcall(onShow)
                     finishReady()
                     return nil
@@ -1272,50 +1068,19 @@ return function(ms)
                 view = v
             end
 
-            -- Held on ms so nothing is collected mid-exit; the kill or the
-            -- reload takes it with everything else.
             ms._exitCurtainView = view
             _warmView = nil
 
-            -- Backstop, not the mechanism. `ms.syncExitCurtainFrame` keeps the
-            -- prewarmed curtain on the shell's frame as the shell moves, so on
-            -- the normal path this finds nothing to do and the exit skips the
-            -- relayout entirely. It still has to run: a curtain built here
-            -- rather than prewarmed was never synced, and a frame can always
-            -- change in a way nothing reported.
             local resized = _matchShellFrame(view)
 
             local octane = ms._octaneMode and "true" or "false"
             local theme  = hs.json.encode(ms._theme or {})
 
             local function present()
-                -- Armed before the JS is dispatched, because the page can
-                -- report back before evaluateJavaScript has even returned.
-                --
-                -- Everything timed off the entrance hangs off this, not off
-                -- present(): the fade is what the send-off is syncing to, and
-                -- the gap between showing the window and the fade actually
-                -- starting is the whole problem this code exists to absorb.
-                -- Timed from here, the hold used to expire mid-fade and the
-                -- teardown pulled the shell out from under a curtain that was
-                -- still coming up.
-                --
-                -- The hold it starts is what makes this read as a takeover:
-                -- the teardown closes the shell, so holding it until the
-                -- curtain is fully opaque keeps the shell lit underneath with
-                -- the curtain coming down over it, instead of the shell
-                -- blinking out and the curtain fading up over bare desktop.
                 armFading()
 
                 ms.safeShow(view)
 
-                -- Re-asserted at show time rather than trusted from build
-                -- time. Ordering is not a property the curtain can set once
-                -- and keep: every window shown between the prewarm and the
-                -- exit gets its own say, and the shell in particular promotes
-                -- itself on every open. Cheap, and the failure it prevents is
-                -- invisible — a curtain behind another window looks exactly
-                -- like a curtain that never came.
                 pcall(function() view:level(_CURTAIN_LEVEL) end)
                 pcall(function() view:bringToFront(true) end)
 
@@ -1324,34 +1089,17 @@ return function(ms)
                         .. string.format("showCurtain(%q, %s);", mode, octane))
                 end)
 
-                -- Whether there is a fade to wait for at all. A page that
-                -- never handshook is a window with nothing running in it;
-                -- octane has no fade by design. Recorded on ms so the
-                -- fade-out reads the same answer.
                 ms._exitCurtainLive = shown and _warmLive and not ms._octaneMode
 
                 if ms._exitCurtainLive then
-                    -- If the page never reports the fade, the send-off still
-                    -- has to happen. Silence is not the fallback.
                     hs.timer.doAfter(CURTAIN_SOUND_FALLBACK_MS / 1000, _fading)
                 else
-                    -- Nothing to sync to: a dead page, or octane, which snaps.
-                    -- Waiting out the backstop here would only make the exit
-                    -- sit silent for over a second before starting.
                     _fading()
                 end
             end
 
-            -- A prewarmed page is already loaded, so it is shown on the spot —
-            -- that immediacy is the entire point of the prewarm. A page built
-            -- just now is not, and revealing it before its html() has landed
-            -- shows nothing at all, so that path waits for the handshake.
             if wasWarm then
                 if resized then
-                    -- Let the layout land before revealing. The send-off
-                    -- starts inside present() too, so this delays the sound
-                    -- and the fade by the same tick and they stay together —
-                    -- which is the property that matters, not the tick itself.
                     hs.timer.doAfter(CURTAIN_SETTLE_MS / 1000, present)
                 else
                     present()
@@ -1363,9 +1111,6 @@ return function(ms)
             local poll
             poll = hs.timer.doEvery(0.05, function()
                 waited = waited + 0.05
-                -- Capped rather than open-ended: a page that faults before its
-                -- listener runs never handshakes, and an exit that waits
-                -- forever on it strands a torn-down app running.
                 if _warmLive or waited >= 0.6 then
                     poll:stop()
                     present()
@@ -1375,15 +1120,9 @@ return function(ms)
             return view
         end
 
-        -- Take the curtain back down, then do the thing. The exit has to wait
-        -- out the fade: `hs.reload()` and `app:kill()` both take the process
-        -- with them, so a fade-out started but not waited for is a fade-out
-        -- nobody ever sees.
         local function _dropCurtain(finish)
             local view = ms._exitCurtainView
 
-            -- Nothing to fade: no curtain, no live page, or octane, which
-            -- snaps as it does everywhere.
             if not view or not ms._exitCurtainLive or ms._octaneMode then
                 return finish()
             end
@@ -1396,46 +1135,11 @@ return function(ms)
             hs.timer.doAfter(CURTAIN_FADE_MS / 1000, finish)
         end
 
-        -- Shared tail for both exits: hold the screen for the send-off, fade
-        -- the curtain, then do the thing. `_waitForSlot` measures from when
-        -- the sample started, so time spent waiting on the curtain handshake
-        -- comes out of the hold rather than being added to it.
-        -- Shared tail for both exits.
-        --
-        -- One slot goes in, not a list: which sound a slot borrows when it has
-        -- none of its own is the registry's business, and playSlot walks that
-        -- chain itself. Timing is still recorded against the slot asked for,
-        -- so the hold below is right whichever sample ends up playing.
-        --
-        -- The send-off starts inside the curtain's onShow, so `_waitForSlot`
-        -- is measuring from a sample that began with the fade rather than
-        -- before it. Everything downstream stays correct for free.
-        -- Hard ceiling on an exit, measured from the click.
-        --
-        -- Everything below it is bounded by timers, so in normal use this
-        -- never fires. It exists because the normal path is not the only
-        -- path: `finishReady` runs `onReady` inside a pcall, and `onReady`
-        -- tears down and *then* schedules the exit — so anything that throws
-        -- between those two swallows the error and leaves a torn-down app
-        -- behind a curtain with nothing left to fire. That hang has no other
-        -- way out; `ms._shuttingDown` is already set, so the power button
-        -- cannot even be clicked again.
-        -- How long to allow the cleanup animations to settle after _teardown
-        -- issues them — the popout retract, the panel/toast fade-outs. Teardown
-        -- itself is synchronous; these run on their own timers (all ≲0.3s), so
-        -- this is the floor the exit waits even when the send-off sound is short
-        -- or muted, so nothing is still animating when the process is taken.
         local EXIT_CLEANUP_S = 0.4
 
-        -- Sits above the longest normal exit (curtain entrance + a full-length
-        -- send-off, capped at SLOT_HOLD_MAX + the fixed tail) so it only ever
-        -- fires on the fault path.
         local EXIT_WATCHDOG_S = 6.0
 
         local function _exit(mode, slot, finish)
-            -- Armed before anything else, so it covers the whole exit rather
-            -- than just the part after the curtain. Fires once: `finish` is a
-            -- kill or a reload, and the first one to land takes the process.
             local _finished = false
             local function finishOnce()
                 if _finished then return end
@@ -1459,28 +1163,8 @@ return function(ms)
             _exitCurtain(mode, function()
                 ms.playSlot(slot)
 
-                -- Everything on screen leaves together. Toasts hold for
-                -- several seconds and the exit does not wait for them, so
-                -- without this a toast is still sitting there when the app
-                -- goes — cut off mid-hold rather than fading the way toasts
-                -- normally do. Started here so their fade runs alongside the
-                -- curtain's, not after it.
                 pcall(function() ms.alert:expireAll() end)
             end, function()
-                -- The whole exit, stripped down to one linear beat:
-                --
-                --   1. Run the cleanup (key release, bind/tap teardown, save,
-                --      popouts retracting, panels + toasts fading out). Teardown
-                --      issues it synchronously; every step is individually
-                --      pcall'd, so this cannot throw and strand the exit.
-                --   2. Hold for whichever finishes last — the send-off sound or
-                --      those cleanup animations. _slotRemaining is what is left
-                --      of the sample from now; EXIT_CLEANUP_S is the settle floor
-                --      for the fades. If the cleanup outlasts the sound, the
-                --      sound contributes nothing; if the sound outlasts cleanup,
-                --      we wait the rest of it out.
-                --   3. A fixed 200ms beat, then fade the curtain out and take
-                --      the process once the fade has actually rendered.
                 pcall(_teardown, mode)
                 local hold = math.max(_slotRemaining(slot), EXIT_CLEANUP_S) + 0.2
                 hs.timer.doAfter(hold, function()
@@ -1489,44 +1173,6 @@ return function(ms)
             end)
         end
 
-        -- ── Shutdown ──────────────────────────────────────────────────────
-        -- The power button's back end.
-        --
-        -- The last step quits Hammerspoon. mudscript is not a process of its
-        -- own — it is what Hammerspoon is running — so tearing its state down
-        -- in place would leave an idle Hammerspoon that the user still has to
-        -- quit by hand, and any handle missed below would keep running inside
-        -- it. Quitting is the only exit that is actually an exit.
-        --
-        -- The send-off is owned by `_exit`, not by the panel and not by this
-        -- function: the panel's copy died with its window, and the sample has
-        -- to start with the curtain's fade rather than ahead of it.
-        -- Runloop-independent backstop. Every timer in _exit rides the
-        -- Hammerspoon runloop the teardown runs on, so a teardown step that
-        -- blocks it under load (a slow save, a webview :delete) freezes the
-        -- watchdog with it and the exit hangs with nothing left to fire. This
-        -- spawns an OUTSIDE process that forces the exit's outcome after a
-        -- grace period no matter what the runloop is doing — the one backstop a
-        -- wedged runloop cannot defeat. Spawned before the teardown so it is
-        -- already running when the block would happen; the child is reparented
-        -- to launchd and survives even a clean exit.
-        --
-        --   shutdown: unconditional `kill -9 <pid>` — shutdown's whole intent
-        --             is termination, and a kill on an already-dead pid (the
-        --             clean os.exit having won) is a harmless no-op.
-        --   restart : `hs.reload()` keeps the SAME pid, so an unconditional
-        --             kill would take out a healthy reloaded instance. Instead
-        --             it is guarded by a sentinel file: the fresh boot clears
-        --             it in init.lua within a moment of process start, so a
-        --             reload that completes leaves nothing for the watchdog to
-        --             act on. Only a reload that never boots (the hang) leaves
-        --             the sentinel in place, and then the watchdog kills the
-        --             wedged process and relaunches — which is the restart the
-        --             user asked for. The relaunched instance clears the
-        --             sentinel on its own boot, so there is no kill loop.
-        --
-        -- Grace periods sit above _exit's EXIT_WATCHDOG_S (6s) so the backstop
-        -- only ever bites a genuine hang, never a slow-but-progressing exit.
         local RESTART_SENTINEL   = hs.configdir .. "/data/.ms_restart_pending"
         local HARDKILL_SHUTDOWN_S = 4
         local HARDKILL_RESTART_S  = 15
@@ -1544,16 +1190,11 @@ return function(ms)
 
         local WATCHDOG_SCRIPT = hs.configdir .. "/data/.ms_exit_watchdog.sh"
 
-        -- Written to a script and launched fully detached with `nohup … &`, NOT
-        -- via hs.task: on restart, hs.reload() wipes the Lua state and could
-        -- collect an hs.task handle and take its child with it — exactly when
-        -- the backstop is needed most. A nohup'd subprocess is reparented to
-        -- launchd and outlives the reload or the kill. os.execute returns the
-        -- instant `&` backgrounds it, so it adds nothing to the stall.
         local function _spawnDetached(cmd)
             local f = io.open(WATCHDOG_SCRIPT, "w")
             if not f then error("cannot write watchdog script") end
-            f:write("#!/bin/sh\n" .. cmd .. "\n"); f:close()
+            f:write("#!/bin/sh\n" .. cmd .. "\n")
+            f:close()
             os.execute("nohup sh '" .. WATCHDOG_SCRIPT .. "' >/dev/null 2>&1 &")
         end
 
@@ -1562,9 +1203,9 @@ return function(ms)
                 local pid = _resolvePid()
                 if not pid then error("no pid") end
                 if mode == "restart" then
-                    -- Mark the restart in flight, then guard the kill on it.
                     local f = io.open(RESTART_SENTINEL, "w")
-                    if f then f:write(tostring(pid)); f:close() end
+                    if f then f:write(tostring(pid))
+                    f:close() end
                     _spawnDetached(
                         "sleep " .. HARDKILL_RESTART_S ..
                         "; if [ -f '" .. RESTART_SENTINEL .. "' ]; then " ..
@@ -1582,7 +1223,10 @@ return function(ms)
             end)
             if not ok then
                 pcall(function()
-                    ms.dev.log({ type = "error", event = mode .. "_hardkill_arm_failed" })
+                    ms.dev.log({
+                        type = "error",
+                        event = mode .. "_hardkill_arm_failed",
+                    })
                 end)
             end
         end
@@ -1590,18 +1234,14 @@ return function(ms)
         ms.shutdown = function()
             if ms._shuttingDown or ms._restarting then return end
             ms._shuttingDown = true
-            ms.dev.log({ type = "system", event = "shutdown_start" })
+            ms.dev.log({
+                type = "system",
+                event = "shutdown_start",
+            })
 
-            -- Guarantee the process actually dies even if the runloop wedges
-            -- mid-teardown; the clean os.exit below still wins the normal race.
             _armExternalHardKill("shutdown")
 
             _exit("shutdown", "shutdown", function()
-                -- kill() is a *request* to terminate, and a request can be
-                -- refused or simply never answered — which is an exit that
-                -- hangs with no timer left to rescue it, because this is the
-                -- last thing that runs. So it is asked politely once and then
-                -- taken: os.exit is unconditional and cannot be declined.
                 pcall(function()
                     local app = hs.application.get("Hammerspoon")
                     if app then app:kill() end
@@ -1610,47 +1250,32 @@ return function(ms)
             end)
         end
 
-        -- ── Restart ───────────────────────────────────────────────────────
-        -- Full reload's back end (⌥]). Same teardown as shutdown, because a
-        -- reload is just as much of an exit — hs.reload() discards the whole
-        -- Lua state, so a bare call to it dropped taps mid-macro with keys
-        -- possibly still held and, worse, never saved settings on the way
-        -- out. The difference is only the last step and the send-off.
         ms.restart = function()
             if ms._restarting or ms._shuttingDown then return end
             ms._restarting = true
-            ms.dev.log({ type = "system", event = "restart_start" })
+            ms.dev.log({
+                type = "system",
+                event = "restart_start",
+            })
 
-            -- Runloop-independent backstop: if the reload wedges and never
-            -- boots, an outside process kills the wedged instance and relaunches
-            -- it. The fresh boot clears the sentinel in init.lua, so a reload
-            -- that completes disarms this on its own.
             _armExternalHardKill("restart")
 
-            -- A restart is not a goodbye, so it gets its own slot — which
-            -- ships unassigned and falls through to the shutdown sound rather
-            -- than to silence. That fallback is declared on the slot itself,
-            -- in ms.soundSlots.
-            --
-            -- hs.reload() tears down the Lua state, and the sound handle goes
-            -- with it — so the hold is what makes the send-off audible at all,
-            -- not just a courtesy. The curtain holds the screen for exactly
-            -- that long, then the reload replaces it with the loading screen.
             _exit("restart", "restart", function() hs.reload() end)
         end
 
         ms.reload = function(opts)
-            ms.dev.log({ type = "system", event = "reload_start" })
+            ms.dev.log({
+                type = "system",
+                event = "reload_start",
+            })
 
-            -- Panic: cancel all active macros, release held keys/buttons, stop timers
             pcall(function() ms.setMacros(0, true) end)
 
-            -- Stop tap watchdog before reload
-            if ms._tapWatchdog then ms._tapWatchdog:stop(); ms._tapWatchdog = nil end
+            if ms._tapWatchdog then ms._tapWatchdog:stop()
+            ms._tapWatchdog = nil end
 
-            ms._quickReloading = true   -- suppress ALL sounds + per-module toasts
+            ms._quickReloading = true
 
-            -- Ensure user settings tables exist before any reload path touches them
             ms._pendingUserSettings = ms._pendingUserSettings or {}
             ms._userSettingDefs     = ms._userSettingDefs     or {}
             ms._userSettingIndex    = ms._userSettingIndex    or {}
@@ -1667,66 +1292,58 @@ return function(ms)
 
             local reloadOk = true
 
-            -- 1. Reload macros (teardown + load + compile + run + loadSettings + rebind + socd)
             if qr.macros then
                 local ok, result = pcall(ms.ui._actions.reloadMacros)
                 if not ok then
                     reloadOk = false
-                    ms.dev.log({ type = "error", event = "reload_error", msg = tostring(result) })
-                    -- Error recovery: re-register system binds so the user isn't stuck
+                    ms.dev.log({
+                        type = "error",
+                        event = "reload_error",
+                        msg = tostring(result),
+                    })
                     pcall(function()
                         ms.bind._registerSystemBinds()
                         ms.bind.rebindSystem()
                     end)
                 elseif result == false then
-                    -- reloadMacros returned false (early failure after pcall succeeded)
                     reloadOk = false
                 end
             end
 
-            -- 2. Reload theme (includes window rebuild — popouts bake theme at creation)
             if qr.theme then
                 local ok, err = pcall(function()
                     ms.loadTheme()
                     pcall(function() ms.alert:recolor() end)
                     pcall(function() ms.dev:recolor() end)
                     if ms._macroLabEnabled and ms.shell and ms.shell.eval then
-                        -- Shell repaints live via JS push (loadTheme already
-                        -- rebaked popout HTML) — no window rebuild, and the
-                        -- legacy window must never surface on reload.
                         ms.shell.eval("applyTheme(" .. hs.json.encode(ms._theme or {}) .. ")")
                     else
-                        -- Rebuild legacy popout windows (they bake theme CSS at creation)
                         ms.ui.hide()
                         hs.timer.doAfter(0.15, function() ms.ui.show() end)
                     end
                 end)
                 if not ok then
                     reloadOk = false
-                    ms.dev.log({ type = "error", event = "reload_theme_error", msg = tostring(err) })
+                    ms.dev.log({
+                        type = "error",
+                        event = "reload_theme_error",
+                        msg = tostring(err),
+                    })
                 end
             end
 
-            -- 3. Reload settings only if macros weren't already reloaded (avoid duplicate rebind)
             if qr.settings and not qr.macros then
                 pcall(function() ms.reloadSettings() end)
             end
 
-            -- 4. Rebuild UI if requested
             if qr.ui then
                 pcall(function() ms.reloadUI() end)
             end
 
-            -- 5. Close all panels silently (sounds suppressed by _quickReloading)
             if ms._macroLabEnabled and ms.shell and ms.shell.hide then
-                -- Shell mode: theme repaint is a JS push (no hide/show cycle),
-                -- so always close here. Only touch the legacy panel if it is
-                -- actually open — ms.ui.hide() refocuses the target app as a
-                -- side effect, and the reload path does its own refocus below.
                 pcall(function() ms.shell.hide() end)
                 if ms.ui and ms.ui._open then pcall(function() ms.ui.hide() end) end
             elseif not qr.theme then
-                -- Theme branch already hides/shows; only hide here if theme didn't
                 pcall(function() ms.ui.hide() end)
             end
             pcall(function() ms.dev.console.hide() end)
@@ -1734,14 +1351,11 @@ return function(ms)
             pcall(function() ms.dev.keys.hide() end)
             pcall(function() ms.dev.window.hide() end)
 
-            -- Done — re-enable sounds
             ms._quickReloading = false
 
-            -- Persist the reload flag
             ms._quickReloaded = 0
             ms.saveSettings()
 
-            -- Refocus target app (hide→activate cycle so the game re-reads bind state)
             hs.timer.doAfter(0.15, function()
                 pcall(function()
                     local app = ms._targetApp and hs.application.get(ms._targetApp)
@@ -1754,20 +1368,18 @@ return function(ms)
                 end)
             end)
 
-            -- Single closing sound + toast
             hs.timer.doAfter(0.3, function()
                 if reloadOk then
                     ms.playSlot("update")
                     ms.alert("Reload complete.", 4, true, { priority = "low" })
                 else
-                    ms.alert("Reload failed — see console.", 6, false, { priority = "low" })
+                    ms.alert("Reload failed, see console.", 6, false, { priority = "low" })
                 end
             end)
         end
 
-        -- Backward compat alias
         ms.quickReload = function() ms.reload() end
-    -- END User Settings — validation helpers --
+    -- END User Settings validation helpers --
 
     -- User Settings & Menu API --
         -- ms.settings.define(def) --
@@ -1830,7 +1442,6 @@ return function(ms)
                 ms._userSettingIndex[key] = def
                 table.insert(ms._userSettingDefs, def)
                 if t == "action" then return end
-                -- Use saved value if available, otherwise default
                 local savedVal = ms._pendingUserSettings and ms._pendingUserSettings[key]
                 if savedVal ~= nil then
                     local validated = _validateUserValue(def, savedVal)
@@ -1876,7 +1487,7 @@ return function(ms)
                     return
                 end
                 if def.type == "soundSlot" then
-                    print("ms.settings.set: '" .. key .. "' is a soundSlot — assign sounds via Settings \xc2\xbb Sound.")
+                    print("ms.settings.set: '" .. key .. "' is a soundSlot, assign sounds via Settings \xc2\xbb Sound.")
                     return
                 end
                 local validated = _validateUserValue(def, value)
@@ -1929,13 +1540,6 @@ return function(ms)
         -- END ms.menu.define --
 
         -- ms.tools.define(def) --
-            -- Registers a user-defined tool: a callable action that appears in
-            -- the macro builder's function picker (under the "User" category)
-            -- and gets its own configuration card in the Tools panel.
-            --
-            -- Tool settings are ordinary user settings under a reserved key
-            -- namespace ("tool.<toolId>.<key>"), so they persist through the
-            -- existing ms._userSettingVals bucket with no new save path.
             ms.tools.define = function(def)
                 assert(type(def) == "table",
                     "ms.tools.define: argument must be a table")
@@ -1955,8 +1559,6 @@ return function(ms)
                 assert(def.settings == nil or type(def.settings) == "table",
                     "ms.tools.define: 'settings' must be a table")
 
-                -- Register each declared setting into the normal user-setting
-                -- tables so get/set/persist/validate all work unchanged.
                 for _, item in ipairs(def.settings or {}) do
                     assert(type(item) == "table",
                         "ms.tools.define: each entry in 'settings' must be a table")
@@ -2002,8 +1604,6 @@ return function(ms)
         -- END ms.tools.define --
 
         -- ms.tools.get(toolId, key) / ms.tools.set(toolId, key, value) --
-            -- Thin namespaced wrappers over ms.settings.get/set so a tool reads
-            -- its own configuration without hand-building the reserved key.
             ms.tools.get = function(toolId, key)
                 assert(type(toolId) == "string", "ms.tools.get: toolId must be a string")
                 assert(type(key) == "string",    "ms.tools.get: key must be a string")
@@ -2032,13 +1632,17 @@ return function(ms)
 
     -- Theme System --
         ms.loadTheme = function()
-            ms.dev.log({ type = "system", event = "theme_load" })
+            ms.dev.log({
+                type = "system",
+                event = "theme_load",
+            })
             if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
             for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
             if ms._customThemeDisabled then return end
             local f = io.open(themePath, "r")
             if not f then return end
-            local content = f:read("*all"); f:close()
+            local content = f:read("*all")
+            f:close()
             local data = hs.json.decode(content)
             if not data then return end
             ms._themeLoaded = true
@@ -2073,8 +1677,6 @@ return function(ms)
                 local clean = data.font:gsub("[;{}()<>\"']", "")
                 if #clean > 0 then ms._theme.font = clean end
             end
-            -- Pass through override keys (text2, text3, border, accentGlow, etc.)
-            -- These accept any string (hex or rgba) so users have full control.
             local overrideKeys = {
                 "text2","text3","border",
                 "accentGlow","accentGlowFaint",
@@ -2088,21 +1690,15 @@ return function(ms)
             end
         end
 
-        -- The raw on-disk theme, or {} when the user has never authored one.
-        -- The editor needs this to tell an explicitly-set key apart from a
-        -- default it merely inherited — ms._theme has already merged the two.
         ms.readThemeFile = function()
             local f = io.open(themePath, "r")
             if not f then return {} end
-            local content = f:read("*all"); f:close()
+            local content = f:read("*all")
+            f:close()
             local data = hs.json.decode(content or "")
             return type(data) == "table" and data or {}
         end
 
-        -- Merges a patch into ms_theme.json and reloads. An empty-string value
-        -- clears the key, which is how the editor reverts one back to default.
-        -- Everything written here still passes through loadTheme's validation,
-        -- so an out-of-range radius or a junk hex is dropped on the way in.
         ms.saveTheme = function(patch)
             if type(patch) ~= "table" then return false end
             local data = ms.readThemeFile()
@@ -2111,13 +1707,12 @@ return function(ms)
             end
             local f = io.open(themePath, "w")
             if not f then return false end
-            f:write(hs.json.encode(data, true)); f:close()
+            f:write(hs.json.encode(data, true))
+            f:close()
             ms.loadTheme()
             return true
         end
 
-        -- Clears the theme back to defaults, keeping a .bak so a hand-authored
-        -- file is recoverable.
         ms.resetTheme = function()
             if hs.fs.attributes(themePath) then
                 os.rename(themePath, themePath .. ".bak")
@@ -2182,7 +1777,10 @@ return function(ms)
                 socdEnabled      = false,
                 socdMode         = "lastWins",
 
-                trackpadHoldKeys = { left = "n", right = "j" },
+                trackpadHoldKeys = {
+                    left = "n",
+                    right = "j",
+                },
                 soundEnabled     = true,
                 soundVolume      = 100,
                 soundAssign      = {},
@@ -2190,8 +1788,12 @@ return function(ms)
                 macros           = {},
                 macroLabEnabled  = true,
                 shell            = {
-                    x = nil, y = nil, w = 900, h = 600,
-                    lastPanel = "macros", visible = false,
+                    x = nil,
+                    y = nil,
+                    w = 900,
+                    h = 600,
+                    lastPanel = "macros",
+                    visible = false,
                 },
             }
             if ms.macroDefaults then
@@ -2228,10 +1830,12 @@ return function(ms)
         local function moveFile(src, dst)
             local f = io.open(src, "r")
             if not f then return false, "cannot read " .. src end
-            local content = f:read("*all"); f:close()
+            local content = f:read("*all")
+            f:close()
             local g = io.open(dst, "w")
             if not g then return false, "cannot write " .. dst end
-            g:write(content); g:close()
+            g:write(content)
+            g:close()
             os.remove(src)
             return true
         end
@@ -2291,7 +1895,7 @@ return function(ms)
                 _co,
                 function()
                     _hookFires = _hookFires + 1
-                    if _hookFires > 2000 then  -- 2000 × 1000 = ~2 M VM instructions
+                    if _hookFires > 2000 then
                         error("readMacroMeta: instruction limit exceeded (possible infinite loop in " .. filePath .. ")")
                     end
                 end,
@@ -2299,7 +1903,7 @@ return function(ms)
                 1000
             )
 
-            coroutine.resume(_co)  -- errors and the watchdog error alike are harmless here
+            coroutine.resume(_co)
             return captured.macroMeta
         end
 
@@ -2309,7 +1913,8 @@ return function(ms)
             if not ms._profilesDirty and _profilesCache then return _profilesCache end
             ms._profilesDirty = false
             local list = {}
-            if not hs.fs.attributes(profilesPath) then _profilesCache = list; return list end
+            if not hs.fs.attributes(profilesPath) then _profilesCache = list
+            return list end
             for entry in hs.fs.dir(profilesPath) do
                 if entry ~= "." and entry ~= ".." then
                     local attr = hs.fs.attributes(profilesPath .. entry)
@@ -2325,7 +1930,8 @@ return function(ms)
             if activeName ~= "" and hs.fs.attributes(profilesPath .. activeName) then
                 local found = false
                 for _, p in ipairs(list) do
-                    if p == activeName then found = true; break end
+                    if p == activeName then found = true
+                    break end
                 end
                 if not found then
                     table.insert(list, activeName)
@@ -2360,11 +1966,12 @@ return function(ms)
                     ms.alert("Profile switch failed: cannot read target profile.", 5)
                     return
                 end
-                targetSrc = tf:read("*all"); tf:close()
+                targetSrc = tf:read("*all")
+                tf:close()
                 switchErrs = auditMacros(targetSrc)
                 if #switchErrs > 0 then
-                    ms.alert("Profile switch rejected — security scan failed:\n  • "
-                        .. table.concat(switchErrs, "\n  • "), 8)
+                    ms.alert("Profile switch rejected, security scan failed:\n  - "
+                        .. table.concat(switchErrs, "\n  - "), 8)
                     return
                 end
             end
@@ -2374,7 +1981,6 @@ return function(ms)
             hs.fs.mkdir(profilesPath)
             hs.fs.mkdir(profilesPath .. currentName)
 
-            -- Archive current macros (if any)
             local currentHasMacros = hs.fs.attributes(macrosPath) ~= nil
             if currentHasMacros then
                 local ok, err = moveFile(macrosPath, profilesPath .. currentName .. "/ms_macros.lua")
@@ -2386,12 +1992,10 @@ return function(ms)
             local hadSettings = hs.fs.attributes(jsonPath)   and moveFile(jsonPath,    profilesPath .. currentName .. "/ms_settings.json")
             local hadDefaults = hs.fs.attributes(defaultPath) and moveFile(defaultPath, profilesPath .. currentName .. "/ms_settings_default.json")
             local hadTheme    = hs.fs.attributes(themePath)   and moveFile(themePath,   profilesPath .. currentName .. "/ms_theme.json")
-            -- Archive current profile's sounds
             local curSoundsDir = profilesPath .. currentName .. "/sounds/"
             moveDirContents(SoundActiveDir, curSoundsDir .. "active/")
             moveDirContents(SoundMacroDir,  curSoundsDir .. "macro/")
 
-            -- Activate target macros (if any)
             if hasMacros then
                 local ok, err = moveFile(profilesPath .. targetName .. "/ms_macros.lua", macrosPath)
                 if not ok then
@@ -2414,7 +2018,6 @@ return function(ms)
             if hs.fs.attributes(profilesPath .. targetName .. "/ms_theme.json") then
                 moveFile(profilesPath .. targetName .. "/ms_theme.json", themePath)
             end
-            -- Restore target profile's sounds
             local tgtSoundsDir = profilesPath .. targetName .. "/sounds/"
             moveDirContents(tgtSoundsDir .. "active/", SoundActiveDir)
             moveDirContents(tgtSoundsDir .. "macro/",  SoundMacroDir)
@@ -2443,11 +2046,11 @@ return function(ms)
                             while j <= n do
                                 local ch = src:sub(j, j)
                                 if ch == "\\" then
-                                    j = j + 2       -- skip escape + the escaped char
+                                    j = j + 2
                                 elseif ch == c then
-                                    break           -- found unescaped closing quote
+                                    break
                                 elseif ch == "\n" then
-                                    break           -- unterminated string
+                                    break
                                 else
                                     j = j + 1
                                 end
@@ -2459,7 +2062,7 @@ return function(ms)
 
                     elseif c == "-" and src:sub(i + 1, i + 1) == "-" then
                         -- Comment --
-                            local j      = i + 2   -- first char after --
+                            local j      = i + 2
                             local isLong = false
                             if src:sub(j, j) == "[" then
                                 local eq = 0
@@ -2567,7 +2170,7 @@ return function(ms)
                             local snip = clean:sub(found, math.min(#clean, found+35))
                                             :gsub("%s+", " ")
                             table.insert(errs, "disallowed path: " .. snip)
-                            break  -- one error per prefix is enough
+                            break
                         end
                         pos = found + 1
                     end
@@ -2596,7 +2199,8 @@ return function(ms)
             local target = hs.application.get(ms._targetApp)
             local selectedPath
             for _, v in pairs(result or {}) do
-                if type(v) == "string" then selectedPath = v; break end
+                if type(v) == "string" then selectedPath = v
+                break end
             end
             if not selectedPath then
                 if target then pcall(function() target:activate() end) end
@@ -2624,7 +2228,8 @@ return function(ms)
                     ms.alert("Could not read the selected file.", 3)
                     return
                 end
-                local content = f:read("*all"); f:close()
+                local content = f:read("*all")
+                f:close()
                 local auditErrs = auditMacros(content)
                 if #auditErrs > 0 then
                     if target then pcall(function() target:activate() end) end
@@ -2636,7 +2241,8 @@ return function(ms)
                 local copied = false
                 local g = io.open(dst, "wb")
                 if g then
-                    g:write(content); g:close()
+                    g:write(content)
+                    g:close()
                     copied = true
                 end
                 if not copied then
@@ -2710,13 +2316,15 @@ return function(ms)
                 local tpl = io.open(templatePath, "r")
                 local blankSrc
                 if tpl then
-                    blankSrc = tpl:read("*a"); tpl:close()
+                    blankSrc = tpl:read("*a")
+                    tpl:close()
                 else
                     blankSrc = 'ms.macroMeta = {\n    name    = "My Macros",\n    author  = "",\n    website = "",\n}\n'
                 end
                 local mf = io.open(macrosPath, "w")
                 if mf then
-                    mf:write(blankSrc); mf:close()
+                    mf:write(blankSrc)
+                    mf:close()
                 else
                     ms.alert("Could not write blank macros file.", 3)
                     return
@@ -2757,7 +2365,8 @@ return function(ms)
             local existing = getProfiles()
             local found = false
             for _, p in ipairs(existing) do
-                if p == folderName then found = true; break end
+                if p == folderName then found = true
+                break end
             end
             if not found then
                 ms.alert("No saved profile named \"" .. name .. "\" found.\nUse Save as New Profile instead.", 4)
@@ -2800,7 +2409,8 @@ return function(ms)
             local _, cpOk = hs.execute("/bin/cp " .. sq(macrosPath) .. " " .. sq(tmpDir .. "ms_macros.lua"))
             if not hs.fs.attributes(tmpDir .. "ms_macros.lua") then
                 ms.alert("Export failed: could not read ms_macros.lua.", 4)
-                os.execute("rm -rf " .. sq(tmpDir)); return
+                os.execute("rm -rf " .. sq(tmpDir))
+                return
             end
             if hs.fs.attributes(jsonPath) then
                 hs.execute("/bin/cp " .. sq(jsonPath) .. " " .. sq(tmpDir .. "ms_settings.json"))
@@ -2811,16 +2421,14 @@ return function(ms)
             if hs.fs.attributes(themePath) then
                 hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(tmpDir .. "ms_theme.json"))
             end
-            -- Bundle theming sounds (preserving subdirectory structure)
             local soundsDir = tmpDir .. "sounds/"
             local soundsCopied = 0
-            local bundledPaths = {}  -- deduplicate by relative path
+            local bundledPaths = {}
             for _, soundName in pairs(ms.soundAssign or {}) do
                 if type(soundName) == "string" and ms.sounds then
                     local soundPath = ms.sounds[soundName]
                     if soundPath and hs.fs.attributes(soundPath) then
                         local filename = soundPath:match("([^/\\]+)$")
-                        -- Determine subdirectory based on source path
                         local subdir = ""
                         pcall(function()
                             if soundPath:sub(1, #SoundActiveDir) == SoundActiveDir then
@@ -2840,9 +2448,7 @@ return function(ms)
                     end
                 end
             end
-            -- Bundle macro sounds (only those referenced in soundAssign)
             local macroCopied = 0
-            -- Build set of sound names that map to macro/ paths
             local usedMacroSounds = {}
             for _, soundName in pairs(ms.soundAssign or {}) do
                 if type(soundName) == "string" and ms.macroSounds and ms.macroSounds[soundName] then
@@ -2862,7 +2468,6 @@ return function(ms)
                     end
                 end
             end
-            -- Bundle fonts referenced by the theme
             local fontsCopied = 0
             do
                 local fontName = (ms._theme and ms._theme.font) or nil
@@ -2909,12 +2514,16 @@ return function(ms)
             local result = hs.dialog.chooseFileOrFolder(
                 "Select a .mspkg profile package to import",
                 os.getenv("HOME") .. "/Downloads/",
-                true, false, false, { "mspkg", "zip" }
+                true, false, false, {
+                    "mspkg",
+                    "zip",
+                }
             )
             local target = hs.application.get(ms._targetApp)
             local selectedPath
             for _, v in pairs(result or {}) do
-                if type(v) == "string" then selectedPath = v; break end
+                if type(v) == "string" then selectedPath = v
+                break end
             end
             if not selectedPath then
                 if target then pcall(function() target:activate() end) end
@@ -2926,35 +2535,37 @@ return function(ms)
             os.execute("rm -rf " .. sq(tmpDir))
             os.execute("mkdir -p " .. sq(tmpDir))
             hs.execute("unzip -o " .. sq(selectedPath) .. " -d " .. sq(tmpDir) .. " 2>/dev/null")
-            -- Detect base directory (handles zips with or without a root subfolder)
             local baseDir = tmpDir
             local macroSrc = tmpDir .. "ms_macros.lua"
             if not hs.fs.attributes(macroSrc) then
-                -- Search one level deep for ms_macros.lua or ms_settings.json
                 local found = false
                 for entry in hs.fs.dir(tmpDir) do
                     if entry ~= "." and entry ~= ".." then
                         local sub = tmpDir .. entry .. "/"
                         if hs.fs.attributes(sub) and hs.fs.attributes(sub .. "ms_macros.lua") then
-                            baseDir = sub; macroSrc = sub .. "ms_macros.lua"; found = true; break
+                            baseDir = sub
+                            macroSrc = sub .. "ms_macros.lua"
+                            found = true
+                            break
                         end
                     end
                 end
                 if not found then
-                    -- No ms_macros.lua anywhere — check for settings-only package
                     for entry in hs.fs.dir(tmpDir) do
                         if entry ~= "." and entry ~= ".." then
                             local sub = tmpDir .. entry .. "/"
                             if hs.fs.attributes(sub) and hs.fs.attributes(sub .. "ms_settings.json") then
-                                baseDir = sub; found = true; break
+                                baseDir = sub
+                                found = true
+                                break
                             end
                         end
                     end
                     if not found and hs.fs.attributes(tmpDir .. "ms_settings.json") then
-                        baseDir = tmpDir; found = true
+                        baseDir = tmpDir
+                        found = true
                     end
                     if found then
-                        -- Settings-only import: use the zip filename as profile name
                         local zipName = selectedPath:match("([^/]+)%.mspkg$") or selectedPath:match("([^/]+)%.zip$") or "imported"
                         local folderName = sanitizeName(zipName)
                         hs.execute("mkdir -p " .. sq(profilesPath .. folderName))
@@ -2972,31 +2583,37 @@ return function(ms)
                         end
                         if target then pcall(function() target:activate() end) end
                         ms.alert("Imported settings as \"" .. zipName .. "\".\n(no macros in package)", 4)
-                        os.execute("rm -rf " .. sq(tmpDir)); return
+                        os.execute("rm -rf " .. sq(tmpDir))
+                        return
                     end
                     if target then pcall(function() target:activate() end) end
                     ms.alert("Import failed: package does not contain ms_macros.lua or ms_settings.json.", 5)
-                    os.execute("rm -rf " .. sq(tmpDir)); return
+                    os.execute("rm -rf " .. sq(tmpDir))
+                    return
                 end
             end
             local mf = io.open(macroSrc, "rb")
             if not mf then
                 if target then pcall(function() target:activate() end) end
                 ms.alert("Import failed: could not read ms_macros.lua from package.", 4)
-                os.execute("rm -rf " .. sq(tmpDir)); return
+                os.execute("rm -rf " .. sq(tmpDir))
+                return
             end
-            local content = mf:read("*all"); mf:close()
+            local content = mf:read("*all")
+            mf:close()
             local auditErrs = auditMacros(content)
             if #auditErrs > 0 then
                 if target then pcall(function() target:activate() end) end
                 ms.alert("Import rejected \xe2\x80\x94 security scan failed:\n  \xe2\x80\xa2 " .. table.concat(auditErrs, "\n  \xe2\x80\xa2 "), 8)
-                os.execute("rm -rf " .. sq(tmpDir)); return
+                os.execute("rm -rf " .. sq(tmpDir))
+                return
             end
             local meta = readMacroMeta(macroSrc)
             if not meta or not meta.name or meta.name == "" then
                 if target then pcall(function() target:activate() end) end
                 ms.alert("Import failed: could not read profile name from ms_macros.lua.", 5)
-                os.execute("rm -rf " .. sq(tmpDir)); return
+                os.execute("rm -rf " .. sq(tmpDir))
+                return
             end
             local folderName = sanitizeName(meta.name)
 
@@ -3005,7 +2622,9 @@ return function(ms)
                 local dst = profilesPath .. folderName .. "/ms_macros.lua"
                 local copied = false
                 local gf = io.open(dst, "wb")
-                if gf then gf:write(content); gf:close(); copied = true end
+                if gf then gf:write(content)
+                gf:close()
+                copied = true end
                 if not copied then
                     local _, st = hs.execute("/bin/cp " .. sq(macroSrc) .. " " .. sq(dst))
                     copied = (st == true) or (hs.fs.attributes(dst) ~= nil)
@@ -3013,7 +2632,8 @@ return function(ms)
                 if not copied then
                     if target then pcall(function() target:activate() end) end
                     ms.alert("Import failed: could not write to profiles folder.\nGrant Hammerspoon Full Disk Access if needed.", 5)
-                    os.execute("rm -rf " .. sq(tmpDir)); return
+                    os.execute("rm -rf " .. sq(tmpDir))
+                    return
                 end
                 local settingsSrc = baseDir .. "ms_settings.json"
                 if hs.fs.attributes(settingsSrc) then
@@ -3027,34 +2647,31 @@ return function(ms)
                 if hs.fs.attributes(themeSrc) then
                     hs.execute("/bin/cp " .. sq(themeSrc) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
                 end
-                -- Import sounds (handles new subdirectory structure + legacy flat format)
                 local soundsAdded = {}
                 local macroAdded = {}
-                -- Prefix each sound directory carries (see ms._autoSortSounds).
-                -- Packages ship sounds either bare or prefixed; imports normalize to
-                -- the destination's prefix so the library keeps one naming scheme.
                 local _sndDirPrefix = {
                     [SoundDefaultsDir] = "d_",
                     [SoundActiveDir]   = "a_",
                     [SoundMacroDir]    = "m_",
                 }
-                -- Same-name imports become numbered variants (Name, Name2, Name3) —
-                -- the existing variant convention. Past slot 3 we stop guessing and
-                -- ask which one to replace; those land here for _resolveSndConflicts.
                 local _sndVariantSlots = 3
                 local _sndConflicts = {}
 
                 local function _readFile(path)
-                    local f = io.open(path, "rb"); if not f then return nil end
-                    local d = f:read("*all"); f:close(); return d
+                    local f = io.open(path, "rb")
+                    if not f then return nil end
+                    local d = f:read("*all")
+                    f:close()
+                    return d
                 end
                 local function _writeFile(path, data)
-                    local f = io.open(path, "wb"); if not f then return false end
-                    f:write(data); f:close(); return true
+                    local f = io.open(path, "wb")
+                    if not f then return false end
+                    f:write(data)
+                    f:close()
+                    return true
                 end
 
-                -- Place one incoming sound file into dstDir, honouring the prefix and
-                -- the Name/Name2/Name3 variant slots.
                 local function _placeSnd(srcSnd, dstDir, file, added)
                     if hs.fs.attributes(srcSnd, "mode") ~= "file" then return end
                     if not hs.fs.attributes(dstDir) then
@@ -3064,8 +2681,6 @@ return function(ms)
                     local stem = file:match("^(.+)%.[^%.]+$") or file
                     local ext  = file:match("%.([^%.]+)$")
                     ext = ext and ("." .. ext) or ""
-                    -- Normalize to the destination prefix, and strip any variant number
-                    -- the package already carried so it re-slots against what we have.
                     if pfx and stem:sub(1, #pfx) ~= pfx then stem = pfx .. stem end
                     local base = stem:match("^(.-)%d+$") or stem
 
@@ -3082,7 +2697,7 @@ return function(ms)
                         if not hs.fs.attributes(p) then
                             free = free or i
                         elseif _readFile(p) == data then
-                            return  -- byte-identical: same sound, not a new variant
+                            return
                         end
                     end
                     if free then
@@ -3092,8 +2707,11 @@ return function(ms)
                         end
                     else
                         table.insert(_sndConflicts, {
-                            data = data, dir = dstDir, base = base,
-                            ext = ext, added = added,
+                            data = data,
+                            dir = dstDir,
+                            base = base,
+                            ext = ext,
+                            added = added,
                         })
                     end
                 end
@@ -3108,7 +2726,6 @@ return function(ms)
                 end
                 local soundsDir = baseDir .. "sounds/"
                 if hs.fs.attributes(soundsDir) then
-                    -- New format: subdirectory structure (sounds/active/, sounds/defaults/, sounds/macro/)
                     local hasSubdirs = hs.fs.attributes(soundsDir .. "active/")
                         or hs.fs.attributes(soundsDir .. "defaults/")
                         or hs.fs.attributes(soundsDir .. "macro/")
@@ -3117,7 +2734,6 @@ return function(ms)
                         pcall(function() _importSndDir(soundsDir .. "defaults/", SoundDefaultsDir, soundsAdded) end)
                         _importSndDir(soundsDir .. "macro/",    SoundMacroDir,    macroAdded)
                     else
-                        -- Legacy format: flat sounds/ directory — prompt user for destination
                         local hasSounds = false
                         local legacyFiles = {}
                         for file in hs.fs.dir(soundsDir) do
@@ -3129,11 +2745,9 @@ return function(ms)
                             end
                         end
                         if hasSounds then
-                            -- Auto-sort by prefix: d_* → defaults, a_* → active, m_* → macro
-                            -- Unprefixed files go to active (legacy default)
                             for _, f in ipairs(legacyFiles) do
                                 local name = f:match("^(.+)%.[^%.]+$") or f
-                                local dest = SoundActiveDir  -- default for unprefixed
+                                local dest = SoundActiveDir
                                 if name:sub(1, 2) == "d_" then
                                     dest = SoundDefaultsDir
                                 elseif name:sub(1, 2) == "m_" then
@@ -3147,7 +2761,6 @@ return function(ms)
                         end
                     end
                 end
-                -- Legacy: import from separate macro/ directory (old package format)
                 local macroSrc = baseDir .. "macro/"
                 if hs.fs.attributes(macroSrc) then
                     _importSndDir(macroSrc, SoundMacroDir, macroAdded)
@@ -3158,9 +2771,6 @@ return function(ms)
                     ms._discoverSounds()
                 end
 
-                -- Sounds whose Name/Name2/Name3 slots are all taken by different audio.
-                -- Ask which slot to give up, one at a time — ms.ui.prompt has a single
-                -- callback slot, so these have to be chained rather than looped.
                 local function _resolveSndConflicts(idx)
                     local c = _sndConflicts[idx]
                     if not c then
@@ -3195,13 +2805,12 @@ return function(ms)
                                 table.insert(c.added, name:match("^(.+)%.[^%.]+$") or name)
                             end
                         elseif r.confirmed then
-                            ms.alert("Invalid slot — skipped \"" .. c.base .. "\".", 2)
+                            ms.alert("Invalid slot, skipped \"" .. c.base .. "\".", 2)
                         end
                         _resolveSndConflicts(idx + 1)
                     end)
                 end
                 if #_sndConflicts > 0 then _resolveSndConflicts(1) end
-                -- Auto-install fonts from package
                 local fontsAdded = 0
                 do
                     local fontsDir = baseDir .. "fonts/"
@@ -3217,9 +2826,12 @@ return function(ms)
                                     if not hs.fs.attributes(dstFont) then
                                         local ff = io.open(srcFont, "rb")
                                         if ff then
-                                            local fdata = ff:read("*all"); ff:close()
+                                            local fdata = ff:read("*all")
+                                            ff:close()
                                             local of = io.open(dstFont, "wb")
-                                            if of then of:write(fdata); of:close(); fontsAdded = fontsAdded + 1 end
+                                            if of then of:write(fdata)
+                                            of:close()
+                                            fontsAdded = fontsAdded + 1 end
                                         end
                                     end
                                 end
@@ -3267,7 +2879,6 @@ return function(ms)
             end
         end
 
-        -- Expose profile management functions for MsUI action handlers
         ms.sanitizeName       = sanitizeName
         ms.getProfiles        = getProfiles
         ms.switchProfile      = switchProfile
@@ -3281,7 +2892,6 @@ return function(ms)
     -- System Integrity --
         ms.integrity = {}
 
-        -- Files to track — ms_core.lua + all spoon init files
         local _integrityFiles = nil
         ms.integrity.trackedFiles = function()
             if _integrityFiles then return _integrityFiles end
@@ -3311,25 +2921,20 @@ return function(ms)
             return nil
         end
 
-        -- Returns: table {relativePath = hash64} or nil
-        -- Backward compat: if file contains a single 64-char hex line (old format),
-        -- returns {"ms_core.lua" = hash}
         ms.integrity.readTrustedManifest = function()
             local f = io.open(trustedHashPath, "r")
             if not f then return nil end
-            local raw = f:read("*all"); f:close()
+            local raw = f:read("*all")
+            f:close()
             if not raw or raw == "" then return nil end
 
-            -- Old format: single hex hash
             local single = raw:match("^%s*([0-9a-fA-F]+)%s*$")
             if single and #single == 64 then
                 return { ["ms_core.lua"] = single:lower() }
             end
 
-            -- New format: JSON object
             local ok, tbl = pcall(hs.json.decode, raw)
             if ok and type(tbl) == "table" then
-                -- Normalize keys to relative paths and values to lowercase
                 local norm = {}
                 for k, v in pairs(tbl) do
                     if type(v) == "string" and #v == 64 then
@@ -3343,16 +2948,19 @@ return function(ms)
             return nil
         end
 
-        -- Writes a manifest table {relativePath = hash64}
         ms.integrity.writeTrustedManifest = function(manifest)
             local ok, json = pcall(hs.json.encode, manifest)
             if not ok then
-                ms.dev.log({ type = "error", event = "hash_seed_failed" })
+                ms.dev.log({
+                    type = "error",
+                    event = "hash_seed_failed",
+                })
                 return false
             end
             local f = io.open(trustedHashPath, "w")
             if f then
-                f:write(json .. "\n"); f:close()
+                f:write(json .. "\n")
+                f:close()
                 local n = 0
                 for _ in pairs(manifest) do n = n + 1 end
                 ms.dev.log({
@@ -3362,17 +2970,18 @@ return function(ms)
                 })
                 return true
             end
-            ms.dev.log({ type = "error", event = "hash_seed_failed" })
+            ms.dev.log({
+                type = "error",
+                event = "hash_seed_failed",
+            })
             return false
         end
 
-        -- Backward compat: readTrustedHash returns the ms_core.lua hash
         ms.integrity.readTrustedHash = function()
             local m = ms.integrity.readTrustedManifest()
             return m and m["ms_core.lua"] or nil
         end
 
-        -- Backward compat: writeTrustedHash writes a single ms_core.lua entry
         ms.integrity.writeTrustedHash = function(hash)
             return ms.integrity.writeTrustedManifest({ ["ms_core.lua"] = hash })
         end
@@ -3382,18 +2991,20 @@ return function(ms)
         end
 
         local _intCache         = {
-            status  = nil,   -- "trusted" | "mismatch" | "uninitialized"
-            details = nil,   -- {relPath = {cur=hash, trusted=hash, status=...}}
+            status  = nil,
+            details = nil,
             t       = 0,
         }
         local _intHashInProgress = false
 
         ms.integrity.invalidateCache = function()
             _intCache.t = 0
-            ms.dev.log({ type = "system", event = "integrity_cache_invalidated" })
+            ms.dev.log({
+                type = "system",
+                event = "integrity_cache_invalidated",
+            })
         end
 
-        -- Check all tracked files against the trusted manifest
         ms.integrity.check = function()
             local now = os.time()
             if _intCache.status ~= nil and (now - _intCache.t) < 60 then
@@ -3416,7 +3027,11 @@ return function(ms)
 
             if pending == 0 then
                 _intHashInProgress = false
-                _intCache = { status = "uninitialized", details = {}, t = now }
+                _intCache = {
+                    status = "uninitialized",
+                    details = {},
+                    t = now,
+                }
                 return "uninitialized"
             end
 
@@ -3435,7 +3050,11 @@ return function(ms)
                         anyMismatch = true
                         allOk = false
                     end
-                    details[rel] = { cur = cur, trusted = tru, status = fileStatus }
+                    details[rel] = {
+                        cur = cur,
+                        trusted = tru,
+                        status = fileStatus,
+                    }
 
                     pending = pending - 1
                     if pending == 0 and not done then
@@ -3463,21 +3082,27 @@ return function(ms)
                         })
                         if status == "mismatch" then hs.reload() end
                     end
-                end, {"-a", "256", absPath})
+                end, {
+                    "-a",
+                    "256",
+                    absPath,
+                })
                 if _t then
                     _t:start()
                 else
-                    details[rel] = { cur = nil, trusted = trusted and trusted[rel] or nil, status = "error" }
+                    details[rel] = {
+                        cur = nil,
+                        trusted = trusted and trusted[rel] or nil,
+                        status = "error",
+                    }
                     allOk = false
                     pending = pending - 1
                 end
             end
 
-            -- Return current cached status while async checks run
             return _intCache.status or "uninitialized"
         end
 
-        -- Trust all currently tracked files
         ms.integrity.trustCurrent = function()
             local files = ms.integrity.trackedFiles()
             local manifest = {}
@@ -3512,14 +3137,24 @@ return function(ms)
 
             local topDir = nil
             local dh = io.popen("ls -d '" .. bundleDir .. "'/mudscript-* 2>/dev/null | head -1")
-            if dh then topDir = dh:read("*l"); dh:close() end
+            if dh then topDir = dh:read("*l")
+            dh:close() end
             if not topDir or topDir == "" then
                 topDir = bundleDir
             end
             if not topDir:match("/$") then topDir = topDir .. "/" end
 
-            local replaceList = { "ms_core.lua", "init.lua", "ui", "bin", "Spoons" }
-            local templateList = { "ms_macros.lua", "profiles/Default" }
+            local replaceList = {
+                "ms_core.lua",
+                "init.lua",
+                "ui",
+                "bin",
+                "Spoons",
+            }
+            local templateList = {
+                "ms_macros.lua",
+                "profiles/Default",
+            }
 
             os.execute("mkdir -p '" .. archivePath .. "'")
 
@@ -3539,7 +3174,6 @@ return function(ms)
                 end
             end
 
-            -- Copy per-file manifest from bundle (uses resolved topDir, not glob)
             local _fmSrc = topDir .. "data/.ms_file_manifest.json"
             local _fmDst = hsDir .. "data/.ms_file_manifest.json"
             if hs.fs.attributes(_fmSrc) then
@@ -3547,7 +3181,6 @@ return function(ms)
                 os.execute("cp '" .. _fmSrc .. "' '" .. _fmDst .. "'")
             end
 
-            -- Copy MANIFEST.json from bundle (preserves signature, bundle hash, fileManifest)
             local _mfSrc = topDir .. "MANIFEST.json"
             local _mfDst = hsDir .. "MANIFEST.json"
             if hs.fs.attributes(_mfSrc) then
@@ -3570,7 +3203,7 @@ return function(ms)
             if not manifest.signature or manifest.signature == ""
                 or not ms._updatePublicKey
                 or ms._updatePublicKey:find("PLACEHOLDER") then
-                return true  -- no signature to verify
+                return true
             end
             local _tmpDir  = archivePath
             local _keyPath = _tmpDir .. "upd_pub.pem"
@@ -3582,20 +3215,25 @@ return function(ms)
                 :gsub("\n[%s]+", "\n")
                 :gsub("[%s]+$", "\n")
             local _kf = io.open(_keyPath, "w")
-            if _kf then _kf:write(_keyContent); _kf:close() end
+            if _kf then _kf:write(_keyContent)
+            _kf:close() end
             local _sf = io.open(_sigPath .. ".b64", "w")
-            if _sf then _sf:write(manifest.signature); _sf:close() end
+            if _sf then _sf:write(manifest.signature)
+            _sf:close() end
             hs.execute("base64 -D -i '" .. _sigPath .. ".b64' -o '" .. _sigPath .. "'")
             os.remove(_sigPath .. ".b64")
             local _signTarget = manifest.bundle and manifest.bundle.sha256 or manifest.sha256
             local _mf = io.open(_msgPath, "w")
-            if _mf then _mf:write(_signTarget:lower()); _mf:close() end
+            if _mf then _mf:write(_signTarget:lower())
+            _mf:close() end
             local _out, _ok = hs.execute(
                 "openssl dgst -sha256 -verify '" .. _keyPath ..
                 "' -signature '" .. _sigPath ..
                 "' '" .. _msgPath .. "' 2>&1"
             )
-            os.remove(_keyPath); os.remove(_sigPath); os.remove(_msgPath)
+            os.remove(_keyPath)
+            os.remove(_sigPath)
+            os.remove(_msgPath)
             if not _ok then
                 ms.dev.log({
                     type   = "error",
@@ -3605,7 +3243,10 @@ return function(ms)
                 ms.alert("Update aborted: signature verification failed.\n" .. tostring(_out), 12)
                 return false
             end
-            ms.dev.log({ type = "system", event = "signature_verified" })
+            ms.dev.log({
+                type = "system",
+                event = "signature_verified",
+            })
             return true
         end
 
@@ -3690,7 +3331,6 @@ return function(ms)
                     end
                     release = data[1]
                     local bestIdx = 1
-                    -- Find the release with the highest version number
                     for i = 2, #data do
                         if _remoteIsNewer(
                             data[bestIdx].tag_name or "",
@@ -3744,33 +3384,36 @@ return function(ms)
         local function _fetchArtifactInfo(callback)
             local repo = ms._testingRepo or "mudbourn/mudscript"
             local workflow = ms._testingWorkflow or "testing"
-            -- Load token from restricted file if not in memory
             local token = ms._githubToken
             if not token or token == "" then
                 local tokenPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_github_token"
                 local f = io.open(tokenPath, "r")
-                if f then token = f:read("*l"); f:close() end
+                if f then token = f:read("*l")
+                f:close() end
                 if token and token ~= "" then ms._githubToken = token end
             end
             if not token or token == "" then
-                ms.dev.log({ type = "error", event = "artifact_fetch_failed", reason = "no_token" })
+                ms.dev.log({
+                    type = "error",
+                    event = "artifact_fetch_failed",
+                    reason = "no_token",
+                })
                 if callback then pcall(callback, nil) end
                 return
             end
 
-            -- Read local base version (strip -pre.N suffix)
             local baseVersion = "0.0.0"
             do
                 local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
                 if lf then
-                    local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                    local ok, lm = pcall(hs.json.decode, lf:read("*all"))
+                    lf:close()
                     if ok and lm and lm.version then
                         baseVersion = lm.version:gsub("%-pre[%.%-]%d+$", "")
                     end
                 end
             end
 
-            -- Step 1: Get latest completed workflow run
             local runsURL = "https://api.github.com/repos/" .. repo
                 .. "/actions/workflows/" .. workflow .. ".yml/runs?per_page=1&status=completed"
             local headers = {
@@ -3779,7 +3422,12 @@ return function(ms)
             }
             hs.http.asyncGet(runsURL, headers, function(code, body, _)
                 if code ~= 200 or not body then
-                    ms.dev.log({ type = "error", event = "artifact_fetch_failed", reason = "runs_http", code = code })
+                    ms.dev.log({
+                        type = "error",
+                        event = "artifact_fetch_failed",
+                        reason = "runs_http",
+                        code = code,
+                    })
                     if callback then pcall(callback, nil) end
                     return
                 end
@@ -3792,12 +3440,16 @@ return function(ms)
                 local runId = run.id
                 local runNumber = run.run_number
 
-                -- Step 2: Get artifacts for this run
                 local artURL = "https://api.github.com/repos/" .. repo
                     .. "/actions/runs/" .. runId .. "/artifacts"
                 hs.http.asyncGet(artURL, headers, function(code2, body2, _)
                     if code2 ~= 200 or not body2 then
-                        ms.dev.log({ type = "error", event = "artifact_fetch_failed", reason = "artifacts_http", code = code2 })
+                        ms.dev.log({
+                            type = "error",
+                            event = "artifact_fetch_failed",
+                            reason = "artifacts_http",
+                            code = code2,
+                        })
                         if callback then pcall(callback, nil) end
                         return
                     end
@@ -3806,7 +3458,6 @@ return function(ms)
                         if callback then pcall(callback, nil) end
                         return
                     end
-                    -- Find the macOS artifact
                     for _, art in ipairs(artData.artifacts) do
                         if art.name and art.name:match("macos") then
                             local downloadURL = "https://api.github.com/repos/" .. repo
@@ -3828,7 +3479,6 @@ return function(ms)
                             return
                         end
                     end
-                    -- No macOS artifact found, try any
                     for _, art in ipairs(artData.artifacts) do
                         if art.name then
                             local downloadURL = "https://api.github.com/repos/" .. repo
@@ -3844,7 +3494,11 @@ return function(ms)
                             return
                         end
                     end
-                    ms.dev.log({ type = "error", event = "artifact_fetch_failed", reason = "no_artifact" })
+                    ms.dev.log({
+                        type = "error",
+                        event = "artifact_fetch_failed",
+                        reason = "no_artifact",
+                    })
                     if callback then pcall(callback, nil) end
                 end)
             end)
@@ -3898,7 +3552,8 @@ return function(ms)
                         ms.alert("Update failed: could not write temp file.", 4)
                         return
                     end
-                    tmpF:write(fBody); tmpF:close()
+                    tmpF:write(fBody)
+                    tmpF:close()
                     local tmpExtract = archivePath .. "ms_bundle_extract/"
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     os.execute("mkdir -p '" .. tmpExtract .. "'")
@@ -3920,11 +3575,11 @@ return function(ms)
                         ms.alert("Update failed: could not extract bundle.", 5)
                         return
                     end
-                    -- Read MANIFEST.json from extracted bundle for signature verification
                     local manifestPath = tmpExtract .. "MANIFEST.json"
                     local topDir = nil
                     local dh = io.popen("ls -d '" .. tmpExtract .. "'/mudscript-* 2>/dev/null | head -1")
-                    if dh then topDir = dh:read("*l"); dh:close() end
+                    if dh then topDir = dh:read("*l")
+                    dh:close() end
                     if topDir and topDir ~= "" then
                         if not topDir:match("/$") then topDir = topDir .. "/" end
                         local altManifest = topDir .. "MANIFEST.json"
@@ -3933,7 +3588,8 @@ return function(ms)
                     local manifest = nil
                     local mf = io.open(manifestPath, "r")
                     if mf then
-                        local ok, m = pcall(hs.json.decode, mf:read("*all")); mf:close()
+                        local ok, m = pcall(hs.json.decode, mf:read("*all"))
+                        mf:close()
                         if ok then manifest = m end
                     end
                     if manifest and not _verifySignature(manifest) then
@@ -3946,7 +3602,8 @@ return function(ms)
                     local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
                     if _sp then _sp:close() end
                     local ok = _applyBundleUpdate(tmpExtract, timestamp)
-                    ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
+                    ms._updateInProgress = false
+                    os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     if not ok then
                         ms.dev.log({
@@ -3964,8 +3621,6 @@ return function(ms)
                         version = newVersion,
                         format  = "bundle",
                     })
-                    -- Re-seed trusted manifest from all tracked files
-                    -- (MANIFEST.json and .ms_file_manifest.json were copied from bundle)
                     ms.integrity.trustCurrent()
                     ms.integrity.invalidateCache()
                     ms.alert("Updated to v" .. newVersion .. ".\\nReloading in 3 seconds\\xe2\\x80\\xa6", 5, true)
@@ -4008,12 +3663,12 @@ return function(ms)
                 end
                 local newVersion = info.version
 
-                -- Check if the remote version is actually newer
                 local _localVer
                 do
                     local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
                     if lf then
-                        local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                        local ok, lm = pcall(hs.json.decode, lf:read("*all"))
+                        lf:close()
                         if ok and lm and lm.version then _localVer = lm.version end
                     end
                 end
@@ -4050,7 +3705,8 @@ return function(ms)
                         ms.alert("Update failed: could not write temp file.", 4)
                         return
                     end
-                    tmpF:write(fBody); tmpF:close()
+                    tmpF:write(fBody)
+                    tmpF:close()
                     local tmpExtract = archivePath .. "ms_bundle_extract/"
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     os.execute("mkdir -p '" .. tmpExtract .. "'")
@@ -4072,11 +3728,11 @@ return function(ms)
                         ms.alert("Update failed: could not extract bundle.", 5)
                         return
                     end
-                    -- Read MANIFEST.json from extracted bundle for signature verification
                     local manifestPath = tmpExtract .. "MANIFEST.json"
                     local topDir = nil
                     local dh = io.popen("ls -d '" .. tmpExtract .. "'/mudscript-* 2>/dev/null | head -1")
-                    if dh then topDir = dh:read("*l"); dh:close() end
+                    if dh then topDir = dh:read("*l")
+                    dh:close() end
                     if topDir and topDir ~= "" then
                         if not topDir:match("/$") then topDir = topDir .. "/" end
                         local altManifest = topDir .. "MANIFEST.json"
@@ -4085,7 +3741,8 @@ return function(ms)
                     local manifest = nil
                     local mf = io.open(manifestPath, "r")
                     if mf then
-                        local ok, m = pcall(hs.json.decode, mf:read("*all")); mf:close()
+                        local ok, m = pcall(hs.json.decode, mf:read("*all"))
+                        mf:close()
                         if ok then manifest = m end
                     end
                     if manifest and not _verifySignature(manifest) then
@@ -4098,7 +3755,8 @@ return function(ms)
                     local _sp = io.open(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending", "w")
                     if _sp then _sp:close() end
                     local ok = _applyBundleUpdate(tmpExtract, timestamp)
-                    ms._updateInProgress = false; os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
+                    ms._updateInProgress = false
+                    os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
                     os.execute("rm -rf '" .. tmpExtract .. "'")
                     if not ok then
                         ms.dev.log({
@@ -4116,8 +3774,6 @@ return function(ms)
                         version = newVersion,
                         format  = "bundle",
                     })
-                    -- Re-seed trusted manifest from all tracked files
-                    -- (MANIFEST.json and .ms_file_manifest.json were copied from bundle)
                     ms.integrity.trustCurrent()
                     ms.integrity.invalidateCache()
                     ms.alert("Updated to v" .. newVersion .. ".\\nReloading in 3 seconds\\xe2\\x80\\xa6", 5, true)
@@ -4133,7 +3789,8 @@ return function(ms)
             do
                 local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
                 if lf then
-                    local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                    local ok, lm = pcall(hs.json.decode, lf:read("*all"))
+                    lf:close()
                     if ok and lm and lm.version then localVersion = lm.version end
                 end
             end
@@ -4175,7 +3832,8 @@ return function(ms)
             do
                 local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
                 if lf then
-                    local ok, lm = pcall(hs.json.decode, lf:read("*all")); lf:close()
+                    local ok, lm = pcall(hs.json.decode, lf:read("*all"))
+                    lf:close()
                     if ok and lm and lm.version then localVersion = lm.version end
                 end
             end
@@ -4253,9 +3911,9 @@ return function(ms)
             end
             local f = io.open(_htmlPath, "r")
             if not f then return end
-            _panel:html(f:read("*all"), _baseURL); f:close()
+            _panel:html(f:read("*all"), _baseURL)
+            f:close()
             ms.safeShow(_panel)
-            -- Error cue: a_Error when custom theming is on, d_Error when off.
             local _errSound = (not ms._customThemeDisabled and ms.sounds and ms.sounds["a_Error"])
                 or (ms.sounds and ms.sounds["d_Error"])
             if _errSound then pcall(function() ms.sound(_errSound) end) end
@@ -4267,8 +3925,6 @@ return function(ms)
                         "setHashes('" .. t .. "', '" .. c .. "')"
                     )
                     _panel:evaluateJavaScript("setPreviewMode()")
-                    -- Guardian is a security surface: only apply the custom theme
-                    -- when custom theming is enabled; otherwise leave the default look.
                     if not ms._customThemeDisabled then
                         local tj = hs.json.encode(ms._theme or {})
                         if tj then
@@ -4285,8 +3941,6 @@ return function(ms)
             end
             local def = ms.registry._defs and ms.registry._defs[id]
             local raw = ms.bindConfig[id] or (def and def.default)
-            -- Resolve derived triggers: default.type = <parentBindID> means
-            -- this bind's trigger is the parent's key + the child's mods.
             if raw and type(raw) == "table" and raw.type and ms.registry._defs[raw.type] then
                 local visited = {}
                 local accum = {}
@@ -4294,7 +3948,8 @@ return function(ms)
                     for _, m in ipairs(mods or {}) do
                         local dup = false
                         for _, e in ipairs(accum) do
-                            if e == m then dup = true; break end
+                            if e == m then dup = true
+                            break end
                         end
                         if not dup then accum[#accum+1] = m end
                     end
@@ -4309,8 +3964,11 @@ return function(ms)
                     if parentBind and type(parentBind) == "table" and parentBind.type
                         and not ms.registry._defs[parentBind.type] then
                         addMods(parentBind.mods)
-                        return { type = parentBind.type, key = parentBind.key,
-                                 button = parentBind.button, direction = parentBind.direction,
+                        return {
+                            type = parentBind.type,
+                            key = parentBind.key,
+                                 button = parentBind.button,
+                                 direction = parentBind.direction,
                                  mods = accum }
                     end
                     addMods(parentBind and parentBind.mods)
@@ -4585,7 +4243,10 @@ return function(ms)
                             if t == hs.eventtap.event.types.leftMouseDown then btn = 0
                             elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
                             else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
-                            parsed = {type="mouse", button=btn}
+                            parsed = {
+                                type="mouse",
+                                button=btn,
+                            }
                             bindStr2 = "Mouse " .. btn
                         end
 
@@ -4652,7 +4313,10 @@ return function(ms)
                             ms.alert(bind.label .. ": " .. (ms.binds[bind.id] and "ON" or "OFF"), 2, true)
                         end
                     })
-                    table.insert(rebindSub, { title = "Rebind: " .. bind.label, fn = makeRebindFn(bind) })
+                    table.insert(rebindSub, {
+                        title = "Rebind: " .. bind.label,
+                        fn = makeRebindFn(bind),
+                    })
                     table.insert(rebindSub, {
                         title = "Set Cooldown: " .. bind.label,
                         fn = function()
@@ -4710,9 +4374,14 @@ return function(ms)
                 end
 
                 table.insert(section, { title = "-" })
-                table.insert(section, { title = "Rebind", menu = rebindSub })
+                table.insert(section, {
+                    title = "Rebind",
+                    menu = rebindSub,
+                })
                 table.insert(section, { title = "-" })
-                table.insert(section, { title = "Reset All to Default...", fn = function()
+                table.insert(section, {
+                    title = "Reset All to Default...",
+                    fn = function()
                     ms.playSlot("interact")
                     ms.ui.modal({
                         title   = "Reset All to Default",
@@ -4744,11 +4413,18 @@ return function(ms)
         -- System submenu --
             local function buildSystemSubmenu()
                 local sub = {}
-                for _, id in ipairs({"enable", "disable", "toggle"}) do
+                for _, id in ipairs({
+                    "enable",
+                    "disable",
+                    "toggle",
+                }) do
                     local def = ms.systemBinds._defs[id]
                     if def then
                         local bindStr = ms.systemBinds.bindStr(id)
-                        table.insert(sub, { title = def.label .. "  " .. bindStr, disabled = true })
+                        table.insert(sub, {
+                            title = def.label .. "  " .. bindStr,
+                            disabled = true,
+                        })
                         table.insert(sub, {
                             title = "  Rebind: " .. def.label,
                             fn = function()
@@ -4763,7 +4439,9 @@ return function(ms)
                                     hs.eventtap.event.types.rightMouseDown,
                                     hs.eventtap.event.types.otherMouseDown,
                                 }, function(event)
-                                    capture:stop(); capture = nil; cancelTimer:stop()
+                                    capture:stop()
+                                    capture = nil
+                                    cancelTimer:stop()
                                     local parsed, newBindStr
                                     local t = event:getType()
                                     if t == hs.eventtap.event.types.keyDown then
@@ -4795,7 +4473,10 @@ return function(ms)
                                         if t == hs.eventtap.event.types.leftMouseDown then btn = 0
                                         elseif t == hs.eventtap.event.types.rightMouseDown then btn = 1
                                         else btn = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber) end
-                                        parsed = {type="mouse", button=btn}
+                                        parsed = {
+                                            type="mouse",
+                                            button=btn,
+                                        }
                                         newBindStr = "Mouse " .. btn
                                     end
                                     if parsed then
@@ -4825,7 +4506,9 @@ return function(ms)
                                 end)
                                 capture:start()
                                 cancelTimer = hs.timer.doAfter(15, function()
-                                    if capture then capture:stop(); capture = nil; ms.alert("Rebind timed out.", 2) end
+                                    if capture then capture:stop()
+                                    capture = nil
+                                    ms.alert("Rebind timed out.", 2) end
                                 end)
                             end
                         })
@@ -4843,14 +4526,32 @@ return function(ms)
                 end
                 table.insert(sub, { title = "-" })
                 local displayBinds = {
-                    {label = "Panic Button / Stop All",  bind = "Alt+F10"},
-                    {label = "Get Target Window Info",   bind = "Ctrl+Shift+R"},
-                    {label = "Quick Reload",              bind = "Alt+[→ Reload Options"},
-                    {label = "Full Reload",               bind = "Alt+]→ Reload Options"},
-                    {label = "Open Menu",                bind = "Alt+P"},
+                    {
+                        label = "Panic Button / Stop All",
+                        bind = "Alt+F10",
+                    },
+                    {
+                        label = "Get Target Window Info",
+                        bind = "Ctrl+Shift+R",
+                    },
+                    {
+                        label = "Quick Reload",
+                        bind = "Alt+[-> Reload Options",
+                    },
+                    {
+                        label = "Full Reload",
+                        bind = "Alt+]-> Reload Options",
+                    },
+                    {
+                        label = "Open Menu",
+                        bind = "Alt+P",
+                    },
                 }
                 for _, bind in ipairs(displayBinds) do
-                    table.insert(sub, { title = bind.label .. "  " .. bind.bind, disabled = true })
+                    table.insert(sub, {
+                        title = bind.label .. "  " .. bind.bind,
+                        disabled = true,
+                    })
                 end
                 return sub
             end
@@ -4868,7 +4569,10 @@ return function(ms)
                     end
                 })
                 table.insert(sub, { title = "-" })
-                table.insert(sub, { title = "Volume: " .. tostring(ms.soundVolume or 100) .. "%", disabled = true })
+                table.insert(sub, {
+                    title = "Volume: " .. tostring(ms.soundVolume or 100) .. "%",
+                    disabled = true,
+                })
                 table.insert(sub, {
                     title = "Set Volume...",
                     fn = function()
@@ -4929,7 +4633,8 @@ return function(ms)
                             hs.execute("mkdir -p '" .. SoundActiveDir .. "'")
                         end
                         if not hs.fs.attributes(slibDir) then
-                            ms.alert("Could not create sounds folder at:\n" .. SoundLib, 4); return
+                            ms.alert("Could not create sounds folder at:\n" .. SoundLib, 4)
+                            return
                         end
 
                         local function sq(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
@@ -4939,17 +4644,20 @@ return function(ms)
                             local filename   = srcPath:match("([^/]+)$")
                             local importName = filename and (filename:match("^(.+)%.[^%.]+$") or filename)
                             if not filename or not importName then
-                                table.insert(failed, srcPath); goto nextFile
+                                table.insert(failed, srcPath)
+                                goto nextFile
                             end
                             local dst = SoundActiveDir .. filename
                             if srcPath ~= dst then
                                 local copied = false
                                 local f = io.open(srcPath, "rb")
                                 if f then
-                                    local content = f:read("*all"); f:close()
+                                    local content = f:read("*all")
+                                    f:close()
                                     local g = io.open(dst, "wb")
                                     if g then
-                                        g:write(content); g:close()
+                                        g:write(content)
+                                        g:close()
                                         copied = true
                                     else
                                         print("ms: import: io.open write failed for " .. tostring(srcPath))
@@ -4965,7 +4673,8 @@ return function(ms)
                                     end
                                 end
                                 if not copied then
-                                    table.insert(failed, importName); goto nextFile
+                                    table.insert(failed, importName)
+                                    goto nextFile
                                 end
                             end
                             ms.importedSounds = ms.importedSounds or {}
@@ -4996,26 +4705,65 @@ return function(ms)
                                     true
                                 )
                             else
-                                ms.alert("Import failed — grant Hammerspoon Full Disk Access\nfor importing from outside ~/.hammerspoon.", 5)
+                                ms.alert("Import failed. Grant Hammerspoon Full Disk Access\nfor importing from outside ~/.hammerspoon.", 5)
                             end
                         end)
                     end
                 })
                 table.insert(sub, { title = "-" })
                 local slots = {
-                    { id = "load",         label = "Loading Screen End"   },
-                    { id = "launch",       label = "Launch Announcement"  },
-                    { id = "updateAvailable", label = "Update Available" },
-                    { id = "alert",        label = "Alert / Notice"       },
-                    { id = "enabled",      label = "Macros Enabled"       },
-                    { id = "disabled",     label = "Macros Disabled"      },
-                    { id = "update",       label = "Setting Updated"      },
-                    { id = "reset",        label = "Setting Reset"        },
-                    { id = "interact",     label = "Menu Interact"        },
-                    { id = "hover",        label = "Menu Hover"           },
-                    { id = "back",         label = "Menu Back"            },
-                    { id = "settingsOpen", label = "Settings Open"        },
-                    { id = "settingsClose",label = "Settings Close"       },
+                    {
+                        id = "load",
+                        label = "Loading Screen End",
+                    },
+                    {
+                        id = "launch",
+                        label = "Launch Announcement",
+                    },
+                    {
+                        id = "updateAvailable",
+                        label = "Update Available",
+                    },
+                    {
+                        id = "alert",
+                        label = "Alert / Notice",
+                    },
+                    {
+                        id = "enabled",
+                        label = "Macros Enabled",
+                    },
+                    {
+                        id = "disabled",
+                        label = "Macros Disabled",
+                    },
+                    {
+                        id = "update",
+                        label = "Setting Updated",
+                    },
+                    {
+                        id = "reset",
+                        label = "Setting Reset",
+                    },
+                    {
+                        id = "interact",
+                        label = "Menu Interact",
+                    },
+                    {
+                        id = "hover",
+                        label = "Menu Hover",
+                    },
+                    {
+                        id = "back",
+                        label = "Menu Back",
+                    },
+                    {
+                        id = "settingsOpen",
+                        label = "Settings Open",
+                    },
+                    {
+                        id = "settingsClose",
+                        label = "Settings Close",
+                    },
                 }
                 local soundNames = {}
                 for name in pairs(ms.sounds or {}) do table.insert(soundNames, name) end
@@ -5036,7 +4784,10 @@ return function(ms)
                     })
                     table.insert(picker, { title = "-" })
                     if #soundNames == 0 then
-                        table.insert(picker, { title = "(no sound files imported)", disabled = true })
+                        table.insert(picker, {
+                            title = "(no sound files imported)",
+                            disabled = true,
+                        })
                     else
                         for _, name in ipairs(soundNames) do
                             table.insert(picker, {
@@ -5061,7 +4812,10 @@ return function(ms)
 
             local function buildTrackpadHoldSubmenu()
             local sub = {}
-            local keys = ms.trackpadHoldKeys or { left = "n", right = "j" }
+            local keys = ms.trackpadHoldKeys or {
+                left = "n",
+                right = "j",
+            }
 
             table.insert(sub, {
                 title = "Left Click Hold  ( " .. (keys.left or "unset") .. " )",
@@ -5070,10 +4824,13 @@ return function(ms)
                         .. "\nPress a key. Backspace to reset to default ( n ). Escape to cancel.", 15)
                     local capture, cancelTimer
                     capture = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(event)
-                        capture:stop(); capture = nil; cancelTimer:stop()
+                        capture:stop()
+                        capture = nil
+                        cancelTimer:stop()
                         local keyCode = event:getKeyCode()
                         local flags = event:getFlags()
-                        if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then ms.alert("Rebind cancelled.", 2); return true end
+                        if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then ms.alert("Rebind cancelled.", 2)
+                        return true end
                         local newKey = (keyCode == 51) and "n" or hs.keycodes.map[keyCode]
                         if newKey then
                             ms.playSlot("interact")
@@ -5103,7 +4860,9 @@ return function(ms)
                     end)
                     capture:start()
                     cancelTimer = hs.timer.doAfter(15, function()
-                        if capture then capture:stop(); capture = nil; ms.alert("Rebind timed out.", 2) end
+                        if capture then capture:stop()
+                        capture = nil
+                        ms.alert("Rebind timed out.", 2) end
                     end)
                 end
             })
@@ -5115,10 +4874,13 @@ return function(ms)
                         .. "\nPress a key. Backspace to reset to default ( j ). Escape to cancel.", 15)
                     local capture, cancelTimer
                     capture = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(event)
-                        capture:stop(); capture = nil; cancelTimer:stop()
+                        capture:stop()
+                        capture = nil
+                        cancelTimer:stop()
                         local keyCode = event:getKeyCode()
                         local flags = event:getFlags()
-                        if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then ms.alert("Rebind cancelled.", 2); return true end
+                        if keyCode == 53 and not (flags.cmd or flags.alt or flags.ctrl or flags.shift) then ms.alert("Rebind cancelled.", 2)
+                        return true end
                         local newKey = (keyCode == 51) and "j" or hs.keycodes.map[keyCode]
                         if newKey then
                             ms.playSlot("interact")
@@ -5148,7 +4910,9 @@ return function(ms)
                     end)
                     capture:start()
                     cancelTimer = hs.timer.doAfter(15, function()
-                        if capture then capture:stop(); capture = nil; ms.alert("Rebind timed out.", 2) end
+                        if capture then capture:stop()
+                        capture = nil
+                        ms.alert("Rebind timed out.", 2) end
                     end)
                 end
             })
@@ -5187,11 +4951,17 @@ return function(ms)
                 local currentName = ms.macroMeta and ms.macroMeta.name
                 local profiles = getProfiles()
                 if currentName then
-                    table.insert(sub, { title = "Active:  " .. currentName, disabled = true })
+                    table.insert(sub, {
+                        title = "Active:  " .. currentName,
+                        disabled = true,
+                    })
                     table.insert(sub, { title = "-" })
                 end
                 if #profiles == 0 then
-                    table.insert(sub, { title = "No saved profiles.", disabled = true })
+                    table.insert(sub, {
+                        title = "No saved profiles.",
+                        disabled = true,
+                    })
                 else
                     for _, name in ipairs(profiles) do
                         local isCurrent = (name == (currentName and sanitizeName(currentName)))
@@ -5219,7 +4989,8 @@ return function(ms)
                 local activeFolder = currentName and sanitizeName(currentName) or ""
                 local hasMatching = false
                 for _, p in ipairs(profiles) do
-                    if p == activeFolder then hasMatching = true; break end
+                    if p == activeFolder then hasMatching = true
+                    break end
                 end
                 table.insert(sub, {
                     title    = "Save Current Profile",
@@ -5234,9 +5005,18 @@ return function(ms)
             end
 
             local keybindSubmenu = {
-                { title = "Main",              menu = buildBindSection(mainBindDefs) },
-                { title = "Optional",          menu = buildBindSection(optionalBindDefs) },
-                { title = "System",            menu = buildSystemSubmenu() },
+                {
+                    title = "Main",
+                    menu = buildBindSection(mainBindDefs),
+                },
+                {
+                    title = "Optional",
+                    menu = buildBindSection(optionalBindDefs),
+                },
+                {
+                    title = "System",
+                    menu = buildSystemSubmenu(),
+                },
                 { title = "-" },
 
                 { title = "-" },
@@ -5247,22 +5027,31 @@ return function(ms)
         -- Settings submenu --
             local function buildSettingsSubmenu()
                 return {
-                    { title = (ms.trackpadMode and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Trackpad / Pen Mode", fn = function()
+                    {
+                        title = (ms.trackpadMode and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Trackpad / Pen Mode",
+                        fn = function()
                         ms.trackpadMode = not ms.trackpadMode
                         ms.saveSettings()
                         ms.bind.rebind()
                         ms.playSlot("update")
                         ms.alert("Trackpad / Pen Mode: " .. (ms.trackpadMode and "ON" or "OFF"), 2, true)
                     end },
-                    { title = "Trackpad Hold Keys", menu = buildTrackpadHoldSubmenu() },
+                    {
+                        title = "Trackpad Hold Keys",
+                        menu = buildTrackpadHoldSubmenu(),
+                    },
                     { title = "-" },
-                    { title = (ms._swallowHotkeys and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Swallow Hotkey Inputs", fn = function()
+                    {
+                        title = (ms._swallowHotkeys and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Swallow Hotkey Inputs",
+                        fn = function()
                         ms._swallowHotkeys = not ms._swallowHotkeys
                         ms.saveSettings()
                         ms.playSlot("update")
                         ms.alert("Swallow Hotkeys: " .. (ms._swallowHotkeys and "ON" .. "\nHotkey keypresses will be blocked from reaching the target app." or "OFF" .. "\nHotkey keypresses will pass through to the target app."), 4, true)
                     end },
-                    { title = (ms.gamepadEnabled and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Controller / Gamepad Input", fn = function()
+                    {
+                        title = (ms.gamepadEnabled and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Controller / Gamepad Input",
+                        fn = function()
                         ms.gamepadEnabled = not ms.gamepadEnabled
                         if not ms.gamepadEnabled then ms.gamepadStop() end
                         ms.saveSettings()
@@ -5271,7 +5060,9 @@ return function(ms)
                         ms.alert("Controller Input: " .. (ms.gamepadEnabled and "ON" or "OFF"), 2, true)
                     end },
                     { title = "-" },
-                    { title = (ms.socdEnabled and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " SOCD Cleaning", fn = function()
+                    {
+                        title = (ms.socdEnabled and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " SOCD Cleaning",
+                        fn = function()
                         ms.socdEnabled = not ms.socdEnabled
                         ms.saveSettings()
                         ms.socdApply()
@@ -5279,19 +5070,25 @@ return function(ms)
                         ms.alert("SOCD Cleaning: " .. (ms.socdEnabled and "ON" or "OFF"), 2, true)
                     end },
                     { title = "SOCD Mode: " .. (ms.socdMode == "lastWins" and "Last Input Wins" or ms.socdMode == "neutral" and "Neutral" or "First Input Wins"), menu = {
-                        { title = (ms.socdMode == "lastWins" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Last Input Wins", fn = function()
+                        {
+                            title = (ms.socdMode == "lastWins" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Last Input Wins",
+                            fn = function()
                             ms.socdMode = "lastWins"
                             ms.saveSettings()
                             ms.playSlot("update")
                             ms.alert("SOCD Mode: Last Input Wins", 2, true)
                         end },
-                        { title = (ms.socdMode == "neutral" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Neutral", fn = function()
+                        {
+                            title = (ms.socdMode == "neutral" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Neutral",
+                            fn = function()
                             ms.socdMode = "neutral"
                             ms.saveSettings()
                             ms.playSlot("update")
                             ms.alert("SOCD Mode: Neutral", 2, true)
                         end },
-                        { title = (ms.socdMode == "firstWins" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " First Input Wins", fn = function()
+                        {
+                            title = (ms.socdMode == "firstWins" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " First Input Wins",
+                            fn = function()
                             ms.socdMode = "firstWins"
                             ms.saveSettings()
                             ms.playSlot("update")
@@ -5299,11 +5096,19 @@ return function(ms)
                         end },
                     }},
                     { title = "-" },
-                    { title = "Sound", menu = buildSoundSubmenu() },
+                    {
+                        title = "Sound",
+                        menu = buildSoundSubmenu(),
+                    },
                     { title = "-" },
-                    { title = "Keybinds", menu = keybindSubmenu },
+                    {
+                        title = "Keybinds",
+                        menu = keybindSubmenu,
+                    },
                     { title = "-" },
-                    { title = "Save as Default...", fn = function()
+                    {
+                        title = "Save as Default...",
+                        fn = function()
                         ms.playSlot("interact")
                         ms.ui.modal({
                             title   = "Save as Default",
@@ -5318,7 +5123,9 @@ return function(ms)
                             end
                         end)
                     end },
-                    { title = "Reset to Default...", fn = function()
+                    {
+                        title = "Reset to Default...",
+                        fn = function()
                         ms.playSlot("interact")
                         ms.ui.modal({
                             title   = "Reset to Default",
@@ -5345,11 +5152,15 @@ return function(ms)
             local function buildDeveloperSubmenu()
                 local _trusted = (ms.integrity.check() == "trusted")
                 return {
-                    { title = "Debug Target Window", fn = function()
+                    {
+                        title = "Debug Target Window",
+                        fn = function()
                         ms.playSlot("interact")
                         ms.debugTarget()
                     end },
-                    { title = "Edit Macros", fn = function()
+                    {
+                        title = "Edit Macros",
+                        fn = function()
                         ms.playSlot("interact")
                         os.execute("open " .. os.getenv("HOME") .. "/.hammerspoon/ms_macros.lua")
                     end },
@@ -5377,13 +5188,17 @@ return function(ms)
                         end or nil,
                     },
                     { title = "Update Channel: " .. (ms._updateChannel == "testing" and "Testing" or "Stable"), menu = {
-                        { title = (ms._updateChannel == "stable" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Stable (MANIFEST.json)", fn = function()
+                        {
+                            title = (ms._updateChannel == "stable" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Stable (MANIFEST.json)",
+                            fn = function()
                             ms._updateChannel = "stable"
                             ms.saveSettings()
                             ms.playSlot("update")
                             ms.alert("Update channel: Stable", 2, true)
                         end },
-                        { title = (ms._updateChannel == "testing" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Testing (GitHub Actions)", fn = function()
+                        {
+                            title = (ms._updateChannel == "testing" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Testing (GitHub Actions)",
+                            fn = function()
                             ms._updateChannel = "testing"
                             ms.saveSettings()
                             ms.playSlot("update")
@@ -5391,13 +5206,17 @@ return function(ms)
                         end },
                     }},
                     { title = "Testing Source: " .. ((ms._testingSource or "release") == "artifact" and "Artifacts" or "Releases"), menu = {
-                        { title = ((ms._testingSource or "release") == "release" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Releases (signed manifests)", fn = function()
+                        {
+                            title = ((ms._testingSource or "release") == "release" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Releases (signed manifests)",
+                            fn = function()
                             ms._testingSource = "release"
                             ms.saveSettings()
                             ms.playSlot("update")
                             ms.alert("Testing source: Releases", 2, true)
                         end },
-                        { title = ((ms._testingSource or "release") == "artifact" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Artifacts (rapid testing)", fn = function()
+                        {
+                            title = ((ms._testingSource or "release") == "artifact" and "\xe2\x9c\x93" or "\xe2\x9c\x97") .. " Artifacts (rapid testing)",
+                            fn = function()
                             ms._testingSource = "artifact"
                             ms.saveSettings()
                             ms.playSlot("update")
@@ -5411,22 +5230,27 @@ return function(ms)
         -- Help submenu --
             local function buildHelpSubmenu()
                 return {
-                    { title = "About", fn = function()
+                    {
+                        title = "About",
+                        fn = function()
                         ms.playSlot("interact")
-                        ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn — https://mudbourn.info", 6)
+                        ms.alert("Hammerspoon mudscript Utility Library\nBy: mudbourn, https://mudbourn.info", 6)
                         if ms.macroMeta then
                             local msg = "\"" .. (ms.macroMeta.name or "Unknown Macro Pack") .. "\"\n"
                             if ms.macroMeta.author then msg = msg .. "By: " .. ms.macroMeta.author end
-                            if ms.macroMeta.website then msg = msg .. " — " .. ms.macroMeta.website end
+                            if ms.macroMeta.website then msg = msg .. ", " .. ms.macroMeta.website end
                             ms.alert(msg, 10)
                         end
                     end },
-                    { title = "Version", fn = function()
+                    {
+                        title = "Version",
+                        fn = function()
                         ms.playSlot("interact")
                         local ver = "?"
                         local lf = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
                         if lf then
-                            local raw = lf:read("*a"); lf:close()
+                            local raw = lf:read("*a")
+                            lf:close()
                             local v = raw:match('"version"%s*:%s*"([^"]+)"')
                             if v then ver = v end
                         end
@@ -5434,16 +5258,22 @@ return function(ms)
                         local label = (chan == "testing") and "Test Build" or "Release"
                         ms.alert("mudscript v" .. ver .. "\n" .. label .. " (" .. chan .. ")", 5, true)
                     end },
-                    { title = "GitHub", fn = function()
+                    {
+                        title = "GitHub",
+                        fn = function()
                         ms.playSlot("interact")
                         hs.urlevent.openURL("https://github.com/mudbourn/mudscript")
                     end },
-                    { title = "Documentation", fn = function()
+                    {
+                        title = "Documentation",
+                        fn = function()
                         ms.playSlot("interact")
                         hs.urlevent.openURL(ms._docsURL .. "?platform=mac")
                     end },
                     { title = "-" },
-                    { title = "Check System Integrity", fn = function()
+                    {
+                        title = "Check System Integrity",
+                        fn = function()
                         ms.playSlot("interact")
                         local status, cur, trusted = ms.integrity.check()
                         if status == "trusted" then
@@ -5454,7 +5284,9 @@ return function(ms)
                             ms.alert("No trusted hash on record.\nUse \"Trust Current Version\" to seed trust.", 5)
                         end
                     end },
-                    { title = "Check for Update...", fn = function()
+                    {
+                        title = "Check for Update...",
+                        fn = function()
                         if ms._updateChannel == "testing" then
                             if not ms._testingRepo or ms._testingRepo == "" then
                                 ms.alert("No testing repo configured.\nSet ms._testingRepo in ms_core.lua.", 5)
@@ -5483,7 +5315,9 @@ return function(ms)
                             end
                         end)
                     end },
-                    { title = "Macro Info", fn = function()
+                    {
+                        title = "Macro Info",
+                        fn = function()
                         ms.playSlot("interact")
                         local path = os.getenv("HOME") .. "/.hammerspoon/ms_macro_info.txt"
                         local f = io.open(path, "w")
@@ -5512,22 +5346,50 @@ return function(ms)
         -- Main menu --
             local function _buildMenuItems()
                 return {
-                    { title = "Macros: " .. (BindValidity == 1 and "ENABLED" or "DISABLED"), disabled = true },
+                    {
+                        title = "Macros: " .. (BindValidity == 1 and "ENABLED" or "DISABLED"),
+                        disabled = true,
+                    },
                     { title = "-" },
-                    { title = "Enable Macros ( Enter )",  fn = function() ms.setMacros(1) end },
-                    { title = "Disable Macros ( / )",     fn = function() ms.setMacros(0) end },
+                    {
+                        title = "Enable Macros ( Enter )",
+                        fn = function() ms.setMacros(1) end,
+                    },
+                    {
+                        title = "Disable Macros ( / )",
+                        fn = function() ms.setMacros(0) end,
+                    },
                     { title = "-" },
-                    { title = "Reload Options", menu = {
-                        { title = "Quick Reload ( ⌥[ )",   fn = function() ms.quickReload() end },
-                        { title = "Full Reload ( ⌥] )",    fn = function()
+                    {
+                        title = "Reload Options",
+                        menu = {
+                        {
+                            title = "Quick Reload ( ⌥[ )",
+                            fn = function() ms.quickReload() end,
+                        },
+                        {
+                            title = "Full Reload ( ⌥] )",
+                            fn = function()
                             if ms.restart then ms.restart() else hs.reload() end
                         end },
                     }},
                     { title = "-" },
-                    { title = "Profiles",  menu = buildProfilesSubmenu() },
-                    { title = "Settings",  menu = buildSettingsSubmenu() },
-                    { title = "Developer", menu = buildDeveloperSubmenu() },
-                    { title = "Help",       menu = buildHelpSubmenu() },
+                    {
+                        title = "Profiles",
+                        menu = buildProfilesSubmenu(),
+                    },
+                    {
+                        title = "Settings",
+                        menu = buildSettingsSubmenu(),
+                    },
+                    {
+                        title = "Developer",
+                        menu = buildDeveloperSubmenu(),
+                    },
+                    {
+                        title = "Help",
+                        menu = buildHelpSubmenu(),
+                    },
                 }
             end
             local function _wrapFns(items)

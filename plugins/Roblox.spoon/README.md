@@ -27,6 +27,29 @@ macro never acts on last session's numbers.
 | `ms.roblox.isFocused()` | `true` when Roblox is the active target |
 | `ms.roblox.activate()` | focus the Roblox window |
 
+## Sensitivity Tether
+
+The combat macros scale every camera move by `refSens / curSens`, where `curSens`
+is `ms._camSens`. Left alone that only tracks the manual **Camera Sensitivity**
+slider, so a player whose real in-game sensitivity differs silently mis-rotates
+every spin (the classic "super jump won't land"). The **Sync Sensitivity From
+Roblox** toggle ties `ms._camSens` to Roblox's live saved sensitivity so the
+calibration always matches the setting actually in effect, and mirrors the value
+onto the visible `cameraSensitivity` slider when a pack defines one.
+
+Reading the live value: the in-game slider writes the legacy scalar
+`MouseSensitivity`, which Roblox mirrors into per-view `Vector2` blocks
+(`MouseSensitivityThirdPerson` / `MouseSensitivityFirstPerson`, stored as nested
+`<X>`/`<Y>`). `effectiveSensitivity()` reads the scalar first and falls back to
+the third-person `Vector2` X (Combat Warriors' default), then first-person. If a
+live slider change does not move `curSens` in mudscript, the effective key is the
+`Vector2` instead, so swap the fallback order.
+
+Freshness: a path watcher on the settings file reacts the instant Roblox flushes
+it (menu close / focus loss, which Roblox controls and mudscript cannot force). A
+slow 10s poll backstops the atomic-rename case FSEvents may report differently.
+Both call the same sync, which no-ops when the value is unchanged.
+
 ## Anti-Timeout
 
 Roblox kicks idle sessions after ~20 minutes. The core mechanism

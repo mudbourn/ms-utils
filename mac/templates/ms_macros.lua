@@ -1,4 +1,4 @@
--- Creator Credits — CREDIT YOURSELF! --
+-- Creator Credits (CREDIT YOURSELF!) --
     ms.macroMeta = {
         name    = "Default",
         author  = "User"
@@ -31,7 +31,7 @@ ms.bind.define("NewMacro1", NewMacro1Function, {
     },
 })
 
--- Camera Sensitivity — target-game-specific, per-profile
+-- Camera Sensitivity --
 ms.settings.define({
     type    = "slider",
     key     = "cameraSensitivity",

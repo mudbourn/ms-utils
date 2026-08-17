@@ -3,9 +3,9 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>mudscript — Loading</title>
+        <title>mudscript, Loading</title>
         <style>
-            /* ── Font ───────────────────────────────────────────────────────── */
+            /* -- Font -- */
             @font-face {
                 font-family: "Almendra";
                 src: url("./fonts/Almendra-Regular.ttf") format("truetype");
@@ -35,7 +35,7 @@
                 font-display: swap;
             }
 
-            /* ── Tokens ─────────────────────────────────────────────────────── */
+            /* -- Tokens -- */
             :root {
                 --bg: #0d0f09;
                 --surface: #141810;
@@ -50,7 +50,7 @@
                 --font: Arial, "Almendra", sans-serif;
             }
 
-            /* ── Reset ──────────────────────────────────────────────────────── */
+            /* -- Reset -- */
             *,
             *::before,
             *::after {
@@ -71,7 +71,7 @@
                 -webkit-font-smoothing: antialiased;
             }
 
-            /* ── Panel ──────────────────────────────────────────────────────── */
+            /* -- Panel -- */
             #panel {
                 width: 360px;
                 height: 140px;
@@ -84,7 +84,7 @@
 
             
 
-            /* ── Brand text — always transition-ready ───────────────────────── */
+            /* -- Brand text, always transition-ready -- */
             #brand {
                 position: absolute;
                 top: 50%;
@@ -110,10 +110,10 @@
                 transform: translate(-187px, -62px) scale(0.643);
             }
 
-            /* ── Compatibility title ─────────────────────────────────────────
+            /* -- Compatibility title --
                A plain fallback title docked where the real brand lands. Shown
                (by ensureBrandFallback, at content-reveal time) ONLY when the
-               animated #brand never became visible — under heavy load the boot
+               animated #brand never became visible, under heavy load the boot
                choreography can start before the page's JS/fonts are ready, so
                showBrand() no-ops and the title never appears. Deliberately
                uses a guaranteed system font, not the themed web font that may
@@ -122,7 +122,7 @@
                 position: absolute;
                 top: 14px;
                 left: 18px;
-                /* ui-lint-allow: intentional system-font fallback — the themed
+                /* ui-lint-allow: intentional system-font fallback, the themed
                    font may be the thing that failed to load (see note above). */
                 font-family: Georgia, "Times New Roman", serif;
                 font-size: 18px;
@@ -137,7 +137,7 @@
                 opacity: 1;
             }
 
-            /* ── Profile name (top-right, above creator) ──────────────────────── */
+            /* -- Profile name (top-right, above creator) -- */
             #profile-name {
                 position: absolute;
                 top: 14px;
@@ -157,7 +157,7 @@
                 opacity: 1;
             }
 
-            /* ── Creator (top-right, below profile name) ──────────────────────── */
+            /* -- Creator (top-right, below profile name) -- */
             #macro-name {
                 position: absolute;
                 top: 30px;
@@ -177,7 +177,7 @@
                 opacity: 1;
             }
 
-            /* ── Divider ─────────────────────────────────────────────────────── */
+            /* -- Divider -- */
             #divider {
                 position: absolute;
                 top: 48px;
@@ -192,7 +192,7 @@
                 opacity: 1;
             }
 
-            /* ── Content ─────────────────────────────────────────────────────── */
+            /* -- Content -- */
             #content {
                 position: absolute;
                 top: 58px;
@@ -206,7 +206,7 @@
                 opacity: 1;
             }
 
-            /* ── Version (inside content area) ──────────────────────────────── */
+            /* -- Version (inside content area) -- */
             #version {
                 position: absolute;
                 top: 0;
@@ -221,7 +221,7 @@
                 white-space: nowrap;
             }
 
-            /* ── Status (directly above progress bar) ─────────────────────────── */
+            /* -- Status (directly above progress bar) -- */
             #status {
                 position: absolute;
                 left: 0;
@@ -236,7 +236,7 @@
                 white-space: nowrap;
             }
 
-            /* ── Progress track ─────────────────────────────────────────────── */
+            /* -- Progress track -- */
             #track {
                 position: absolute;
                 left: 0;
@@ -247,7 +247,7 @@
                 background: var(--surface);
             }
 
-            /* ── Progress fill ──────────────────────────────────────────────── */
+            /* -- Progress fill -- */
             #fill {
                 position: absolute;
                 left: 0;
@@ -270,14 +270,14 @@
             <div id="divider"></div>
             <div id="content">
                 <div id="version"></div>
-                <div id="status">Starting up…</div>
+                <div id="status">Starting up...</div>
                 <div id="track"></div>
                 <div id="fill"></div>
             </div>
         </div>
 
         <script>
-            /* ── Host communication ─────────────────────────────────────────── */
+            /* -- Host communication -- */
             function sendToHost(msg) {
                 const s = JSON.stringify(msg);
                 if (window.chrome && window.chrome.webview)
@@ -286,7 +286,7 @@
                     window.webkit.messageHandlers.loading.postMessage(s);
             }
 
-            /* ── Theme injection ─────────────────────────────────────────────── */
+            /* -- Theme injection -- */
             function applyTheme(t) {
                 if (!t) return;
                 const r = document.documentElement.style;
@@ -303,11 +303,11 @@
                 if (t.font) r.setProperty("--font", t.font + ', "Almendra", Arial, sans-serif');
             }
 
-            /* ── Animation controls ──────────────────────────────────────────── */
+            /* -- Animation controls -- */
             function showBrand() {
                 document.getElementById("brand").classList.add("visible");
                 // If the compatibility title stood in earlier (brand was late),
-                // retract it now that the real one is up — no double title.
+                // retract it now that the real one is up, no double title.
                 var compat = document.getElementById("brand-compat");
                 if (compat) compat.classList.remove("visible");
             }
@@ -337,7 +337,7 @@
             }
 
             // Reveal the compatibility title only if the animated #brand never
-            // faded in. Safe to call more than once — idempotent, and a no-op
+            // faded in. Safe to call more than once, idempotent, and a no-op
             // once the real brand is visible.
             function ensureBrandFallback() {
                 var brand = document.getElementById("brand");
@@ -347,14 +347,14 @@
                 compat.classList.add("visible");
             }
 
-            /* ── Progress ────────────────────────────────────────────────────── */
+            /* -- Progress -- */
             function setProgress(pct, msg) {
                 document.getElementById("fill").style.width =
                     Math.max(0, Math.min(100, pct)) + "%";
                 if (msg) document.getElementById("status").textContent = msg;
             }
 
-            /* ── Creator ──────────────────────────────────────────────────────── */
+            /* -- Creator -- */
             function setCreator(name) {
                 var el = document.getElementById("macro-name");
                 if (el && name) el.textContent = "by " + name;
@@ -364,22 +364,22 @@
                 document.getElementById("macro-name").classList.add("visible");
             }
 
-            /* ── Version ────────────────────────────────────────────────────── */
+            /* -- Version -- */
             function setVersion(v) {
                 var el = document.getElementById("version");
                 if (el && v) el.textContent = "v" + v;
             }
 
-            /* ── Profile name ────────────────────────────────────────────────── */
+            /* -- Profile name -- */
             function setProfileName(name) {
                 var el = document.getElementById("profile-name");
                 if (el && name) el.textContent = name;
             }
 
-            /* ── Suppress context menu ──────────────────────────────────────── */
+            /* -- Suppress context menu -- */
             document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-            /* ── Page-ready handshake ─────────────────────────────────────── */
+            /* -- Page-ready handshake -- */
             /* Tell the host the page is alive so it can drive the boot
                choreography.  Without this, blind timers scheduled from the
                Lua side race WKWebView's async html() load and silently

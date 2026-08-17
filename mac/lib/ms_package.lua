@@ -1,24 +1,4 @@
--- ms_package — Typed Package Format (.mspkg) --
---
--- A .mspkg is a zip archive carrying a single kind of shareable content plus a
--- manifest (`mspkg.json`) describing what it is and what it contains.
---
--- Five types exist. Each declares exactly which paths it may carry, so a theme
--- package can never smuggle macro code and a sound package can never overwrite
--- settings:
---
---   macro    ms_macros.lua and/or ms_macros_visual.json, plus sounds/macro/
---   theme    ms_theme.json, plus ui/fonts/
---   sound    sounds/active/ and sounds/macro/, plus the slot assignment map
---   plugin   a Spoon under Spoons/<Name>.spoon/ — the third-party surface
---   profile  the whole set — macros, settings, theme and sounds together
---
--- `profile` is the legacy monolithic shape: an archive with no manifest is read
--- as a formatVersion-0 profile so packages made before typing still import.
---
--- Macro packages carry Lua, JSON, or both. Neither is legacy — hand-written
--- ms_macros.lua and builder-authored ms_macros_visual.json are permanent peers,
--- and `macroFormat` records which of them a package actually ships.
+-- ms_package (Typed Package Format: .mspkg) --
 return function(ms)
 
     local _home     = os.getenv("HOME")
@@ -46,18 +26,19 @@ return function(ms)
         local function readFile(path)
             local f = io.open(path, "r")
             if not f then return nil end
-            local body = f:read("*all"); f:close()
+            local body = f:read("*all")
+            f:close()
             return body
         end
 
         local function writeFile(path, body)
             local f = io.open(path, "w")
             if not f then return false end
-            f:write(body); f:close()
+            f:write(body)
+            f:close()
             return true
         end
 
-        -- Reject anything that could escape the extraction root.
         local function safeRelPath(p)
             if type(p) ~= "string" or p == "" then return nil end
             if p:find("^/") or p:find("^~") then return nil end
@@ -74,10 +55,6 @@ return function(ms)
             return dir
         end
 
-        -- Component-wise, not lexicographic: "1.10.0" < "1.9.0" is true as a
-        -- string compare, which read every double-digit version as older than
-        -- its single-digit predecessor. Unparseable input compares as equal so
-        -- a malformed `requires` warns about nothing rather than everything.
         local function versionLess(a, b)
             local am = { tostring(a):match("^(%d+)%.(%d+)%.(%d+)$") }
             local bm = { tostring(b):match("^(%d+)%.(%d+)%.(%d+)$") }
@@ -95,110 +72,82 @@ return function(ms)
     -- END Helpers --
 
     -- Type Specs --
-        -- `paths` are the path prefixes a type may carry. `required` must be
-        -- satisfied by at least one present file or the package is malformed.
         local TYPE_SPECS = {
             macro = {
                 label    = "Macro Pack",
-                paths    = { "ms_macros.lua", "ms_macros_visual.json", "sounds/macro/" },
-                required = { "ms_macros.lua", "ms_macros_visual.json" },
+                paths    = {
+                    "ms_macros.lua",
+                    "ms_macros_visual.json",
+                    "sounds/macro/",
+                },
+                required = {
+                    "ms_macros.lua",
+                    "ms_macros_visual.json",
+                },
             },
-            -- Sounds are a theme aspect, not a profile one: a theme is the
-            -- whole sensory surface, so it may carry audio and the slot map
-            -- that gives that audio meaning. Whether an export actually
-            -- includes them is the user's call (bundleSoundsWithTheme) —
-            -- these are the paths a theme is *allowed* to carry, not a list
-            -- of what it must.
             theme = {
                 label    = "Theme",
-                -- No sounds/defaults/: those ship with the app, are identical
-                -- everywhere, and cannot be removed — carrying them would put
-                -- the same bytes in every theme anyone exports.
                 paths    = {
-                    "ms_theme.json", "ui/fonts/",
-                    "sounds/active/", "sounds/macro/",
+                    "ms_theme.json",
+                    "ui/fonts/",
+                    "sounds/active/",
+                    "sounds/macro/",
                     "sound_assign.json",
                 },
                 required = { "ms_theme.json" },
             },
-            -- Same rule as the theme above, and for the same reason: a sound
-            -- pack carries the audio a user can actually change. It used to
-            -- name sounds/Default/, which is not a directory that exists —
-            -- the library is sounds/defaults/ — so the required check could
-            -- never pass and no sound pack could be built or installed. It is
-            -- gone rather than corrected: letting a package write into
-            -- sounds/defaults/ is letting it overwrite the fallback floor
-            -- every slot lands on.
             sound = {
                 label    = "Sound Pack",
-                paths    = { "sounds/active/", "sounds/macro/", "sound_assign.json" },
+                paths    = {
+                    "sounds/active/",
+                    "sounds/macro/",
+                    "sound_assign.json",
+                },
                 required = { "sounds/active/" },
             },
-            -- Spoons/ is the third-party surface: lib/ is first-party only, so
-            -- a plugin can no longer land beside core modules. Everything is
-            -- nested under Spoons/<Name>.spoon/ rather than sitting at the
-            -- install root — a flat plugin.json would mean the second plugin
-            -- installed overwrites the first one's manifest.
             plugin = {
                 label    = "Plugin",
                 paths    = { "Spoons/" },
                 required = { "Spoons/" },
             },
-            -- A profile is monolithic: the whole look and feel in one archive,
-            -- so it carries its audio and fonts alongside the config. The
-            -- theme/sound overlap the earlier design avoided is not a conflict
-            -- here — a profile is a wholesale swap, not a layer, so on install
-            -- it simply is the source of truth for every file it names.
-            -- sounds/defaults/ is still excluded: it ships identical with every
-            -- install and must never be overwritten by a package.
             profile = {
                 label    = "Profile",
                 paths    = {
-                    "ms_macros.lua", "ms_macros_visual.json", "ms_settings.json",
-                    "ms_settings_default.json", "ms_theme.json",
-                    "sounds/active/", "sounds/macro/", "ui/fonts/", "sound_assign.json",
+                    "ms_macros.lua",
+                    "ms_macros_visual.json",
+                    "ms_settings.json",
+                    "ms_settings_default.json",
+                    "ms_theme.json",
+                    "sounds/active/",
+                    "sounds/macro/",
+                    "ui/fonts/",
+                    "sound_assign.json",
                 },
                 required = {},
             },
         }
 
-        ms.package.TYPES = { "macro", "theme", "sound", "plugin", "profile" }
+        ms.package.TYPES = {
+            "macro",
+            "theme",
+            "sound",
+            "plugin",
+            "profile",
+        }
 
         ms.package.spec = function(kind) return TYPE_SPECS[kind] end
 
-        -- A verify report's declared type, or nil. A legacy archive has no
-        -- declared type and can never be a plugin, so it reads as nil here.
         local function manifestType(report)
             local m = type(report) == "table" and report.manifest
             if type(m) ~= "table" or m.legacy then return nil end
             return m.type
         end
 
-        -- The single seam the "disable security protections" control wires
-        -- into. Defaults closed: with nothing wired up, no unvalidated plugin
-        -- can install. Anything replacing this must be sticky and visible —
-        -- a per-import prompt is exactly what this exists to prevent.
         ms.package.protectionDisabled = function() return false end
 
-        -- Guardian's plugin ledger. Guardian reads this before ms exists, so
-        -- the two sides share only a file format and a hash recipe — keep
-        -- _hashSpoonTree in ms_guardian.lua byte-identical to spoonTreeHash
-        -- here or every install will read as tampered on the next boot.
         local _ledgerPath = _dataDir .. "/.ms_plugin_ledger.json"
 
         local function spoonTreeHash(absDir)
-            -- Two invariants keep this digest stable for the same bundle:
-            --   * LC_ALL=C pins the sort collation. Without it `sort` orders by
-            --     the process locale, so the tree hashes differently under C
-            --     (GUI launch) vs en_US (terminal launch) — e.g. README.md
-            --     sorts first under C, last under en_US.
-            --   * The ._* and __MACOSX excludes drop AppleDouble metadata that a
-            --     Finder-"Compress" package carries in. macOS reaps those files
-            --     out of the bundle at unpredictable times, so hashing them makes
-            --     the digest drift after install. They are inert (Hammerspoon
-            --     never executes them), so excluding them is safe.
-            -- Either drift shows up as Guardian's "Unrecognized Plugin" block.
-            -- MUST stay byte-identical to _hashSpoonTree in ms_guardian.lua.
             local out, ok = hs.execute(
                 "cd " .. sq(absDir) .. " && find . -type f ! -name '.DS_Store' " ..
                 "! -name '._*' ! -path './__MACOSX/*' " ..
@@ -225,18 +174,14 @@ return function(ms)
         end
 
         ms.package.recordPlugins = function(names, manifest)
-            local ledger = readLedger() or { version = 1, plugins = {} }
+            local ledger = readLedger() or {
+                version = 1,
+                plugins = {},
+            }
 
             for name in pairs(names) do
                 local hash = spoonTreeHash(_hsDir .. "/Spoons/" .. name)
                 if hash then
-                    -- The display fields are recorded here because this is the
-                    -- only moment they exist: install copies the Spoons/ tree
-                    -- verbatim, so nothing on disk afterwards remembers what
-                    -- the package called itself. The alternative — reading a
-                    -- name out of the Spoon's own init.lua — means parsing
-                    -- third-party code to draw a list, which is not a trade
-                    -- worth making for a subtitle.
                     ledger.plugins[name] = {
                         hash        = hash,
                         id          = manifest and manifest.id or nil,
@@ -253,7 +198,6 @@ return function(ms)
             return writeLedger(ledger)
         end
 
-        -- True when `rel` sits under one of the type's allowed prefixes.
         local function pathAllowed(kind, rel)
             local spec = TYPE_SPECS[kind]
             if not spec then return false end
@@ -267,9 +211,6 @@ return function(ms)
             return false
         end
 
-        -- At least one of the type's required paths must be present. `rels` is
-        -- a flat list of archive-relative paths. Enforced on both sides: pack
-        -- refuses to build one, verify refuses to trust one built elsewhere.
         local function requiredSatisfied(kind, rels)
             local spec = TYPE_SPECS[kind]
             if not spec then return false end
@@ -289,8 +230,6 @@ return function(ms)
     -- END Type Specs --
 
     -- Fingerprint --
-        -- Recorded at pack time and compared at import time so a package built
-        -- elsewhere warns instead of failing obscurely.
         ms.package.fingerprint = function()
             local arch = hs.execute("/usr/bin/uname -m 2>/dev/null") or ""
             return {
@@ -300,10 +239,10 @@ return function(ms)
             }
         end
 
-        -- Display name for the OS a package was built on. Falls back to the
-        -- raw value rather than "unknown" so a package from a platform this
-        -- build has never heard of still reads as something specific.
-        local OS_LABELS = { macos = "macOS", windows = "Windows" }
+        local OS_LABELS = {
+            macos = "macOS",
+            windows = "Windows",
+        }
 
         ms.package.osLabel = function(manifest)
             local os_ = type(manifest) == "table" and (manifest.platform or {}).os
@@ -311,7 +250,6 @@ return function(ms)
             return OS_LABELS[os_] or os_
         end
 
-        -- Returns a list of human-readable warnings; empty means clean.
         ms.package.compatWarnings = function(manifest)
             local warnings = {}
             if type(manifest) ~= "table" then return warnings end
@@ -337,8 +275,6 @@ return function(ms)
                     ". Only matters for plugins shipping native code."
             end
 
-            -- Two shapes in the wild: the manifest nests it under `mudscript`,
-            -- the registry index carries it as a bare string. Accept both.
             local rq  = manifest.requires
             local req = (type(rq) == "table" and rq.mudscript)
                      or (type(rq) == "string" and rq)
@@ -348,7 +284,7 @@ return function(ms)
                 local have = tostring(ms.version or ""):match("(%d+%.%d+%.%d+)")
                 if want and have and versionLess(have, want) then
                     warnings[#warnings + 1] =
-                        "Needs mudscript " .. req .. "; this install is " .. tostring(ms.version) .. "."
+                        "Needs mudscript " .. req .. ", this install is " .. tostring(ms.version) .. "."
                 end
             end
 
@@ -357,8 +293,6 @@ return function(ms)
     -- END Fingerprint --
 
     -- Inspect --
-        -- Reads the manifest without extracting the archive. An archive with no
-        -- manifest is reported as a formatVersion-0 profile (pre-typing export).
         ms.package.inspect = function(path)
             if not fileExists(path) then return nil, "Package not found." end
 
@@ -374,7 +308,6 @@ return function(ms)
                 end
             end
 
-            -- Legacy: untyped archive. Only call it a profile if it looks like one.
             local listing = hs.execute("/usr/bin/unzip -Z1 " .. sq(path) .. " 2>/dev/null") or ""
             if listing:find("ms_macros%.lua") or listing:find("ms_settings%.json") then
                 return {
@@ -388,7 +321,6 @@ return function(ms)
             return nil, "Not a recognisable mudscript package."
         end
 
-        -- Flat list of archive members, directories dropped.
         ms.package.contents = function(path)
             local listing = hs.execute("/usr/bin/unzip -Z1 " .. sq(path) .. " 2>/dev/null") or ""
             local out = {}
@@ -402,14 +334,13 @@ return function(ms)
     -- END Inspect --
 
     -- Verify --
-        -- Integrity is self-contained: every file the manifest lists must be
-        -- present and hash as recorded. Trust is external — `trustLookup` is
-        -- supplied by ms_registry and maps a package hash to a trust level.
-        --
-        -- Returns { ok, trust, hash, issues = {...}, warnings = {...} }
-        -- trust is one of: "trusted" | "community" | "unsigned" | "tampered"
         ms.package.verify = function(path, trustLookup)
-            local result = { ok = false, trust = "unsigned", issues = {}, warnings = {} }
+            local result = {
+                ok = false,
+                trust = "unsigned",
+                issues = {},
+                warnings = {},
+            }
 
             local manifest, err = ms.package.inspect(path)
             if not manifest then
@@ -424,7 +355,6 @@ return function(ms)
                 return result
             end
 
-            -- Every member must be legal for the declared type.
             local members = ms.package.contents(path)
             for _, rel in ipairs(members) do
                 if not safeRelPath(rel) then
@@ -435,10 +365,6 @@ return function(ms)
                 end
             end
 
-            -- ...and the type's own minimum must be met. pack enforces this on
-            -- the way out, but a package built by anything other than this
-            -- packer has never been through that gate, which is exactly the
-            -- case the registry exists to handle.
             if not manifest.legacy and not requiredSatisfied(manifest.type, members) then
                 local spec = TYPE_SPECS[manifest.type]
                 result.issues[#result.issues + 1] =
@@ -446,7 +372,6 @@ return function(ms)
                     table.concat(spec and spec.required or {}, " or ") .. "."
             end
 
-            -- Recorded hashes must match the archive's actual bytes.
             if type(manifest.contents) == "table" then
                 local dir = tempDir("verify")
                 hs.execute("/usr/bin/unzip -qq -o " .. sq(path) .. " -d " .. sq(dir) .. " 2>/dev/null")
@@ -478,18 +403,11 @@ return function(ms)
     -- END Verify --
 
     -- Profile components --
-        -- A profile is a composition, and these rules are the single source of
-        -- truth for how it decomposes — used both to record the `components`
-        -- block at pack time and to cut a profile apart in split().
-        --
-        -- Sounds have a canonical, exclusive home in the `sound` package. The
-        -- `theme` may ALSO carry a copy when includeSoundsInTheme is set — the
-        -- same opt-in the standalone theme export offers — so "just the theme"
-        -- and "just the sounds" stay separately downloadable by default.
-        -- Macro-triggered audio (sounds/macro/) travels with the macros so a
-        -- macro pack is self-contained. Settings are profile-only: no
-        -- shareable sub-type, never emitted as a component package.
-        local PROFILE_COMPONENT_KINDS = { "theme", "sound", "macro" }
+        local PROFILE_COMPONENT_KINDS = {
+            "theme",
+            "sound",
+            "macro",
+        }
 
         local function isAudioRel(rel)
             return rel:sub(1, 14) == "sounds/active/"
@@ -497,10 +415,6 @@ return function(ms)
                 or rel == "sound_assign.json"
         end
 
-        -- Returns { theme = {files={...}, includesSounds=bool}, sound = {files},
-        -- macro = {files}, settings = {files} }. Membership can overlap (audio
-        -- is in `sound` always and `theme` optionally) — each component is its
-        -- own package, so that is fine.
         local function profileComponents(relPaths, includeSoundsInTheme)
             local comp = {
                 theme    = { files = {}, includesSounds = includeSoundsInTheme and true or false },
@@ -524,11 +438,6 @@ return function(ms)
     -- END Profile components --
 
     -- Pack --
-        -- opts = {
-        --   type, name, version, author, website, description,
-        --   files   = { ["ms_theme.json"] = "/abs/source/path", ... },
-        --   out     = "/abs/dest.mspkg",
-        -- }
         ms.package.pack = function(opts)
             opts = opts or {}
             local kind = opts.type
@@ -558,7 +467,8 @@ return function(ms)
             for rel, src in pairs(opts.files) do
                 local clean = safeRelPath(rel)
                 if not clean then
-                    rmrf(staging); return nil, "Unsafe path: " .. tostring(rel)
+                    rmrf(staging)
+                    return nil, "Unsafe path: " .. tostring(rel)
                 end
                 if not pathAllowed(kind, clean) then
                     rmrf(staging)
@@ -575,7 +485,10 @@ return function(ms)
                 end
             end
 
-            if staged == 0 then rmrf(staging); return nil, "No readable source files." end
+            if staged == 0 then
+                rmrf(staging)
+                return nil, "No readable source files."
+            end
 
             local packed = {}
             for rel in pairs(manifest.contents) do packed[#packed + 1] = rel end
@@ -592,11 +505,6 @@ return function(ms)
                     or (hasJSON and "json" or "lua")
             end
 
-            -- Record the composition so the profile is self-describing: split
-            -- and (later) partial install read this map instead of re-deriving.
-            -- Only components actually present are listed. includeSoundsInTheme
-            -- defaults false — a clean split keeps theme (visuals) and sound
-            -- (audio) separate unless the author opts the audio into the theme.
             if kind == "profile" then
                 local rels = {}
                 for rel in pairs(manifest.contents) do rels[#rels + 1] = rel end
@@ -611,7 +519,8 @@ return function(ms)
             end
 
             if not writeFile(staging .. "/" .. MANIFEST_NAME, hs.json.encode(manifest)) then
-                rmrf(staging); return nil, "Could not write manifest."
+                rmrf(staging)
+                return nil, "Could not write manifest."
             end
 
             hs.execute("/bin/rm -f " .. sq(opts.out))
@@ -631,18 +540,6 @@ return function(ms)
     -- END Pack --
 
     -- Split --
-        -- Take a profile apart into its component packages. Each output is a
-        -- standalone typed .mspkg built by pack(), indistinguishable from one
-        -- authored directly, so it publishes and installs like any other.
-        --
-        -- File lists are always re-derived from the archive's real contents
-        -- (not trusted from a possibly-hand-edited manifest); the manifest's
-        -- recorded includeSoundsInTheme is used only as the default toggle. A
-        -- legacy profile with no components block therefore still splits.
-        --
-        -- opts = { includeSoundsInTheme = bool }  -- default: the profile's own
-        --         recorded preference, else false.
-        -- Returns { made = {{type,path,name}...}, skipped = {{type,why}...} }.
         ms.package.split = function(path, outDir, opts)
             opts = opts or {}
             local manifest, err = ms.package.inspect(path)
@@ -666,8 +563,6 @@ return function(ms)
             local staging = tempDir("split")
             hs.execute("/usr/bin/unzip -qq -o " .. sq(path) .. " -d " .. sq(staging) .. " 2>/dev/null")
 
-            -- Base name for the outputs; drop a trailing "profile" so
-            -- "Combat Warriors profile" yields "Combat Warriors-theme.mspkg".
             local base = manifest.name
                 or (path:match("([^/]+)%.mspkg$")) or "Profile"
             base = base:gsub("%s+[Pp]rofile$", "")
@@ -679,13 +574,17 @@ return function(ms)
                 local files, present = {}, {}
                 for _, rel in ipairs(comp[kind].files) do
                     local abs = staging .. "/" .. rel
-                    if fileExists(abs) then files[rel] = abs; present[#present + 1] = rel end
+                    if fileExists(abs) then
+                        files[rel] = abs
+                        present[#present + 1] = rel
+                    end
                 end
                 if #present == 0 then
-                    -- This component simply is not in the profile; omit quietly.
                 elseif not requiredSatisfied(kind, present) then
-                    skipped[#skipped + 1] = { type = kind, why = "missing " ..
-                        table.concat((TYPE_SPECS[kind] or {}).required or {}, " or ") }
+                    skipped[#skipped + 1] = {
+                        type = kind,
+                        why = "missing " .. table.concat((TYPE_SPECS[kind] or {}).required or {}, " or "),
+                    }
                 else
                     local label = (TYPE_SPECS[kind] or {}).label or kind
                     local out = outDir .. "/" .. fileBase .. "-" .. kind .. ".mspkg"
@@ -698,21 +597,29 @@ return function(ms)
                         files   = files,
                         out     = out,
                     })
-                    if m then made[#made + 1] = { type = kind, path = out, name = base .. " " .. label }
-                    else skipped[#skipped + 1] = { type = kind, why = perr or "pack failed" } end
+                    if m then
+                        made[#made + 1] = {
+                            type = kind,
+                            path = out,
+                            name = base .. " " .. label,
+                        }
+                    else
+                        skipped[#skipped + 1] = {
+                            type = kind,
+                            why = perr or "pack failed",
+                        }
+                    end
                 end
             end
             rmrf(staging)
-            return { made = made, skipped = skipped }
+            return {
+                made = made,
+                skipped = skipped,
+            }
         end
     -- END Split --
 
     -- Install --
-        -- Extracts a verified package into the live install. Every destination
-        -- is derived from the type spec, never from the archive, so a package
-        -- can only ever write where its own type is allowed to.
-        --
-        -- opts = { force = bool, trustLookup = fn, backup = bool (default true) }
         ms.package.install = function(path, opts)
             opts = opts or {}
 
@@ -721,12 +628,6 @@ return function(ms)
                 return nil, table.concat(report.issues, "\n")
             end
 
-            -- Plugins are inside the trust boundary and `force` does not reach
-            -- them. Every other type is data the app interprets; a plugin is
-            -- code that runs with the app's own privileges, so "import anyway"
-            -- — one confirmation dialog — is far too cheap a bypass. The only
-            -- way to run an unvalidated plugin is to turn protection off
-            -- wholesale, which is a deliberate, visible, sticky act.
             if manifestType(report) == "plugin" and report.trust ~= "trusted" then
                 if not ms.package.protectionDisabled() then
                     return nil,
@@ -738,13 +639,6 @@ return function(ms)
                 return nil, "Package is not in the validated library. Import anyway to continue."
             end
 
-            -- ms_macros.lua is executable code. The hand-rolled profile
-            -- importer, the compiler and the macros panel all scan it with
-            -- ms.auditMacros before it can run; the generic install path did
-            -- not, so a profile or macro package installed here — including one
-            -- pulled from the registry via Browse — could land unscanned code
-            -- on disk. Scan it before anything is written, and reject the whole
-            -- install on failure, exactly as the importer does.
             if ms.auditMacros then
                 for _, rel in ipairs(ms.package.contents(path)) do
                     if rel == "ms_macros.lua" then
@@ -752,8 +646,8 @@ return function(ms)
                         if type(src) == "string" and src ~= "" then
                             local errs = ms.auditMacros(src)
                             if type(errs) == "table" and #errs > 0 then
-                                return nil, "Macro security scan failed:\n  \xe2\x80\xa2 " ..
-                                    table.concat(errs, "\n  \xe2\x80\xa2 ")
+                                return nil, "Macro security scan failed:\n  - " ..
+                                    table.concat(errs, "\n  - ")
                             end
                         end
                         break
@@ -765,13 +659,6 @@ return function(ms)
             local staging  = tempDir("install")
             hs.execute("/usr/bin/unzip -qq -o " .. sq(path) .. " -d " .. sq(staging) .. " 2>/dev/null")
 
-            -- Optional component slice: install only one slice of a profile
-            -- (theme / sound / macro) instead of the whole thing, read from the
-            -- manifest's `components` map. The package is still verified whole
-            -- above — trust, hashes and path rules all apply to the profile —
-            -- so slicing only narrows which of its files land on disk. This is
-            -- how one uploaded profile serves four install choices without any
-            -- duplicated bytes. See [[saved-profiles-config-only-snapshot]].
             local sliceSet = nil
             if opts.component and type(manifest.components) == "table" then
                 sliceSet = {}
@@ -779,8 +666,6 @@ return function(ms)
                 if type(c) == "table" and type(c.files) == "table" then
                     for _, rel in ipairs(c.files) do sliceSet[rel] = true end
                 end
-                -- The theme's optional bonus: also pull the profile's audio
-                -- (the sound component's files) when the user opts in.
                 if opts.component == "theme" and opts.includeSounds
                    and type(manifest.components.sound) == "table"
                    and type(manifest.components.sound.files) == "table" then
@@ -798,7 +683,6 @@ return function(ms)
                 local clean = safeRelPath(rel)
                 if clean and (not sliceSet or sliceSet[clean])
                    and (manifest.legacy or pathAllowed(manifest.type, clean)) then
-                    -- data/ files live under data/; everything else mirrors the install root.
                     local dest
                     if clean:find("^ms_") and clean:find("%.json$") then
                         dest = _dataDir .. "/" .. clean
@@ -825,9 +709,6 @@ return function(ms)
 
             if #installed == 0 then return nil, "Nothing could be installed." end
 
-            -- A macro package shipping JSON needs compiling before it can bind.
-            -- Keyed on what was actually installed, not manifest.type, so a
-            -- macro slice of a profile (manifest.type == "profile") compiles too.
             if ms.compiler and ms.compiler.compile then
                 for _, rel in ipairs(installed) do
                     if rel == "ms_macros_visual.json" then
@@ -837,17 +718,13 @@ return function(ms)
                 end
             end
 
-            -- A slot map is state, not a file the install root should keep:
-            -- copying it in is what the loop above did, so read it back into
-            -- ms.soundAssign and drop the stray copy. Without this the audio
-            -- lands but every slot still points where it did before, which
-            -- looks exactly like the import having silently failed.
             for _, rel in ipairs(installed) do
                 if rel == "sound_assign.json" then
                     local dropped = _hsDir .. "/sound_assign.json"
                     local f = io.open(dropped, "r")
                     if f then
-                        local raw = f:read("*all"); f:close()
+                        local raw = f:read("*all")
+                        f:close()
                         local ok, tbl = pcall(hs.json.decode, raw)
                         if ok and type(tbl) == "table" then
                             ms.soundAssign = ms.soundAssign or {}
@@ -864,11 +741,6 @@ return function(ms)
                 end
             end
 
-            -- Record the plugin in Guardian's ledger. Guardian blocks boot on
-            -- any Spoons/ entry it has no record of, and this write is the
-            -- only thing that creates one — which is the point: passing the
-            -- trust gate above is what earns a Spoon the right to load, and a
-            -- .spoon hand-dropped into the dir never gets here.
             if manifest.type == "plugin" then
                 local names = {}
                 for _, rel in ipairs(installed) do
@@ -899,11 +771,6 @@ return function(ms)
     -- END Install --
 
     -- Plugin Inventory --
-        -- What is installed, whether it is allowed to load, and taking it back
-        -- out again. The ledger is the source for everything except the tree
-        -- hash: a .spoon on disk carries no manifest of its own, so the record
-        -- written at install time is the only thing that knows what a plugin
-        -- is called or who wrote it.
 
         local function validSpoonName(name)
             if type(name) ~= "string" then return nil end
@@ -914,24 +781,11 @@ return function(ms)
 
         ms.package.validSpoonName = validSpoonName
 
-        -- Disabled rather than enabled, deliberately. A freshly installed
-        -- plugin should run without a second opt-in — the trust gate on the
-        -- way in is the decision point — and a name this list has never heard
-        -- of can never read as "off".
         ms.package.pluginEnabled = function(name)
             local off = ms._pluginsDisabled
             return not (type(off) == "table" and off[name] == true)
         end
 
-        -- Every .spoon on disk, joined against the ledger. `status` is:
-        --   ok           recorded, and the tree still hashes to its record
-        --   modified     recorded, but the tree changed underneath it
-        --   unrecorded   no ledger row — it did not come through install
-        --
-        -- The last two normally block boot in Guardian, so seeing one here
-        -- means Guardian is off or the tree changed after it ran. The panel
-        -- shows them either way: a list that quietly omitted the plugin that
-        -- is about to stop the next boot would be the worst kind of correct.
         ms.package.listPlugins = function()
             local out = {}
             local spoonsDir = _hsDir .. "/Spoons"
@@ -956,8 +810,6 @@ return function(ms)
 
                     out[#out + 1] = {
                         dir         = name,
-                        -- The bundle name minus ".spoon" is the fallback, so an
-                        -- unrecorded plugin still reads as something.
                         name        = rec.name or name:gsub("%.spoon$", ""),
                         id          = rec.id,
                         version     = rec.version,
@@ -977,9 +829,6 @@ return function(ms)
             return out
         end
 
-        -- Disabling leaves the bundle exactly where it is. Moving or renaming
-        -- it would change what Guardian sees in Spoons/ and turn an off switch
-        -- into a blocked boot, so the flag is the only thing that moves.
         ms.package.setPluginEnabled = function(name, on)
             if not validSpoonName(name) then return false end
             ms._pluginsDisabled = ms._pluginsDisabled or {}
@@ -988,11 +837,6 @@ return function(ms)
             return true
         end
 
-        -- Deletes the bundle and its ledger row together. Both or neither: a
-        -- dir with no row blocks the next boot, and a row with no dir is a
-        -- stale claim that would vouch for whatever lands under that name
-        -- later. The disabled flag goes too, so reinstalling gives a plugin
-        -- that is on rather than mysteriously off.
         ms.package.removePlugin = function(name)
             if not validSpoonName(name) then return false, "Invalid plugin name." end
 
@@ -1016,20 +860,11 @@ return function(ms)
             if ms._pluginsDisabled then ms._pluginsDisabled[name] = nil end
             if ms.saveSettings then pcall(ms.saveSettings) end
 
-            -- The Spoon is already loaded into this session. Hammerspoon has
-            -- no unload, so the files are gone but the code is not — say so
-            -- rather than letting a still-running plugin look removed.
             return true
         end
     -- END Plugin Inventory --
 
     -- Export Helpers --
-        -- Collects the live install's files for a given type, ready for pack().
-        -- opts.configDir (profile kind only): read the config files from a saved
-        -- profile directory instead of the live locations, so an inactive
-        -- profile can be exported without switching to it. Sounds and fonts are
-        -- NOT snapshotted per-profile, so those always come from the live dirs
-        -- (config + live assets — a deliberate choice, see the Profiles panel).
         ms.package.collect = function(kind, opts)
             local files = {}
 
@@ -1055,8 +890,6 @@ return function(ms)
             elseif kind == "theme" then
                 addIf("ms_theme.json", _dataDir .. "/ms_theme.json")
                 addDir("ui/fonts/",    _hsDir .. "/ui/fonts/")
-                -- Opt-out, not opt-in: sounds belong to the theme, so a theme
-                -- export carries them unless the user has ticked them off.
                 if ms.bundleSoundsWithTheme ~= false then
                     addDir("sounds/active/", _hsDir .. "/sounds/active/")
                     addDir("sounds/macro/",  _hsDir .. "/sounds/macro/")
@@ -1067,17 +900,10 @@ return function(ms)
             elseif kind == "sound" then
                 addDir("sounds/active/", _hsDir .. "/sounds/active/")
                 addDir("sounds/macro/",  _hsDir .. "/sounds/macro/")
-                -- The audio without the slot map is a folder of files nobody
-                -- has pointed at anything. The theme export has always sent
-                -- both; this one used to send neither it nor a directory that
-                -- exists.
                 local assign = ms.package.exportSoundAssign()
                 if assign then files["sound_assign.json"] = assign end
 
             elseif kind == "profile" then
-                -- Config comes from a saved profile dir when exporting an
-                -- inactive profile (all files flat in that dir), else the live
-                -- split _hsDir / _dataDir layout.
                 local cfg = opts and opts.configDir
                 local macrosSrc = cfg and (cfg .. "ms_macros.lua")            or (_hsDir   .. "/ms_macros.lua")
                 local dataSrc   = function(f) return cfg and (cfg .. f)       or (_dataDir .. "/" .. f) end
@@ -1086,10 +912,6 @@ return function(ms)
                 addIf("ms_settings.json",         dataSrc("ms_settings.json"))
                 addIf("ms_settings_default.json", dataSrc("ms_settings_default.json"))
                 addIf("ms_theme.json",            dataSrc("ms_theme.json"))
-                -- Monolithic: carry the audio and fonts too, so an installed
-                -- profile is the whole look and feel and not a config shell
-                -- pointing at sounds and a font the recipient does not have.
-                -- sounds/defaults/ is deliberately omitted (ships everywhere).
                 addDir("sounds/active/", _hsDir .. "/sounds/active/")
                 addDir("sounds/macro/",  _hsDir .. "/sounds/macro/")
                 addDir("ui/fonts/",      _hsDir .. "/ui/fonts/")
@@ -1100,7 +922,6 @@ return function(ms)
             return files
         end
 
-        -- Sound packages carry their slot assignment map alongside the audio.
         ms.package.exportSoundAssign = function()
             local path = tempDir("assign") .. "/sound_assign.json"
             if writeFile(path, hs.json.encode(ms.soundAssign or {})) then return path end
@@ -1109,18 +930,14 @@ return function(ms)
     -- END Export Helpers --
 
     -- Smoke Test --
-        -- Round-trips the live theme through pack → verify → install and
-        -- reports each leg. Run from the Hammerspoon console:
-        --
-        --   hs.inspect(ms.package.selfTest())
-        --
-        -- The theme is chosen deliberately: it is the smallest type, and the
-        -- install leg rewrites ms_theme.json with the bytes it was packed
-        -- from, so a pass leaves the install exactly as it found it.
         ms.package.selfTest = function()
             local steps = {}
             local function step(name, ok, detail)
-                steps[#steps + 1] = { step = name, ok = ok and true or false, detail = detail }
+                steps[#steps + 1] = {
+                    step = name,
+                    ok = ok and true or false,
+                    detail = detail,
+                }
                 return ok
             end
 
@@ -1131,7 +948,10 @@ return function(ms)
             if not step("collect", files["ms_theme.json"] ~= nil,
                         files["ms_theme.json"] and (count .. " files")
                             or "no live ms_theme.json to pack") then
-                return { ok = false, steps = steps }
+                return {
+                    ok = false,
+                    steps = steps,
+                }
             end
 
             local manifest, err = ms.package.pack({
@@ -1142,28 +962,37 @@ return function(ms)
                 out     = out,
             })
             if not step("pack", manifest ~= nil, err or (manifest and manifest.hash)) then
-                return { ok = false, steps = steps }
+                return {
+                    ok = false,
+                    steps = steps,
+                }
             end
 
             local report = ms.package.verify(out)
             if not step("verify", report.ok, table.concat(report.issues, "; ")) then
                 rmrf(out:match("(.*)/"))
-                return { ok = false, steps = steps }
+                return {
+                    ok = false,
+                    steps = steps,
+                }
             end
 
-            -- Unsigned by design — nothing here is in the validated library.
             step("trust", report.trust == "unsigned", "trust = " .. tostring(report.trust))
 
-            -- backup = false: the install leg rewrites the same bytes it packed
-            -- from, so .bak copies would be litter, not safety.
-            local res, ierr = ms.package.install(out, { force = true, backup = false })
+            local res, ierr = ms.package.install(out, {
+                force = true,
+                backup = false,
+            })
             step("install", res ~= nil, ierr or (res and table.concat(res.installed, ", ")))
 
             rmrf(out:match("(.*)/"))
 
             local allOk = true
             for _, s in ipairs(steps) do if not s.ok then allOk = false end end
-            return { ok = allOk, steps = steps }
+            return {
+                ok = allOk,
+                steps = steps,
+            }
         end
     -- END Smoke Test --
 

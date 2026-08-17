@@ -49,8 +49,10 @@ function obj:init()
 
         ms.hid.press = function(key, mods)
             if not armed() then return end
-            local app = targetApp(); if not app then return end
-            local code = keyCode(key); if not code then return end
+            local app = targetApp()
+            if not app then return end
+            local code = keyCode(key)
+            if not code then return end
             local ev = hs.eventtap.event.newKeyEvent(mods or {}, code, true)
             ev:post(app)
             held.keys[code] = mods or {}
@@ -58,8 +60,10 @@ function obj:init()
 
         ms.hid.release = function(key, mods)
             if not armed() then return end
-            local app = targetApp(); if not app then return end
-            local code = keyCode(key); if not code then return end
+            local app = targetApp()
+            if not app then return end
+            local code = keyCode(key)
+            if not code then return end
             local ev = hs.eventtap.event.newKeyEvent(mods or (held.keys[code]) or {}, code, false)
             ev:post(app)
             held.keys[code] = nil
@@ -73,7 +77,8 @@ function obj:init()
 
         ms.hid.click = function(button)
             if not armed() then return end
-            local app = targetApp(); if not app then return end
+            local app = targetApp()
+            if not app then return end
             button = button or 0
             local pos = hs.mouse.absolutePosition()
             local downT, upT
@@ -91,7 +96,9 @@ function obj:init()
                 end
                 ev:post(app)
             end
-            send(downT); ms.wait(30); send(upT)
+            send(downT)
+            ms.wait(30)
+            send(upT)
         end
 
         ms.hid.releaseAll = function()

@@ -1,13 +1,13 @@
     /* panel: settings */
     (function() {
     "use strict";
-// ── State ──────────────────────────────────────────────────────────
+// -- State --
             let S = {};
             let _modalResolve = null;
             let _toastTimer = null;
-            let _ctxTarget = null; // { macro: m } — what was right-clicked
+            let _ctxTarget = null; // { macro: m }, what was right-clicked
 
-            // ── Context menu ───────────────────────────────────────────────────
+            // -- Context menu --
             function closeCtxMenu() {
                 const el = document.getElementById("ctx-menu-settings");
                 if (el) el.classList.remove("open");
@@ -88,11 +88,11 @@
                 if (e.key === "Escape") closeCtxMenu();
             });
 
-            // ── Bridge ─────────────────────────────────────────────────────────
+            // -- Bridge --
             function sendToHost(msg) {
                 const s = typeof msg === "string" ? msg : JSON.stringify(msg);
                 if (window.shellPost) {
-                    // Running inside the Macro Lab shell — route through msShell channel
+                    // Running inside the Macro Lab shell, route through msShell channel
                     const data = typeof msg === "string" ? JSON.parse(msg) : msg;
                     window.shellPost("settings", data.action || "unknown", data);
                 } else if (window.chrome?.webview) {
@@ -102,7 +102,7 @@
                 }
             }
 
-            // ── Shell integration ─────────────────────────────────────────────
+            // -- Shell integration --
             // When loaded inside the shell, register as a panel so shellDispatch
             // can route incoming Lua pushes (state, theme) to receiveState().
             if (window.registerPanel) {
@@ -115,7 +115,7 @@
                 });
             }
 
-            // ── Window drag ────────────────────────────────────────────────────
+            // -- Window drag --
             // borderless windows ignore -webkit-app-region (isMovable=false by default)
             // so we implement drag manually via the Lua moveWindow action.
             let _dragging = false; // script-level so playSlot can read it
@@ -153,7 +153,7 @@
                     });
             })();
 
-            // ── Sound ──────────────────────────────────────────────────────────
+            // -- Sound --
             const _lastSlot = {};
             function playSlot(slot) {
                 if (_dragging) return; // window is being dragged; skip hover sounds
@@ -164,7 +164,7 @@
                 sendToHost({ action: "playSlot", slot });
             }
 
-            // ── Toast ──────────────────────────────────────────────────────────
+            // -- Toast --
             function showAlert(msg, duration) {
                 const el = document.getElementById("toast");
                 el.textContent = msg;
@@ -183,7 +183,7 @@
                 _toastTimer = null;
             }
 
-            // ── Modal ──────────────────────────────────────────────────────────
+            // -- Modal --
             function openModal(
                 title,
                 msg,
@@ -256,15 +256,15 @@
                 });
             }
             // Lua calls this via ms.shell.eval, which runs at global scope, so
-            // the IIFE-local declaration has to be published to window — same as
+            // the IIFE-local declaration has to be published to window, same as
             // openModal/closeModal above. Without it the confirm modal never
             // opens (ReferenceError), so rebinds capture but never save.
             window.openLuaModal = openLuaModal;
 
             // Mutate the already-open modal in place without opening a new one
             // or resolving the pending promise. The rebind flow uses this to
-            // drive a single modal through two phases — a live "capturing" phase
-            // that streams the keys being held, then a "confirm" phase — so the
+            // drive a single modal through two phases, a live "capturing" phase
+            // that streams the keys being held, then a "confirm" phase, so the
             // one prompt both informs the user and shows the detected bind,
             // replacing the old floating alert toast. Any field may be omitted
             // to leave it untouched; showConfirm/showCancel toggle each button
@@ -288,7 +288,7 @@
                     document.getElementById("modal-cancel").style.display =
                         d.showCancel ? "" : "none";
                 // keys: render the detected combo as spotlighted key caps. An
-                // array (even empty) shows the strip — empty renders a dim "…"
+                // array (even empty) shows the strip, empty renders a dim "..."
                 // placeholder so the user can see where their keys will land
                 // before pressing anything. Omit the field to leave it as is;
                 // openModal hides the strip for ordinary (non-rebind) modals.
@@ -302,7 +302,7 @@
                     if (arr.length === 0) {
                         const ph = document.createElement("kbd");
                         ph.className = "modal-key placeholder";
-                        ph.textContent = "…";
+                        ph.textContent = "...";
                         box.appendChild(ph);
                     } else {
                         arr.forEach((k, i) => {
@@ -358,13 +358,13 @@
                     }
                 });
 
-            // ── Shutdown ───────────────────────────────────────────────────────
+            // -- Shutdown --
             // The power button is the only destructive control in the title
             // bar, so it confirms first. Once confirmed the panel's job is
             // over: it hands off to the host and goes quiet.
             //
             // Deliberately no curtain and no send-off sound here. Both used to
-            // live in this page, and both were wrong for the same reason —
+            // live in this page, and both were wrong for the same reason ,
             // this window is what the host's teardown closes, so the curtain
             // went dark while the sample was still playing, leaving the
             // desktop on screen for the rest of the send-off. The host puts up
@@ -377,7 +377,7 @@
                 playSlot("interact");
                 const r = await openModal(
                     "Quit mudscript",
-                    "Stop all macros and quit mudscript?\n\nThis quits Hammerspoon — mudscript runs inside it, so there is no way to leave one without the other.",
+                    "Stop all macros and quit mudscript?\n\nThis quits Hammerspoon, mudscript runs inside it, so there is no way to leave one without the other.",
                     "Quit",
                 );
                 if (!r.confirmed) return;
@@ -390,7 +390,7 @@
                 sendToHost({ action: "shutdown" });
             }
 
-            // ── Helpers ────────────────────────────────────────────────────────
+            // -- Helpers --
             function h(tag, attrs = {}, ...children) {
                 const el = document.createElement(tag);
                 for (const [k, v] of Object.entries(attrs)) {
@@ -416,7 +416,7 @@
                         type: "checkbox",
                         // The shell owns the toggle sound for every toggle; host
                         // handlers must not play one or they double up. Sounding
-                        // after onchange keeps the mute toggles honest — the host
+                        // after onchange keeps the mute toggles honest, the host
                         // processes messages in order, so muting silences its own
                         // click and unmuting is audible.
                         onchange: (e) => {
@@ -547,10 +547,10 @@
                 groupLabel, showCtxMenu,
             };
 
-            // ── Sections ───────────────────────────────────────────────────────
+            // -- Sections --
 
 
-            // ── Reusable slider row builder ────────────────────────────────────────
+            // -- Reusable slider row builder --
             // Builds a complete slider row element and returns it.
             // label (string), hint (string|null), min/max/step (number),
             // unit (string|null), val (number), onChange(v), ctxItems (array|null)
@@ -625,7 +625,7 @@
                 return wrap;
             }
 
-            // ── buildRuntime — macro engine + reload ───────────────────────────
+            // -- buildRuntime, macro engine + reload --
             // The macros switch and the reload menu used to live in the title
             // bar as compact ghost buttons, back when the title bar was the
             // only chrome settings had. They are settings, so they read as
@@ -711,7 +711,7 @@
                 );
             }
 
-            // ── buildAccessibility — input and motion settings ─────────────────────
+            // -- buildAccessibility, input and motion settings --
             function buildAccessibility(body) {
                 const hidden = S.hiddenFeatures || {};
                 const hasTrackpad = !hidden.trackpad;
@@ -845,12 +845,12 @@
                 );
             }
 
-            // ── renderUserItem — shared renderer for user-defined items ─────────────
+            // -- renderUserItem, shared renderer for user-defined items --
             // Used by both buildSettings (Settings section) and buildUserSection.
             // Context-menu items shared by every user setting row. "Reset to
             // default" appears when the def carries a default; "Delete tool"
             // appears only for settings the user authored in the Setting
-            // Builder (item.authored, set by the host) — pack-declared settings
+            // Builder (item.authored, set by the host), pack-declared settings
             // are not ours to remove. Returns null when neither applies so the
             // row menu stays hidden.
             function userCtxItems(item) {
@@ -989,9 +989,9 @@
                 }
             }
 
-            // ── buildDefaults — save / restore the whole settings file ─────────
-            // These act on every setting, app-level and pack-defined alike —
-            // not just the user-defined ones — so they live in the Settings
+            // -- buildDefaults, save / restore the whole settings file --
+            // These act on every setting, app-level and pack-defined alike ,
+            // not just the user-defined ones, so they live in the Settings
             // panel, not in Tools with the pack's own controls.
             function buildDefaults(body) {
                 body.appendChild(
@@ -1018,7 +1018,7 @@
                 );
             }
 
-            // ── buildSettings — the pack's own user-defined settings ───────────
+            // -- buildSettings, the pack's own user-defined settings --
             function buildSettings(body) {
                 // User-defined settings targeting the Settings section
                 const items = S.userSettings || [];
@@ -1042,7 +1042,7 @@
                 }
             }
 
-            // ── buildUserSection — custom user-defined sections ────────────────────
+            // -- buildUserSection, custom user-defined sections --
             function buildUserSection(body, menu) {
                 for (const item of menu.items || []) {
                     renderUserItem(body, item);
@@ -1072,7 +1072,7 @@
             }
 
             // The row menu (also opened by right-click). Switch/Delete only make
-            // sense for a saved, non-active profile; Export works for either —
+            // sense for a saved, non-active profile; Export works for either ,
             // the active one exports live, a saved one exports its snapshot plus
             // the live assets (see exportPackage/collect in the host).
             function profileMenuItems(name, isCurrent) {
@@ -1094,7 +1094,7 @@
                 }
                 items.push({
                     icon: "",
-                    label: "Export this profile…",
+                    label: "Export this profile...",
                     action: () =>
                         sendToHost(
                             isCurrent
@@ -1140,7 +1140,7 @@
 
                 for (const name of profiles) {
                     const isCurrent = name === current;
-                    // No "disabled" on the active row — it must stay interactive
+                    // No "disabled" on the active row, it must stay interactive
                     // so its actions button (Export) is clickable.
                     const r = h("div", {
                         cls: "row",
@@ -1152,7 +1152,7 @@
                             h("span", { cls: "pill success" }, "Active"),
                         );
 
-                    // Visible actions affordance — right-click is not reliable in
+                    // Visible actions affordance, right-click is not reliable in
                     // the host webview, so every action is reachable from here.
                     const menuBtn = h(
                         "button",
@@ -1272,18 +1272,18 @@
                         actionBtn("Export Profile", "", () =>
                             sendToHost({ action: "exportPackage", type: "profile" }),
                         ),
-                        actionBtn("Split Profile…", "", () =>
+                        actionBtn("Split Profile...", "", () =>
                             sendToHost({ action: "splitProfile" }),
                         ),
                     ),
                 );
-                // A profile carries everything; this is the narrow one — just
+                // A profile carries everything; this is the narrow one, just
                 // ms_macros.lua / ms_macros_visual.json and sounds/macro/. Both
                 // macro formats travel if both are present; the manifest's
                 // macroFormat records which.
                 body.appendChild(
                     btnRow(
-                        actionBtn("Export Macros…", "", () =>
+                        actionBtn("Export Macros...", "", () =>
                             sendToHost({ action: "exportPackage", type: "macro" }),
                         ),
                     ),
@@ -1292,7 +1292,7 @@
 
             function buildDeveloper(body) {
                 // Edit Macros lives in the Macros panel toolbar and Edit Theme
-                // in the Theme panel's Theme File section — each raw-file escape
+                // in the Theme panel's Theme File section, each raw-file escape
                 // hatch sits with the builder that owns that file.
                 body.appendChild(
                     btnRow(
@@ -1418,8 +1418,8 @@
                 // System Integrity
                 const status = S.integrityStatus || "uninitialized";
                 const hash = S.integrityHash
-                    ? S.integrityHash.slice(0, 16) + "…"
-                    : "—";
+                    ? S.integrityHash.slice(0, 16) + "..."
+                    : ",";
                 const trusted = status === "trusted";
 
                 let statusPill;
@@ -1438,7 +1438,7 @@
                 else statusPill = h("span", { cls: "pill", style: "font-weight:600" }, "Not set");
                 body.appendChild(row("System Integrity", hash, statusPill));
 
-                // Trust row — greyed when trusted
+                // Trust row, greyed when trusted
                 const trustRow = h("div", {
                     cls: "row" + (trusted ? " disabled" : ""),
                     onmouseenter: () => {
@@ -1451,7 +1451,7 @@
                         { cls: "row-label" },
                         trusted
                             ? "Trust Current Version"
-                            : "Trust Current Version…",
+                            : "Trust Current Version...",
                     ),
                 );
                 if (!trusted) {
@@ -1460,7 +1460,7 @@
                         const prompt =
                             status === "uninitialized"
                                 ? `Seal this ms_core.lua as the trusted baseline?\nHash: ${hash}`
-                                : `Hash mismatch — trust the CURRENT (possibly modified) version?\nHash: ${hash}`;
+                                : `Hash mismatch, trust the CURRENT (possibly modified) version?\nHash: ${hash}`;
                         const r = await openModal(
                             "Trust Current Version",
                             prompt,
@@ -1480,7 +1480,7 @@
                     ),
                 );
 
-                // Delete hash — only shown when a hash is actually on record
+                // Delete hash, only shown when a hash is actually on record
                 if (status !== "uninitialized") {
                     body.appendChild(divider());
                     body.appendChild(
@@ -1493,9 +1493,9 @@
                                         "Delete Trusted Hash",
                                         "This removes integrity protection entirely.\n\n" +
                                             "From this point on mudscript will load ANY version of its code " +
-                                            "without warning — including maliciously modified files.\n\n" +
+                                            "without warning, including maliciously modified files.\n\n" +
                                             "You are on your own. Proceed only if you know what you are doing.",
-                                        "Delete — I understand the risk",
+                                        "Delete, I understand the risk",
                                     );
                                     if (r.confirmed)
                                         sendToHost({
@@ -1578,14 +1578,14 @@
                 body.appendChild(btnRow(docBtn, githubBtn));
             }
 
-            // ── Render ─────────────────────────────────────────────────────────
+            // -- Render --
             function render() {
                 const scroll = document.getElementById("scroll");
                 const scrollTop = scroll.scrollTop;
                 scroll.innerHTML = "";
 
-                // Everything user-defined — the pack's own Settings section,
-                // its Calibration group, and any custom menus — lives in the
+                // Everything user-defined, the pack's own Settings section,
+                // its Calibration group, and any custom menus, lives in the
                 // Tools panel now (renderToolsPanel, below). Macros moved to
                 // the macros panel, which owns rebinding. Settings keeps only
                 // the app-level surfaces that have no panel of their own.
@@ -1612,12 +1612,12 @@
                 scroll.scrollTop = scrollTop;
             }
 
-            // ── buildSettingBuilder — author a setting from the Tools panel ────
+            // -- buildSettingBuilder, author a setting from the Tools panel --
             // A live form for composing a setting definition without hand-
             // editing ms_macros.lua: pick a type, fill the fields, watch it
             // render in the preview using the very same renderUserItem the real
             // rows use, then Add it. The Add posts the finished def to the host
-            // on the tools channel (ui:tools:addUserSetting) — the Lua side that
+            // on the tools channel (ui:tools:addUserSetting), the Lua side that
             // persists it into the pack is the next step; until then this
             // models the authoring flow end to end and previews the result.
             function buildSettingBuilder(body) {
@@ -1657,7 +1657,7 @@
                 // house style. Re-renders nothing on input beyond the preview,
                 // so focus stays put while typing. The input elements are kept
                 // in `identityInputs` so Add/Reset can push cleared draft values
-                // back into the DOM — the builder no longer rebuilds itself, so
+                // back into the DOM, the builder no longer rebuilds itself, so
                 // clearing `draft` alone would leave stale text on screen.
                 const identityInputs = {};
                 const textField = (labelText, sub, key, placeholder) => {
@@ -1674,7 +1674,7 @@
                     identityInputs[key] = input;
                     return row(labelText, sub, input);
                 };
-                // Sync the identity inputs' visible text from `draft` — used
+                // Sync the identity inputs' visible text from `draft`, used
                 // after Add/Reset clears the draft.
                 const syncIdentityInputs = () => {
                     for (const k in identityInputs)
@@ -1699,7 +1699,7 @@
                         "row-sub row-compact",
                     );
 
-                // ── Stable containers ────────────────────────────────────────
+                // -- Stable containers --
                 // Type picker never rebuilds; the type-specific block (dyn) and
                 // the preview do. Keeping the picker and the common text fields
                 // out of the rebuilt region is what preserves input focus.
@@ -1719,13 +1719,13 @@
                 const dyn = h("div", { cls: "setting-builder-dyn" });
                 body.appendChild(dyn);
 
-                // ── Preview ──────────────────────────────────────────────────
+                // -- Preview --
                 body.appendChild(divider());
                 body.appendChild(groupLabel("Preview"));
                 const preview = h("div", { cls: "setting-builder-preview" });
                 body.appendChild(preview);
 
-                // ── Add / Reset ──────────────────────────────────────────────
+                // -- Add / Reset --
                 body.appendChild(
                     btnRow(
                         actionBtn("Add Setting", "accent", () => {
@@ -1738,7 +1738,7 @@
                             // The host validates (duplicate keys, etc.) and is
                             // the source of truth for the success/failure
                             // notice. Clear the identity fields so the next
-                            // setting starts fresh — the builder no longer
+                            // setting starts fresh, the builder no longer
                             // rebuilds on the host's state push, so push the
                             // cleared values into the inputs directly.
                             sendToHost({ action: "addUserSetting", def: def });
@@ -1760,9 +1760,9 @@
                     ),
                 );
 
-                // ── Builders ─────────────────────────────────────────────────
+                // -- Builders --
                 // Assemble the serialized item the preview and the host both
-                // consume — same shape ms_ui.lua emits for a defined setting.
+                // consume, same shape ms_ui.lua emits for a defined setting.
                 function buildDef() {
                     const d = { type: draft.type, target: draft.target };
                     if (keyed(draft.type)) {
@@ -1808,7 +1808,7 @@
                     return null;
                 }
 
-                // ── Type-specific fields ─────────────────────────────────────
+                // -- Type-specific fields --
                 function renderDynamic() {
                     dyn.innerHTML = "";
                     const t = draft.type;
@@ -1976,11 +1976,11 @@
                 updatePreview();
             }
 
-            // ── Tools panel (rendered into #tools-scroll) ────────────────────
+            // -- Tools panel (rendered into #tools-scroll) --
             // Home for everything the macro pack defines: the generic Settings
             // section (with Save/Reset as Default), the Calibration group, and
             // any custom menus. Built from the same section()/renderUserItem
-            // kit as the Settings panel — same document, so it renders straight
+            // kit as the Settings panel, same document, so it renders straight
             // into the Tools panel's scroll container. Rendered from
             // panel-settings.js exactly as the Profiles panel is.
             function renderToolsPanel() {
@@ -2019,7 +2019,7 @@
                 // Setting Builder lives in its own tab. Build it ONCE: it is a
                 // self-contained compose form backed by local `draft` state and
                 // reads nothing from host state, so there is no reason to rebuild
-                // it on a state push — and doing so destroyed the focused input
+                // it on a state push, and doing so destroyed the focused input
                 // mid-keystroke. With the shell being a non-activating panel,
                 // the lost focus meant the next keys fell through to whatever app
                 // was actually active instead of the field.
@@ -2033,7 +2033,7 @@
             }
             window.renderToolsPanel = renderToolsPanel;
 
-            // ── Tools tab strip ──────────────────────────────────────────────
+            // -- Tools tab strip --
             let _otabs = null;
             function toolsTabs() {
                 if (_otabs) return _otabs;
@@ -2057,7 +2057,7 @@
             }
             window.switchToolsTab = switchToolsTab;
 
-            // ── Profiles panel (rendered into #profiles-scroll) ──────────────
+            // -- Profiles panel (rendered into #profiles-scroll) --
             function renderProfilesPanel() {
                 const el = document.getElementById("profiles-scroll");
                 if (!el) return;
@@ -2068,14 +2068,14 @@
                     style: "padding:16px 14px 8px;font-size:11px;color:var(--text3);opacity:0.6;font-style:italic;",
                 }, "More profile features coming soon.");
                 el.appendChild(note);
-                // The Profiles panel no longer has a Browse tab — discovery and
+                // The Profiles panel no longer has a Browse tab, discovery and
                 // install moved to the universal Browse stage (panel-browse.js).
             }
             window.renderProfilesPanel = renderProfilesPanel;
-            // The Profiles panel is a single view now — its old Profiles/Browse
+            // The Profiles panel is a single view now, its old Profiles/Browse
             // tab strip was removed once Browse moved to its own stage.
 
-            // ── Theme application ──────────────────────────────────────────────
+            // -- Theme application --
 
             window.settingsApplyTheme = settingsApplyTheme;
 
@@ -2094,7 +2094,7 @@
                 document.body.style.fontFamily = `"${font}", Almendra, Palatino, Georgia, serif`;
             }
 
-            // Parse #rrggbb or #rgb → { r, g, b }
+            // Parse #rrggbb or #rgb -> { r, g, b }
             function hexToRgb(hex) {
                 hex = hex.replace(/^#/, "");
                 if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
@@ -2105,7 +2105,7 @@
             function settingsApplyTheme(t) {
                 if (!t) return;
                 const r = document.documentElement.style;
-                // ── Base colors ──────────────────────────────────────────
+                // -- Base colors --
                 if (t.bg) r.setProperty("--bg", t.bg);
                 if (t.surface) r.setProperty("--surface", t.surface);
                 if (t.surface2) r.setProperty("--surface2", t.surface2);
@@ -2118,7 +2118,7 @@
                 if (t.warning) r.setProperty("--warning", t.warning);
                 if (t.text) r.setProperty("--text", t.text);
 
-                // ── Derived: text2/text3 from text ───────────────────────
+                // -- Derived: text2/text3 from text --
                 if (t.text && !t.text2) {
                     const c = hexToRgb(t.text);
                     if (c) r.setProperty("--text2", `rgba(${c.r},${c.g},${c.b},0.85)`);
@@ -2128,7 +2128,7 @@
                     if (c) r.setProperty("--text3", `rgba(${c.r},${c.g},${c.b},0.55)`);
                 }
 
-                // ── Derived: border from accent + hover mix ──────────────
+                // -- Derived: border from accent + hover mix --
                 if (t.accent && t.hover && !t.border) {
                     const a = hexToRgb(t.accent);
                     const h = hexToRgb(t.hover);
@@ -2140,7 +2140,7 @@
                     }
                 }
 
-                // ── Derived: accent glow ─────────────────────────────────
+                // -- Derived: accent glow --
                 if (t.accent && !t.accentGlow) {
                     const a = hexToRgb(t.accent);
                     if (a) r.setProperty("--accent-glow", `rgba(${a.r},${a.g},${a.b},0.4)`);
@@ -2150,7 +2150,7 @@
                     if (a) r.setProperty("--accent-glow-faint", `rgba(${a.r},${a.g},${a.b},0.12)`);
                 }
 
-                // ── Derived: danger glow/border ──────────────────────────
+                // -- Derived: danger glow/border --
                 if (t.danger && !t.dangerGlow) {
                     const d = hexToRgb(t.danger);
                     if (d) r.setProperty("--danger-glow", `rgba(${d.r},${d.g},${d.b},0.6)`);
@@ -2160,7 +2160,7 @@
                     if (d) r.setProperty("--danger-border", `rgba(${d.r},${d.g},${d.b},0.3)`);
                 }
 
-                // ── Explicit overrides always win ────────────────────────
+                // -- Explicit overrides always win --
                 if (t.text2) r.setProperty("--text2", t.text2);
                 if (t.text3) r.setProperty("--text3", t.text3);
                 if (t.border) r.setProperty("--border", t.border);
@@ -2169,7 +2169,7 @@
                 if (t.dangerGlow) r.setProperty("--danger-glow", t.dangerGlow);
                 if (t.dangerBorder) r.setProperty("--danger-border", t.dangerBorder);
 
-                // ── Radius, font ────────────────────────────────────────
+                // -- Radius, font --
                 if (t.radius !== undefined) {
                     r.setProperty("--radius", t.radius + "px");
                     r.setProperty(
@@ -2180,7 +2180,7 @@
                 applyFont(t.font, t.fontURL);
             }
 
-            // ── receiveState ───────────────────────────────────────────────────
+            // -- receiveState --
             function receiveState(state) {
                 S = state;
                 applyTheme(S.theme);
@@ -2189,13 +2189,13 @@
                 render();
                 renderToolsPanel();
                 renderProfilesPanel();
-                // Theme & sound live in panel-theme.js — it gets the state it
+                // Theme & sound live in panel-theme.js, it gets the state it
                 // needs handed to it rather than reaching back for S.
                 if (window.renderThemePanel) window.renderThemePanel(state);
                 if (window.renderPluginsPanel) window.renderPluginsPanel(state);
             }
 
-            // ── Init ───────────────────────────────────────────────────────────
+            // -- Init --
             document.addEventListener("DOMContentLoaded", () => {
                 // When embedded in the shell iframe, strip window-chrome styling
                 if (window.shellPost) {

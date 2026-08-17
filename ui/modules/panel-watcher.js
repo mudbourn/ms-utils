@@ -1,7 +1,7 @@
     /* panel: watcher */
     (function() {
     "use strict";
-// ── Step categories ─────────────────────────────────────────────
+// -- Step categories --
             const CATS = [
                 { id: "wait", label: "Waits", regex: /\] wait / },
                 { id: "sound", label: "Sound calls", regex: /\] sound / },
@@ -23,10 +23,10 @@
                 return "other";
             }
 
-            // ── Panel container (for scoped DOM queries) ──────────────────
+            // -- Panel container (for scoped DOM queries) --
             const _panel = document.querySelector('.panel-watcher');
 
-            // ── Mute state ──────────────────────────────────────────────────
+            // -- Mute state --
             const _muted = new Set();
 
             function isMuted(cat) { return _muted.has(cat); }
@@ -60,7 +60,7 @@
                 }
             }
 
-            // ── Build filter panel ──────────────────────────────────────────
+            // -- Build filter panel --
             (function buildFilterPanel() {
                 const CAT_DOT_COLORS = {
                     wait: "var(--text3)",
@@ -135,7 +135,7 @@
                 }
             });
 
-            // ── Watcher buildRow ────────────────────────────────────────────
+            // -- Watcher buildRow --
             function buildRow(entry) {
                 if (entry.type === "step") {
                     const row = document.createElement("div");
@@ -213,7 +213,7 @@
                 return row;
             }
 
-            // ── Create LogPanel ─────────────────────────────────────────────
+            // -- Create LogPanel --
             const lp = createLogPanel({
                 channel: "watcher",
                 buildRow,
@@ -223,14 +223,14 @@
                 clearAction: "clearLog",
             });
 
-            // ── Expose globals for inline handlers ──────────────────────────
+            // -- Expose globals for inline handlers --
             window._panelPauseFns['watcher'] = lp.togglePause;
             window.playSlot          = lp.playSlot;
             window.toggleFilterPanel = toggleFilterPanel;
             window.closePanel        = lp.closePanel;
             window.watcherApplyTheme = lp.applyTheme;
 
-            // ── Watcher clearLog ────────────────────────────────────────────
+            // -- Watcher clearLog --
             function clearLog() {
                 const log = _panel ? _panel.querySelector("#log") : document.getElementById("log");
                 if (log) log.innerHTML = "";
@@ -238,7 +238,7 @@
             }
             window._panelClearFns['watcher'] = clearLog;
 
-            // ── Init ────────────────────────────────────────────────────────
+            // -- Init --
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("watcher", function(action, body) {

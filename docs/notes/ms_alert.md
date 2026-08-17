@@ -1,11 +1,6 @@
-# MsAlert — design notes
+# MsAlert
 
-Staged rationale extracted from `mac/lib/ms_alert.lua` during the comment
-cleanup. Source material for the phase-4 navigable docs. Each entry is "why the
-code is the way it is", removed from the source so the code carries mechanics,
-not essays.
-
-## Toast window level — `screenSaver + 1`
+## Toast window level (`screenSaver + 1`)
 
 `makeCanvas` sets the canvas level to `windowLevels.screenSaver + 1`.
 

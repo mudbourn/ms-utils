@@ -1,4 +1,4 @@
--- MsDevTools — converted from a Spoon; Spoons/ is reserved for plugins.
+-- MsDevTools --
 return function(ms)
 -- MsDevTools --
     local MsDevTools = {}
@@ -10,12 +10,9 @@ return function(ms)
     MsDevTools.logDir       = "~/Documents/ms_dev_logs/"
     MsDevTools.branchTrace  = true
 
-    -- Panel push helper: route through shellReceive when panel is in shell,
-    -- fall back to direct evaluateJavaScript for standalone / popout webviews.
     local function _pushToPanel(panelView, panelId, js)
         local ms = _G.ms
 
-        -- Popout: panel lives in its own borderless webview
         if ms and ms.shell and ms.shell.getPopOutView then
             local popView = ms.shell.getPopOutView(panelId)
             if popView then
@@ -24,20 +21,15 @@ return function(ms)
             end
         end
 
-        -- Shell path: panel inline in the main shell webview
         if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
-            -- Extract function call: "appendEntry({...})" → fn="appendEntry", args="{}"
             local fnName, argStr = js:match("^(%w+)%((.+)%)$")
             if fnName and argStr then
-                -- shellReceive routes to the registered JS panel handler
-                -- (shellDispatch would send BACK to Lua — wrong direction)
                 local receiveJs = "shellReceive(\"" .. panelId .. "\",\"" .. fnName .. "\"," .. argStr .. ")"
                 pcall(function() ms.shell.eval(receiveJs) end)
                 return
             end
         end
 
-        -- Fallback: direct webview push (standalone panel)
         if panelView then
             pcall(function() panelView:evaluateJavaScript(js) end)
         end
@@ -69,21 +61,24 @@ return function(ms)
     }
 
     local _typeToChannel = {
-        key = "keys", mouse = "keys", scroll = "keys", mousemove = "keys",
-        macro = "watcher", sound = "watcher",
-        system = "console", print = "console", result = "console",
+        key = "keys",
+        mouse = "keys",
+        scroll = "keys",
+        mousemove = "keys",
+        macro = "watcher",
+        sound = "watcher",
+        system = "console",
+        print = "console",
+        result = "console",
         input = "console",
-        error = "console",  -- error primary channel; also gated per-panel for watcher
+        error = "console",
     }
 
     local _devBusy            = false
     local _devLastConsoleType = nil
 
-    -- Persistent file handles: one long-lived append handle per log file,
-    -- opened lazily, flushed per line (immediacy preserved), reopened after
-    -- a trim, closed on teardown. Eliminates open→write→close syscalls.
-    local _catHandles  = {}   -- [path] = open file* for the JSON log
-    local _readHandles = {}   -- [path] = open file* for the readable log
+    local _catHandles  = {}
+    local _readHandles = {}
     local _dirsEnsured = false
 
     local function _ensureDirs()
@@ -103,7 +98,6 @@ return function(ms)
         return h
     end
 
-    -- Close all persistent log handles (call on teardown / full reload)
     function MsDevTools:closeLogHandles()
         for path, h in pairs(_catHandles) do pcall(function() h:close() end) end
         for path, h in pairs(_readHandles) do pcall(function() h:close() end) end
@@ -111,11 +105,6 @@ return function(ms)
         _readHandles = {}
     end
 
-    -- Write-time log capping: periodically trim log files to _HIST_MAX lines
-    -- to prevent unbounded growth (the root cause of the Inputs Panel hang).
-    -- Module scope: both the history loader (inside :start()) and the write-time
-    -- cap (inside :_devWrite()) need this, and they are sibling functions — a
-    -- local inside :start() reads as a nil global from _devWrite.
     local _HIST_MAX            = 500
     local _WRITE_TRIM_INTERVAL = 200
     local _writeCounter        = 0
@@ -130,12 +119,18 @@ return function(ms)
         local g = io.open(path, "w")
         if not g then return end
         for i = #lines - keep + 1, #lines do
-            g:write(lines[i]); g:write("\n")
+            g:write(lines[i])
+            g:write("\n")
         end
         g:close()
     end
     local _lastReadLine       = nil
-    local _consoleSkip = { target_focus=1, target_blur=1, macros_enabled=1, macros_disabled=1 }
+    local _consoleSkip = {
+        target_focus=1,
+        target_blur=1,
+        macros_enabled=1,
+        macros_disabled=1,
+    }
     local _lastReadType       = nil
     local _lastReadCategory   = nil
 
@@ -164,24 +159,20 @@ return function(ms)
     local _mousePos, _mousePoller, _windowPoller
     local _windowHistory, _windowLast, _windowMaxHistory
     local _pushMouseState
-    -- Window Spy engine (event-driven, hang-safe; replaces the 0.4s poller)
     local _winAppWatcher, _winUiWatcher, _winMonitor
     local _winDirty, _winMoveN, _winResizeN, _winLastMouse, _winLastInspectAt
-    -- Forward-declared so the Window bus handler in :start() (registered far above
-    -- their definitions) captures these upvalues instead of resolving to nil
-    -- globals — the "ready" push fired _winRead/_winPush before they existed.
     local _winRead, _winPush
     local _axTimeoutSet = false
-    -- Standalone-panel drag: OS-mouse-delta eventtap, mirroring the shell
-    -- window (log-panel.js sends dragStart/moveEnd, not per-move deltas)
     local _devDragTap
     local function _devDragEnd(getView)
-        if _devDragTap then _devDragTap:stop(); _devDragTap = nil end
+        if _devDragTap then _devDragTap:stop()
+        _devDragTap = nil end
         local v = getView and getView()
         if v then pcall(function() v:shadow(true) end) end
     end
     local function _devDragStart(getView, pos)
-        if _devDragTap then _devDragTap:stop(); _devDragTap = nil end
+        if _devDragTap then _devDragTap:stop()
+        _devDragTap = nil end
         local view = getView()
         if not view then return end
         local startFrame = view:frame()
@@ -189,7 +180,10 @@ return function(ms)
         local topLimit = (hs.mouse.getCurrentScreen() or hs.screen.mainScreen()):frame().y
         pcall(function() view:shadow(false) end)
         local et = hs.eventtap.event.types
-        _devDragTap = hs.eventtap.new({ et.leftMouseDragged, et.leftMouseUp }, function(ev)
+        _devDragTap = hs.eventtap.new({
+            et.leftMouseDragged,
+            et.leftMouseUp,
+        }, function(ev)
             local v = getView()
             if not v then return false end
             if ev:getType() == et.leftMouseUp then
@@ -199,33 +193,25 @@ return function(ms)
             local mp = hs.mouse.absolutePosition()
             local nx = startFrame.x + (mp.x - startMouse.x)
             local ny = math.max(startFrame.y + (mp.y - startMouse.y), topLimit)
-            if pos then pos.x = nx; pos.y = ny end
-            pcall(function() v:frame({ x = nx, y = ny, w = startFrame.w, h = startFrame.h }) end)
+            if pos then pos.x = nx
+            pos.y = ny end
+            pcall(function() v:frame({
+                x = nx,
+                y = ny,
+                w = startFrame.w,
+                h = startFrame.h,
+            }) end)
             return false
         end)
         _devDragTap:start()
     end
-    -- Shell state: which inline panel is showing + a move-driven mouse poller so
-    -- the Inputs coordinate readout follows the cursor (the click-only eventtap
-    -- was the sole coord source in the shell; there is no standalone keys panel).
     local _activePanel, _shellMousePoller
-    -- Window Spy: is the Window tab showing?  The element-under-cursor AX read
-    -- (systemElementAtPosition) is the heaviest/riskiest call and feeds the
-    -- element data card, which now lives in the Window tab alongside the focused
-    -- window card.  We skip it while the Log tab is up.
     local _winElementTab = true
-    -- F6: decouple the expensive pixel-snapshot + AX element-inspection from
-    -- the engine.  Off by default — the user opts in via the Window panel.
-    -- Octane forces this off (along with the whole engine).
     local _winElementInspect = false
-    -- Pending minimize/hide transition (name + label) to log on the next tick, and
-    -- the name of the app the scoped watcher is currently following.
     local _winPendingEvent, _winWatchedAppName
 
     local _traceSuppress = false
 
-    -- Shell-mode helper: returns true when the shell is the active display
-    -- (standalone panels are nil, but shell panels are inline and ready)
     local function _shellActive()
         local m = _G.ms
         return m and m.shell and m.shell.isReady and m.shell.isReady() or false
@@ -235,10 +221,12 @@ return function(ms)
     local _devFadeTimers = {}
     local _htmlCache = {}
 
-    -- Octane logging gate: maps channel → enabled (true = logging active)
-    -- All channels default to enabled. Octane _apply sets all to false.
-    -- Channels: console, watcher, keys, window
-    local _logEnabled = { console = true, watcher = true, keys = true, window = true }
+    local _logEnabled = {
+        console = true,
+        watcher = true,
+        keys = true,
+        window = true,
+    }
 
     local function _cacheDevHTML()
         local files = {
@@ -265,7 +253,13 @@ return function(ms)
         _catPaths = {}
         _readablePaths = {}
 
-        for _, cat in ipairs({"input", "macro", "system", "error", "console"}) do
+        for _, cat in ipairs({
+            "input",
+            "macro",
+            "system",
+            "error",
+            "console",
+        }) do
             _catPaths[cat]      = _jsonDir .. "ms_dev_" .. cat .. ".log"
             _readablePaths[cat] = _readDir .. "ms_dev_" .. cat .. ".txt"
         end
@@ -285,9 +279,6 @@ return function(ms)
         if not ms then return end
         if ms.checkGuardian and not ms.checkGuardian("MsDevTools") then return end
 
-        -- Global Accessibility messaging timeout: the seatbelt that makes every
-        -- AX call (window reads, element-under-cursor) fail fast instead of
-        -- freezing the single Lua thread if a target app is slow/mid-launch.
         if not _axTimeoutSet then
             _axTimeoutSet = pcall(function()
                 hs.axuielement.systemWideElement():setTimeout(0.15)
@@ -324,7 +315,6 @@ return function(ms)
             end,
         })
 
-        -- Callable table so ms.dev.log(entry) works AND ms.dev.log.pause/etc are fields
         ms.dev.log = setmetatable({
             pause = function(channel)
                 _logEnabled[channel] = false
@@ -368,8 +358,6 @@ return function(ms)
             self:onMouseEvent(...)
         end
 
-        -- Hot-path predicates: gate expensive per-event work in ms_core.lua
-        -- when no dev consumer would use the data.
         ms.dev._wantsMouseEvents = function()
             return _keysPanel or _shellActive() or _logEnabled.keys
         end
@@ -423,37 +411,12 @@ return function(ms)
             })
         end
 
-        -- Hammerspoon console mirroring.
-        --
-        -- print() already lands in the shell console via the _G.print wrap
-        -- above — the console evaluates typed input against _G, so a print()
-        -- there resolves to it. What never arrives is the console's own echo:
-        -- runstring (Hammerspoon's _coresetup.lua) load()s the line, tostring()s
-        -- the results and *returns* the string for the ObjC console to draw, so
-        -- an expression's value never passes through print at all.
-        --
-        -- The input preparser is the only supported hook into that path, and it
-        -- only sees the source. So the source is stashed and swapped for a call
-        -- to our own evaluator, which reproduces runstring's contract exactly:
-        -- same load() order (expression, then statement), same xpcall, and the
-        -- same return values passed back — runstring tostring/tab-joins them,
-        -- so the console draws what it always drew.
-        --
-        -- Stashing rather than re-quoting the source into the replacement
-        -- string is deliberate: any quoting scheme can be broken by input that
-        -- contains its own delimiter, and this hook sits in front of every line
-        -- typed into the console. Preparse and eval are consecutive and
-        -- single-threaded, so the stash cannot interleave.
         local _consoleSrc = nil
 
         local function _logConsole(entry)
             pcall(function() self:log(entry) end)
         end
 
-        -- Global rather than reached through ms.dev: this name is baked into
-        -- the string handed back to the console, so it has to resolve even if
-        -- ms.dev is mid-reload, or a typed line would fail on a nil index
-        -- instead of running.
         _G.__msConsoleEval = function()
             local src = _consoleSrc
             _consoleSrc = nil
@@ -464,20 +427,23 @@ return function(ms)
             if not fn then fn, err = load(src) end
 
             if not fn then
-                _logConsole({ type = "error", msg = tostring(err) })
-                return tostring(err)   -- runstring returns the load error too
+                _logConsole({
+                    type = "error",
+                    msg = tostring(err),
+                })
+                return tostring(err)
             end
 
             local res = table.pack(xpcall(fn, debug.traceback))
 
             if not res[1] then
-                _logConsole({ type = "error", msg = tostring(res[2]) })
-                return res[2]          -- runstring draws the traceback alone
+                _logConsole({
+                    type = "error",
+                    msg = tostring(res[2]),
+                })
+                return res[2]
             end
 
-            -- res[1] is xpcall's success flag; the real values start at 2.
-            -- A line with no return value (an assignment, a call returning
-            -- nothing) logs nothing rather than an empty result row.
             if res.n > 1 then
                 local parts = {}
 
@@ -494,8 +460,6 @@ return function(ms)
             return table.unpack(res, 2, res.n)
         end
 
-        -- Chain rather than clobber: the preparser is a single global slot and
-        -- something else may already own it.
         local _prevPreparser = hs._consoleInputPreparser
 
         hs._consoleInputPreparser = function(s)
@@ -506,18 +470,16 @@ return function(ms)
 
             if type(s) ~= "string" or s:match("^%s*$") then return s end
 
-            _logConsole({ type = "input", msg = s })
+            _logConsole({
+                type = "input",
+                msg = s,
+            })
 
             _consoleSrc = s
 
             return "__msConsoleEval()"
         end
 
-        -- History loader (must be before bus handlers)
-        -- Bounded read: reads all raw lines (cheap string ops, no JSON decode),
-        -- then only decodes the last _HIST_MAX entries. The log is append-only
-        -- (entries written in chronological order), so no sort is needed. This
-        -- replaces the old full-file decode + sort + trim approach.
         local function _loadDevHistory(panel, categories, shellPanelId, skipEvents)
             local entries = {}
             for _, cat in ipairs(categories) do
@@ -525,13 +487,11 @@ return function(ms)
                 if path then
                     local f = io.open(path, "r")
                     if f then
-                        -- Phase 1: read raw lines (cheap — no JSON decode)
                         local rawLines = {}
                         for line in f:lines() do
                             rawLines[#rawLines + 1] = line
                         end
                         f:close()
-                        -- Phase 2: decode only the last _HIST_MAX lines
                         local start = math.max(1, #rawLines - _HIST_MAX + 1)
                         for i = start, #rawLines do
                             local ok, entry = pcall(hs.json.decode, rawLines[i])
@@ -545,7 +505,6 @@ return function(ms)
                 end
             end
             if #entries == 0 then return end
-            -- Entries are in append order (chronological); no sort needed.
             local ok, json = pcall(hs.json.encode, entries)
             if ok then
                 if shellPanelId then
@@ -558,9 +517,7 @@ return function(ms)
             end
         end
 
-        -- Shell bus subscribers: handle messages from dev tool panels in shell
         if ms.bus then
-            -- Console panel actions
             ms.bus.on("ui:console:*", function(topic, body)
                 if not body or type(body) ~= "table" then return end
                 local action = body.action
@@ -568,62 +525,81 @@ return function(ms)
                     local fn, err = load("return " .. body.code)
                     if not fn then fn, err = load(body.code) end
                     if not fn then
-                        self:_devWrite({ type = "error", msg = err or "syntax error" })
+                        self:_devWrite({
+                            type = "error",
+                            msg = err or "syntax error",
+                        })
                     else
                         local res = table.pack(pcall(fn))
                         local success = table.remove(res, 1)
                         if not success then
-                            self:_devWrite({ type = "error", msg = tostring(res[1]) })
+                            self:_devWrite({
+                                type = "error",
+                                msg = tostring(res[1]),
+                            })
                         elseif #res > 0 then
                             local parts = {}
                             for _, v in ipairs(res) do parts[#parts + 1] = tostring(v) end
-                            self:_devWrite({ type = "result", msg = table.concat(parts, "\t") })
+                            self:_devWrite({
+                                type = "result",
+                                msg = table.concat(parts, "\t"),
+                            })
                         end
                     end
                 elseif action == "clear" then
-                    for _, cat in ipairs({"console", "error", "system"}) do
+                    for _, cat in ipairs({
+                        "console",
+                        "error",
+                        "system",
+                    }) do
                         local p = _catPaths[cat]
-                        if p then local f = io.open(p, "w"); if f then f:close() end end
+                        if p then local f = io.open(p, "w")
+                        if f then f:close() end end
                         local r = _readablePaths[cat]
-                        if r then local f = io.open(r, "w"); if f then f:close() end end
+                        if r then local f = io.open(r, "w")
+                        if f then f:close() end end
                     end
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
                 elseif action == "ackDanger" then
-                    -- Persist the first-open danger-notice ack into
-                    -- ms_settings.json so it survives reloads and reinstalls.
                     ms._consoleDangerAck = true
                     if ms.saveSettings then ms.saveSettings() end
                 elseif action == "ready" then
-                    _loadDevHistory(nil, {"console", "error", "system"}, "console", _consoleSkip)
-                    -- Push the persisted danger-notice ack so the panel knows
-                    -- whether to raise the first-open warning.
+                    _loadDevHistory(nil, {
+                        "console",
+                        "error",
+                        "system",
+                    }, "console", _consoleSkip)
                     _pushToPanel(_consolePanel, "console",
                         "setDangerAck(" .. (ms._consoleDangerAck and "true" or "false") .. ")")
                 end
             end)
 
-            -- Watcher panel actions
             ms.bus.on("ui:watcher:*", function(topic, body)
                 if not body or type(body) ~= "table" then return end
                 local action = body.action
                 if action == "clear" then
-                    for _, cat in ipairs({"macro", "error"}) do
+                    for _, cat in ipairs({
+                        "macro",
+                        "error",
+                    }) do
                         local p = _catPaths[cat]
-                        if p then local f = io.open(p, "w"); if f then f:close() end end
+                        if p then local f = io.open(p, "w")
+                        if f then f:close() end end
                         local r = _readablePaths[cat]
-                        if r then local f = io.open(r, "w"); if f then f:close() end end
+                        if r then local f = io.open(r, "w")
+                        if f then f:close() end end
                     end
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
                 elseif action == "ready" then
-                    _loadDevHistory(nil, {"macro", "error"}, "watcher")
+                    _loadDevHistory(nil, {
+                        "macro",
+                        "error",
+                    }, "watcher")
                 end
             end)
 
-            -- Push the live reference resolution to the Inputs panel so the
-            -- "REF" coord-mode label shows the real numbers instead of the
-            -- hardcoded default. Called on panel-ready and on any ref change.
             local function _pushRefDims()
                 if not (_keysPanel or _shellActive()) then return end
                 local w = ms._refW or 1680
@@ -635,22 +611,26 @@ return function(ms)
             end
             ms.dev.pushRefDims = _pushRefDims
 
-            -- Inputs (keys) panel actions
             ms.bus.on("ui:keys:*", function(topic, body)
                 if not body or type(body) ~= "table" then return end
                 local action = body.action
                 if action == "clear" then
                     local p = _catPaths["input"]
-                    if p then local f = io.open(p, "w"); if f then f:close() end end
+                    if p then local f = io.open(p, "w")
+                    if f then f:close() end end
                     local r = _readablePaths["input"]
-                    if r then local f = io.open(r, "w"); if f then f:close() end end
+                    if r then local f = io.open(r, "w")
+                    if f then f:close() end end
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
                 elseif action == "ready" then
                     if not _keysReady then
                         _keysReady = true
                         local _p = hs.mouse.absolutePosition()
-                        _mousePos = { x = math.floor(_p.x), y = math.floor(_p.y) }
+                        _mousePos = {
+                            x = math.floor(_p.x),
+                            y = math.floor(_p.y),
+                        }
                     end
                     _loadDevHistory(nil, {"input"}, "keys")
                     _pushRefDims()
@@ -659,7 +639,6 @@ return function(ms)
                 end
             end)
 
-            -- Window panel actions
             ms.bus.on("ui:window:*", function(topic, body)
                 if not body or type(body) ~= "table" then return end
                 local action = body.action
@@ -668,22 +647,12 @@ return function(ms)
                 elseif action == "playSlot" and body.slot then
                     ms.playSlot(body.slot)
                 elseif action == "tab" then
-                    -- Gate the heavy element-under-cursor AX poll on the Window
-                    -- tab being visible (element data lives there now).  Force a
-                    -- recompute on entry so it fills immediately.
                     _winElementTab = (body.tab == "window")
                     if _winElementTab then _winLastMouse = nil end
                 elseif action == "setInspect" then
-                    -- F6: toggle the expensive pixel-snapshot + AX element inspection
                     _winElementInspect = (body.enabled == true)
                     if not _winElementInspect then _winLastMouse = nil end
                 elseif action == "ready" then
-                    -- Panel handler is now registered — push current state so
-                    -- the card fills immediately without requiring a tab-out.
-                    -- Also (re)load the event log from retained history: a popout
-                    -- fires ready only once its own webview has loaded, which is
-                    -- the reliable moment to seed it (the poppedOut handler's
-                    -- earlier push can lose the race against page load).
                     hs.timer.doAfter(0.05, function()
                         if _windowOpen then
                             local st = _winRead(hs.window.focusedWindow())
@@ -699,10 +668,6 @@ return function(ms)
                 end
             end)
 
-            -- Popping the Window panel into its own webview: it becomes live on
-            -- its own, so mark it open and (re)start the Window Spy engine. The
-            -- engine may have self-stopped as the inline panel hid during the
-            -- pop-out; without this restart the popout receives no pushes at all.
             ms.bus.on("panel:poppedOut", function(_, body)
                 if not body or body.id ~= "window" then return end
                 _windowOpen = true
@@ -711,35 +676,25 @@ return function(ms)
                 end
             end)
 
-            -- Rail navigation: load history + start pollers when panel changes
-            -- Bus handlers are invoked as fn(topic, payload); the panel name is on
-            -- the payload. Taking only one arg bound `data` to the topic STRING, so
-            -- data.panel was always nil and this whole handler returned early —
-            -- which is why the Window monitor never populated and the shell mouse
-            -- poller never started (the rail opens panels via navigate, not showX).
             ms.bus.on("ui:_shell:navigate", function(_, data)
                 if not data or not data.panel then return end
                 local p = data.panel
 
-                -- Octane logging gate: auto-resume the target channel and
-                -- re-pause the previous channel so only the active panel logs.
                 local _octaneActive = _G.ms and _G.ms._octaneMode
                 if _octaneActive then
-                    -- Pause previous channel
-                    local _panelToChannel = { console="console", watcher="watcher", keys="keys", window="window" }
+                    local _panelToChannel = {
+                        console="console",
+                        watcher="watcher",
+                        keys="keys",
+                        window="window",
+                    }
                     local prevCh = _panelToChannel[_activePanel]
                     if prevCh then _logEnabled[prevCh] = false end
-                    -- Resume new channel
                     local newCh = _panelToChannel[p]
                     if newCh then _logEnabled[newCh] = true end
                 end
 
                 _activePanel = p
-                -- Leaving the Window monitor: tear the AX engine down NOW, not on
-                -- the next 0.15s tick. On the Element tab a heavy element poll may
-                -- be in flight/queued, and letting it keep firing is what made
-                -- switching AWAY from that tab lag. Synchronous stop = no more
-                -- element reads contending with the destination panel.
                 if p ~= "window" then
                     _winElementTab = false
                     self:_winEngineStop()
@@ -747,30 +702,31 @@ return function(ms)
                 if p == "console" then
                     _consoleOpen = true
                     hs.timer.doAfter(0.1, function()
-                        _loadDevHistory(nil, {"console", "error", "system"}, "console", _consoleSkip)
+                        _loadDevHistory(nil, {
+                            "console",
+                            "error",
+                            "system",
+                        }, "console", _consoleSkip)
                     end)
                 elseif p == "watcher" then
                     _watcherOpen = true
                     hs.timer.doAfter(0.1, function()
-                        _loadDevHistory(nil, {"macro", "error"}, "watcher")
+                        _loadDevHistory(nil, {
+                            "macro",
+                            "error",
+                        }, "watcher")
                     end)
                 elseif p == "keys" then
                     if not _keysReady then _keysReady = true end
                     hs.timer.doAfter(0.1, function()
                         _loadDevHistory(nil, {"input"}, "keys")
                     end)
-                    -- Move-driven coordinate tracking. In the shell there is no
-                    -- standalone keys panel and thus no _mousePoller, so the only
-                    -- coord source was the click-only mouse eventtap — the readout
-                    -- froze between clicks. Poll the pointer so it follows drags,
-                    -- matching AHK Window Spy. Idle while another panel is shown;
-                    -- self-stops when the shell goes away.
-                    -- Under octane, skip the poller — coordinate tracking is cosmetic.
                     if not _octaneActive then
                         if _shellMousePoller then _shellMousePoller:stop() end
                         _shellMousePoller = hs.timer.doEvery(0.08, function()
                         if not _shellActive() then
-                            if _shellMousePoller then _shellMousePoller:stop(); _shellMousePoller = nil end
+                            if _shellMousePoller then _shellMousePoller:stop()
+                            _shellMousePoller = nil end
                             return
                         end
                         if _activePanel ~= "keys" then return end
@@ -780,11 +736,14 @@ return function(ms)
                         local _x, _y = math.floor(_p.x), math.floor(_p.y)
                         local prev = _mousePos
                         if not prev or _x ~= prev.x or _y ~= prev.y then
-                            _mousePos = { x = _x, y = _y }
+                            _mousePos = {
+                                x = _x,
+                                y = _y,
+                            }
                             pcall(function() _pushMouseState(_x, _y) end)
                         end
                     end)
-                    end -- not _octaneActive
+                    end
                 elseif p == "window" then
                     _windowOpen = true
                     hs.timer.doAfter(0.15, function()
@@ -793,31 +752,24 @@ return function(ms)
                             if ok then pcall(function() ms.shell.eval("shellReceive('window','loadHistory'," .. j .. ")") end) end
                         end
                     end)
-                    -- Start the event-driven Window Spy engine (idempotent). The
-                    -- engine primes the rich live-state card itself (sync + a
-                    -- delayed re-prime that beats the panel-ready race), so we no
-                    -- longer push a focus-shaped payload here: it carried no frame,
-                    -- pid, role, screen or flags and clobbered the rich state,
-                    -- leaving the card showing only App/Title.
-                    -- Under octane, skip the Window Spy engine entirely.
                     if not _octaneActive then
                         self:_winEngineStart()
                     end
                 end
             end)
 
-            -- The Window Spy engine self-stops whenever the shell hides (so it
-            -- isn't polling AX in the background). Restart it when the shell is
-            -- shown again while the Window panel is the active one.
             ms.bus.on("macroLab:toggled", function(_, body)
-                -- Under octane, don't restart Window Spy engine
                 if body and body.visible and _activePanel == "window" and _windowOpen
                     and not (_G.ms and _G.ms._octaneMode) then
                     self:_winEngineStart()
                 end
-                -- Octane: re-pause the active channel when the shell closes
                 if body and not body.visible and _G.ms and _G.ms._octaneMode then
-                    local _panelToChannel = { console="console", watcher="watcher", keys="keys", window="window" }
+                    local _panelToChannel = {
+                        console="console",
+                        watcher="watcher",
+                        keys="keys",
+                        window="window",
+                    }
                     local ch = _panelToChannel[_activePanel]
                     if ch then _logEnabled[ch] = false end
                 end
@@ -858,13 +810,15 @@ return function(ms)
 
         table.sort(list)
 
-        -- Cap at 5 folders per reload so we never block the main thread.
         local pruned = 0
 
         while #list > limit and pruned < 5 do
             local dir = _devArchDir .. list[1]
 
-            for _, sub in ipairs({"json", "readable"}) do
+            for _, sub in ipairs({
+                "json",
+                "readable",
+            }) do
                 local sp = dir .. "/" .. sub
 
                 if hs.fs.attributes(sp) then
@@ -887,7 +841,6 @@ return function(ms)
     function MsDevTools:_archiveOnReload()
         _flushReadLine()
 
-        -- Prune first so we never accumulate unbounded folders.
         local limit = (type(self.archiveLimit) == "number" and self.archiveLimit >= 0)
             and self.archiveLimit or 15
 
@@ -911,15 +864,10 @@ return function(ms)
 -- Core Logging --
     function MsDevTools:_devWrite(entry)
         if _devBusy then return end
-        -- Step entries belong in the watcher panel only, not the log file
         if entry.type == "step" then return end
 
-        -- Octane logging gate: skip all I/O and panel pushes when the entry's
-        -- channel is disabled. Each entry type maps to one primary channel.
         local ch = _typeToChannel[entry.type]
         if ch and not _logEnabled[ch] then
-            -- Even when the primary channel is disabled, check if the entry
-            -- also belongs to another enabled channel (e.g. error → watcher).
             local alsoChannel = nil
             if entry.type == "error" then alsoChannel = "watcher" end
             if not alsoChannel or not _logEnabled[alsoChannel] then
@@ -930,7 +878,6 @@ return function(ms)
 
         _devBusy = true
 
-        -- Flush any buffered readable line from the previous entry.
         _flushReadLine()
 
         entry.ts = os.date("%H:%M:%S")
@@ -970,12 +917,11 @@ return function(ms)
                 h:flush()
             end
 
-            -- Periodic log cap: trim to _HIST_MAX lines to prevent unbounded growth
             _writeCounter = _writeCounter + 1
             if _writeCounter % _WRITE_TRIM_INTERVAL == 0 then
                 _trimLogFile(catPath, _HIST_MAX)
-                -- Trim rewrites the file; invalidate the handle so next write reopens
-                if _catHandles[catPath] then _catHandles[catPath]:close(); _catHandles[catPath] = nil end
+                if _catHandles[catPath] then _catHandles[catPath]:close()
+                _catHandles[catPath] = nil end
             end
         end
 
@@ -1049,9 +995,7 @@ return function(ms)
                     end
                 end
 
-                -- Refuse to send: skip consecutive same-type entries entirely
                 if _lastReadType == entry.type then
-                    -- Refused — same badge type as last entry
                 else
                     if _lastReadLine then
                         h:write(_lastReadLine .. "\n")
@@ -1069,9 +1013,12 @@ return function(ms)
         if (_consolePanel or _shellActive()) and _logEnabled.console and t ~= "mousemove" and t ~= "step" then
             local send = false
 
-            -- Filter status events from console (kept in watcher)
-            -- Key/mouse/sound/macro belong in their dedicated monitors, not console
-            local _consoleDedicated = { key=1, mouse=1, sound=1, macro=1 }
+            local _consoleDedicated = {
+                key=1,
+                mouse=1,
+                sound=1,
+                macro=1,
+            }
             if t == "system" and entry.event and _consoleSkip[entry.event] then
                 send = false
             elseif _consoleDedicated[t] then
@@ -1111,12 +1058,11 @@ return function(ms)
 
 -- Event Hooks --
     function MsDevTools:onMacroFire(id, label, parentId, parentLabel, trigger)
-        -- Log subroutine handoff when a macro calls a sub-function
         if parentLabel then
             self:_devWrite({
                 type  = "step",
                 category = "macro",
-                msg   = "[" .. (parentLabel or "macro") .. "] → " .. (label or id),
+                msg   = "[" .. (parentLabel or "macro") .. "] -> " .. (label or id),
             })
         end
         self:_devWrite({
@@ -1200,7 +1146,6 @@ return function(ms)
 -- END Event Hooks --
 
 -- Watcher Helpers --
-    -- Build display label: explicit label, or full call chain from stack
     local function _buildDisplayLabel(label)
         if label then return label end
         if not (ms and ms._getCallChain) then return nil end
@@ -1237,7 +1182,6 @@ return function(ms)
         })
     end
 
-    -- Bunching removed: cam/wait steps log immediately, one line each.
     function MsDevTools:accCamMove(dx, dy, label)
         if _traceSuppress then return end
         if dx == nil or dy == nil then return end
@@ -1253,7 +1197,6 @@ return function(ms)
         self:macroLog(msg, label)
     end
 
-    -- Flushes are no-ops now (nothing is buffered).
     function MsDevTools:flushCam(label) end
     function MsDevTools:flushWait(label) end
     function MsDevTools:flushAll(label) end
@@ -1329,16 +1272,20 @@ return function(ms)
     local function _devThemeJS()
         local t = ms._theme or {}
 
-        -- Build a clean theme object for applyTheme()
         local safe = {}
-        for _, k in ipairs({"bg","surface","surface2","hover","accent","accentHi",
+        for _, k in ipairs({
+            "bg",
+            "surface",
+            "surface2",
+            "hover",
+            "accent",
+            "accentHi",
             "success","dangerBg","danger","warning","text","text2","text3",
             "border","borderDim","accentGlow","accentGlowFaint","dangerGlow",
             "dangerBorder","mouse","scroll","key","radius","font"}) do
             if t[k] ~= nil then safe[k] = t[k] end
         end
 
-        -- Handle font URL for custom font files
         if type(t.font) == "string" and t.font:match("%.[ot]tf$") then
             local fp = hs.configdir .. "/sounds/" .. t.font
             local f = io.open(fp, "r")
@@ -1346,7 +1293,8 @@ return function(ms)
                 fp = _home .. "/.hammerspoon/sounds/" .. t.font
                 f = io.open(fp, "r")
             end
-            if f then f:close(); safe.fontURL = "file://" .. fp end
+            if f then f:close()
+            safe.fontURL = "file://" .. fp end
         end
 
         local ok, json = pcall(hs.json.encode, safe)
@@ -1361,7 +1309,12 @@ return function(ms)
         local x      = screen.x + screen.w - w - xOff
         local y      = screen.y + yOff
         local panel  = hs.webview.new(
-            { x = x, y = y, w = w, h = h },
+            {
+                x = x,
+                y = y,
+                w = w,
+                h = h,
+            },
             { developerExtrasEnabled = true },
             uc
         )
@@ -1374,7 +1327,12 @@ return function(ms)
         pcall(function() panel:allowTextEntry(true) end)
         pcall(function() panel:shadow(true) end)
 
-        return panel, uc, { x = x, y = y, w = w, h = h }
+        return panel, uc, {
+            x = x,
+            y = y,
+            w = w,
+            h = h,
+        }
     end
 
     local function _setupDevPanelTheme(panel, timerKey, onReady)
@@ -1407,7 +1365,6 @@ return function(ms)
             _devFadeTimers[key] = nil
         end
 
-        -- Octane: snap to final opacity, no timer
         if ms and ms._octaneMode then
             pcall(function() panel:alpha(1) end)
             return
@@ -1435,7 +1392,6 @@ return function(ms)
             _devFadeTimers[key] = nil
         end
 
-        -- Octane: snap to hidden, no timer
         if ms and ms._octaneMode then
             pcall(function() panel:alpha(0) end)
             if onDone then onDone() end
@@ -1562,12 +1518,18 @@ return function(ms)
                 end
 
             elseif data.action == "clear" then
-                for _, cat in ipairs({"console", "error", "system"}) do
+                for _, cat in ipairs({
+                    "console",
+                    "error",
+                    "system",
+                }) do
                     local p = _catPaths[cat]
-                    if p then local f = io.open(p, "w"); if f then f:close() end end
+                    if p then local f = io.open(p, "w")
+                    if f then f:close() end end
 
                     local r = _readablePaths[cat]
-                    if r then local f = io.open(r, "w"); if f then f:close() end end
+                    if r then local f = io.open(r, "w")
+                    if f then f:close() end end
                 end
 
             elseif data.action == "close" then
@@ -1609,14 +1571,17 @@ return function(ms)
     end
 
     function MsDevTools:showConsole()
-        -- Shell path: switch to console tab and load history
         local ms = _G.ms
         if ms and ms.shell and ms.shell.isReady and ms.shell.isReady() then
             _consoleOpen = true
             ms.shell.show()
             ms.shell.eval("showPanel('console')")
             hs.timer.doAfter(0.15, function()
-                _loadDevHistory(nil, {"console", "error", "system"}, "console", _consoleSkip)
+                _loadDevHistory(nil, {
+                    "console",
+                    "error",
+                    "system",
+                }, "console", _consoleSkip)
             end)
             return
         end
@@ -1644,7 +1609,11 @@ return function(ms)
             _devFadeTimers["_histConsole"] = nil
             if not _consolePanel or not _consoleOpen then return end
 
-            _loadDevHistory(_consolePanel, {"console", "error", "system"}, nil, _consoleSkip)
+            _loadDevHistory(_consolePanel, {
+                "console",
+                "error",
+                "system",
+            }, nil, _consoleSkip)
         end)
     end
 
@@ -1684,12 +1653,17 @@ return function(ms)
             if not ok or type(data) ~= "table" then return end
 
             if data.action == "clear" then
-                for _, cat in ipairs({"macro", "error"}) do
+                for _, cat in ipairs({
+                    "macro",
+                    "error",
+                }) do
                     local p = _catPaths[cat]
-                    if p then local f = io.open(p, "w"); if f then f:close() end end
+                    if p then local f = io.open(p, "w")
+                    if f then f:close() end end
 
                     local r = _readablePaths[cat]
-                    if r then local f = io.open(r, "w"); if f then f:close() end end
+                    if r then local f = io.open(r, "w")
+                    if f then f:close() end end
                 end
 
             elseif data.action == "close" then
@@ -1731,7 +1705,10 @@ return function(ms)
             ms.shell.show()
             ms.shell.eval("showPanel('watcher')")
             hs.timer.doAfter(0.15, function()
-                _loadDevHistory(nil, {"macro", "error"}, "watcher")
+                _loadDevHistory(nil, {
+                    "macro",
+                    "error",
+                }, "watcher")
             end)
             return
         end
@@ -1759,7 +1736,10 @@ return function(ms)
             _devFadeTimers["_histWatcher"] = nil
             if not _watcherPanel or not _watcherOpen then return end
 
-            _loadDevHistory(_watcherPanel, {"macro", "error"})
+            _loadDevHistory(_watcherPanel, {
+                "macro",
+                "error",
+            })
         end)
     end
 
@@ -1800,10 +1780,12 @@ return function(ms)
 
             if data.action == "clear" then
                 local p = _catPaths["input"]
-                if p then local f = io.open(p, "w"); if f then f:close() end end
+                if p then local f = io.open(p, "w")
+                if f then f:close() end end
 
                 local r = _readablePaths["input"]
-                if r then local f = io.open(r, "w"); if f then f:close() end end
+                if r then local f = io.open(r, "w")
+                if f then f:close() end end
 
             elseif data.action == "close" then
                 self:hideKeys()
@@ -1933,7 +1915,10 @@ return function(ms)
             local prev    = _mousePos
 
             if not prev or _x ~= prev.x or _y ~= prev.y then
-                _mousePos = { x = _x, y = _y }
+                _mousePos = {
+                    x = _x,
+                    y = _y,
+                }
 
                 _pushMouseState(_x, _y)
             end
@@ -1969,32 +1954,34 @@ return function(ms)
         end
     end
 
-    -- Octane Mode support: stop all idle pollers
     function MsDevTools:stopAllPollers()
-        if _mousePoller then _mousePoller:stop(); _mousePoller = nil end
-        if _shellMousePoller then _shellMousePoller:stop(); _shellMousePoller = nil end
+        if _mousePoller then _mousePoller:stop()
+        _mousePoller = nil end
+        if _shellMousePoller then _shellMousePoller:stop()
+        _shellMousePoller = nil end
         self:_winEngineStop()
     end
 
-    -- Octane Mode support: restart pollers for currently active panels
     function MsDevTools:restartPollersIfActive()
-        -- Restart standalone keys mouse poller if keys panel is open
         if _keysOpen and _keysPanel and not _mousePoller then
             _mousePoller = hs.timer.doEvery(0.1, function()
                 if not _keysPanel then
-                    if _mousePoller then _mousePoller:stop(); _mousePoller = nil end
+                    if _mousePoller then _mousePoller:stop()
+                    _mousePoller = nil end
                     return
                 end
                 local _p      = hs.mouse.absolutePosition()
                 local _x, _y  = math.floor(_p.x), math.floor(_p.y)
                 local prev    = _mousePos
                 if not prev or _x ~= prev.x or _y ~= prev.y then
-                    _mousePos = { x = _x, y = _y }
+                    _mousePos = {
+                        x = _x,
+                        y = _y,
+                    }
                     _pushMouseState(_x, _y)
                 end
             end)
         end
-        -- Restart Window Spy engine if window panel is active
         if _windowOpen and _activePanel == "window" then
             self:_winEngineStart()
         end
@@ -2002,14 +1989,8 @@ return function(ms)
 -- END Inputs Panel --
 
 -- Window Panel --
-    -- ── Window Spy engine ─────────────────────────────────────────────
-    -- Hang-safe, event-driven replacement for the old 0.4s focus poller.
-    -- Every AX read is pcall-guarded and globally timeout-bounded (see start).
-    -- Focus is followed with hs.application.watcher (no window enumeration);
-    -- per-app move/resize come from an app-scoped uielement watcher whose
-    -- callback is trivial (tally + set a dirty flag); a throttled tick does the
-    -- real reads/pushes; and all of it idles while the shell window is dragged.
-    local function _winG(fn) local ok, v = pcall(fn); if ok then return v end end
+    local function _winG(fn) local ok, v = pcall(fn)
+    if ok then return v end end
 
     function _winRead(win)
         if not win then return nil end
@@ -2022,8 +2003,16 @@ return function(ms)
             title      = _winG(function() return win:title() end),
             role       = _winG(function() return win:role() end),
             subrole    = _winG(function() return win:subrole() end),
-            frame      = f and { x = math.floor(f.x), y = math.floor(f.y), w = math.floor(f.w), h = math.floor(f.h) } or nil,
-            screen     = _winG(function() local s = win:screen(); return s and s:name() end),
+            frame      = f and {
+                x = math.floor(f.x),
+                y = math.floor(f.y),
+                w = math.floor(f.w),
+                h = math.floor(f.h),
+            } or nil,
+            screen     = _winG(function()
+                local s = win:screen()
+                return s and s:name()
+            end),
             id         = _winG(function() return win:id() end),
             standard   = _winG(function() return win:isStandard() end),
             minimized  = _winG(function() return win:isMinimized() end),
@@ -2032,13 +2021,16 @@ return function(ms)
         }
     end
 
-    -- Light read: frame + flags only.  Used by the dirty tick (move/resize)
-    -- so drags don't re-query bundleID/role/screen every 150ms.
     local function _winReadLight(win)
         if not win then return nil end
         local f = _winG(function() return win:frame() end)
         return {
-            frame      = f and { x = math.floor(f.x), y = math.floor(f.y), w = math.floor(f.w), h = math.floor(f.h) } or nil,
+            frame      = f and {
+                x = math.floor(f.x),
+                y = math.floor(f.y),
+                w = math.floor(f.w),
+                h = math.floor(f.h),
+            } or nil,
             standard   = _winG(function() return win:isStandard() end),
             minimized  = _winG(function() return win:isMinimized() end),
             fullscreen = _winG(function() return win:isFullscreen() end),
@@ -2051,7 +2043,6 @@ return function(ms)
         if ok then pcall(function() _pushToPanel(_windowPanel, "window", fn .. "(" .. j .. ")") end) end
     end
 
-    -- Coerce an AX attribute to a short JSON-safe string (drop tables/userdata).
     local function _axStr(v)
         local t = type(v)
         if t == "string" then return #v > 120 and (v:sub(1, 120) .. "\u{2026}") or v end
@@ -2059,24 +2050,12 @@ return function(ms)
         return nil
     end
 
-    -- The engine must idle the moment the Window monitor is not the thing on
-    -- screen — otherwise its AX polling keeps hammering the shared Lua thread in
-    -- the background (shell hidden, or a different panel showing), which is pure
-    -- overhead and can steal frames from whatever is running (e.g. the target game).
-    -- `_shellActive()` only means the webview loaded; it never goes false, so it
-    -- is NOT a sufficient liveness test on its own.
     local function _winStillOpen()
-        if _windowPanel ~= nil then return _windowOpen end  -- standalone webview
-        -- Popped out into its own webview: the panel is on screen on its own,
-        -- independent of the main shell's active panel or visibility. Without
-        -- this, the popout falls through to the shell-inline test below, which
-        -- fails the moment it detaches — stopping the engine and leaving the
-        -- popout dead (dashes, grey badges, empty log, inert Inspect).
+        if _windowPanel ~= nil then return _windowOpen end
         local ms = _G.ms
         if ms and ms.shell and ms.shell.isPoppedOut and ms.shell.isPoppedOut("window") then
             return _windowOpen
         end
-        -- Shell-inline: only run while the Window panel is the active, visible one.
         if not (_windowOpen and _shellActive() and _activePanel == "window") then
             return false
         end
@@ -2085,13 +2064,15 @@ return function(ms)
     end
 
     function MsDevTools:_winEngineStop()
-        if _winAppWatcher then pcall(function() _winAppWatcher:stop() end); _winAppWatcher = nil end
-        if _winUiWatcher  then pcall(function() _winUiWatcher:stop()  end); _winUiWatcher  = nil end
-        if _winMonitor then _winMonitor:stop(); _winMonitor = nil end
-        _winElementInspect = false  -- reset F6 gate on engine stop
+        if _winAppWatcher then pcall(function() _winAppWatcher:stop() end)
+        _winAppWatcher = nil end
+        if _winUiWatcher  then pcall(function() _winUiWatcher:stop()  end)
+        _winUiWatcher  = nil end
+        if _winMonitor then _winMonitor:stop()
+        _winMonitor = nil end
+        _winElementInspect = false
     end
 
-    -- F6: public setter for the element-inspect gate (called by Octane integration)
     function MsDevTools:setWinElementInspect(enabled)
         _winElementInspect = (enabled == true)
         if not _winElementInspect then _winLastMouse = nil end
@@ -2100,25 +2081,15 @@ return function(ms)
     function MsDevTools:_winEngineStart()
         self:_winEngineStop()
         _winDirty, _winMoveN, _winResizeN, _winLastMouse = false, 0, 0, nil
-        _winElementTab = true  -- engine starts with element tab active
-        local _winLastFullState = nil  -- cached full read for merging light reads
+        _winElementTab = true
+        local _winLastFullState = nil
 
-        -- The window the readout is *about*, held separately from focus.
-        --
-        -- Minimizing takes focus with it, so focusedWindow() at tick time is
-        -- either a different window or nil — and the flags the Data tab shows
-        -- are precisely the ones that only turn on once the window is no
-        -- longer focused. Read from focus alone, `minimized` can never be
-        -- true: either another window answers (false) or nothing does (no
-        -- push at all). The log was right because it comes from the watcher
-        -- event, which fires on the right window.
         local _winLastWin = nil
 
-        -- Focus first, the tracked window second. Not the reverse: focus
-        -- moving to a new window is the normal case and must retarget.
         local function _winSubject()
             local w = hs.window.focusedWindow()
-            if w then _winLastWin = w; return w end
+            if w then _winLastWin = w
+            return w end
             return _winLastWin
         end
 
@@ -2127,8 +2098,6 @@ return function(ms)
             if win then _winLastWin = win end
             if light then
                 st = _winReadLight(win or _winSubject())
-                -- Merge light read into the cached full state so the UI
-                -- doesn't blank out app/title/etc during dirty ticks.
                 if st and _winLastFullState then
                     for k, v in pairs(_winLastFullState) do
                         if st[k] == nil then st[k] = v end
@@ -2143,26 +2112,23 @@ return function(ms)
         end
 
         local function watchApp(app)
-            if _winUiWatcher then pcall(function() _winUiWatcher:stop() end); _winUiWatcher = nil end
-            if not app then _winWatchedAppName = nil; return end
-            -- Remember whose window we're following: after a minimize, focus has
-            -- already left, so focusedWindow() no longer names this app.
+            if _winUiWatcher then pcall(function() _winUiWatcher:stop() end)
+            _winUiWatcher = nil end
+            if not app then _winWatchedAppName = nil
+            return end
             _winWatchedAppName = _winG(function() return app:name() end)
             _winUiWatcher = _winG(function()
                 local w = app:newWatcher(function(el, ev)
-                    -- Trivial callback (fires hundreds of times per drag): no AX,
-                    -- no JSON, no push here — just tally and flag; tick does the work.
                     if _G.ms and _G.ms._shellDragging then return end
                     if ev == hs.uielement.watcher.windowMinimized then
-                        -- The element that fired, not focus. Minimizing hands
-                        -- focus to whatever window is behind, so by tick time
-                        -- focusedWindow() names a different window and the
-                        -- flags would describe that one instead — reading
-                        -- `minimized = false` for a window nobody minimized.
-                        _winPendingEvent = { type = "minimize", app = _winWatchedAppName,
+                        _winPendingEvent = {
+                            type = "minimize",
+                            app = _winWatchedAppName,
                             win = _winG(function() return el:asHSWindow() end) }
                     elseif ev == hs.uielement.watcher.windowUnminimized then
-                        _winPendingEvent = { type = "unminimize", app = _winWatchedAppName,
+                        _winPendingEvent = {
+                            type = "unminimize",
+                            app = _winWatchedAppName,
                             win = _winG(function() return el:asHSWindow() end) }
                     elseif ev == hs.uielement.watcher.windowResized then
                         _winResizeN = _winResizeN + 1
@@ -2183,46 +2149,42 @@ return function(ms)
             end)
         end
 
-        -- Focus follows the active app (no window enumeration). We also log app
-        -- hide/unhide (Cmd+H) — a whole-app visibility change that the per-window
-        -- minimize watcher above does not cover.
         _winAppWatcher = hs.application.watcher.new(function(_, ev, app)
-            if not _winStillOpen() then self:_winEngineStop(); return end
+            if not _winStillOpen() then self:_winEngineStop()
+            return end
             if ev == hs.application.watcher.activated then
                 local st = pushState()
                 if st then
-                    self:_pushWindowEvent({ type = "focus", ts = os.date("%H:%M:%S"), app = st.app, title = st.title })
+                    self:_pushWindowEvent({
+                        type = "focus",
+                        ts = os.date("%H:%M:%S"),
+                        app = st.app,
+                        title = st.title,
+                    })
                 end
                 watchApp(app)
             elseif ev == hs.application.watcher.hidden or ev == hs.application.watcher.unhidden then
                 local nm = _winG(function() return app:name() end)
                 self:_pushWindowEvent({
                     type = ev == hs.application.watcher.hidden and "hide" or "show",
-                    ts = os.date("%H:%M:%S"), app = nm,
+                    ts = os.date("%H:%M:%S"),
+                    app = nm,
                 })
-                -- Same trap as minimize: hiding an app takes focus with it,
-                -- so a bare pushState() reads whichever window inherited
-                -- focus and reports it visible. The hidden app's own window
-                -- is the subject here, and it is still readable while hidden.
                 pushState(_winG(function() return app:mainWindow() end))
             end
         end)
         pcall(function() _winAppWatcher:start() end)
 
-        -- Merged tick: coalesce window state + element/mouse into one push.
-        -- Replaces the old _winTick (0.15s) + _winAxPoll (0.2s) pair.
         _winMonitor = hs.timer.doEvery(0.2, function()
-            if not _winStillOpen() then self:_winEngineStop(); return end
+            if not _winStillOpen() then self:_winEngineStop()
+            return end
             if _G.ms and _G.ms._shellDragging then return end
 
             local payload = {}
             local hasData = false
 
-            -- ── Window state (dirty-flag logic) ───────────────────────────
             if _winDirty then
                 _winDirty = false
-                -- A pending minimize/unminimize names its own window, and
-                -- that window is the one the flags are about for this tick.
                 local st = _winReadLight(
                     (_winPendingEvent and _winPendingEvent.win) or _winSubject()
                 )
@@ -2238,7 +2200,9 @@ return function(ms)
                 local f = st and st.frame
                 local events = {}
                 if _winPendingEvent then
-                    local entry = { type = _winPendingEvent.type, ts = os.date("%H:%M:%S"),
+                    local entry = {
+                        type = _winPendingEvent.type,
+                        ts = os.date("%H:%M:%S"),
                         app = _winPendingEvent.app }
                     table.insert(_windowHistory, entry)
                     if #_windowHistory > _windowMaxHistory then table.remove(_windowHistory, 1) end
@@ -2246,16 +2210,26 @@ return function(ms)
                     _winPendingEvent = nil
                 end
                 if _winMoveN > 0 then
-                    local entry = { type = "move", ts = os.date("%H:%M:%S"), count = _winMoveN,
-                        x = f and f.x or nil, y = f and f.y or nil }
+                    local entry = {
+                        type = "move",
+                        ts = os.date("%H:%M:%S"),
+                        count = _winMoveN,
+                        x = f and f.x or nil,
+                        y = f and f.y or nil,
+                    }
                     table.insert(_windowHistory, entry)
                     if #_windowHistory > _windowMaxHistory then table.remove(_windowHistory, 1) end
                     table.insert(events, entry)
                     _winMoveN = 0
                 end
                 if _winResizeN > 0 then
-                    local entry = { type = "resize", ts = os.date("%H:%M:%S"), count = _winResizeN,
-                        w = f and f.w or nil, h = f and f.h or nil }
+                    local entry = {
+                        type = "resize",
+                        ts = os.date("%H:%M:%S"),
+                        count = _winResizeN,
+                        w = f and f.w or nil,
+                        h = f and f.h or nil,
+                    }
                     table.insert(_windowHistory, entry)
                     if #_windowHistory > _windowMaxHistory then table.remove(_windowHistory, 1) end
                     table.insert(events, entry)
@@ -2267,13 +2241,8 @@ return function(ms)
                 end
             end
 
-            -- ── Element under cursor (AX poll logic) ─────────────────────
-            -- Gated by _winElementInspect (F6): off by default, user opts in.
             if _winElementInspect and _winElementTab and hs.accessibilityState() then
                 local p = hs.mouse.absolutePosition()
-                -- Stationary refresh: shiftlock (pointer-lock) pins the cursor, so
-                -- position-equality alone would freeze the pixel/AX readout while
-                -- the screen under it keeps changing. Re-sample every 0.5s anyway.
                 local _now = hs.timer.secondsSinceEpoch()
                 local _stationaryDue = (not _winLastInspectAt) or (_now - _winLastInspectAt) >= 0.5
                 if _stationaryDue or not (_winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y) then
@@ -2284,17 +2253,26 @@ return function(ms)
                         if not scr then return nil end
                         local snap = scr:snapshot(hs.geometry.rect(p.x, p.y, 1, 1))
                         if not snap then return nil end
-                        local c = snap:colorAt({ x = 0, y = 0 })
+                        local c = snap:colorAt({
+                            x = 0,
+                            y = 0,
+                        })
                         if not c or c.red == nil then return nil end
                         local r = math.floor((c.red or 0) * 255 + 0.5)
                         local g = math.floor((c.green or 0) * 255 + 0.5)
                         local b = math.floor((c.blue or 0) * 255 + 0.5)
-                        return { r = r, g = g, b = b, hex = string.format("#%02X%02X%02X", r, g, b) }
+                        return {
+                            r = r,
+                            g = g,
+                            b = b,
+                            hex = string.format("#%02X%02X%02X", r, g, b),
+                        }
                     end)
                     local win = hs.window.focusedWindow()
                     local wf = win and _winG(function() return win:frame() end)
                     payload.mouse = {
-                        sx = math.floor(p.x), sy = math.floor(p.y),
+                        sx = math.floor(p.x),
+                        sy = math.floor(p.y),
                         wx = wf and math.floor(p.x - wf.x) or nil,
                         wy = wf and math.floor(p.y - wf.y) or nil,
                         pixel = pixel,
@@ -2305,7 +2283,12 @@ return function(ms)
                         local fr = _winG(function() return el:attributeValue("AXFrame") end)
                         local frame
                         if type(fr) == "table" and fr.x then
-                            frame = { x = math.floor(fr.x), y = math.floor(fr.y), w = math.floor(fr.w), h = math.floor(fr.h) }
+                            frame = {
+                                x = math.floor(fr.x),
+                                y = math.floor(fr.y),
+                                w = math.floor(fr.w),
+                                h = math.floor(fr.h),
+                            }
                         end
                         payload.element = {
                             axPermission    = true,
@@ -2326,17 +2309,10 @@ return function(ms)
             end
         end)
 
-        -- One-shot AX banner when accessibility is off (matches original else branch).
         if not hs.accessibilityState() then
             _winPush("updateElement", { axPermission = false })
         end
 
-        -- Prime off the current runloop tick. Reading window AX + creating the
-        -- app watcher is synchronous work on the shared thread; doing it inline
-        -- with the panel switch is what makes the switch visibly hitch. Deferring
-        -- lets the navigation/render settle first, then fills the card. A second
-        -- delayed re-prime also covers the race where the first push lands before
-        -- the inline window panel has registered its handler.
         hs.timer.doAfter(0.02, function()
             if not _winStillOpen() then return end
             local win = hs.window.focusedWindow()
@@ -2359,9 +2335,6 @@ return function(ms)
             local ok, j = pcall(hs.json.encode, entry)
 
             if ok then
-                -- Log only. The live state card is fed separately by the engine's
-                -- updateCurrentWindow pushes (rich payload), so a sparse log entry
-                -- must not overwrite it here.
                 pcall(function()
                     _pushToPanel(_windowPanel, "window", "appendEntry(" .. j .. ")")
                 end)
@@ -2411,7 +2384,6 @@ return function(ms)
             panel:html(_htmlCache["window"], _devBase)
         end
 
-        -- Load history and current window state once on build
         _devFadeTimers["_histWindow"] = hs.timer.doAfter(0.05, function()
             _devFadeTimers["_histWindow"] = nil
             if not _windowPanel then return end
@@ -2441,7 +2413,6 @@ return function(ms)
             _windowOpen = true
             ms.shell.show()
             ms.shell.eval("showPanel('window')")
-            -- Load window history and current state
             hs.timer.doAfter(0.15, function()
                 if #_windowHistory > 0 then
                     local ok, j = pcall(hs.json.encode, _windowHistory)
@@ -2449,11 +2420,8 @@ return function(ms)
                         pcall(function() ms.shell.eval("shellReceive('window','loadHistory'," .. j .. ")") end)
                     end
                 end
-                -- Re-push the rich state now the panel is ready (the engine's
-                -- immediate prime below may have raced the shell panel load).
                 _winPush("updateCurrentWindow", _winRead(hs.window.focusedWindow()))
             end)
-            -- Start the event-driven Window Spy engine (idempotent).
             self:_winEngineStart()
             return
         end
@@ -2477,7 +2445,6 @@ return function(ms)
 
         _devFadeIn(_windowPanel, "window")
 
-        -- Start the event-driven Window Spy engine (primes state + follows focus).
         self:_winEngineStart()
     end
 

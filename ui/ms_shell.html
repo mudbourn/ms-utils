@@ -5,8 +5,8 @@
     <title>Macro Lab Shell</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Almendra:ital,wght@0,400;0,700;1,400;1,700&display=swap">
     <style>
-        /* ═══ UNIFIED DESIGN SYSTEM ═══════════════════════════════════════════ */
-        /* Layer 1: Tokens ─────────────────────────────────────────────────────── */
+        /* -- UNIFIED DESIGN SYSTEM -- */
+        /* Layer 1: Tokens -- */
         :root {
             --bg: #0d0f09; --surface: #141810; --surface2: #1c2116; --surface3: #24291a; --hover: #2d3523;
             --accent: #6b8c3a; --accent-hi: #8db84e; --success: #7aa63c;
@@ -28,10 +28,10 @@
             --rail-w: 140px;
         }
 
-        /* Layer 2: Reset ──────────────────────────────────────────────────────── */
+        /* Layer 2: Reset -- */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
         /* Selection is drawn by macOS in the *system* accent unless a rule
-           says otherwise — it follows System Settings, not the theme, so it
+           says otherwise, it follows System Settings, not the theme, so it
            was the one colour in the shell the theme did not control. */
         ::selection { background: var(--accent); color: var(--bg); }
         html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; min-width: 200px; min-height: 150px; }
@@ -39,9 +39,9 @@
         #shell-root { display: flex; flex-direction: row; width: 100%; height: 100%; background: var(--bg); border-radius: var(--ms-window-radius, 0px); overflow: hidden; }
         button { cursor: pointer; border: none; background: none; color: inherit; font: inherit; }
         input, select { font: inherit; color: inherit; background: none; border: none; outline: none; }
-        /* ── Keyboard navigation ──────────────────────────────────────────
+        /* -- Keyboard navigation --
            Replace the WebView's default blue focus ring with a themed accent
-           ring, and only ever show it for keyboard focus (:focus-visible) —
+           ring, and only ever show it for keyboard focus (:focus-visible) ,
            mouse/touch focus stays quiet, matching the pointer flow where the
            click sound and hover border carry the feedback. The ring follows
            each element's own corner radius, so it reads as part of the UI
@@ -52,12 +52,12 @@
         input:focus-visible, textarea:focus-visible, select:focus-visible, .input-sm:focus-visible { outline: none; }
         input[type="range"] { -webkit-appearance: none; appearance: none; }
 
-        /* Layer 3: Shared Components ───────────────────────────────────────────── */
+        /* Layer 3: Shared Components -- */
 
-        /* ── SVG Icon ── */
+        /* -- SVG Icon -- */
         .icon { width: 16px; height: 16px; flex-shrink: 0; }
 
-        /* ── Icon Button ── */
+        /* -- Icon Button -- */
         .icon-btn {
             display: flex; align-items: center; justify-content: center;
             width: 28px; height: 28px; border: none; border-radius: var(--radius);
@@ -67,13 +67,13 @@
         .icon-btn:hover { color: var(--accent-hi); background: var(--hover); }
         .icon-btn .icon { width: 16px; height: 16px; }
 
-        /* ── Left Rail ── */
+        /* -- Left Rail -- */
         #rail {
             width: var(--rail-w); min-width: var(--rail-w); height: 100%;
             background: var(--surface); border-right: 1px solid var(--border-dim);
             display: flex; flex-direction: column; padding: 8px 0; gap: 2px; overflow-y: auto;
         }
-        /* Dedicated window-drag strip at the top of the rail — always present
+        /* Dedicated window-drag strip at the top of the rail, always present
            regardless of which panel is shown, so the window can always be grabbed. */
         #rail-drag {
             flex-shrink: 0; height: 22px; margin: -4px 0 4px; cursor: grab;
@@ -96,7 +96,7 @@
         .rail-item.active { background: var(--surface2); color: var(--accent-hi); box-shadow: inset 0 0 0 1px var(--accent); }
         /* Keyboard focus on a rail item: the global :focus-visible ring sits
            outside the element and clips against the narrow rail edges, and it
-           shares --accent with the active item's inset ring — so the two read
+           shares --accent with the active item's inset ring, so the two read
            as the same highlight at two sizes. Give the rail its own ring: inset
            (never clipped) and in the brighter accent so it stays distinct from
            the active state's dim-accent border. */
@@ -113,14 +113,14 @@
         .rail-item.rail-icon-only.active .icon { opacity: 1; }
         .rail-bottom-row { display: flex; flex-direction: row; justify-content: space-evenly; }
 
-        /* ── Content Area ── */
+        /* -- Content Area -- */
         #content { flex: 1; height: 100%; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }
 
-        /* ── Panel Base ── */
+        /* -- Panel Base -- */
         [class^="panel-"] { width: 100%; height: 100%; display: none; flex-direction: column; overflow: hidden; }
         #panel { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 
-        /* ── Panel Header ── */
+        /* -- Panel Header -- */
         #header {
             display: flex; align-items: center; gap: 8px;
             height: 40px; padding: 0 12px;
@@ -132,7 +132,7 @@
         #panel-title, #status-text { flex: 1; font-weight: 600; font-size: 13px; }
         .header-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
 
-        /* ── Ghost Button ── */
+        /* -- Ghost Button -- */
         .btn-ghost {
             padding: 5px 8px; border-radius: var(--radius-s);
             background: var(--surface2); color: var(--text2);
@@ -142,7 +142,7 @@
         .btn-ghost:hover { background: var(--hover); color: var(--text); }
         .btn-ghost.active { background: var(--accent); color: var(--bg); }
 
-        /* ── Close Button ── */
+        /* -- Close Button -- */
         .btn-close {
             width: 28px; height: 28px; border-radius: var(--radius);
             background: var(--surface2); color: var(--text2);
@@ -153,7 +153,7 @@
         .btn-close .icon { width: 14px; height: 14px; display: block; }
         .btn-close:hover { background: var(--hover); color: var(--text); }
 
-        /* ── Pop-out Button ── */
+        /* -- Pop-out Button -- */
         .btn-popout {
             width: 28px; height: 28px; border-radius: var(--radius);
             background: var(--surface2); color: var(--text2);
@@ -164,7 +164,7 @@
         .btn-popout:hover { background: var(--hover); color: var(--text); }
         .btn-popout .icon { width: 14px; height: 14px; display: block; }
 
-        /* ── Macro Button ── */
+        /* -- Macro Button -- */
         .btn-macro {
             padding: 3px 10px; border-radius: var(--radius); font-size: 11px;
             font-weight: 600; transition: opacity 0.15s;
@@ -173,7 +173,7 @@
         .btn-enable { background: var(--success); color: #1e2214; }
         .btn-disable { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
 
-        /* ── Input ── */
+        /* -- Input -- */
         .input, #code-input {
             flex: 1; background: var(--surface2); border: 1px solid var(--border);
             border-radius: var(--radius); padding: 5px 8px; color: var(--text);
@@ -183,7 +183,7 @@
         .input::placeholder, #code-input::placeholder { color: var(--text2); opacity: 0.55; }
         .input:focus, #code-input:focus { border-color: var(--accent); }
 
-        /* ── Badge ── */
+        /* -- Badge -- */
         .badge {
             flex-shrink: 0; padding: 1px 5px; border-radius: var(--radius-s);
             font: 700 10px var(--font-mono); letter-spacing: 0.05em;
@@ -199,7 +199,7 @@
         .badge-sound { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
         .badge-scroll { background: color-mix(in srgb, var(--scroll) 20%, transparent); color: var(--scroll); }
 
-        /* ── Log Container ── */
+        /* -- Log Container -- */
         #log, .log {
             flex: 1; overflow-y: auto; overflow-x: hidden; padding: 4px 0; min-height: 0;
             scrollbar-width: thin; scrollbar-color: var(--border) transparent;
@@ -208,7 +208,7 @@
         #log::-webkit-scrollbar-track, .log::-webkit-scrollbar-track { background: transparent; }
         #log::-webkit-scrollbar-thumb, .log::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--radius); }
 
-        /* ── Entry ── */
+        /* -- Entry -- */
         .entry {
             display: flex; align-items: flex-start; gap: 6px;
             padding: 5px 12px; font-size: 12px; border-bottom: 1px solid var(--border-dim);
@@ -222,7 +222,7 @@
         .entry-error .msg { color: var(--danger); }
         .entry-input .msg { color: var(--text2); font-style: italic; }
 
-        /* ── Step (watcher) ── */
+        /* -- Step (watcher) -- */
         .step {
             display: flex; align-items: flex-start; gap: 6px;
             padding: 4px 12px 4px 36px; font-size: 12px; opacity: 0.7;
@@ -233,7 +233,7 @@
         .step.selected:hover { background: var(--accent-glow-faint); }
         .tool-msg { color: var(--text); word-break: break-word; flex: 1; }
 
-        /* ── Pill ── */
+        /* -- Pill -- */
         .pill {
             display: inline-flex; align-items: center; padding: 1px 7px;
             border-radius: var(--radius); font: 700 10px var(--font-mono);
@@ -245,7 +245,7 @@
         .pill.danger { background: var(--danger); color: #fff; }
         .pill.warning { background: var(--warning); color: #1a1208; }
 
-        /* ── Input Bar ── */
+        /* -- Input Bar -- */
         #inputbar {
             display: flex; align-items: center; gap: 8px;
             padding: 8px 12px; background: var(--surface);
@@ -258,7 +258,7 @@
         }
         #run-btn:hover { opacity: 0.85; }
 
-        /* ── Context Menu ── */
+        /* -- Context Menu -- */
         #ctx-menu, #ctx-menu-settings {
             position: fixed; min-width: 140px; background: var(--surface2);
             border: 1px solid var(--border); border-radius: var(--radius-s);
@@ -287,7 +287,7 @@
         .ctx-item .ctx-icon { font-size: 11px; width: 14px; text-align: center; flex-shrink: 0; opacity: 0.7; }
         .ctx-divider { height: 1px; background: var(--border); margin: 2px 0; }
 
-        /* ═══ WATCHER-SPECIFIC ════════════════════════════════════════════════ */
+        /* -- WATCHER-SPECIFIC -- */
         .panel-watcher .dot { font-size: 7px; color: var(--accent); flex-shrink: 0; padding-top: 2px; }
         .panel-watcher .msg .sub-sep { color: var(--text3); margin: 0 3px; }
         .panel-watcher .msg .sub-name { color: var(--text); }
@@ -319,7 +319,7 @@
         .filter-clear { padding: 5px 12px; font-size: 11px; color: var(--text2); cursor: pointer; text-align: center; }
         .filter-clear:hover { color: var(--text); }
 
-        /* ═══ KEYS-SPECIFIC ═══════════════════════════════════════════════════ */
+        /* -- KEYS-SPECIFIC -- */
         #flag-row { display: flex; align-items: center; padding: 7px 12px; gap: 8px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
         .flag-pill { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: var(--radius); background: var(--surface2); border: 1px solid var(--border); font-size: 11px; color: var(--text2); transition: border-color 0.2s, color 0.2s; flex: 1; }
         .flag-pill.flag-recent { border-color: var(--accent); color: var(--text); }
@@ -365,7 +365,7 @@
         .move-name { color: var(--text3); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
         .dim { color: var(--text3); font: 10px var(--font-mono); }
 
-        /* ═══ WINDOW-SPECIFIC ═════════════════════════════════════════════════ */
+        /* -- WINDOW-SPECIFIC -- */
         #current { padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
         #current-empty { color: var(--text3); font-style: italic; font-size: 12px; }
         #current-app { color: var(--accent); font-weight: 700; font-size: 14px; display: none; }
@@ -388,8 +388,8 @@
         .panel-window .wtab.active { color: var(--accent); border-bottom-color: var(--accent); }
         .panel-window .wtab-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         .panel-window .wtab-section.active { display: flex; }
-        /* ── Theme & Sound panel ─────────────────────────────────────────── */
-        /* Tab strip mirrors .wtab above — same shape, panel-scoped so the two
+        /* -- Theme & Sound panel -- */
+        /* Tab strip mirrors .wtab above, same shape, panel-scoped so the two
            can't reach into each other's buttons. */
         .panel-theme .ttabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
         .panel-theme .ttab { flex: 1; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text2); text-align: center; cursor: pointer; border: none; border-bottom: 2px solid transparent; background: none; transition: color 0.15s, border-color 0.15s; }
@@ -401,7 +401,7 @@
            cards as the settings list, so they have to line up with it. */
         .panel-theme .tsec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
 
-        /* ── Tools panel ─────────────────────────────────────────────────── */
+        /* -- Tools panel -- */
         /* Same section-built scroll as Theme, scoped to .panel-tools. Holds
            the pack's user-defined settings (Settings/Calibration/menus). */
         /* Tab strip: built settings in one tab, the Setting Builder in the other. */
@@ -415,21 +415,21 @@
         .panel-tools .tsec-scroll::-webkit-scrollbar { width: 4px; }
         .panel-tools .tsec-scroll::-webkit-scrollbar-track { background: transparent; }
         .panel-tools .tsec-scroll::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
-        /* Setting Builder — the segmented-options editor and live preview. */
+        /* Setting Builder, the segmented-options editor and live preview. */
         .setting-builder-opts { display: flex; flex-direction: column; gap: 6px; padding: 4px 14px 2px; }
         .sb-opt-row { display: flex; align-items: center; gap: 6px; }
         .sb-opt-row .input-sm { flex: 1; }
         .sb-opt-row .sb-opt-rm { flex: 0 0 auto; min-width: 30px; padding: 5px 8px; }
         .setting-builder-preview { min-height: 8px; margin: 2px 0; border-top: 1px dashed var(--border-dim); border-bottom: 1px dashed var(--border-dim); background: color-mix(in srgb, var(--accent) 5%, transparent); }
 
-        /* ── Profiles panel ──────────────────────────────────────────────── */
-        /* Single view — no tab strip (Browse moved to its own stage). The
+        /* -- Profiles panel -- */
+        /* Single view, no tab strip (Browse moved to its own stage). The
            .ptab-section wrapper is kept as the flex container for the list. */
         .panel-profiles .ptab-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         .panel-profiles .ptab-section.active { display: flex; }
         .panel-profiles .psec-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
 
-        /* ── Plugins panel ───────────────────────────────────────────────── */
+        /* -- Plugins panel -- */
         /* No tab strip: the panel is one list. The Browse half of this lands
            when the registry has plugins to browse, and an empty second tab in
            the meantime is a promise the UI cannot keep. */
@@ -462,7 +462,7 @@
         .panel-theme .color-swatch::-webkit-color-swatch { border: none; border-radius: 2px; }
         .panel-theme .color-hex { width: 74px; padding: 3px 6px; font: 11px var(--font-mono); color: var(--text); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); }
         .panel-theme .color-hex:focus { outline: none; border-color: var(--accent); }
-        /* Sizing only — the control itself is .macro-select, styled once in
+        /* Sizing only, the control itself is .macro-select, styled once in
            ui-select.js so every dropdown in the shell stays one control. */
         .panel-theme .theme-select { max-width: 150px; min-width: 0; padding: 3px 6px; font-size: 11px; border-radius: var(--radius-s); }
         .panel-theme .theme-note { padding: 10px 14px 4px; font-size: 11px; line-height: 1.5; color: var(--text3); }
@@ -515,7 +515,7 @@
            sticky heading and stay on screen while the grid scrolls. */
         .panel-window .section-head .flags-row { margin-left: auto; align-self: center; justify-content: flex-end; }
 
-        /* ═══ SETTINGS-SPECIFIC ════════════════════════════════════════════════ */
+        /* -- SETTINGS-SPECIFIC -- */
         #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex-shrink: 0; transition: background 0.2s; }
         #status-dot.off { background: var(--danger); box-shadow: 0 0 4px var(--danger-glow); }
 
@@ -531,7 +531,7 @@
         #scroll::-webkit-scrollbar-track { background: transparent; }
         #scroll::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
 
-        /* ── Settings groups ──────────────────────────────────────────────────
+        /* -- Settings groups --
            Groups used to be accordions because settings was one narrow panel
            competing for space. It owns a window now, so every group is open
            and its heading is a heading: it sticks to the top of the scroll so
@@ -569,7 +569,7 @@
         /* A sub-row belongs to the row above it: indented, and visually joined
            by dropping the parent's separator. */
         .row-sub { padding-left: 30px; }
-        /* For rows whose label needs no explanation — they sit under a group
+        /* For rows whose label needs no explanation, they sit under a group
            label that already gave it. */
         .row-compact { min-height: 34px; padding-top: 6px; padding-bottom: 6px; }
         .group-hint { padding: 0 14px 8px; font-size: 11px; line-height: 1.45; color: var(--text3); }
@@ -582,7 +582,7 @@
         .toggle-track { position: absolute; inset: 0; border-radius: 10px; background: var(--surface2); transition: background 0.2s; }
         .toggle input:checked + .toggle-track { background: var(--accent); }
         /* Keyboard focus: the real control is a 0×0 opacity:0 checkbox, and the
-           global input:focus-visible rule strips its outline — so tabbing to a
+           global input:focus-visible rule strips its outline, so tabbing to a
            toggle showed nothing. Trace the visible track instead. box-shadow
            follows the track's radius (no clipping) and only shows for keyboard
            focus, matching every other :focus-visible ring in the shell. */
@@ -597,7 +597,7 @@
         .seg-btn.active { background: var(--accent); color: var(--bg); }
         .seg-btn:hover:not(.active):not(:disabled) { background: var(--hover); color: var(--text); }
         /* A locked segment still has to show which choice is pinned, so the
-           whole strip dims as one and the active pill keeps its accent —
+           whole strip dims as one and the active pill keeps its accent ,
            dimming the buttons individually would leave the pill bright. */
         .seg.locked { opacity: 0.4; }
         .seg-btn:disabled { cursor: default; }
@@ -678,7 +678,7 @@
         .input-sm { background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); -webkit-text-fill-color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; user-select: text; -webkit-user-select: text; width: 100%; }
         .input-sm::placeholder { color: var(--text3); opacity: 0.55; -webkit-text-fill-color: var(--text3); }
 
-        /* ═══ MACROS-SPECIFIC ══════════════════════════════════════════════════ */
+        /* -- MACROS-SPECIFIC -- */
         .fn-picker { display: flex; flex-direction: row; width: 100%; height: 100%; overflow: hidden; }
         .fn-picker-list { width: 240px; min-width: 240px; border-right: 1px solid var(--border-dim); display: flex; flex-direction: column; background: var(--surface); }
         .fn-picker-search { padding: 8px 10px; border-bottom: 1px solid var(--border-dim); }
@@ -712,7 +712,7 @@
         .fn-param-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
         .fn-param-type { font-size: 9px; font-weight: 400; color: var(--accent); background: var(--accent-glow-faint); padding: 1px 5px; border-radius: var(--radius-s); text-transform: none; letter-spacing: 0; }
         /* Also matches the tool-creator fields (New Tool form), whose wrappers
-           carry only .fn-param-group, not .fn-param — without this they rendered
+           carry only .fn-param-group, not .fn-param, without this they rendered
            as unstyled native inputs, the visible "tool elements don't theme". */
         .fn-param input[type="text"], .fn-param input[type="number"],
         .fn-param-group input[type="text"], .fn-param-group input[type="number"] { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: var(--font-mono); user-select: text; -webkit-user-select: text; }
@@ -745,7 +745,7 @@
         .fn-toast { position: fixed; bottom: 16px; right: 16px; background: var(--surface2); border: 1px solid var(--success); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 8px 14px; opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 1000; }
         .fn-toast.show { opacity: 1; transform: translateY(0); }
 
-        /* ── Tools section in the Add Module picker ─────────────────── */
+        /* -- Tools section in the Add Module picker -- */
         .fn-cat-tools .fn-cat-name { color: var(--accent); }
         .fn-tool-entry { justify-content: space-between; }
         .fn-tool-tag { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 1px 5px; border-radius: var(--radius-s); margin-left: auto; }
@@ -760,7 +760,7 @@
         .fn-tool-usehint code { font-family: var(--font-mono); color: var(--accent-hi); background: var(--accent-glow-faint); padding: 0 3px; border-radius: var(--radius-s); }
         .fn-tool-delete { background: var(--danger); }
 
-        /* ── Value / Tool bind switch on a parameter ────────────────── */
+        /* -- Value / Tool bind switch on a parameter -- */
         .fn-bind-switch { margin-left: auto; display: inline-flex; gap: 0; border: 1px solid var(--border-dim); border-radius: var(--radius-s); overflow: hidden; }
         .fn-bind-opt { background: var(--surface2); border: none; color: var(--text3); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 6px; cursor: pointer; transition: all 0.1s; }
         .fn-bind-opt:hover { color: var(--text); }
@@ -773,7 +773,7 @@
         .fn-param-tool select.fn-tool-select:focus { border-color: var(--accent); }
         .fn-param.bound .fn-param-type { color: var(--accent-hi); }
 
-        /* ── Segmented-option editor in the tool creator ────────────── */
+        /* -- Segmented-option editor in the tool creator -- */
         .fn-seg-optrow { display: flex; gap: 4px; margin-bottom: 4px; }
         .fn-seg-optrow input { flex: 1; min-width: 0; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 4px 6px; outline: none; font-family: var(--font-mono); user-select: text; -webkit-user-select: text; }
         .fn-seg-optrow input:focus { border-color: var(--accent); }
@@ -794,13 +794,13 @@
         .macro-select-item { padding: 5px 10px; font-size: 11px; color: var(--text2); white-space: nowrap; cursor: pointer; transition: background 0.12s, color 0.12s; }
         .macro-select-item:hover { background: var(--hover); color: var(--text); }
         .macro-select-item.active { color: var(--accent); }
-        /* Placeholder row when no macros exist yet — not a real choice. */
+        /* Placeholder row when no macros exist yet, not a real choice. */
         .macro-select-empty { color: var(--text3); cursor: default; font-style: italic; }
         .macro-select-empty:hover { background: transparent; color: var(--text3); }
         .macro-select-menu::-webkit-scrollbar { width: 4px; }
         .macro-select-menu::-webkit-scrollbar-track { background: transparent; }
         .macro-select-menu::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
-        /* Overflow "⋯" menu — holds the secondary toolbar actions so they never
+        /* Overflow "⋯" menu, holds the secondary toolbar actions so they never
            clip at the shell's smallest width. Mirrors .macro-select-menu. */
         .macro-overflow { position: relative; display: flex; }
         .macro-overflow-btn { font-size: 14px; line-height: 1; padding: 4px 9px; }
@@ -846,7 +846,7 @@
         .macro-name-input:focus { border-color: var(--accent); background: var(--surface2); }
 
         .macros-layout { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; position: relative; }
-        /* ── Macros panel tab strip (Builder | Binds) ──────────────────────
+        /* -- Macros panel tab strip (Builder | Binds) --
            Same shape as .wtab/.ttab above, panel-scoped so the strips stay
            independent. */
         .panel-macros .mtabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -855,10 +855,10 @@
         .panel-macros .mtab.active { color: var(--accent); border-bottom-color: var(--accent); }
         .panel-macros .mtab-section { display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
         .panel-macros .mtab-section.active { display: flex; }
-        /* ── Binds list ──────────────────────────────────────────────────── */
+        /* -- Binds list -- */
         .binds-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
         .binds-empty { padding: 20px 14px; font-size: 12px; color: var(--text3); text-align: center; }
-        /* Pack Info (ms.macroMeta) editor — sits above the bind list.
+        /* Pack Info (ms.macroMeta) editor, sits above the bind list.
            Collapsible so it does not permanently steal room from the binds. */
         .macro-meta-section { flex-shrink: 0; }
         .macro-meta-head { cursor: pointer; user-select: none; }
@@ -899,7 +899,7 @@
            the accent so the current mode reads at a glance. */
         .bind-mode-toggle { width: auto; min-width: 34px; padding: 0 8px; font: 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; }
         .bind-toggle { margin-left: 2px; }
-        /* An unbound macro can't be enabled — the track dims and the toggle
+        /* An unbound macro can't be enabled, the track dims and the toggle
            stops taking the pointer so it reads as locked, not merely off. */
         .toggle.disabled { cursor: not-allowed; opacity: 0.4; }
         .toggle.disabled .toggle-track { background: var(--surface2); }
@@ -919,7 +919,7 @@
            thin outline mismatched against the bold button text). */
         .macros-add-tool-btn svg path { fill: var(--bg); stroke: none; }
 
-        /* ── Step Canvas ─────────────────────────────────────────────── */
+        /* -- Step Canvas -- */
         .tool-canvas { display: flex; flex-direction: column; gap: 2px; padding: 8px; min-height: 100%; overflow-y: auto; position: relative; }
         /* Dragging a module from the picker over the canvas. */
         .tool-canvas.fn-drop-target { box-shadow: inset 0 0 0 2px var(--accent); border-radius: var(--radius); background: var(--accent-glow-faint); }
@@ -931,7 +931,7 @@
         .tool-canvas-empty-icon { font-size: 28px; opacity: 0.25; }
         /* -webkit-user-drag:element re-enables native HTML5 drag under the
            shell's global `-webkit-user-select:none`, which otherwise silently
-           kills `draggable` in WebKit — the reason blocks couldn't be dragged. */
+           kills `draggable` in WebKit, the reason blocks couldn't be dragged. */
         .tool-block { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--surface); border: 1px solid var(--border-dim); border-radius: var(--radius); cursor: default; transition: background 0.1s, border-color 0.15s, box-shadow 0.15s; position: relative; user-select: none; min-height: 32px; -webkit-user-drag: element; }
         /* Same quirk for the draggable picker entries (module rows). */
         .fn-entry[draggable="true"] { -webkit-user-drag: element; }
@@ -1011,8 +1011,8 @@
         .fn-picker-overlay-close svg { width: 14px; height: 14px; }
         .fn-picker-overlay-close svg path { stroke: var(--text); fill: none; }
 
-        /* ── Resize grab zones ──────────────────────────────────────────────
-           Edges are 9px thick and corners are 18px — a wider grab radius that
+        /* -- Resize grab zones --
+           Edges are 9px thick and corners are 18px, a wider grab radius that
            is easy to land on. The edge zones are inset by exactly the corner
            size so edges and corners never overlap: the old 6px inset against
            8px corners left a seam where the two zones fought over the cursor,
@@ -1034,7 +1034,7 @@
         .resize-nw { top: 0; left: 0; width: 18px; height: 18px; cursor: nwse-resize; }
         .resize-se { bottom: 0; right: 0; width: 18px; height: 18px; cursor: nwse-resize; }
         .resize-sw { bottom: 0; left: 0; width: 18px; height: 18px; cursor: nesw-resize; }
-        /* Persistent grip in the bottom-right corner — an always-visible cue
+        /* Persistent grip in the bottom-right corner, an always-visible cue
            that the window resizes, in the same spot as a native resize handle.
            Lives on the SE zone so hovering the grab area brightens it. */
         .resize-se::after {
@@ -1050,7 +1050,7 @@
         /* During resize, suppress pointer events on content so grab isn't lost */
         body.resizing * { pointer-events: none !important; }
 
-        /* ── Console first-open danger notice (scoped to the console panel) ── */
+        /* -- Console first-open danger notice (scoped to the console panel) -- */
         .panel-console { position: relative; }
         .panel-console .danger-overlay {
             position: absolute; inset: 0; z-index: 400; display: none;
@@ -1085,7 +1085,7 @@
         }
         .panel-console .danger-ack:hover { opacity: 0.85; }
 
-        /* Themed tooltip — replaces native `title` bubbles, which render on a
+        /* Themed tooltip, replaces native `title` bubbles, which render on a
            lower window level than the shell webview and so hide behind it. */
         .ms-tooltip {
             position: fixed; z-index: 100000; max-width: 260px;
@@ -1116,7 +1116,7 @@
 <div class="resize-zone resize-sw" data-edge="sw"></div>
 <div id="shell-root">
 
-    <!-- ── Left Rail ─────────────────────────────────────────────────────── -->
+    <!-- -- Left Rail -- -->
     <nav id="rail">
         <div id="rail-drag" title="Drag to move window"><span class="grip"><span></span><span></span><span></span></span></div>
         <button class="rail-item active" data-panel="macros"><span class="rail-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></span> Macros</button>
@@ -1136,14 +1136,14 @@
         <span id="rail-version" style="padding: 1px 12px 3px; font-size: 10px; color: var(--text3); opacity: 0.5; text-align: center;"></span>
     </nav>
 
-    <!-- ── Content Area ──────────────────────────────────────────────────── -->
+    <!-- -- Content Area -- -->
     <main id="content">
 
         <div class="panel-console" style="display:none">
 
         <!-- Header -->
         <div id="header">
-            <span id="panel-title">mudscript — console</span>
+            <span id="panel-title">mudscript, console</span>
             <div class="header-btns">
                 <button
                     id="pause-btn"
@@ -1193,7 +1193,7 @@
             <input
                 id="code-input"
                 type="text"
-                placeholder="> enter lua…"
+                placeholder="> enter lua..."
                 autocomplete="off"
                 autocorrect="off"
                 autocapitalize="off"
@@ -1250,7 +1250,7 @@
 <div class="panel-watcher" style="display:none">
 
         <div id="header">
-            <span id="panel-title">mudscript — macro monitor</span>
+            <span id="panel-title">mudscript, macro monitor</span>
             <div class="header-btns">
                 <button
                     id="pause-btn"
@@ -1305,7 +1305,7 @@
 
         <div id="log"></div>
 
-        <!-- Filter panel — absolute bottom-right, injected by JS -->
+        <!-- Filter panel, absolute bottom-right, injected by JS -->
         <div id="filter-panel"></div>
 
         <div id="ctx-menu"></div>
@@ -1316,7 +1316,7 @@
 <div class="panel-keys" style="display:none">
 
         <div id="header">
-            <span id="panel-title">mudscript — input monitor</span>
+            <span id="panel-title">mudscript, input monitor</span>
             <div class="header-btns">
                 <button
                     id="pause-btn"
@@ -1362,11 +1362,11 @@
         <div id="flag-row">
             <div class="flag-pill" id="flag-key-pill">
                 <span class="flag-label">Key</span>
-                <span id="flag-key-name">—</span>
+                <span id="flag-key-name">,</span>
             </div>
             <span class="flag-sep">│</span>
             <div class="flag-pill" id="flag-mouse-pill">
-                <span id="flag-mouse-name">—</span>
+                <span id="flag-mouse-name">,</span>
                 <span class="flag-label">Mouse</span>
             </div>
         </div>
@@ -1391,7 +1391,7 @@
             </button>
         </div>
 
-        <!-- ── Keyboard tab ──────────────────────────────────────────────── -->
+        <!-- -- Keyboard tab -- -->
         <div id="keys-section" class="tab-section active">
             <div class="state-section">
                 <div class="section-label">Active</div>
@@ -1401,14 +1401,14 @@
             <div id="keys-log" class="log"></div>
         </div>
 
-        <!-- ── Mouse tab ─────────────────────────────────────────────────── -->
+        <!-- -- Mouse tab -- -->
         <div id="mouse-section" class="tab-section">
             <div class="state-section">
                 <div class="section-label">Position</div>
                 <div id="coord-row">
                     <div id="pos-display">
-                        x:&nbsp;<span id="mx-display">—</span
-                        >&nbsp;&nbsp;y:&nbsp;<span id="my-display">—</span>
+                        x:&nbsp;<span id="mx-display">,</span
+                        >&nbsp;&nbsp;y:&nbsp;<span id="my-display">,</span>
                     </div>
                     <div class="coord-dropdown" id="coordDropdown">
                         <button class="coord-dd-btn" id="coord-dd-btn" onmouseenter="playSlot('hover')" onclick="playSlot('interact'); document.getElementById('coordDropdown').classList.toggle('open');">Screen ▾</button>
@@ -1439,7 +1439,7 @@
 
         <!-- Header -->
         <div id="header">
-            <span id="panel-title">mudscript — window monitor</span>
+            <span id="panel-title">mudscript, window monitor</span>
             <div class="header-btns">
                 <button
                     id="inspectToggle"
@@ -1582,7 +1582,7 @@
         </div>
 <div class="panel-tools" style="display:none">
         <div id="header">
-            <span id="panel-title">mudscript — tools</span>
+            <span id="panel-title">mudscript, tools</span>
             <div class="header-btns">
                 <button
                     class="btn-close"
@@ -1605,7 +1605,7 @@
 </div>
 <div class="panel-theme" style="display:none">
         <div id="header">
-            <span id="panel-title">mudscript — theme & sound</span>
+            <span id="panel-title">mudscript, theme & sound</span>
             <div class="header-btns">
                 <button
                     class="btn-close"
@@ -1632,7 +1632,7 @@
 </div>
 <div class="panel-browse" style="display:none">
         <div id="header">
-            <span id="panel-title">mudscript — browse</span>
+            <span id="panel-title">mudscript, browse</span>
             <div class="header-btns">
                 <button
                     class="btn-close"
@@ -1646,7 +1646,7 @@
 </div>
 <div class="panel-plugins" style="display:none">
         <div id="header">
-            <span id="panel-title">mudscript — plugins</span>
+            <span id="panel-title">mudscript, plugins</span>
             <div class="header-btns">
                 <button
                     class="btn-close"
@@ -1660,7 +1660,7 @@
 </div>
 <div class="panel-profiles" style="display:none">
         <div id="header">
-            <span id="panel-title">mudscript — profiles</span>
+            <span id="panel-title">mudscript, profiles</span>
             <div class="header-btns">
                 <button
                     class="btn-close"
@@ -1750,7 +1750,7 @@
         <div id="panel">
             <!-- Header -->
             <div id="header">
-                <span id="panel-title">mudscript — settings</span>
+                <span id="panel-title">mudscript, settings</span>
                 <div class="header-btns">
                     <button
                         id="btn-power"
@@ -1777,11 +1777,11 @@
 
         <!-- The exit curtain is not here. It is a host-owned full-screen
              webview (ui/ms_curtain.html), because this window is the one the
-             host's teardown closes — a curtain inside it cannot outlive the
+             host's teardown closes, a curtain inside it cannot outlive the
              thing it is covering for. -->
 
         </div>
-        <!-- Context menu — a sibling of the panels, never inside one, so it is
+        <!-- Context menu, a sibling of the panels, never inside one, so it is
              not removed from the render tree when its owning panel is hidden.
              Shared by the Settings and Profiles panels (both drawn by
              panel-settings.js); position:fixed places it by viewport coords. -->
@@ -1789,7 +1789,7 @@
         <div class="panel-macros" style="display:none">
         <!-- Header -->
         <div id="header">
-            <span id="panel-title">mudscript — macro lab</span>
+            <span id="panel-title">mudscript, macro lab</span>
             <div class="header-btns">
                 <button
                     class="btn-close"
@@ -1802,10 +1802,10 @@
         <div id="slot-macros"></div></div>
     </main>
 
-    <!-- Modal — a shell-level element, deliberately outside every panel div.
+    <!-- Modal, a shell-level element, deliberately outside every panel div.
          It hosts the Lua confirm/prompt round-trip (openLuaModal). It used to
          live inside .panel-settings, so it only rendered while Settings was the
-         active panel: a rebind captured from Macros › Binds queued a confirm
+         active panel: a rebind captured from Macros > Binds queued a confirm
          that never appeared unless you then switched to Settings. Kept here it
          floats above whichever panel is showing, where the request originates. -->
     <!-- inert while closed: it stays in the DOM (only opacity/pointer-events
@@ -1843,15 +1843,15 @@
         </div>
     </div>
 
-    <!-- ═══ Shared: ui-tabs.js ════════════════════════════════════════════════ -->
+    <!-- -- Shared: ui-tabs.js -- -->
     <script src="./modules/ui-tabs.js"></script>
 
 
-    <!-- ═══ Shared: log-panel.js ══════════════════════════════════════════════ -->
+    <!-- -- Shared: log-panel.js -- -->
     <script src="./modules/log-panel.js"></script>
 
 
-    <!-- ═══ ICONS + Shell Dispatch + Navigation ══════════════════════════════ -->
+    <!-- -- ICONS + Shell Dispatch + Navigation -- -->
     <script>
     (function() {
     "use strict";
@@ -1918,7 +1918,7 @@
     }
     window.icon = icon;
     // ICONS is a top-level `const`, and a top-level const is not a property of
-    // window the way a var is — so `window.ICONS` was undefined everywhere,
+    // window the way a var is, so `window.ICONS` was undefined everywhere,
     // and every caller that tested for it fell through to its fallback.
     // Exported explicitly, next to icon(), because the two are one API: icon()
     // renders a name, and this is how a caller asks whether a name exists.
@@ -1939,7 +1939,7 @@
     // Diagnostic: surface JS errors to the Hammerspoon console. Panel init and
     // button handlers run inside the webview, whose console is invisible from
     // Lua, so a throw here (e.g. during a panel's IIFE) silently kills every
-    // handler wired after it — the failure looks like "nothing happens." Route
+    // handler wired after it, the failure looks like "nothing happens." Route
     // uncaught errors and rejected promises to Lua so they print alongside the
     // rest of the log. Posts directly (not via shellDispatch) so it still works
     // if the error fires before the rest of the API is ready.
@@ -2037,14 +2037,14 @@
         shellDispatch('_shell', 'popOut', { panel: id });
     };
 
-    // Per-panel pause registry — each panel registers its togglePause
+    // Per-panel pause registry, each panel registers its togglePause
     window._panelPauseFns = {};
     window.togglePause = function() {
         var fn = window._panelPauseFns[window.currentPanel];
         if (fn) fn();
     };
 
-    // Per-panel clear registry — each panel registers its clearLog
+    // Per-panel clear registry, each panel registers its clearLog
     window._panelClearFns = {};
     window.clearLog = function() {
         var fn = window._panelClearFns[window.currentPanel];
@@ -2091,12 +2091,12 @@
         if (theme.surface) r.setProperty('--surface', theme.surface);
         if (theme.surface2) r.setProperty('--surface2', theme.surface2);
         if (theme.hover) r.setProperty('--hover', theme.hover);
-        // surface3 has no key in ms_theme.json — Lua derives it from surface2
+        // surface3 has no key in ms_theme.json, Lua derives it from surface2
         // and hover when it builds the theme CSS. This function did not, so a
         // live theme update moved every surface *except* this one and it kept
         // its stock value: #24291a, a dark olive, which is why a red theme
         // showed a green chip behind the active sound filter. Same blend as
-        // the Lua side, deliberately — two derivations of one colour drift.
+        // the Lua side, deliberately, two derivations of one colour drift.
         if (theme.surface3) {
             r.setProperty('--surface3', theme.surface3);
         } else if (theme.surface2 && theme.hover) {
@@ -2170,12 +2170,12 @@
         });
     });
 
-    // ── Keyboard navigation: sound parity ────────────────────────────────
+    // -- Keyboard navigation: sound parity --
     // The pointer plays a 'hover' cue on mouseenter; keyboard focus never did,
     // so tabbing through the UI was silent and felt off-model. Mirror the cue
     // when focus moves by keyboard. Intent is tracked explicitly rather than
     // read from :focus-visible so that clicking a text field (which the engine
-    // still treats as focus-visible) does not chirp — only real key-driven
+    // still treats as focus-visible) does not chirp, only real key-driven
     // moves do. The flag is armed by focus-moving keys and disarmed by any
     // pointer press, both captured so panel handlers cannot swallow them first.
     var _kbNav = false;
@@ -2185,12 +2185,12 @@
 
     // Enter commits a text field the way clicking away does. The shell's inputs
     // live outside any <form>, so the browser fires 'change' only on blur, never
-    // on Enter — which is why an edit "didn't take" until you clicked off (this
+    // on Enter, which is why an edit "didn't take" until you clicked off (this
     // affected Tools, the macro builder, Browse, etc.). Blur on Enter to run that
     // same commit once, keeping the single-source-of-truth 'change' handlers.
     // Capture phase so it still fires for inputs that stopPropagation on keydown
     // (the macro-builder param fields do, to shield the shortcut layer).
-    // Left alone: textareas (Enter = newline) and fields that own their Enter —
+    // Left alone: textareas (Enter = newline) and fields that own their Enter ,
     // the console runner (#code-input) and the modal (#modal-input).
     document.addEventListener('keydown', function(e) {
         if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented) return;
@@ -2217,41 +2217,41 @@
     </script>
 
 
-    <!-- ═══ Panel: console ═══════════════════════════════════════════════════════ -->
+    <!-- -- Panel: console -- -->
     <script src="./modules/panel-console.js"></script>
 
 
-    <!-- ═══ Panel: watcher ═══════════════════════════════════════════════════════ -->
+    <!-- -- Panel: watcher -- -->
     <script src="./modules/panel-watcher.js"></script>
 
 
-    <!-- ═══ Panel: keys ═══════════════════════════════════════════════════════ -->
+    <!-- -- Panel: keys -- -->
     <script src="./modules/panel-keys.js"></script>
 
 
-    <!-- ═══ Panel: window ═══════════════════════════════════════════════════════ -->
+    <!-- -- Panel: window -- -->
     <script src="./modules/panel-window.js"></script>
 
 
-    <!-- ═══ Panel: settings ═══════════════════════════════════════════════════════ -->
+    <!-- -- Panel: settings -- -->
     <script src="./modules/panel-settings.js"></script>
 
 
-    <!-- ═══ Panel: theme & sound ═══════════════════════════════════════════════ -->
+    <!-- -- Panel: theme & sound -- -->
     <!-- After panel-settings.js: builds from the window.msUI kit it publishes. -->
     <script src="./modules/panel-theme.js"></script>
 
 
-    <!-- ═══ Panel: plugins ═══════════════════════════════════════════════════ -->
+    <!-- -- Panel: plugins -- -->
     <!-- After panel-settings.js for the same reason panel-theme.js is. -->
     <script src="./modules/panel-plugins.js"></script>
     <script src="./modules/panel-browse.js"></script>
 
 
-    <!-- ═══ Panel: macros ═══════════════════════════════════════════════════════ -->
+    <!-- -- Panel: macros -- -->
     <script src="./modules/panel-macros.js"></script>
 
-    <!-- ═══ Global themed tooltips ══════════════════════════════════════════════ -->
+    <!-- -- Global themed tooltips -- -->
     <script>
     // Native `title` tooltips render in an OS window that sits below the shell
     // webview's window level, so they're invisible until they happen to spill

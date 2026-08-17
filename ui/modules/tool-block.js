@@ -1,5 +1,5 @@
 /**
- * ToolBlock — visual macro tool block renderer and drag-and-drop manager.
+ * ToolBlock, visual macro tool block renderer and drag-and-drop manager.
  *
  * Renders macro tools as draggable blocks with nesting support (if/for/while).
  *
@@ -15,14 +15,14 @@
  *   canvas.addTool({ action: "ms.type", params: { key: "/", mods: [] } });
  *   const tools = canvas.serialize();
  *
- * Usage (IIFE — in ms_shell.html or other non-module contexts):
+ * Usage (IIFE, in ms_shell.html or other non-module contexts):
  *
  *   // Already available as window.ToolCanvas after this script loads.
  *   const canvas = new window.ToolCanvas(containerEl, { onChange, svgBase });
  *   ...
  */
 
-// ── Shell sounds ────────────────────────────────────────────────────────
+// -- Shell sounds --
 // Hover on enter, click sound on activate. Guarded on window.playSlot: this
 // module also loads in contexts that have no sound bus, where it must no-op.
 function _sfx(el, clickSlot) {
@@ -35,13 +35,13 @@ function _sfx(el, clickSlot) {
     return el;
 }
 
-// ── SVG icon cache ──────────────────────────────────────────────────────
+// -- SVG icon cache --
 const _svgCache = {};
 
 /**
  * Fetch an SVG file and return its innerHTML (cached).
- * @param {string} base  — base URL for svg/ directory
- * @param {string} name  — icon name (without .svg)
+ * @param {string} base , base URL for svg/ directory
+ * @param {string} name , icon name (without .svg)
  * @returns {Promise<string>}
  */
 async function fetchSVG(base, name) {
@@ -62,7 +62,7 @@ async function fetchSVG(base, name) {
     }
 }
 
-// ── Action → icon mapping ───────────────────────────────────────────────
+// -- Action -> icon mapping --
 const ACTION_ICON_MAP = {
     "ms.type":          "keyboard",
     "ms.press":         "keyboard",
@@ -102,7 +102,7 @@ function iconForAction(action) {
     return ACTION_ICON_MAP[action] || "macros";
 }
 
-// ── Parameter summary ───────────────────────────────────────────────────
+// -- Parameter summary --
 
 function paramSummary(action, params) {
     if (!params) return "";
@@ -110,7 +110,7 @@ function paramSummary(action, params) {
     if (keys.length === 0) return "";
     if (action === "if" || action === "while") return params.condition || "";
     if (action === "for") {
-        return (params.var || "i") + " = " + (params.from ?? 1) + " → " + (params.to ?? 1);
+        return (params.var || "i") + " = " + (params.from ?? 1) + " -> " + (params.to ?? 1);
     }
     const parts = [];
     for (let i = 0; i < Math.min(keys.length, 2); i++) {
@@ -120,13 +120,13 @@ function paramSummary(action, params) {
             if (v.length === 0) continue;
             v = v.join("+");
         }
-        if (typeof v === "string" && v.length > 16) v = v.slice(0, 14) + "…";
+        if (typeof v === "string" && v.length > 16) v = v.slice(0, 14) + "...";
         parts.push(k + ": " + v);
     }
     return parts.join(", ");
 }
 
-// ── Step ID generator ───────────────────────────────────────────────────
+// -- Step ID generator --
 let _toolIdCounter = 0;
 function nextToolId() {
     return "_tool_" + (++_toolIdCounter) + "_" + Date.now().toString(36);
@@ -136,7 +136,7 @@ function deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
-// ── CSS (injected once) ─────────────────────────────────────────────────
+// -- CSS (injected once) --
 let _cssInjected = false;
 
 function injectCSS() {
@@ -144,7 +144,7 @@ function injectCSS() {
     _cssInjected = true;
     const style = document.createElement("style");
     style.textContent = `
-/* ── Step Canvas (ES module) ─────────────────────────────────────── */
+/* -- Step Canvas (ES module) -- */
 .tool-canvas {
     display: flex;
     flex-direction: column;
@@ -313,14 +313,14 @@ function injectCSS() {
     document.head.appendChild(style);
 }
 
-// ── ToolCanvas class ────────────────────────────────────────────────────
+// -- ToolCanvas class --
 
 /**
- * @param {HTMLElement} container — DOM element to render into
+ * @param {HTMLElement} container, DOM element to render into
  * @param {Object} opts
- * @param {function} [opts.onChange] — called when tools change (receives serialized tools)
- * @param {string}   [opts.svgBase] — base URL for svg/ directory
- * @param {function} [opts.onSelect] — called when a tool is selected (toolId, toolData)
+ * @param {function} [opts.onChange], called when tools change (receives serialized tools)
+ * @param {string}   [opts.svgBase], base URL for svg/ directory
+ * @param {function} [opts.onSelect], called when a tool is selected (toolId, toolData)
  */
 export class ToolCanvas {
     constructor(container, opts = {}) {
@@ -346,7 +346,7 @@ export class ToolCanvas {
         this._preloadIcons();
     }
 
-    // ── Icon preloading ────────────────────────────────────────────────
+    // -- Icon preloading --
 
     async _preloadIcons() {
         const needed = new Set(["drag", "close", "chevdown", "chevup", "trash", "edit", "macros", "tools"]);
@@ -354,7 +354,7 @@ export class ToolCanvas {
         for (const name of needed) await fetchSVG(this._svgBase, name);
     }
 
-    // ── Tool ID management ──────────────────────────────────────────────
+    // -- Tool ID management --
 
     _assignIds(tools) {
         for (const tool of tools) {
@@ -366,7 +366,7 @@ export class ToolCanvas {
         }
     }
 
-    // ── Load tools ─────────────────────────────────────────────────────
+    // -- Load tools --
 
     load(tools) {
         this._tools = tools || [];
@@ -376,7 +376,7 @@ export class ToolCanvas {
         this._render();
     }
 
-    // ── Add a tool ─────────────────────────────────────────────────────
+    // -- Add a tool --
 
     addTool(toolDef, afterId) {
         const tool = deepClone(toolDef);
@@ -394,7 +394,7 @@ export class ToolCanvas {
         this._fireChange();
     }
 
-    // ── Remove a tool ──────────────────────────────────────────────────
+    // -- Remove a tool --
 
     removeTool(sid) {
         if (this._removeFrom(this._tools, sid)) {
@@ -423,7 +423,7 @@ export class ToolCanvas {
         return -1;
     }
 
-    // ── Move tool ──────────────────────────────────────────────────────
+    // -- Move tool --
 
     moveTool(dragId, targetId, pos) {
         const tool = this._map[dragId];
@@ -453,7 +453,7 @@ export class ToolCanvas {
         this._fireChange();
     }
 
-    // ── Serialize ──────────────────────────────────────────────────────
+    // -- Serialize --
 
     serialize() {
         return this._strip(deepClone(this._tools));
@@ -469,7 +469,7 @@ export class ToolCanvas {
         return tools;
     }
 
-    // ── Update params ──────────────────────────────────────────────────
+    // -- Update params --
 
     updateTool(sid, newParams) {
         const tool = this._map[sid];
@@ -479,12 +479,12 @@ export class ToolCanvas {
         this._fireChange();
     }
 
-    // ── Selection ──────────────────────────────────────────────────────
+    // -- Selection --
 
     getSelectedId() { return this._selId; }
     getSelectedTool() { return this._selId ? this._map[this._selId] : null; }
 
-    // ── Clipboard (copy / cut / paste) ─────────────────────────────────
+    // -- Clipboard (copy / cut / paste) --
 
     copySelected() {
         const tool = this.getSelectedTool();
@@ -538,11 +538,11 @@ export class ToolCanvas {
         this._onSelect(sid, this._map[sid]);
     }
 
-    // ── Fire change ────────────────────────────────────────────────────
+    // -- Fire change --
 
     _fireChange() { this._onChange(this.serialize()); }
 
-    // ── Render ─────────────────────────────────────────────────────────
+    // -- Render --
 
     _render() {
         this._root.innerHTML = "";
@@ -641,7 +641,7 @@ export class ToolCanvas {
         toggle.addEventListener("click", e => {
             e.stopPropagation();
             const collapsed = toggle.classList.toggle("collapsed");
-            // Collapse every branch of THIS container — an `if` has both a
+            // Collapse every branch of THIS container, an `if` has both a
             // "then" and an "else" nest, each with its own label. A plain
             // querySelector(".tool-nest-body") stopped at "then" and left
             // "else" (and both labels) showing. Only direct children are
@@ -748,7 +748,7 @@ export class ToolCanvas {
         return body;
     }
 
-    // ── Drag and drop ──────────────────────────────────────────────────
+    // -- Drag and drop --
 
     _isDesc(pid, cid) {
         const p = this._map[pid];
@@ -826,7 +826,7 @@ export class ToolCanvas {
         this._root.querySelectorAll(".drag-target").forEach(el => el.classList.remove("drag-target"));
     }
 
-    // ── Destroy ────────────────────────────────────────────────────────
+    // -- Destroy --
 
     destroy() {
         this._root.innerHTML = "";
@@ -835,7 +835,7 @@ export class ToolCanvas {
     }
 }
 
-// ── Expose on window for IIFE contexts ──────────────────────────────────
+// -- Expose on window for IIFE contexts --
 if (typeof window !== "undefined") {
     window.ToolCanvas = ToolCanvas;
 }

@@ -1,10 +1,10 @@
     /* panel: keys */
     (function() {
     "use strict";
-// ── Panel container ──────────────────────────────────────────────
+// -- Panel container --
             const _panel = document.querySelector('.panel-keys');
 
-// ── Create LogPanel (selection, context menu, keyboard, drag, theme) ──
+// -- Create LogPanel (selection, context menu, keyboard, drag, theme) --
             const lp = createLogPanel({
                 channel: "keys",
                 buildRow, // defined below
@@ -26,7 +26,7 @@
                 },
             });
 
-            // ── Expose globals for inline handlers ──────────────────────────
+            // -- Expose globals for inline handlers --
             window._panelPauseFns['keys'] = lp.togglePause;
             window.playSlot    = lp.playSlot;
             window._panelClearFns['keys'] = clearLog;
@@ -35,7 +35,7 @@
             window.onCoordModeChange = onCoordModeChange;
             window.keysApplyTheme = lp.applyTheme;
 
-            // ── Constants ───────────────────────────────────────────────────
+            // -- Constants --
             const BTN_NAMES = {
                 0: "Left",
                 1: "Right",
@@ -46,7 +46,7 @@
 
             function btnName(n) { return BTN_NAMES[n] ?? "M" + n; }
 
-            // ── Entry builder ───────────────────────────────────────────────
+            // -- Entry builder --
             function mkSpan(cls, text) {
                 const s = document.createElement("span");
                 s.className = cls;
@@ -62,7 +62,7 @@
                     row.className = "entry move-entry";
                     row.append(
                         mkSpan("ts", "[" + (entry.ts || "") + "]"),
-                        mkSpan("arrow arrow-move", "→"),
+                        mkSpan("arrow arrow-move", "->"),
                         mkSpan("move-name", entry.x + ", " + entry.y),
                     );
                     row.onmouseenter = function() { lp.playSlot("hover"); };
@@ -116,7 +116,7 @@
                 return row;
             }
 
-            // ── Route entries to the correct log ────────────────────────────
+            // -- Route entries to the correct log --
             function appendEntry(entry) {
                 if (lp.isPaused()) return;
                 if (entry.type === "key" && entry.down)
@@ -163,14 +163,14 @@
                 ml.scrollTop = ml.scrollHeight;
             }
 
-            // ── Active keys pills ───────────────────────────────────────────
+            // -- Active keys pills --
             function updateActiveKeys(keys) {
                 const row = document.getElementById("keys-pills");
                 row.innerHTML = "";
                 if (!keys || keys.length === 0) {
                     const p = document.createElement("span");
                     p.className = "pill pill-empty";
-                    p.textContent = "—";
+                    p.textContent = ",";
                     row.appendChild(p);
                     return;
                 }
@@ -186,7 +186,7 @@
                 });
             }
 
-            // ── Mouse state (position + active buttons) ─────────────────────
+            // -- Mouse state (position + active buttons) --
             function updateMouseState(state) {
                 const mx = _panel ? _panel.querySelector("#mx-display") : document.getElementById("mx-display");
                 const my = _panel ? _panel.querySelector("#my-display") : document.getElementById("my-display");
@@ -225,21 +225,21 @@
                 if (pos.y != null && my) my.textContent = pos.y;
             }
 
-            // ── Flag row ────────────────────────────────────────────────────
+            // -- Flag row --
             let _lastKeyTime = 0,
                 _lastMouseTime = 0;
 
             function flagKey(name) {
                 _lastKeyTime = Date.now();
                 document.getElementById("flag-key-name").textContent =
-                    name || "—";
+                    name || ",";
                 _updateFlagStyles();
             }
 
             function flagMouse(name) {
                 _lastMouseTime = Date.now();
                 document.getElementById("flag-mouse-name").textContent =
-                    name || "—";
+                    name || ",";
                 _updateFlagStyles();
             }
 
@@ -259,12 +259,12 @@
                     );
             }
 
-            // ── Tab switching ───────────────────────────────────────────────
+            // -- Tab switching --
             // At load, not lazily: the styles must be up whether or not anyone
             // ever clicks a tab. The shell no longer carries its own copy.
             injectTabStyles();
 
-            // Scoped to this panel — the shell hosts every panel's markup at
+            // Scoped to this panel, the shell hosts every panel's markup at
             // once, so an unscoped ".tab" would reach into its neighbours.
             let _ktabs = null;
             function _tabs() {
@@ -285,7 +285,7 @@
 
             function switchTab(tab) { _tabs().switch(tab); }
 
-            // ── Button actions ──────────────────────────────────────────────
+            // -- Button actions --
             function clearLog() {
                 document.getElementById("keys-log").innerHTML = "";
                 document.getElementById("mouse-log").innerHTML = "";
@@ -342,12 +342,12 @@
                 if (btn) btn.textContent = (labels[mode] || mode) + ' ▾';
             }
 
-            // ── Expose for Lua evaluateJavaScript ───────────────────────────
+            // -- Expose for Lua evaluateJavaScript --
             window.updateActiveKeys = updateActiveKeys;
             window.updateMouseState = updateMouseState;
             window.updateMousePos   = updateMousePos;
 
-            // ── Init ────────────────────────────────────────────────────────
+            // -- Init --
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("keys", function(action, body) {

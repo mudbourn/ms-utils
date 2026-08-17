@@ -1,4 +1,4 @@
--- ms_loading — Startup Loading Screen --
+-- ms_loading (Startup Loading Screen) --
 return function(ms)
 
     local _lWebView, _lFadingOut
@@ -69,13 +69,7 @@ return function(ms)
                 if not ok or type(data) ~= "table" then return end
                 if data.action == "ready" then
                     if _G._bootChoreographyStarted then
-                        -- The 0.5s hard fallback (below) starts the choreography
-                        -- even when the page is slow to load — and its
-                        -- showBrand() then evaluates against a page whose JS does
-                        -- not exist yet, so it silently no-ops and the logo never
-                        -- appears. Now that the page has actually handshaked, its
-                        -- functions are defined, so re-assert the brand: the one
-                        -- reveal a premature start is most likely to have dropped.
+                        -- Re-assert the brand now that the page has handshaked.
                         if _lWebView then
                             pcall(function() _lWebView:evaluateJavaScript("showBrand()") end)
                         end
@@ -104,7 +98,8 @@ return function(ms)
 
             local f = io.open(htmlPath, "r")
             if f then
-                local html = f:read("*all"); f:close()
+                local html = f:read("*all")
+                f:close()
                 _lWebView:html(html, baseURL)
             end
 
@@ -139,7 +134,10 @@ return function(ms)
                     step = step + 1
                     if _lWebView then _lWebView:alpha(step / steps) end
                     if step >= steps then
-                        if _G._loadTimers.fadeIn then _G._loadTimers.fadeIn:stop(); _G._loadTimers.fadeIn = nil end
+                        if _G._loadTimers.fadeIn then
+                            _G._loadTimers.fadeIn:stop()
+                            _G._loadTimers.fadeIn = nil
+                        end
                     end
                 end)
 
@@ -173,8 +171,14 @@ return function(ms)
                 step = step + 1
                 if _lWebView then _lWebView:alpha(1 - (step / steps)) end
                 if step >= steps then
-                    if _G._loadTimers.fadeOut then _G._loadTimers.fadeOut:stop(); _G._loadTimers.fadeOut = nil end
-                    if _lWebView then _lWebView:delete(); _lWebView = nil end
+                    if _G._loadTimers.fadeOut then
+                        _G._loadTimers.fadeOut:stop()
+                        _G._loadTimers.fadeOut = nil
+                    end
+                    if _lWebView then
+                        _lWebView:delete()
+                        _lWebView = nil
+                    end
                     _G._loadTimers.announce = hs.timer.doAfter(0.1, onDone)
                 end
             end)

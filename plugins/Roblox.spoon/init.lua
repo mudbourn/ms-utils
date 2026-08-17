@@ -16,13 +16,6 @@ obj.license = "MIT"
     local CACHE_LABEL  = "com.mudscript.cache-cleaner"
 -- END Paths --
 
--- Live sensitivity sync handles; started in :init, torn down in :stop.
---   _sensWatcher — fires the instant Roblox rewrites the settings file, so a
---                  change shows up as soon as Roblox flushes it (menu close /
---                  focus loss), with no poll lag. We cannot make Roblox flush
---                  on demand — it owns that — so we react to it instead.
---   _sensTimer   — slow backstop: catches a flush the watcher missed (e.g. an
---                  atomic rename-replace the file-path watcher didn't see).
 local _sensWatcher = nil
 local _sensTimer   = nil
 
@@ -47,10 +40,6 @@ local _sensTimer   = nil
         return v == "true"
     end
 
-    -- Roblox stores per-view sensitivity as a Vector2, e.g.
-    --   <Vector2 name="MouseSensitivityThirdPerson"><X>1.5</X><Y>1.5</Y></Vector2>
-    -- readSetting's single-line regex can't reach the nested <X>, so this pulls
-    -- the block for `key` and returns its X component.
     local function readVectorX(key)
         if type(key) ~= "string" then return nil end
         local f = io.open(SETTINGS_XML, "r")
@@ -63,12 +52,6 @@ local _sensTimer   = nil
         return tonumber(block:match('<X>%s*([%-%d%.eE]+)%s*</X>'))
     end
 
-    -- The sensitivity that actually governs camera rotation. In-game the slider
-    -- writes the legacy scalar `MouseSensitivity`, which Roblox mirrors into the
-    -- per-view Vector2s; we read the scalar first and fall back to the Vector2
-    -- X (third-person is Combat Warriors' default) only if the scalar is absent.
-    -- NOTE: if a live change to the in-game slider does NOT move `curSens` in
-    -- mudscript, the effective key is the Vector2 instead — swap the order here.
     local function effectiveSensitivity()
         return readNumber("MouseSensitivity")
             or readVectorX("MouseSensitivityThirdPerson")
@@ -97,10 +80,14 @@ local _sensTimer   = nil
             if hs.fs.attributes(plistSrc) and hs.fs.attributes(scriptSrc) then
                 local f = io.open(plistSrc, "r")
                 if f then
-                    local content = f:read("*all"); f:close()
+                    local content = f:read("*all")
+                    f:close()
                     content = content:gsub(litPattern("%%AGENT_PATH%%"), litRepl(scriptSrc))
                     local g = io.open(plistDst, "w")
-                    if g then g:write(content); g:close() end
+                    if g then
+                        g:write(content)
+                        g:close()
+                    end
                     os.execute("chmod 755 '" .. scriptSrc .. "'")
                     os.execute("launchctl unload '" .. plistDst
                         .. "' 2>/dev/null; launchctl load '" .. plistDst .. "'")
@@ -180,21 +167,12 @@ function obj:init()
     -- END Anti-Timeout --
 
     -- Sensitivity Tether --
-        -- The combat macros scale every camera move by refSens / curSens, where
-        -- curSens is ms._camSens. On its own that only tracks the manual "Camera
-        -- Sensitivity" slider, so a player whose real in-game sensitivity differs
-        -- silently mis-rotates every spin — the classic "super jump won't land."
-        -- This keeps ms._camSens tied to Roblox's live saved sensitivity, so the
-        -- calibration is always correct for the setting actually in effect.
         local function syncSensitivity()
             if ms.settings.get("robloxSyncSensitivity") == false then return end
             local sens = effectiveSensitivity()
-            if type(sens) ~= "number" or sens <= 0 then return end   -- Roblox not run yet / no file
+            if type(sens) ~= "number" or sens <= 0 then return end
             if ms._camSens ~= sens then
                 ms._camSens = sens
-                -- Mirror onto the visible slider when the pack defines one, so
-                -- the UI shows the value the macros are really using. A pack
-                -- without cameraSensitivity is left untouched.
                 if ms.settings.get("cameraSensitivity") ~= nil then
                     pcall(ms.settings.set, "cameraSensitivity", sens)
                 end
@@ -212,22 +190,15 @@ function obj:init()
             onChange = function() pcall(syncSensitivity) end,
         })
 
-        -- Primary: react the instant Roblox flushes the settings file (on its
-        -- menu close / focus loss — Roblox controls when, we cannot force it).
-        -- A file-path watch fires on in-place writes; the poll below backstops
-        -- the atomic-rename case FSEvents may report differently.
         if _sensWatcher then _sensWatcher:stop() end
         _sensWatcher = hs.pathwatcher.new(SETTINGS_XML, function()
             pcall(syncSensitivity)
         end)
         if _sensWatcher then _sensWatcher:start() end
 
-        -- Backstop poll. Slow, because the watcher carries the responsiveness;
-        -- this only has to catch a write the watcher didn't see. Cheap either
-        -- way — a ~4 KB file read, and syncSensitivity no-ops when unchanged.
         if _sensTimer then _sensTimer:stop() end
         _sensTimer = hs.timer.doEvery(10, function() pcall(syncSensitivity) end)
-        pcall(syncSensitivity)   -- seed immediately at load
+        pcall(syncSensitivity)
     -- END Sensitivity Tether --
 
     -- Cache Cleaner Toggle --
@@ -291,8 +262,14 @@ function obj:init()
 end
 
 function obj:stop()
-    if _sensWatcher then _sensWatcher:stop(); _sensWatcher = nil end
-    if _sensTimer then _sensTimer:stop(); _sensTimer = nil end
+    if _sensWatcher then
+        _sensWatcher:stop()
+        _sensWatcher = nil
+    end
+    if _sensTimer then
+        _sensTimer:stop()
+        _sensTimer = nil
+    end
     pcall(function() ms.antiTimeoutStop() end)
     if ms._targetApp == "Roblox" then
         pcall(function() ms.setTargetApp(nil) end)

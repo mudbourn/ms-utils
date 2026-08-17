@@ -1,8 +1,7 @@
-# MsCompiler — visual-macro → Lua compilation
+# MsCompiler
 
-Staged rationale from `mac/lib/ms_compiler.lua`. Source material for the phase-4
-navigable docs. Security-relevant invariants are flagged **[SECURITY]** — the
-code keeps a terse guard label at each site; the full reasoning is here.
+Compiles visual macros to Lua. Security-relevant invariants are flagged
+**[SECURITY]**.
 
 ## Tool bindings (`__toolRef`)
 
@@ -37,6 +36,12 @@ literal one is only emitted when > 1, the pre-binding behaviour. Drags carry a
 second point (start → end); emit x2/y2 whenever the step supplies them — the
 recorder does for Drag ops — so the gesture round-trips instead of collapsing to
 a click.
+
+A freehand or recorded drag rides in one step as an `"x,y;x,y;..."` point string.
+`ms.dragPath` takes positional args, so it needs a dedicated emitter. Without one
+the generic fallback passed the params as a single table, `ms.dragPath` saw a
+table where it wanted the point string, hit `#points == 0`, and returned
+silently, which is why recorded drags never executed.
 
 ## Conditional block shapes
 
@@ -73,6 +78,16 @@ unconditionally, so without purging first every save would duplicate the macro
 in the bind list. Remember what was registered (the `{id, source}` sources list)
 so the next re-load after a save/delete purges exactly those ids before the
 compiled chunk re-defines them.
+
+## Deleting a main promotes its peers
+
+When a "main" macro is deleted, any macro whose bind derives from it
+(`bind = { type = <deletedId>, ... }`) would be orphaned, its trigger pointing at
+a macro that no longer exists. Deletion gives each such peer the deleted macro's
+concrete trigger plus the peer's own modifier, so a peer that fired on
+"mouse3 + V" becomes a standalone "mouse3 + V" main. This runs only when the
+deleted macro's own bind is concrete (key/mouse/scroll/gamepad/combo), which is
+exactly the "delete a main, promote its colleagues" case.
 
 ## Credits ownership (handwritten wins)
 

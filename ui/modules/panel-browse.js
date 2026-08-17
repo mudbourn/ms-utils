@@ -2,10 +2,10 @@
     (function() {
     "use strict";
 
-    /* ── panel-browse.js ────────────────────────────────────────────────────
+    /* -- panel-browse.js --
      *
      * The Browse stage: the one universal storefront for the validated
-     * library. Every package type — profile, plugin, theme, sound, macro —
+     * library. Every package type, profile, plugin, theme, sound, macro ,
      * is discovered and installed here, and here only. Management stays with
      * each type's own panel (a plugin toggles in Plugins, a theme applies in
      * Theme); this stage never manages, it only finds and installs.
@@ -14,7 +14,7 @@
      * signed index or it is not. We render the badge the entry carries and
      * hand the install to ms.package, which re-checks trust before it writes.
      *
-     * Data is fetched lazily — the catalog is a network document with a TTL,
+     * Data is fetched lazily, the catalog is a network document with a TTL,
      * so we ask for it the first time the stage is opened rather than folding
      * it into the settings state that every panel repaint carries. Lua answers
      * 'browseList' with a 'catalog' push; a manual Refresh forces a refetch.
@@ -23,7 +23,7 @@
      * other module panels. This panel owns only its cards and toolbar.
      */
 
-    // ── State ────────────────────────────────────────────────────────────
+    // -- State --
     let S = {
         entries:    null,   // null = never loaded; [] = loaded, empty
         loading:    false,
@@ -53,7 +53,7 @@
     ];
 
 
-    // ── Data ─────────────────────────────────────────────────────────────
+    // -- Data --
     function requestCatalog(opts) {
         S.loading = true;
         S.error   = null;
@@ -68,7 +68,7 @@
         requestCatalog();
     }
 
-    // ── Filtering ────────────────────────────────────────────────────────
+    // -- Filtering --
     // Lua already filters, but re-filtering here keeps typing responsive
     // without a round-trip per keystroke: we narrow the last catalog locally
     // and only refetch on Refresh.
@@ -86,7 +86,7 @@
 
     // Expand each profile that advertises components into virtual per-type
     // entries (Theme / Sound / Macro), so those slices show up under their own
-    // filters and group headers — all installing from the profile's single
+    // filters and group headers, all installing from the profile's single
     // download, no duplicated assets. The profile itself stays in the list too.
     function expandForBrowse(list) {
         const out = [];
@@ -101,7 +101,7 @@
             for (const k of ["theme", "sound", "macro"]) {
                 if (!c[k]) continue;
                 out.push({
-                    id: e.id + "::" + k,   // synthetic — for keys/rendering only
+                    id: e.id + "::" + k,   // synthetic, for keys/rendering only
                     installId: e.id,       // the real registry id to download
                     component: k,
                     virtual: true,
@@ -110,7 +110,7 @@
                     version: e.version,
                     author: e.author,
                     website: e.website,
-                    url: e.url,            // shared asset → GitHub button works
+                    url: e.url,            // shared asset -> GitHub button works
                     sha256: e.sha256,
                     trust: e.trust,
                     themeBonus: (k === "theme") && !!c.sound
@@ -122,7 +122,7 @@
     }
 
     // Turn a package's asset URL into a human-facing GitHub page.
-    // …/releases/download/<tag>/<asset>  →  …/releases/tag/<tag>
+    // .../releases/download/<tag>/<asset>  ->  .../releases/tag/<tag>
     // Any other github.com URL falls back to the owner/repo root. Non-GitHub
     // (or missing) URLs return null so the button simply does not appear.
     function githubPageFor(url) {
@@ -134,7 +134,7 @@
         return null;
     }
 
-    // ── Card ─────────────────────────────────────────────────────────────
+    // -- Card --
     function packageCard(e) {
         const { h, actionBtn } = ui();
         const card = h("div", {
@@ -142,19 +142,19 @@
             onmouseenter: () => playSlot("hover"),
         });
 
-        // Unified display name: "<base>  [Type]" for every kind — the profile
+        // Unified display name: "<base>  [Type]" for every kind, the profile
         // and its slices read the same way. Strip any type word the source name
-        // already carries (a trailing "profile", or a " — Theme" from a virtual
+        // already carries (a trailing "profile", or a ", Theme" from a virtual
         // entry) so it is never doubled.
         const typeLabel = String((TYPES.find((x) => x.value === e.type) || {}).label
-            || e.type).replace(/s$/, ""); // "Themes" → "Theme"
+            || e.type).replace(/s$/, ""); // "Themes" -> "Theme"
         const baseName = (e.name || e.id)
-            .replace(/\s*[—–-]\s*(Theme|Sound|Macro|Profile|Plugin)\s*$/i, "")
+            .replace(/\s*[,–-]\s*(Theme|Sound|Macro|Profile|Plugin)\s*$/i, "")
             .replace(/\s+(profile|theme|sound|macro|plugin)$/i, "")
             .trim() || (e.name || e.id);
         const displayName = baseName + "  [" + typeLabel + "]";
 
-        // No trust badge: the registry is curator-published — every entry is
+        // No trust badge: the registry is curator-published, every entry is
         // vetted before it lands, so presence in the library IS the trust
         // signal. install still re-checks trust before writing (ms.package).
         const name = h("div", { cls: "browse-name" }, displayName);
@@ -206,8 +206,8 @@
             actions.appendChild(actionBtn("Website", "", () =>
                 send("openURL", { url: e.website })));
         }
-        // "View on GitHub" — the asset URL is a release download link; turn it
-        // into the human-facing release page (…/releases/tag/<tag>), else fall
+        // "View on GitHub", the asset URL is a release download link; turn it
+        // into the human-facing release page (.../releases/tag/<tag>), else fall
         // back to the repo root. Only shown for github.com-hosted packages.
         const ghHref = githubPageFor(e.url);
         if (ghHref) {
@@ -229,7 +229,7 @@
         return card;
     }
 
-    // ── Toolbar ──────────────────────────────────────────────────────────
+    // -- Toolbar --
     function toolbar() {
         const { h, seg, actionBtn } = ui();
         const bar = h("div", { cls: "browse-toolbar" });
@@ -237,7 +237,7 @@
         const search = h("input", {
             cls: "browse-search",
             type: "text",
-            placeholder: "Search the library…",
+            placeholder: "Search the library...",
             value: S.query,
             oninput: (ev) => { S.query = ev.target.value; renderResults(); },
         });
@@ -253,13 +253,13 @@
         return bar;
     }
 
-    // ── Results region ───────────────────────────────────────────────────
+    // -- Results region --
     function results() {
         const { h, groupLabel } = ui();
         const wrap = h("div", { cls: "browse-results" });
 
         if (S.loading && S.entries === null) {
-            wrap.appendChild(h("div", { cls: "browse-empty" }, "Loading the library…"));
+            wrap.appendChild(h("div", { cls: "browse-empty" }, "Loading the library..."));
             return wrap;
         }
         if (S.error) {
@@ -300,7 +300,7 @@
         return wrap;
     }
 
-    // ── Style ────────────────────────────────────────────────────────────
+    // -- Style --
     // Self-contained so the panel reads correctly before any theme-specific
     // card CSS exists for it. Uses theme tokens only.
     function ensureStyle() {
@@ -335,7 +335,7 @@
         .browse-actions { display:flex; gap:8px; }
         .browse-bonus { display:flex; align-items:center; gap:6px;
             color:var(--text2); font-size:11px; cursor:pointer; user-select:none; }
-        /* Custom checkbox — the native macOS control ignores our theme, so we
+        /* Custom checkbox, the native macOS control ignores our theme, so we
            strip its appearance and draw a themed box + check ourselves. */
         .browse-bonus input[type="checkbox"] { -webkit-appearance:none;
             appearance:none; margin:0; width:14px; height:14px; flex:0 0 14px;
@@ -344,7 +344,7 @@
             transition:background 0.12s, border-color 0.12s; }
         .browse-bonus input[type="checkbox"]:hover { border-color:var(--accent); }
         /* The global input:focus-visible rule strips the outline, so a keyboard
-           tab to this checkbox showed nothing — restore a themed focus ring. */
+           tab to this checkbox showed nothing, restore a themed focus ring. */
         .browse-bonus input[type="checkbox"]:focus-visible { box-shadow:0 0 0 2px var(--accent-hi); }
         .browse-bonus input[type="checkbox"]:checked { background:var(--accent);
             border-color:var(--accent); }
@@ -364,7 +364,7 @@
         document.head.appendChild(el);
     }
 
-    // ── Render ───────────────────────────────────────────────────────────
+    // -- Render --
     // Two seams: render() rebuilds the whole panel (toolbar + results);
     // renderResults() repaints only the list, so typing in the search box
     // never steals focus from the input.
@@ -389,7 +389,7 @@
         box.appendChild(results());
     }
 
-    // ── Bridge ───────────────────────────────────────────────────────────
+    // -- Bridge --
     if (window.registerPanel) {
         window.registerPanel("browse", function(action, body) {
             if (action === "catalog") {
@@ -406,7 +406,7 @@
     }
 
     // Lazy first load: fetch the catalog the first time the stage is opened,
-    // not at boot — the registry is a network document and most sessions
+    // not at boot, the registry is a network document and most sessions
     // never open Browse.
     const railBtn = document.querySelector('.rail-item[data-panel="browse"]');
     if (railBtn) railBtn.addEventListener("click", ensureLoaded);

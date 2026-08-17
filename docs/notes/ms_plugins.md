@@ -1,7 +1,4 @@
-# MsPlugins — plugin loading & teardown
-
-Staged rationale from `mac/lib/ms_plugins.lua`. Source material for the phase-4
-navigable docs. The code keeps mechanics; the "why" lives here.
+# MsPlugins
 
 ## The problem: Hammerspoon has no unload
 

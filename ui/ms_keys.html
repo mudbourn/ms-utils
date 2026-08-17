@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <style>
-            /* ── Fonts ──────────────────────────────────────────────────────── */
+            /* -- Fonts -- */
             @font-face {
                 font-family: "Almendra";
                 src: url("./fonts/Almendra-Regular.ttf") format("truetype");
@@ -29,7 +29,7 @@
                 font-style: italic;
             }
 
-            /* ── Tokens ─────────────────────────────────────────────────────── */
+            /* -- Tokens -- */
             :root {
                 --bg: #0d0f09;
                 --surface: #141810;
@@ -50,7 +50,7 @@
                 /* --mouse and --scroll fall back to --warning via var() */
             }
 
-            /* ── Reset ──────────────────────────────────────────────────────── */
+            /* -- Reset -- */
             *,
             *::before,
             *::after {
@@ -90,7 +90,7 @@
                 color: inherit;
             }
 
-            /* ── Header ─────────────────────────────────────────────────────── */
+            /* -- Header -- */
             #header {
                 display: flex;
                 align-items: center;
@@ -138,7 +138,7 @@
                 color: var(--text);
             }
 
-            /* ── Flag row ───────────────────────────────────────────────────── */
+            /* -- Flag row -- */
             #flag-row {
                 display: flex;
                 align-items: center;
@@ -184,10 +184,10 @@
                 flex-shrink: 0;
             }
 
-            /* ── Tabs ───────────────────────────────────────────────────────── */
+            /* -- Tabs -- */
             /* .tab / .tab-section styles come from modules/ui-tabs.js */
 
-            /* ── State section ──────────────────────────────────────────────── */
+            /* -- State section -- */
             .state-section {
                 padding: 8px 12px;
                 background: var(--surface);
@@ -234,7 +234,7 @@
                 opacity: 0.4;
             }
 
-            /* ── Coord row ──────────────────────────────────────────────────── */
+            /* -- Coord row -- */
             #coord-row {
                 display: flex;
                 align-items: center;
@@ -254,14 +254,14 @@
                 flex-shrink: 0;
             }
 
-            /* ── Section divider ────────────────────────────────────────────── */
+            /* -- Section divider -- */
             .section-divider {
                 height: 1px;
                 background: var(--border);
                 flex-shrink: 0;
             }
 
-            /* ── Event log ──────────────────────────────────────────────────── */
+            /* -- Event log -- */
             .log {
                 flex: 1;
                 overflow-y: auto;
@@ -279,7 +279,7 @@
                 border-radius: 3px;
             }
 
-            /* ── Entry rows ─────────────────────────────────────────────────── */
+            /* -- Entry rows -- */
             .entry {
                 display: flex;
                 align-items: baseline;
@@ -309,7 +309,7 @@
                 min-width: 52px;
             }
 
-            /* ── Badges ─────────────────────────────────────────────────────── */
+            /* -- Badges -- */
             .badge {
                 font: 700 10px var(--font-mono);
                 letter-spacing: 0.05em;
@@ -331,7 +331,7 @@
                 color: var(--scroll, var(--warning));
             }
 
-            /* ── Arrows ─────────────────────────────────────────────────────── */
+            /* -- Arrows -- */
             .arrow {
                 flex-shrink: 0;
             }
@@ -357,7 +357,7 @@
                 color: var(--text3);
             }
 
-            /* ── Name spans ─────────────────────────────────────────────────── */
+            /* -- Name spans -- */
             .key-name {
                 color: var(--text);
                 word-break: break-word;
@@ -380,7 +380,7 @@
                 font: 10px var(--font-mono);
             }
 
-            /* ── Context menu ─────────────────────────────────────────────── */
+            /* -- Context menu -- */
             #ctx-menu {
                 position: fixed;
                 min-width: 140px;
@@ -417,7 +417,7 @@
     </head>
     <body>
         <div id="header">
-            <span id="panel-title">mudscript — input monitor</span>
+            <span id="panel-title">mudscript, input monitor</span>
             <div class="header-btns">
                 <button
                     id="pause-btn"
@@ -457,11 +457,11 @@
         <div id="flag-row">
             <div class="flag-pill" id="flag-key-pill">
                 <span class="flag-label">Key</span>
-                <span id="flag-key-name">—</span>
+                <span id="flag-key-name">,</span>
             </div>
             <span class="flag-sep">│</span>
             <div class="flag-pill" id="flag-mouse-pill">
-                <span id="flag-mouse-name">—</span>
+                <span id="flag-mouse-name">,</span>
                 <span class="flag-label">Mouse</span>
             </div>
         </div>
@@ -486,7 +486,7 @@
             </button>
         </div>
 
-        <!-- ── Keyboard tab ──────────────────────────────────────────────── -->
+        <!-- -- Keyboard tab -- -->
         <div id="keys-section" class="tab-section active">
             <div class="state-section">
                 <div class="section-label">Active</div>
@@ -496,14 +496,14 @@
             <div id="keys-log" class="log"></div>
         </div>
 
-        <!-- ── Mouse tab ─────────────────────────────────────────────────── -->
+        <!-- -- Mouse tab -- -->
         <div id="mouse-section" class="tab-section">
             <div class="state-section">
                 <div class="section-label">Position</div>
                 <div id="coord-row">
                     <div id="pos-display">
-                        x:&nbsp;<span id="mx-display">—</span
-                        >&nbsp;&nbsp;y:&nbsp;<span id="my-display">—</span>
+                        x:&nbsp;<span id="mx-display">,</span
+                        >&nbsp;&nbsp;y:&nbsp;<span id="my-display">,</span>
                     </div>
                     <!-- Built by createSelect (modules/ui-select.js), mounted
                          from the script below. The native dropdown this
@@ -525,7 +525,7 @@
         <script>
             "use strict";
 
-            // ── Create LogPanel (selection, context menu, keyboard, drag, theme) ──
+            // -- Create LogPanel (selection, context menu, keyboard, drag, theme) --
             const lp = createLogPanel({
                 channel: "keys",
                 buildRow, // defined below
@@ -546,7 +546,7 @@
                 },
             });
 
-            // ── Expose globals for inline handlers ──────────────────────────
+            // -- Expose globals for inline handlers --
             window.togglePause = lp.togglePause;
             window.playSlot    = lp.playSlot;
             window.clearLog    = clearLog;
@@ -555,7 +555,7 @@
             window.onCoordModeChange = onCoordModeChange;
             window.applyTheme  = lp.applyTheme;
 
-            // ── Constants ───────────────────────────────────────────────────
+            // -- Constants --
             const BTN_NAMES = {
                 0: "Left",
                 1: "Right",
@@ -566,7 +566,7 @@
 
             function btnName(n) { return BTN_NAMES[n] ?? "M" + n; }
 
-            // ── Entry builder ───────────────────────────────────────────────
+            // -- Entry builder --
             function mkSpan(cls, text) {
                 const s = document.createElement("span");
                 s.className = cls;
@@ -582,7 +582,7 @@
                     row.className = "entry move-entry";
                     row.append(
                         mkSpan("ts", "[" + (entry.ts || "") + "]"),
-                        mkSpan("arrow arrow-move", "→"),
+                        mkSpan("arrow arrow-move", "->"),
                         mkSpan("move-name", entry.x + ", " + entry.y),
                     );
                     row.onmouseenter = function() { lp.playSlot("hover"); };
@@ -636,7 +636,7 @@
                 return row;
             }
 
-            // ── Route entries to the correct log ────────────────────────────
+            // -- Route entries to the correct log --
             function appendEntry(entry) {
                 if (lp.isPaused()) return;
                 if (entry.type === "key" && entry.down)
@@ -679,14 +679,14 @@
                 ml.scrollTop = ml.scrollHeight;
             }
 
-            // ── Active keys pills ───────────────────────────────────────────
+            // -- Active keys pills --
             function updateActiveKeys(keys) {
                 const row = document.getElementById("keys-pills");
                 row.innerHTML = "";
                 if (!keys || keys.length === 0) {
                     const p = document.createElement("span");
                     p.className = "pill pill-empty";
-                    p.textContent = "—";
+                    p.textContent = ",";
                     row.appendChild(p);
                     return;
                 }
@@ -702,7 +702,7 @@
                 });
             }
 
-            // ── Mouse state (position + active buttons) ─────────────────────
+            // -- Mouse state (position + active buttons) --
             function updateMouseState(state) {
                 if (state.x != null)
                     document.getElementById("mx-display").textContent = state.x;
@@ -740,21 +740,21 @@
                     document.getElementById("my-display").textContent = pos.y;
             }
 
-            // ── Flag row ────────────────────────────────────────────────────
+            // -- Flag row --
             let _lastKeyTime = 0,
                 _lastMouseTime = 0;
 
             function flagKey(name) {
                 _lastKeyTime = Date.now();
                 document.getElementById("flag-key-name").textContent =
-                    name || "—";
+                    name || ",";
                 _updateFlagStyles();
             }
 
             function flagMouse(name) {
                 _lastMouseTime = Date.now();
                 document.getElementById("flag-mouse-name").textContent =
-                    name || "—";
+                    name || ",";
                 _updateFlagStyles();
             }
 
@@ -774,7 +774,7 @@
                     );
             }
 
-            // ── Tab switching ───────────────────────────────────────────────
+            // -- Tab switching --
             injectTabStyles();
             const tabs = createTabs({
                 onSwitch(tab) {
@@ -785,7 +785,7 @@
             });
             function switchTab(tab) { tabs.switch(tab); }
 
-            // ── Button actions ──────────────────────────────────────────────
+            // -- Button actions --
             function clearLog() {
                 document.getElementById("keys-log").innerHTML = "";
                 document.getElementById("mouse-log").innerHTML = "";
@@ -796,10 +796,10 @@
                 lp.sendToHost({ action: "setCoordMode", mode: mode });
             }
 
-            // ── Coordinate-mode dropdown ────────────────────────────────────
+            // -- Coordinate-mode dropdown --
             // Options live here rather than in markup because the control is
             // built, not parsed. "screen" matches _coordMode's default in
-            // ms_devtools.lua — the host is not asked on load, so the two
+            // ms_devtools.lua, the host is not asked on load, so the two
             // defaults have to agree.
             var coordSelect = createSelect({
                 options: [
@@ -817,14 +817,14 @@
             });
             document.getElementById("coord-select-mount").appendChild(coordSelect);
 
-            // ── Expose for Lua evaluateJavaScript ───────────────────────────
+            // -- Expose for Lua evaluateJavaScript --
             window.appendEntry      = appendEntry;
             window.loadHistory      = loadHistory;
             window.updateActiveKeys = updateActiveKeys;
             window.updateMouseState = updateMouseState;
             window.updateMousePos   = updateMousePos;
 
-            // ── Init ────────────────────────────────────────────────────────
+            // -- Init --
             document.addEventListener("DOMContentLoaded", () => {
                 if (typeof registerPanel === "function") {
                     registerPanel("keys", function(action, body) {

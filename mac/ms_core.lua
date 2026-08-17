@@ -1,4 +1,5 @@
--- Core System ---- PLEASE EDIT CAREFULLY --
+-- Core System (PLEASE EDIT CAREFULLY) --
+-- Design notes: docs/notes/ms_core.md
     -- Hammerspoon mudscript Utility Library --
         -- 0. Bootstrap & Spoons --
             if _G.__ms_core_running then return end
@@ -28,7 +29,7 @@
                 require("lib.ms_loading")(ms)
             -- END Loading Screen --
 
-            -- Guardian (lives in lib/ms_guardian.lua; runs before this file) --
+            -- Guardian (lives in lib/ms_guardian.lua, runs before this file) --
             -- END Guardian --
 
             -- One-time migration (move settings/hash to data/) --
@@ -40,10 +41,15 @@
                         local dst = _h .. "/data/" .. name
                         if hs.fs.attributes(dst) then return end
                         if not hs.fs.attributes(src) then return end
-                        local f = io.open(src, "rb"); if not f then return end
-                        local c = f:read("*all"); f:close()
-                        local g = io.open(dst, "wb"); if not g then return end
-                        g:write(c); g:close(); os.remove(src)
+                        local f = io.open(src, "rb")
+                        if not f then return end
+                        local c = f:read("*all")
+                        f:close()
+                        local g = io.open(dst, "wb")
+                        if not g then return end
+                        g:write(c)
+                        g:close()
+                        os.remove(src)
                     end
                     _mvToData("ms_settings.json")
                     _mvToData("ms_settings_default.json")
@@ -67,9 +73,12 @@
                                     if not hs.fs.attributes(_dst) then
                                         local _f = io.open(_srcDir .. _file, "rb")
                                         if _f then
-                                            local _c = _f:read("*all"); _f:close()
+                                            local _c = _f:read("*all")
+                                            _f:close()
                                             local _g = io.open(_dst, "wb")
-                                            if _g then _g:write(_c); _g:close(); _installed = true end
+                                            if _g then _g:write(_c)
+                                            _g:close()
+                                            _installed = true end
                                         end
                                     end
                                 end
@@ -77,28 +86,22 @@
                         end
                     end
                     if _installed then
-                        hs.reload(); return
+                        hs.reload()
+                        return
                     end
                 end
             -- END Font installation --
 
             -- MsGuardian (integrity check) --
                 ms.loading.update(3, "Configuring Guardian\u{2026}")
-                -- Guardian has already run: mac/init.lua loads it, it verifies
-                -- hashes, sets _guardianPassed and only then dofile's this file.
-                -- There is nothing to invoke here — the old call was to a
-                -- :check() method MsGuardian never defined, swallowed by pcall,
-                -- and its hs.loadSpoon re-entered the module that loads core.
-                -- Guardian tether: every module checks this flag
                 ms.checkGuardian = function(name)
                     if _G._guardianPassed then return true end
-                    print("INTEGRITY ERROR: " .. (name or "module") .. " halted — Guardian did not pass.")
+                    print("INTEGRITY ERROR: " .. (name or "module") .. " halted, Guardian did not pass.")
                     ms.alert("\u{26a0} Integrity Error\n" .. (name or "Module") .. " refused to start.\nGuardian check did not pass.", 10)
                     return false
                 end
             -- END MsGuardian (integrity check) --
 
-            -- Event Bus (ms.bus) — created before spoons so handlers register
                 do
                     local _busSubs = {}
 
@@ -121,7 +124,6 @@
 
                     ms.bus.emit = function(topic, payload)
                         assert(type(topic) == "string", "ms.bus.emit: topic must be a string")
-                        -- Exact match
                         local subs = _busSubs[topic]
                         if subs then
                             for fn, _ in pairs(subs) do
@@ -131,7 +133,6 @@
                                 end
                             end
                         end
-                        -- Wildcard subscribers: "ui:settings:*" matches "ui:settings:ready"
                         for pattern, fns in pairs(_busSubs) do
                             local starPos = pattern:find("%*$")
                             if starPos then
@@ -161,7 +162,7 @@
                 end)
 
                 if not _msDevOk then
-                    print("MsDevTools: load failed — " .. tostring(_msDevErr))
+                    print("MsDevTools: load failed, " .. tostring(_msDevErr))
                     ms.devtools = nil
                 end
 
@@ -193,10 +194,26 @@
                     ms.dev._onKeyEvent   = function() end
                     ms.dev._onMouseEvent = function() end
 
-                    ms.dev.console = { show = function() end, hide = function() end, toggle = function() end }
-                    ms.dev.watcher = { show = function() end, hide = function() end, toggle = function() end }
-                    ms.dev.keys    = { show = function() end, hide = function() end, toggle = function() end }
-                    ms.dev.window  = { show = function() end, hide = function() end, toggle = function() end }
+                    ms.dev.console = {
+                        show = function() end,
+                        hide = function() end,
+                        toggle = function() end,
+                    }
+                    ms.dev.watcher = {
+                        show = function() end,
+                        hide = function() end,
+                        toggle = function() end,
+                    }
+                    ms.dev.keys    = {
+                        show = function() end,
+                        hide = function() end,
+                        toggle = function() end,
+                    }
+                    ms.dev.window  = {
+                        show = function() end,
+                        hide = function() end,
+                        toggle = function() end,
+                    }
 
                     ms.dev.prewarm     = function() end
                     ms.dev.prewarmStep = function() end
@@ -235,7 +252,7 @@
                 end)
 
                 if not _msAlertOk then
-                    print("MsAlert: load failed — " .. tostring(_msAlertErr))
+                    print("MsAlert: load failed, " .. tostring(_msAlertErr))
                 end
 
                 if _msAlert then
@@ -263,7 +280,7 @@
                 end)
 
                 if not _msSettingsOk then
-                    print("MsSettings: load failed — " .. tostring(_msSettingsErr))
+                    print("MsSettings: load failed, " .. tostring(_msSettingsErr))
                 end
 
                 if _msSettings then
@@ -342,7 +359,7 @@
                 end)
 
                 if not _msUIOk then
-                    print("MsUI: load failed — " .. tostring(_msUIErr))
+                    print("MsUI: load failed, " .. tostring(_msUIErr))
                 end
 
                 if _msUI then
@@ -380,40 +397,54 @@
         -- END 0. Bootstrap & Spoons --
 
         -- 0b. Startup Sanity Checks --
-        -- After hs.reload(), OS-level key/button state from a previous session
-        -- persists because the old Lua state never sent release events.
-        -- Clean up before initializing fresh state. Uses raw keycodes to
-        -- avoid string-lookup failures.
         do
-            -- Modifier keycodes (left variants)
-            local modKeys = { 55, 58, 59, 56, 63 }  -- cmd, alt, ctrl, shift, fn
+            local modKeys = {
+                55,
+                58,
+                59,
+                56,
+                63,
+            }
             for _, kc in ipairs(modKeys) do
                 pcall(function()
                     local ev = hs.eventtap.event.newKeyEvent({}, kc, false)
-                    if ev then ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999); ev:post() end
+                    if ev then ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    ev:post() end
                 end)
             end
 
-            -- Common macro-held keycodes
-            local commonKeys = { 13, 0, 1, 2, 12, 14, 15, 3, 49 }  -- w, a, s, d, q, e, r, f, space
+            local commonKeys = {
+                13,
+                0,
+                1,
+                2,
+                12,
+                14,
+                15,
+                3,
+                49,
+            }
             for _, kc in ipairs(commonKeys) do
                 pcall(function()
                     local ev = hs.eventtap.event.newKeyEvent({}, kc, false)
-                    if ev then ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999); ev:post() end
+                    if ev then ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
+                    ev:post() end
                 end)
             end
 
-            -- Mouse button release (0=left, 1=right, 2+=other)
             for btn = 0, 5 do
                 pcall(function()
-                    local pos = {0, 0}
+                    local pos = {
+                        0,
+                        0,
+                    }
                     local ev
                     if btn == 0 then
-                        ev = hs.eventtap.event.newMouseEvent(2, pos)   -- leftMouseUp
+                        ev = hs.eventtap.event.newMouseEvent(2, pos)
                     elseif btn == 1 then
-                        ev = hs.eventtap.event.newMouseEvent(4, pos)   -- rightMouseUp
+                        ev = hs.eventtap.event.newMouseEvent(4, pos)
                     else
-                        ev = hs.eventtap.event.newMouseEvent(26, pos)  -- otherMouseUp
+                        ev = hs.eventtap.event.newMouseEvent(26, pos)
                         ev:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btn)
                     end
                     if ev then
@@ -423,13 +454,11 @@
                 end)
             end
 
-            -- Clear any stale global timers from a previous generation
             if _G._loadTimers then
                 for _, t in pairs(_G._loadTimers) do pcall(function() t:stop() end) end
             end
             _G._loadTimers = {}
 
-            -- Stop previous app watcher if still lingering
             if _G.__ms_appWatcher then pcall(function() _G.__ms_appWatcher:stop() end) end
         end
         -- END 0b. Startup Sanity Checks --
@@ -438,30 +467,33 @@
             ms.vars = {}
             ms.keytrack = {}
             ms._keyBindings = {}
-            ms._keyBindingsByCode = {}   -- [keyCode] = { binding, ... } — derived index, synced at ms.key/delete
+            ms._keyBindingsByCode = {}
             ms.bindConfig = {}
             ms.bindHandles = {}
-            ms.systemBinds             = { _config = {}, _handles = {} }
+            ms.systemBinds             = {
+                _config = {},
+                _handles = {},
+            }
 
             ms.trackpadMode          = false
-            ms.trackpadHoldKeys      = { left = "n", right = "j" }
+            ms.trackpadHoldKeys      = {
+                left = "n",
+                right = "j",
+            }
             ms.socdMode              = "lastWins"
             ms.socdEnabled           = false
             ms.trackpadBindOverrides = {
-                superJump     = {type="key", mods={}, key="k"},
+                superJump     = {
+                    type="key",
+                    mods={},
+                    key="k",
+                },
             }
             ms.binds                 = {}
-            -- Handwritten macros (from ms_macros.lua) that the user "deleted" in
-            -- the shell UI. Deleting one from disk would mean editing source, so
-            -- instead its id is parked here: disabled, unbound, and hidden from
-            -- the macro list, persisted across reloads. Visual-builder macros are
-            -- truly deletable (they live in the JSON pack), so they never land
-            -- here. Keyed id → true.
             ms._suppressedMacros     = {}
             ms.running   = {}
             ms.cooldowns = {}
             ms._targetActive = false
-            -- Safe zones: system binds fire here even without target-app focus
             ms._safeApps = {
                 ["Hammerspoon"]      = true,
                 ["Activity Monitor"] = true,
@@ -482,21 +514,24 @@
             ms._macroHeldButtons = {}
             ms._coroContext      = {}
             ms._activeContexts   = {}
-            ms.registry              = { _defs = {}, _defList = {} }
-            ms.bind                  = { _wires = {}, _autoCount = 0 }
+            ms.registry              = {
+                _defs = {},
+                _defList = {},
+            }
+            ms.bind                  = {
+                _wires = {},
+                _autoCount = 0,
+            }
 
-            -- The game/app macros target. No longer hardcoded: a macro pack
-            -- (ms_macros.lua) or a plugin declares it via ms.setTargetApp(). The
-            -- optional TARGET_APP global lets a pack seed it before core runs;
-            -- with none set there is no target and system binds only fire in
-            -- safe zones.
             ms._targetApp     = TARGET_APP or nil
             ms._targetHandle  = ms._targetApp and hs.application.get(ms._targetApp) or nil
             ms._targetActive  = false
-            ms._qrOptions = { macros = true, theme = true, settings = true, ui = true }
-            -- Plugins the user has switched off, by bundle dir name. Empty is
-            -- the normal state: install is the decision point, so this only
-            -- ever holds names someone deliberately turned off.
+            ms._qrOptions = {
+                macros = true,
+                theme = true,
+                settings = true,
+                ui = true,
+            }
             ms._pluginsDisabled = {}
             ms.getTargetWin = function()
                 local app = hs.application.get(ms._targetApp)
@@ -517,26 +552,34 @@
             REF_W = REF_W or 1680
             REF_H = REF_H or 1044
             REF_SENS = REF_SENS or 1.5
-            -- Reference resolution & scaling — the values the point resolver
-            -- actually reads. They seed from the REF_W/REF_H globals but a macro
-            -- pack retargets them at runtime through ms.settings (see
-            -- ms.setReferenceResolution / ms.setReferenceScaling, defined in the
-            -- Resolution & Window Scaling section). ms._refScaling gates
-            -- Window-relative scaling: when false, Window* points are placed at
-            -- raw offsets, as if every call had passed Unscaled.
             ms._refW       = ms._refW or REF_W
             ms._refH       = ms._refH or REF_H
             if ms._refScaling == nil then ms._refScaling = true end
-            Move        = "Move";    Click       = "Click";    DoubleClick = "DoubleClick"
-            TripleClick = "TripleClick";   Drag   = "Drag";    Press       = "Press";    Release     = "Release"
-            Left        = "Left";    Right       = "Right";   Center      = "Center"
-            Button4     = "Button4"; Button5     = "Button5"
+            Move        = "Move"
+            Click       = "Click"
+            DoubleClick = "DoubleClick"
+            TripleClick = "TripleClick"
+            Drag   = "Drag"
+            Press       = "Press"
+            Release     = "Release"
+            Left        = "Left"
+            Right       = "Right"
+            Center      = "Center"
+            Button4     = "Button4"
+            Button5     = "Button5"
             Unscaled    = true
-            Absolute     = "Absolute";  Mouse        = "Mouse"
-            WindowTL     = "WindowTL";  WindowTR     = "WindowTR"
-            WindowBL     = "WindowBL";  WindowBR     = "WindowBR";  WindowCenter = "WindowCenter"
-            ScreenTL     = "ScreenTL";  ScreenTR     = "ScreenTR"
-            ScreenBL     = "ScreenBL";  ScreenBR     = "ScreenBR";  ScreenCenter = "ScreenCenter"
+            Absolute     = "Absolute"
+            Mouse        = "Mouse"
+            WindowTL     = "WindowTL"
+            WindowTR     = "WindowTR"
+            WindowBL     = "WindowBL"
+            WindowBR     = "WindowBR"
+            WindowCenter = "WindowCenter"
+            ScreenTL     = "ScreenTL"
+            ScreenTR     = "ScreenTR"
+            ScreenBL     = "ScreenBL"
+            ScreenBR     = "ScreenBR"
+            ScreenCenter = "ScreenCenter"
             BindValidity = 1
             SoundLib = os.getenv("HOME") .. "/.hammerspoon/sounds/"
             SoundDefaultsDir = SoundLib .. "defaults/"
@@ -547,57 +590,140 @@
             ms.importedSounds  = {}
             ms.soundEnabled    = true
             ms.soundVolume     = 100
-            -- Sounds are a theme aspect, so theme exports carry them by
-            -- default. The Sounds tab can turn that off per install.
             ms.bundleSoundsWithTheme = true
             ms.soundAssign     = {}
 
             -- Sound Slot Registry --
-                -- The one list of built-in sound slots. playSlot's fallback,
-                -- the custom-theme reset, the preset builder and the Sounds
-                -- tab all derive from this table and none of them keep a
-                -- copy — adding a slot is one edit here.
-                --
-                --   id        key under ms.soundAssign
-                --   label     Sounds tab row label
-                --   group     "load" or "event" — which group the tab files it under
-                --   d         default sample base; nil = ships unassigned
-                --   a         themed sample base; nil = no themed variant
-                --   fallback  slot to try when this one resolves to nothing
                 ms.soundSlots = {
-                    { id = "themeLoaded",     label = "Theme Applied",       group = "load",  d = "d_ThemeLoaded",     a = "a_ThemeLoaded" },
-                    { id = "load",            label = "Loading Screen End",  group = "load",  d = "d_LoadEnd",         a = "a_LoadEnd" },
-                    { id = "launch",          label = "Launch Announcement", group = "load",  d = "d_Launch",          a = "a_Launch" },
+                    {
+                        id = "themeLoaded",
+                        label = "Theme Applied",
+                        group = "load",
+                        d = "d_ThemeLoaded",
+                        a = "a_ThemeLoaded",
+                    },
+                    {
+                        id = "load",
+                        label = "Loading Screen End",
+                        group = "load",
+                        d = "d_LoadEnd",
+                        a = "a_LoadEnd",
+                    },
+                    {
+                        id = "launch",
+                        label = "Launch Announcement",
+                        group = "load",
+                        d = "d_Launch",
+                        a = "a_Launch",
+                    },
 
-                    { id = "updateAvailable", label = "Update Available",    group = "event", d = "d_UpdateAvailable", a = "a_UpdateAvailable" },
-                    { id = "alert",           label = "Alert / Notice",      group = "event", d = "d_Alert",           a = "a_Alert" },
-                    { id = "enabled",         label = "Macros Enabled",      group = "event", d = "d_MacrosOn",        a = "a_MacrosOn" },
-                    { id = "disabled",        label = "Macros Disabled",     group = "event", d = "d_MacrosOff",       a = "a_MacrosOff" },
-                    { id = "toggleOn",        label = "Toggle On",           group = "event", d = "d_ToggleOn",        a = "a_ToggleOn" },
-                    { id = "toggleOff",       label = "Toggle Off",          group = "event", d = "d_ToggleOff",       a = "a_ToggleOff" },
-                    { id = "update",          label = "Setting Updated",     group = "event", d = "d_Update",          a = "a_Update" },
-                    { id = "reset",           label = "Setting Reset",       group = "event", d = "d_Reset",           a = "a_Reset" },
-                    { id = "interact",        label = "Menu Interact",       group = "event", d = "d_Interact",        a = "a_Interact" },
-                    { id = "hover",           label = "Menu Hover",          group = "event", d = "d_Hover",           a = "a_Hover" },
-                    { id = "back",            label = "Menu Back",           group = "event", d = "d_Back",            a = "a_Back" },
-                    { id = "settingsOpen",    label = "Settings Open",       group = "event", d = "d_SettingsOpen",    a = "a_SettingsOpen" },
-                    { id = "settingsClose",   label = "Settings Close",      group = "event", d = "d_SettingsClose",   a = "a_SettingsClose" },
-                    { id = "shutdown",        label = "Shutdown",            group = "event", d = "d_Shutdown",        a = "a_Shutdown" },
+                    {
+                        id = "updateAvailable",
+                        label = "Update Available",
+                        group = "event",
+                        d = "d_UpdateAvailable",
+                        a = "a_UpdateAvailable",
+                    },
+                    {
+                        id = "alert",
+                        label = "Alert / Notice",
+                        group = "event",
+                        d = "d_Alert",
+                        a = "a_Alert",
+                    },
+                    {
+                        id = "enabled",
+                        label = "Macros Enabled",
+                        group = "event",
+                        d = "d_MacrosOn",
+                        a = "a_MacrosOn",
+                    },
+                    {
+                        id = "disabled",
+                        label = "Macros Disabled",
+                        group = "event",
+                        d = "d_MacrosOff",
+                        a = "a_MacrosOff",
+                    },
+                    {
+                        id = "toggleOn",
+                        label = "Toggle On",
+                        group = "event",
+                        d = "d_ToggleOn",
+                        a = "a_ToggleOn",
+                    },
+                    {
+                        id = "toggleOff",
+                        label = "Toggle Off",
+                        group = "event",
+                        d = "d_ToggleOff",
+                        a = "a_ToggleOff",
+                    },
+                    {
+                        id = "update",
+                        label = "Setting Updated",
+                        group = "event",
+                        d = "d_Update",
+                        a = "a_Update",
+                    },
+                    {
+                        id = "reset",
+                        label = "Setting Reset",
+                        group = "event",
+                        d = "d_Reset",
+                        a = "a_Reset",
+                    },
+                    {
+                        id = "interact",
+                        label = "Menu Interact",
+                        group = "event",
+                        d = "d_Interact",
+                        a = "a_Interact",
+                    },
+                    {
+                        id = "hover",
+                        label = "Menu Hover",
+                        group = "event",
+                        d = "d_Hover",
+                        a = "a_Hover",
+                    },
+                    {
+                        id = "back",
+                        label = "Menu Back",
+                        group = "event",
+                        d = "d_Back",
+                        a = "a_Back",
+                    },
+                    {
+                        id = "settingsOpen",
+                        label = "Settings Open",
+                        group = "event",
+                        d = "d_SettingsOpen",
+                        a = "a_SettingsOpen",
+                    },
+                    {
+                        id = "settingsClose",
+                        label = "Settings Close",
+                        group = "event",
+                        d = "d_SettingsClose",
+                        a = "a_SettingsClose",
+                    },
+                    {
+                        id = "shutdown",
+                        label = "Shutdown",
+                        group = "event",
+                        d = "d_Shutdown",
+                        a = "a_Shutdown",
+                    },
 
-                    -- A restart is not a goodbye, so it has its own samples;
-                    -- the fallback stays for the case where they are missing,
-                    -- because silence is worse than borrowing the send-off.
-                    --
-                    -- It used to declare `fallback` and nothing else, and a
-                    -- slot with no series is invisible to every mechanism that
-                    -- iterates on one: buildSoundPresets skipped it (so no
-                    -- preset ever moved it), soundSlotDefaults skipped it (so
-                    -- Default never restored it, and "custom theme off" left
-                    -- it pointing at an un-indexed a_ name), and
-                    -- soundSlotReserved claimed nothing for it (so an import
-                    -- could take d_Restart out from under it). Naming the
-                    -- series is what puts it back under all four.
-                    { id = "restart",         label = "Restart",             group = "event", d = "d_Restart",         a = "a_Restart",        fallback = "shutdown" },
+                    {
+                        id = "restart",
+                        label = "Restart",
+                        group = "event",
+                        d = "d_Restart",
+                        a = "a_Restart",
+                        fallback = "shutdown",
+                    },
                 }
 
                 ms.soundSlot = function(id)
@@ -607,9 +733,6 @@
                     return nil
                 end
 
-                -- The slots to try, in order, for one request. A slot with no
-                -- fallback is a one-element chain; the walk is depth-capped so
-                -- a fallback loop cannot hang the caller.
                 ms.soundSlotChain = function(id)
                     local chain, seen = {}, {}
                     local cur = id
@@ -622,9 +745,6 @@
                     return chain
                 end
 
-                -- The assignment map "custom theming off" means: every slot
-                -- that has a default, pointed at it. Slots without one stay
-                -- unassigned and lean on their fallback.
                 ms.soundSlotDefaults = function()
                     local out = {}
                     for _, slot in ipairs(ms.soundSlots) do
@@ -633,16 +753,13 @@
                     return out
                 end
 
-                -- Every name the registry lays claim to, numbered preset
-                -- variants included. An import is not allowed to land on one
-                -- of these: a file called a_Shutdown.wav dropped into the
-                -- library would otherwise overwrite the themed send-off, and
-                -- d_Shutdown.wav would be auto-sorted straight over the
-                -- shipped default — taking the fallback floor with it.
                 ms.soundSlotReserved = function()
                     local out = {}
                     for _, slot in ipairs(ms.soundSlots) do
-                        for _, base in ipairs({ slot.d, slot.a }) do
+                        for _, base in ipairs({
+                            slot.d,
+                            slot.a,
+                        }) do
                             if base then
                                 out[base] = true
                                 for n = 1, 9 do out[base .. n] = true end
@@ -652,15 +769,6 @@
                     return out
                 end
 
-                -- The numbered presets the Sounds tab offers, built from
-                -- whatever variants are actually on disk. Preset 1 is the
-                -- unsuffixed a_* sample; 2 and 3 prefer a_*N and fall back
-                -- through a_* to the slot's default, so a theme that only
-                -- ships one variant of a sound still gives all three presets
-                -- something to play.
-                --
-                -- A slot the registry gives no sample of its own is left out:
-                -- a preset has nothing to say about a slot that borrows.
                 ms.buildSoundPresets = function()
                     local all = ms.sounds or {}
                     local function variant(base, num)
@@ -684,24 +792,14 @@
                                 end
                             end
                         end
-                        table.insert(presets, { num = num, assigns = assigns })
+                        table.insert(presets, {
+                            num = num,
+                            assigns = assigns,
+                        })
                     end
                     return presets
                 end
 
-                -- Turn an arbitrary imported filename into a library name that
-                -- cannot collide with anything the registry owns.
-                --
-                -- An import is an a_ sound: it has not said what it is, so it
-                -- goes where user audio goes and setSoundKind can retype it
-                -- later. Whatever prefix it arrived with is stripped first, so
-                -- re-importing a_Foo.wav cannot produce a_a_Foo and importing
-                -- d_Shutdown.wav cannot land on the shipped default.
-                --
-                -- The uniquifier suffixes -2, -3 … rather than a bare digit,
-                -- because a bare digit is how the preset system spells
-                -- "variant 2 of this slot's sound" — an import called
-                -- Shutdown2 would otherwise quietly become preset 2's send-off.
                 ms.safeSoundName = function(stem, prefix)
                     prefix = prefix or "a_"
                     stem = (stem or ""):gsub('[/\\:*?"<>|%c]', "_")
@@ -755,15 +853,9 @@
                 ms._userSettingVals  = {}
                 ms._userMenuDefs     = {}
                 ms._hiddenFeatures   = {}
-                -- User-defined tools (ms.tools.define) — callable actions the
-                -- macro builder can invoke, configured from the Tools panel.
                 ms.tools             = ms.tools or {}
                 ms._toolDefs         = {}
                 ms._toolIndex        = {}
-                -- Default palette mirrors the docs site (docs-ms.mudbourn.info):
-                -- olive/moss green accent on warm near-black, parchment text.
-                -- Supersedes the earlier grayscale default (see
-                -- .hermes/plans/2026-06-30_default-theme-grayscale.md).
                 ms._themeDefaults = {
                     bg       = "#0d0f09",
                     surface  = "#141810",
@@ -780,8 +872,8 @@
                     windowRadius = 8,
                     font         = "Arial",
                     fadeMs       = 250,
-                    alertAnimMs   = 250,  -- toast animation duration (ms)
-                    alertAnimSteps = 30,  -- toast animation steps
+                    alertAnimMs   = 250,
+                    alertAnimSteps = 30,
                 }
                 ms._theme = {}
                 for k, v in pairs(ms._themeDefaults) do ms._theme[k] = v end
@@ -790,8 +882,6 @@
             -- Window Radius Helper [ms.theme] --
                 ms.theme = ms.theme or {}
 
-                --- Apply transparent window + CSS --ms-window-radius to a webview panel.
-                --- Call AFTER hs.webview.new + windowStyle(0), BEFORE panel:html().
                 ms.theme.applyWindowRadius = function(panel)
                     if not panel then return end
                     local r = (ms._theme and ms._theme.windowRadius)
@@ -807,7 +897,6 @@
                         .. "document.body.style.background='transparent';",
                         r
                     )
-                    -- Queue for after html() loads
                     hs.timer.doAfter(0.05, function()
                         pcall(function() panel:evaluateJavaScript(js) end)
                     end)
@@ -870,11 +959,6 @@
                 return hskeymap[k] or hs.keycodes.map[k]
             end
 
-            -- Reverse lookup (code -> name) for the dev key feed.
-            -- hs.keycodes.map logs a console warning for any code absent from
-            -- the active keymap, and it is indexed on every key event — so the
-            -- globe/Fn key (179) warned on every press. Memoized: an unknown
-            -- code is resolved (and warns) at most once per session.
             local _KEY_NAME_EXTRA = { [179] = "fn" }
             local _keyNameCache   = {}
             local function keyName(code)
@@ -909,9 +993,6 @@
                 return false
             end
 
-            -- ms.held(id): true iff every identifier modifier of bind `id` is
-            -- currently held. Used to route a shared trigger among its claimants.
-            -- Binds with no identifier mods (the fallback) return false.
             ms.held = function(id)
                 local c = ms.effectiveBind and ms.effectiveBind(id)
                 if not c or not c.mods or #c.mods == 0 then return false end
@@ -921,7 +1002,12 @@
                 return true
             end
 
-            local _prevModFlags = { shift = false, alt = false, ctrl = false, cmd = false }
+            local _prevModFlags = {
+                shift = false,
+                alt = false,
+                ctrl = false,
+                cmd = false,
+            }
 
             ms._keyListener = hs.eventtap.new({
                 hs.eventtap.event.types.keyDown,
@@ -951,10 +1037,26 @@
                             cmd   = flags.cmd   and true or false,
                         }
                         local modNames = {
-                            { k="shift", code=56, name="shift" },
-                            { k="alt",   code=58, name="alt"   },
-                            { k="ctrl",  code=59, name="ctrl"  },
-                            { k="cmd",   code=55, name="cmd"   },
+                            {
+                                k="shift",
+                                code=56,
+                                name="shift",
+                            },
+                            {
+                                k="alt",
+                                code=58,
+                                name="alt",
+                            },
+                            {
+                                k="ctrl",
+                                code=59,
+                                name="ctrl",
+                            },
+                            {
+                                k="cmd",
+                                code=55,
+                                name="cmd",
+                            },
                         }
                         for _, m in ipairs(modNames) do
                             if now[m.k] ~= _prevModFlags[m.k] then
@@ -967,18 +1069,6 @@
                 end
 
                 if type == hs.eventtap.event.types.keyDown then
-                    -- Repeat detection reads the OS autorepeat flag rather than
-                    -- inferring it from our own keytrack bookkeeping. keytrack was
-                    -- fragile: if a key-up was ever missed (the tap briefly
-                    -- disabled by macOS then revived, an up delivered while
-                    -- another app held focus, a swallowed event) keytrack[keyCode]
-                    -- stayed true, so the next genuine press was misread as an
-                    -- auto-repeat and silently dropped — the intermittent
-                    -- "Escape toggle ignores the input" bug. The autorepeat
-                    -- property is authoritative per event, so a fresh press always
-                    -- registers. This matches _makeKeyWatcher, which already uses
-                    -- it. keytrack is still maintained below for the physical-hold
-                    -- consumers (SOCD, chords).
                     local isRepeat = (event:getProperty(
                         hs.eventtap.event.properties.keyboardEventAutorepeat) or 0) ~= 0
                     ms.keytrack[keyCode] = true
@@ -991,8 +1081,6 @@
                         if bucket then
                         for _, binding in ipairs(bucket) do
                             if binding then
-                                -- Exact-match: required mods held AND no extra mods held,
-                                -- so bare-key binds don't swallow modified combos (alt+esc)
                                 local modsMatch = true
                                 if not binding.modsAny then
                                     if (not binding.mods.cmd)   ~= (not flags.cmd)   then modsMatch = false end
@@ -1000,15 +1088,11 @@
                                     if (not binding.mods.ctrl)  ~= (not flags.ctrl)  then modsMatch = false end
                                     if (not binding.mods.shift) ~= (not flags.shift) then modsMatch = false end
                                 end
-                                -- Chord binds (ms.keyCombo) require their other keys to
-                                -- be physically held; keytrack was just set for this key,
-                                -- so we only check the companions. When they aren't held
-                                -- we fall through to the next (less specific) binding in
-                                -- the bucket rather than swallowing the key.
                                 local heldMatch = true
                                 if binding.alsoHeld then
                                     for _, oc in ipairs(binding.alsoHeld) do
-                                        if not ms.keytrack[oc] then heldMatch = false; break end
+                                        if not ms.keytrack[oc] then heldMatch = false
+                                        break end
                                     end
                                 end
                                 if modsMatch and heldMatch then
@@ -1025,7 +1109,7 @@
                                 end
                             end
                         end
-                        end -- bucket
+                        end
                     end
                 elseif type == hs.eventtap.event.types.keyUp then
                     ms.keytrack[keyCode] = false
@@ -1063,15 +1147,9 @@
                 return false
             end):start()
 
-            -- Tap-disable recovery watchdog: macOS silently disables eventtaps
-            -- when their callback overruns (kCGEventTapDisabledByTimeout).
-            -- Re-enable any dead taps every 2s so macros don't silently die.
             ms._resilientTaps = { ms._keyListener }
 
-            -- Register mouse/scroll listeners as they're created (in ms.mouse/ms.scrollBind below)
-            -- The watchdog starts lazily after all taps are registered.
 
-            -- Key logging: immediate, one line each (bunching removed).
             local function _keyLog(msg)
                 if ms.dev and ms.devtools then
                     local label = ms._getCallChain()
@@ -1085,13 +1163,13 @@
             -- END Key logging --
 
                 ms.press = function(key, mods)
-                    if ms.dev then ms.devtools:flushAll(); _keyFlush() end
+                    if ms.dev then ms.devtools:flushAll()
+                    _keyFlush() end
                     local keyCode = getCode(key)
                     if not keyCode then
                         print("Error: Could not find keyCode for " .. tostring(key))
                         return
                     end
-                    -- Track key hold start time, suppress repeated ↓ for same key
                     ms._keyHoldStarts = ms._keyHoldStarts or {}
                     local alreadyHeld = ms._macroHeldKeys[keyCode]
                     if not alreadyHeld then
@@ -1109,10 +1187,10 @@
                 end
 
                 ms.release = function(key, mods)
-                    if ms.dev then ms.devtools:flushAll(); _keyFlush() end
+                    if ms.dev then ms.devtools:flushAll()
+                    _keyFlush() end
                     local keyCode = getCode(key)
                     if not keyCode then return end
-                    -- Calculate hold duration
                     local durationStr = ""
                     ms._keyHoldStarts = ms._keyHoldStarts or {}
                     local startTime = ms._keyHoldStarts[keyCode]
@@ -1146,7 +1224,8 @@
                 end
 
                 ms.type = function(key, mods, holdMs)
-                    if ms.dev then ms.devtools:flushAll(); _keyFlush() end
+                    if ms.dev then ms.devtools:flushAll()
+                    _keyFlush() end
                     local _hold = holdMs or 15
                     if ms.dev then
                         local modsStr = (mods and #mods > 0) and (" [" .. table.concat(mods, "+") .. "]") or ""
@@ -1158,20 +1237,11 @@
                     ms.press(key, mods)
                     ms.wait(_hold)
                     ms.release(key, mods)
-                    ms.devtools:setTraceSuppress(_saved)  -- restore rather than reset; safe across cancellation
+                    ms.devtools:setTraceSuppress(_saved)
                 end
 
-                -- ms.hold(key, mods, durationMs)
-                -- Press and HOLD a key. The compiler emits this for a builder
-                -- "Hold" step, yet the runtime never defined it — so a Hold step
-                -- compiled to a nil call. With a duration it also reproduces the
-                -- OS key-repeat a real hold gives: a synthetic keyDown does not
-                -- auto-repeat on its own, so "hold to spam a key" only ever typed
-                -- one character. With no duration it just holds (paired with a
-                -- later ms.release / an explicit Release step, e.g. a movement
-                -- hold), leaving overlapping holds to the caller.
-                local HOLD_INITIAL_MS = 250   -- macOS default initial repeat delay
-                local HOLD_REPEAT_MS  = 33    -- ~30/s, near the default repeat rate
+                local HOLD_INITIAL_MS = 250
+                local HOLD_REPEAT_MS  = 33
                 ms.hold = function(key, mods, durationMs)
                     local keyCode = getCode(key)
                     if not keyCode then
@@ -1180,10 +1250,8 @@
                     end
                     ms.press(key, mods)
                     local dur = tonumber(durationMs)
-                    if not dur or dur <= 0 then return end  -- indefinite hold
+                    if not dur or dur <= 0 then return end
 
-                    -- First char is the initial press above; repeats begin only
-                    -- after the initial delay, exactly like a physical hold.
                     if dur <= HOLD_INITIAL_MS then
                         ms.wait(dur)
                     else
@@ -1208,9 +1276,6 @@
                         return
                     end
 
-                    -- mods == "any" matches the key under any modifier state,
-                    -- the way the old system binds did (return / escape fire even
-                    -- while a movement modifier is held in-game).
                     local modsAny = (mods == "any")
                     local modSet = {}
                     if not modsAny then
@@ -1229,7 +1294,8 @@
 
                     table.insert(ms._keyBindings, binding)
                     local bucket = ms._keyBindingsByCode[keyCode]
-                    if not bucket then bucket = {}; ms._keyBindingsByCode[keyCode] = bucket end
+                    if not bucket then bucket = {}
+                    ms._keyBindingsByCode[keyCode] = bucket end
                     bucket[#bucket + 1] = binding
 
                     return { delete = function()
@@ -1239,7 +1305,6 @@
                                 break
                             end
                         end
-                        -- Remove from by-code index
                         local bcBucket = ms._keyBindingsByCode[keyCode]
                         if bcBucket then
                             for i, b in ipairs(bcBucket) do
@@ -1253,13 +1318,6 @@
                     end}
                 end
 
-                -- Register a chord: fires when the last key of `keys` goes down
-                -- while every other key in the chord (and the required modifiers)
-                -- is already held. Order-independent — a binding is registered on
-                -- each key, and whichever completes the chord is the one that
-                -- fires. Matched off ms.keytrack, the same physical-hold table
-                -- SOCD and the trackpad holds read. hs.hotkey can't express a
-                -- two-normal-key chord (V+K), so this bypasses it entirely.
                 ms.keyCombo = function(mods, keys, swallow, pressFn, isSystem)
                     local codes = {}
                     for _, k in ipairs(keys or {}) do
@@ -1270,7 +1328,6 @@
                         end
                         codes[#codes + 1] = c
                     end
-                    -- A one-key "chord" is just a plain key bind.
                     if #codes < 2 then
                         return ms.key(mods, keys and keys[1], swallow, pressFn, nil, isSystem)
                     end
@@ -1295,7 +1352,8 @@
                         }
                         table.insert(ms._keyBindings, binding)
                         local bucket = ms._keyBindingsByCode[code]
-                        if not bucket then bucket = {}; ms._keyBindingsByCode[code] = bucket end
+                        if not bucket then bucket = {}
+                        ms._keyBindingsByCode[code] = bucket end
                         bucket[#bucket + 1] = binding
                         handles[#handles + 1] = binding
                     end
@@ -1303,12 +1361,14 @@
                     return { delete = function()
                         for _, binding in ipairs(handles) do
                             for i, b in ipairs(ms._keyBindings) do
-                                if b == binding then table.remove(ms._keyBindings, i); break end
+                                if b == binding then table.remove(ms._keyBindings, i)
+                                break end
                             end
                             local bc = ms._keyBindingsByCode[binding.keyCode]
                             if bc then
                                 for i, b in ipairs(bc) do
-                                    if b == binding then table.remove(bc, i); break end
+                                    if b == binding then table.remove(bc, i)
+                                    break end
                                 end
                                 if #bc == 0 then ms._keyBindingsByCode[binding.keyCode] = nil end
                             end
@@ -1332,7 +1392,10 @@
                 elseif direction == "left" then dx = -clicks
                 elseif direction == "right" then dx = clicks
                 end
-                local ev = hs.eventtap.event.newScrollEvent({dx, dy}, {}, "pixel")
+                local ev = hs.eventtap.event.newScrollEvent({
+                    dx,
+                    dy,
+                }, {}, "pixel")
                 ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
                 ev:post()
             end
@@ -1354,20 +1417,24 @@
                         local isDown
 
                         if type == hs.eventtap.event.types.leftMouseDown then
-                            b = 0; isDown = true
+                            b = 0
+                            isDown = true
                         elseif type == hs.eventtap.event.types.leftMouseUp then
-                            b = 0; isDown = false
+                            b = 0
+                            isDown = false
                         elseif type == hs.eventtap.event.types.rightMouseDown then
-                            b = 1; isDown = true
+                            b = 1
+                            isDown = true
                             ms.keytrack[999] = true
                         elseif type == hs.eventtap.event.types.rightMouseUp then
-                            b = 1; isDown = false
+                            b = 1
+                            isDown = false
                             ms.keytrack[999] = false
                         elseif type == hs.eventtap.event.types.otherMouseDown then
                             b = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
                             isDown = true
                             if b == 2 then ms.keytrack[998] = true end
-                        else -- otherMouseUp
+                        else
                             b = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
                             isDown = false
                             if b == 2 then ms.keytrack[998] = false end
@@ -1399,10 +1466,13 @@
                     end):start()
                     ms._resilientTaps[#ms._resilientTaps+1] = ms._mouseListener
                 end
-                ms._mouseCallbacks[button] = { fn = clickFn, swallow = swallow, system = isSystem or false }
+                ms._mouseCallbacks[button] = {
+                    fn = clickFn,
+                    swallow = swallow,
+                    system = isSystem or false,
+                }
             end
 
-            -- ms.scrollBind(direction, fn) — listen for scroll wheel up/down and fire callback
             ms._scrollCallbacks = ms._scrollCallbacks or {}
             ms.scrollBind = function(direction, fn)
                 if not ms._scrollListener then
@@ -1431,9 +1501,8 @@
                 }
             end
 
-            -- Gamepad reader — background process using ms_gc_read binary
             ms._gamepadTask = nil
-            ms._gamepadCallbacks = {}  -- [buttonName] = fn
+            ms._gamepadCallbacks = {}
             ms._gamepadConnected = false
 
             ms.gamepadStart = function()
@@ -1442,7 +1511,6 @@
                 ms._gamepadCallbacks = {}
                 ms._gamepadTask = hs.task.new(bin, function() end, function(task, stdOut, stdErr)
                     if not stdOut or stdOut == "" then return true end
-                    -- Parse JSON line
                     local ok, ev = pcall(function() return hs.json.decode(stdOut) end)
                     if not ok or not ev or not ev.e then return true end
                     if ev.e == "connect" then
@@ -1453,7 +1521,6 @@
                     elseif ev.e == "disconnect" then
                         ms._gamepadConnected = false
                     elseif ev.e == "press" then
-                        -- Route to rebind capture if active, otherwise to bound button
                         local rebindCb = ms._gamepadCallbacks._rebind
                         if rebindCb then
                             rebindCb(ev.b)
@@ -1480,7 +1547,6 @@
                 end
             end
 
-            -- ms.gamepadBind(buttonName, fn) — listen for a gamepad button press (requires gamepadEnabled)
             ms.gamepadBind = function(button, fn)
                 if not ms.gamepadEnabled then
                     return { delete = function() end }
@@ -1496,9 +1562,22 @@
 
 
             ms.Mouse = function(operation, button, reference, ...)
-                local OPS  = { Move=true, Click=true, DoubleClick=true,
-                               TripleClick=true, Drag=true, Press=true, Release=true }
-                local BTNS = { Left=0, Right=1, Center=2, Button4=3, Button5=4 }
+                local OPS  = {
+                    Move=true,
+                    Click=true,
+                    DoubleClick=true,
+                    TripleClick=true,
+                    Drag=true,
+                    Press=true,
+                    Release=true,
+                }
+                local BTNS = {
+                    Left=0,
+                    Right=1,
+                    Center=2,
+                    Button4=3,
+                    Button5=4,
+                }
                 local REFS = {
                     Absolute=true,   Mouse=true,
                     WindowTL=true,   WindowTR=true,  WindowBL=true,
@@ -1521,11 +1600,17 @@
                     x1, y1, x2, y2 = _a, _b, _c, _d
                 end
 
-                -- Log with all available params
                 do
-                    local parts = { "Mouse ", tostring(operation), " ", tostring(button), " ", tostring(reference) }
+                    local parts = {
+                        "Mouse ",
+                        tostring(operation),
+                        " ",
+                        tostring(button),
+                        " ",
+                        tostring(reference),
+                    }
                     if x1 then parts[#parts + 1] = " " .. tostring(x1) .. "," .. tostring(y1) end
-                    if x2 then parts[#parts + 1] = " → " .. tostring(x2) .. "," .. tostring(y2) end
+                    if x2 then parts[#parts + 1] = " -> " .. tostring(x2) .. "," .. tostring(y2) end
                     local msg = table.concat(parts)
                     if ms.dev and ms.dev._watcherPanel then
                         ms.devtools:watcherStep(msg)
@@ -1546,8 +1631,14 @@
                 else
                     ax2, ay2 = ax1, ay1
                 end
-                local pos1 = { x = ax1, y = ay1 }
-                local pos2 = { x = ax2, y = ay2 }
+                local pos1 = {
+                    x = ax1,
+                    y = ay1,
+                }
+                local pos2 = {
+                    x = ax2,
+                    y = ay2,
+                }
 
                 local downT, upT, dragT
                 if btn == 0 then
@@ -1581,35 +1672,49 @@
                 end
 
                 local function singleClick(pos)
-                    post(downT, pos); ms.wait(50); post(upT, pos)
+                    post(downT, pos)
+                    ms.wait(50)
+                    post(upT, pos)
                 end
 
                 if     operation == "Move"        then moveTo(pos1)
-                elseif operation == "Click"       then moveTo(pos1); ms.wait(50); singleClick(pos1)
+                elseif operation == "Click"       then moveTo(pos1)
+                ms.wait(50)
+                singleClick(pos1)
                 elseif operation == "DoubleClick" then
-                    moveTo(pos1); ms.wait(50)
-                    singleClick(pos1); ms.wait(50); singleClick(pos1)
+                    moveTo(pos1)
+                    ms.wait(50)
+                    singleClick(pos1)
+                    ms.wait(50)
+                    singleClick(pos1)
                 elseif operation == "TripleClick" then
-                    moveTo(pos1); ms.wait(50)
-                    for i = 1, 3 do singleClick(pos1); if i < 3 then ms.wait(50) end end
+                    moveTo(pos1)
+                    ms.wait(50)
+                    for i = 1, 3 do singleClick(pos1)
+                    if i < 3 then ms.wait(50) end end
                 elseif operation == "Drag"        then
-                    moveTo(pos1); ms.wait(50)
-                    post(downT, pos1); ms.wait(50)
+                    moveTo(pos1)
+                    ms.wait(50)
+                    post(downT, pos1)
+                    ms.wait(50)
                     post(dragT, pos2)
                     hs.mouse.absolutePosition(pos2)
                     ms.wait(50)
                     post(upT, pos2)
                 elseif operation == "Press"       then
-                    moveTo(pos1); post(downT, pos1)
-                    ms._macroHeldButtons[btn] = { upT = upT, pos = pos1 }
+                    moveTo(pos1)
+                    post(downT, pos1)
+                    ms._macroHeldButtons[btn] = {
+                        upT = upT,
+                        pos = pos1,
+                    }
                 elseif operation == "Release"     then
                     post(upT, pos1)
                     ms._macroHeldButtons[btn] = nil
                 end
             end
 
-            -- ms.cam — camera drag via CGEvent --
-            --
+            -- ms.cam camera drag via CGEvent --
 
             local _camEvType  = hs.eventtap.event.types.otherMouseDragged
             local _camBtn     = hs.eventtap.event.properties.mouseEventButtonNumber
@@ -1618,48 +1723,43 @@
             local _camTotalX  = 0
             local _camTotalY  = 0
             local _camRebalancing = false
-            local _camAnchor  = nil  -- Window center anchor for stable camera control
-            local _camActivated = false  -- Track if camera has been activated
+            local _camAnchor  = nil
+            local _camActivated = false
 
-            -- Update anchor to window center (prevents shiftlock drift)
             local function _updateCamAnchor()
                 local win = ms.getTargetWin()
                 if win then
                     local f = win:frame()
-                    _camAnchor = { x = f.x + (f.w / 2), y = f.y + (f.h / 2) }
+                    _camAnchor = {
+                        x = f.x + (f.w / 2),
+                        y = f.y + (f.h / 2),
+                    }
                 end
             end
 
-            -- Activate camera control (post mouse down/up to register with the target app)
             local function _activateCam()
                 if _camActivated then return end
-                -- Use current cursor position, not anchor
                 local pos = hs.mouse.absolutePosition()
                 local downEv = hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.otherMouseDown, pos)
                 local upEv = hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.otherMouseUp, pos)
                 downEv:setProperty(_camBtn, 5)
                 upEv:setProperty(_camBtn, 5)
-                -- Mark as synthetic events
                 downEv:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
                 upEv:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
                 downEv:post()
-                hs.timer.usleep(10000)  -- 10ms delay
+                hs.timer.usleep(10000)
                 upEv:post()
                 _camActivated = true
             end
 
-            -- Expose for app watcher
             ms._updateCamAnchor = _updateCamAnchor
             ms._activateCam = _activateCam
             ms._resetCamActivated = function() _camActivated = false end
 
             ms.cam = setmetatable({}, {
                 __call = function(_, dx, dy)
-                    -- Activate camera on first use
                     if not _camActivated then _activateCam() end
 
-                    -- Scale by sensitivity ratio so macros calibrated at refSens
-                    -- produce the same rotation regardless of in-game sensitivity
                     local refSens = ms.settings and ms.settings.get("refSensitivity") or 1.5
                     local curSens = ms._camSens or 1.5
                     if refSens > 0 and curSens > 0 and refSens ~= curSens then
@@ -1671,17 +1771,14 @@
                     dx = math.floor(dx + 0.5)
                     dy = math.floor(dy + 0.5)
 
-                    -- Use current cursor position for relative anchoring
                     local pos = hs.mouse.absolutePosition()
                     local ev  = hs.eventtap.event.newMouseEvent(_camEvType, pos)
                     ev:setProperty(_camBtn, 5)
                     ev:setProperty(_camDx, dx)
                     ev:setProperty(_camDy, dy)
-                    -- Mark as synthetic event to prevent cursor movement
                     ev:setProperty(hs.eventtap.event.properties.eventSourceUserData, 999)
                     ev:post()
 
-                    -- No need to restore cursor - we never moved it
 
                     if not _camRebalancing then
                         _camTotalX = _camTotalX + dx
@@ -1690,23 +1787,19 @@
                 end,
             })
 
-            -- Update anchor when the target app gains focus
             ms.bus.on("ui:_shell:navigate", function(data)
                 if data and data.panel then
                     _updateCamAnchor()
                 end
             end)
-            -- Suppress wait logging inside ms.cam calls (cam loops are noisy)
             local _origCamCall = getmetatable(ms.cam).__call
             getmetatable(ms.cam).__call = function(self, dx, dy)
                 dx = math.floor(dx + 0.5)
                 dy = math.floor(dy + 0.5)
-                -- Suppress internal wait logging
                 local saved = ms.dev and ms.devtools and ms.devtools:getTraceSuppress()
                 if saved ~= nil then ms.devtools:setTraceSuppress(true) end
                 _origCamCall(self, dx, dy)
                 if saved ~= nil then ms.devtools:setTraceSuppress(saved) end
-                -- Accumulate (flushes on value change or before scroll/wait)
                 if ms.dev and ms.devtools then
                     ms.devtools:accCamMove(dx, dy, ms._getCallChain())
                 end
@@ -1734,39 +1827,43 @@
                 _camTotalY = 0
             end
 
-            -- ms.flick(dx, dy, opts): deterministic tightly-bunched delta stream.
-            -- Runs synchronously (no yield). count = number of deltas, gapUs = microsecond spacing.
             ms.flick = function(dx, dy, opts)
                 opts = opts or {}
                 local count = opts.count or math.max(1, math.floor(math.abs(dx) / 100 + 0.5))
                 local gapUs = opts.gapUs or ms._flickGapUs or 1000
-                -- Bresenham-style remainder so emitted sum == requested total exactly
                 local perX, remX = math.floor(dx / count), dx % count
                 local perY, remY = math.floor(dy / count), dy % count
                 local accX, accY = 0, 0
                 for i = 1, count do
-                    local ex = perX; accX = accX + remX; if accX >= count then ex = ex + 1; accX = accX - count end
-                    local ey = perY; accY = accY + remY; if accY >= count then ey = ey + 1; accY = accY - count end
+                    local ex = perX
+                    accX = accX + remX
+                    if accX >= count then ex = ex + 1
+                    accX = accX - count end
+                    local ey = perY
+                    accY = accY + remY
+                    if accY >= count then ey = ey + 1
+                    accY = accY - count end
                     ms.cam(ex, ey)
                     if i < count then hs.timer.usleep(gapUs) end
                 end
             end
 
-            -- ms.cam.sweep — async single doEvery pump (for throws)
             local _sweepQueue = {}
             local _sweepTimer = nil
             local _SWEEP_HZ   = 120
 
             local function _sweepTick()
                 if #_sweepQueue == 0 then
-                    if _sweepTimer then _sweepTimer:stop(); _sweepTimer = nil end
+                    if _sweepTimer then _sweepTimer:stop()
+                    _sweepTimer = nil end
                     return
                 end
                 local job = _sweepQueue[1]
                 if job.ticksLeft <= 0 then
                     table.remove(_sweepQueue, 1)
                     if #_sweepQueue == 0 then
-                        if _sweepTimer then _sweepTimer:stop(); _sweepTimer = nil end
+                        if _sweepTimer then _sweepTimer:stop()
+                        _sweepTimer = nil end
                     end
                     return
                 end
@@ -1774,14 +1871,20 @@
                 local perTickY = job.dy / job.totalTicks
                 local ex = math.floor(perTickX * (job.totalTicks - job.ticksLeft + 1)) - math.floor(perTickX * (job.totalTicks - job.ticksLeft))
                 local ey = math.floor(perTickY * (job.totalTicks - job.ticksLeft + 1)) - math.floor(perTickY * (job.totalTicks - job.ticksLeft))
-                if ex == 0 and ey == 0 then ex = perTickX >= 0 and 1 or -1; ey = 0 end
+                if ex == 0 and ey == 0 then ex = perTickX >= 0 and 1 or -1
+                ey = 0 end
                 ms.cam(ex, ey)
                 job.ticksLeft = job.ticksLeft - 1
             end
 
             ms.cam.sweep = function(dx, dy, durationMs)
                 local ticks = math.max(1, math.floor((durationMs / 1000) * _SWEEP_HZ + 0.5))
-                _sweepQueue[#_sweepQueue + 1] = { dx = dx, dy = dy, ticksLeft = ticks, totalTicks = ticks }
+                _sweepQueue[#_sweepQueue + 1] = {
+                    dx = dx,
+                    dy = dy,
+                    ticksLeft = ticks,
+                    totalTicks = ticks,
+                }
                 if not _sweepTimer then
                     _sweepTimer = hs.timer.doEvery(1 / _SWEEP_HZ, _sweepTick)
                 end
@@ -1794,7 +1897,8 @@
 
             ms.cam.sweepCancel = function()
                 _sweepQueue = {}
-                if _sweepTimer then _sweepTimer:stop(); _sweepTimer = nil end
+                if _sweepTimer then _sweepTimer:stop()
+                _sweepTimer = nil end
             end
 
             -- END ms.cam --
@@ -1803,7 +1907,6 @@
 
         -- 5. Timing --
             ms.after = function(ms_time, fn)
-                -- Capture call stack for context propagation into async callbacks
                 local capturedStack = nil
                 local co = coroutine.running()
                 if co then
@@ -1824,14 +1927,6 @@
             end
 
             ms.wait = function(ms_time)
-                -- Lua 5.4 (Hammerspoon) returns (mainthread, true) on the main
-                -- thread, where 5.1 returned nil — so a bare `if co` was always
-                -- true and the yield below fired even on the main thread, which
-                -- cannot yield. That errored on the yield and then again when the
-                -- orphaned timer resumed the non-suspended main thread ("cannot
-                -- resume non-suspended coroutine"). Gate on the isMain flag so
-                -- actions run directly (console, testRun's pcall) block-sleep
-                -- instead, and only real macro coroutines take the yield path.
                 local co, isMain = coroutine.running()
                 if co and not isMain then
                     local ctx = ms._coroContext[co]
@@ -1853,7 +1948,8 @@
                             ms._coroContext[co] = nil
                             if ctx then ms._activeContexts[ctx] = nil end
                             if ms.dev then ms.devtools:stopTrace(co) end
-                            if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
+                            if _keyFlushTimer then _keyFlushTimer:stop()
+                            _keyFlushTimer = nil end
                             _keyFlush()
                             local flushLabel = ctx and ctx.callStack and ctx.callStack[1]
                             if ms.dev then ms.devtools:flushAll(flushLabel) end
@@ -1875,20 +1971,16 @@
                 return f.x + (f.w / 2), f.y + (f.h / 2)
             end
 
-            -- Reference resolution the resolver scales against. Kept in sync
-            -- with the REF_W/REF_H globals so older code that reads them keeps
-            -- working. Macro packs drive these via ms.settings (see ms_macros).
             ms.setReferenceResolution = function(w, h)
-                if type(w) == "number" and w > 0 then ms._refW = w; REF_W = w end
-                if type(h) == "number" and h > 0 then ms._refH = h; REF_H = h end
-                -- Keep the Inputs panel's REF coord-mode label in sync.
+                if type(w) == "number" and w > 0 then ms._refW = w
+                REF_W = w end
+                if type(h) == "number" and h > 0 then ms._refH = h
+                REF_H = h end
                 if ms.dev and ms.dev.pushRefDims then
                     pcall(ms.dev.pushRefDims)
                 end
             end
 
-            -- Toggle Window-relative scaling. When off, Window* points are
-            -- placed at raw offsets (as if every call passed Unscaled).
             ms.setReferenceScaling = function(on)
                 ms._refScaling = (on ~= false)
             end
@@ -1913,8 +2005,6 @@
                 local f   = win and win:frame()
                 local s   = hs.screen.mainScreen():frame()
                 local RW, RH = ms._refW or REF_W, ms._refH or REF_H
-                -- Scale Window* points unless the caller opted out (Unscaled)
-                -- or the user turned reference scaling off entirely.
                 local scaled = (ms._refScaling ~= false) and not unscaled
                 if     reference == "Absolute"     then return x, y
                 elseif reference == "Mouse"        then
@@ -1988,20 +2078,28 @@
 
         -- 7. Macro Bind Controller --
             local _debounceTimer = nil
-            local _stateSound    = nil  -- handle to the last state-change sound
+            local _stateSound    = nil
 
             local function _doNotify(state)
                 if loadfinish ~= 1 then return end
-                if _debounceTimer then _debounceTimer:stop(); _debounceTimer = nil end
+                if _debounceTimer then _debounceTimer:stop()
+                _debounceTimer = nil end
                 _debounceTimer = hs.timer.doAfter(0.05, function()
                     _debounceTimer = nil
-                    if _stateSound then pcall(function() _stateSound:stop() end); _stateSound = nil end
+                    if _stateSound then pcall(function() _stateSound:stop() end)
+                    _stateSound = nil end
                     if state == 1 then
                         _stateSound = ms.playSlot("enabled")
-                        ms.alert("Macros enabled!",  3, true, { id = "_state", source = "system" })
+                        ms.alert("Macros enabled!",  3, true, {
+                            id = "_state",
+                            source = "system",
+                        })
                     else
                         _stateSound = ms.playSlot("disabled")
-                        ms.alert("Macros disabled.", 3, true, { id = "_state", source = "system" })
+                        ms.alert("Macros disabled.", 3, true, {
+                            id = "_state",
+                            source = "system",
+                        })
                     end
                 end)
             end
@@ -2010,9 +2108,11 @@
                 if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
                 if state == 1 and BindValidity ~= 1 then
                     BindValidity = 1
-                    -- Update camera anchor when macros are enabled
                     if ms._updateCamAnchor then ms._updateCamAnchor() end
-                    ms.dev.log({ type = "system", event = "macros_enabled" })
+                    ms.dev.log({
+                        type = "system",
+                        event = "macros_enabled",
+                    })
                     if not silent then _doNotify(1) end
                 elseif state == 0 and BindValidity ~= 0 then
                     BindValidity = 0
@@ -2022,7 +2122,10 @@
                         if timer and timer.stop then timer:stop() end
                     end
                     ms.running = {}
-                    ms.dev.log({ type = "system", event = "macros_disabled" })
+                    ms.dev.log({
+                        type = "system",
+                        event = "macros_disabled",
+                    })
                     if not silent then _doNotify(0) end
                 end
                 if ms.ui and ms.ui._open then ms.ui.refresh() end
@@ -2034,10 +2137,12 @@
                         local fromDialog = ms._inputOpen
                         ms._inputOpen = false
                         ms._targetActive = true
-                        ms.dev.log({ type = "system", event = "target_focus", fromDialog = fromDialog or false })
-                        -- Update camera anchor when target gains focus
+                        ms.dev.log({
+                            type = "system",
+                            event = "target_focus",
+                            fromDialog = fromDialog or false,
+                        })
                         if ms._updateCamAnchor then ms._updateCamAnchor() end
-                        -- Reset cam activation so next ms.cam re-registers with target
                         if ms._resetCamActivated then ms._resetCamActivated() end
                         if not ms._loadComplete then return end
                         if fromDialog then
@@ -2046,13 +2151,15 @@
                             ms.setMacros(1)
                         end
                     else
-                        -- Don't disable macros if settings panel or shell is open
                         local shellOpen = ms._shellState and ms._shellState.visible
                         if (ms.ui._open or shellOpen) and appName == "Hammerspoon" then return end
                         ms._inputOpen    = (appName == "Hammerspoon") and ms._targetActive
                         ms._targetActive = false
-                        ms.dev.log({ type = "system", event = "target_blur", to = appName })
-                        -- Reset camera activation state when the target app loses focus
+                        ms.dev.log({
+                            type = "system",
+                            event = "target_blur",
+                            to = appName,
+                        })
                         if ms._camActivated ~= nil then ms._camActivated = false end
                         if BindValidity == 1 then
                             ms.setMacros(0, ms._inputOpen)
@@ -2060,7 +2167,7 @@
                     end
                 end
             end):start()
-            _G.__ms_appWatcher = ms._appWatcher  -- survives reload (lives outside the ms table) so next load's stop-guard can find this generation
+            _G.__ms_appWatcher = ms._appWatcher
 
             _G._initTimer = hs.timer.doAfter(0.3, function()
                 local frontApp = hs.application.frontmostApplication()
@@ -2069,8 +2176,6 @@
                 end
             end)
 
-            -- Octane Mode: low-overhead performance toggle
-            -- Strips logging, animations, pollers, and sounds while macros run unchanged
             ms.octane = ms.octane or {}
             ms.octane.on = function()
                 if ms._octaneMode then return end
@@ -2087,54 +2192,57 @@
             ms.octane.toggle = function()
                 if ms._octaneMode then ms.octane.off() else ms.octane.on() end
             end
-            -- Internal: apply octane state (called on load if persisted on)
             ms.octane._apply = function()
-                -- Logging gate: pause all channels
                 if ms.dev and ms.dev.log and ms.dev.log.pauseAll then
                     pcall(ms.dev.log.pauseAll)
                 end
-                -- Stop all idle pollers (mouse, shell mouse, window spy)
                 if ms.devtools and ms.devtools.stopAllPollers then
                     pcall(function() ms.devtools:stopAllPollers() end)
                 end
-                -- Stop menu hover watcher entirely under octane
                 if ms._menuHoverWatcher then
                     ms._menuHoverWatcher:stop()
                     ms._menuHoverWatcher = nil
                 end
-                -- Force Window Monitor element-inspect off (expensive pixel + AX)
                 if ms.devtools and ms.devtools.setWinElementInspect then
                     pcall(function() ms.devtools:setWinElementInspect(false) end)
                 end
             end
-            -- Internal: remove octane state (called on toggle off)
             ms.octane._remove = function()
-                -- Re-enable all logging channels
                 if ms.dev and ms.dev.log and ms.dev.log.resumeAll then
                     pcall(ms.dev.log.resumeAll)
                 end
-                -- Restart pollers for panels that are currently active
                 if ms.devtools and ms.devtools.restartPollersIfActive then
                     pcall(function() ms.devtools:restartPollersIfActive() end)
                 end
-                -- Restart menu hover watcher if menu is visible
                 if ms._menuVisible and ms._menuHoverStart then
                     pcall(ms._menuHoverStart)
                 end
             end
 
-            -- System hotkey bindings (configurable via shell)
             ms._hotkeys = {
-                panic       = { mods = {"alt"}, key = "F10" },
-                quickReload = { mods = {"alt"}, key = "[" },
-                fullReload  = { mods = {"alt"}, key = "]" },
-                openMenu    = { mods = {"alt"}, key = "p" },
-                octane      = { mods = {"alt"}, key = "o" },
+                panic       = {
+                    mods = {"alt"},
+                    key = "F10",
+                },
+                quickReload = {
+                    mods = {"alt"},
+                    key = "[",
+                },
+                fullReload  = {
+                    mods = {"alt"},
+                    key = "]",
+                },
+                openMenu    = {
+                    mods = {"alt"},
+                    key = "p",
+                },
+                octane      = {
+                    mods = {"alt"},
+                    key = "o",
+                },
             }
             ms._hotkeyHandles = {}
 
-            -- Keystate watcher: fires on key down, waits for key up + cooldown
-            -- Does NOT swallow key inputs
             local _hotkeyCooldowns = {}
             local _hotkeyDown = {}
             local _hotkeyDownAt = {}
@@ -2177,11 +2285,6 @@
                     end
                     return true
                 end
-                -- Exact-match for the fire gate: required mods held AND no extras,
-                -- so bare-key watchers don't swallow modified combos (alt+esc).
-                -- flagsChanged reset below stays subset-match on purpose: exact
-                -- there would clear the cooldown when an extra mod is pressed
-                -- mid-hold and re-fire on key repeat.
                 local function modsExact(flags)
                     if modsAny then return true end
                     if not modsMatch(flags) then return false end
@@ -2201,7 +2304,6 @@
                     local flags = e:getFlags()
                     local kc = e:getKeyCode()
                     if type == hs.eventtap.event.types.flagsChanged then
-                        -- Modifier released: reset state
                         if not modsAny and not modsMatch(flags) then
                             _hotkeyDown[id] = false
                             _hotkeyCooldowns[id] = false
@@ -2226,7 +2328,6 @@
                         if kc == keyCode then
                             _hotkeyDown[id]   = false
                             _hotkeyDownAt[id] = nil
-                            -- Cooldown: wait 0.15s after key up before allowing re-fire
                             _hotkeyCooldowns[id] = true
                             hs.timer.doAfter(0.15, function()
                                 _hotkeyCooldowns[id] = false
@@ -2241,7 +2342,6 @@
             end
 
             ms._bindHotkeys = function()
-                -- Clear old taps
                 for _, h in pairs(ms._hotkeyHandles) do
                     if h and h.stop then h:stop() end
                 end
@@ -2262,7 +2362,6 @@
                     t:start()
                 end
 
-                -- Panic
                 local hk = ms._hotkeys.panic
                 local tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
                     if not ms._hotkeysReady then return end
@@ -2271,15 +2370,6 @@
                 end)
                 if tap then _register("panic", tap) end
 
-                -- Quick Reload — a native hs.hotkey, not a _makeKeyWatcher tap.
-                -- The eventtap only swallows when ms._swallowHotkeys is on, so by
-                -- default the combo passed straight through to the target app —
-                -- ⌥[ leaked into the game at the very moment a reload was tearing
-                -- the binds down. hs.hotkey consumes the key itself and is not one
-                -- of the eventtaps torn down during a reload, so the keystroke is
-                -- swallowed cleanly. The combo is fixed (not user-rebindable), so
-                -- a static hotkey is safe. It fires regardless of target focus —
-                -- reloading the config from anywhere is harmless.
                 if ms._quickReloadHotkey then
                     pcall(function() ms._quickReloadHotkey:delete() end)
                     ms._quickReloadHotkey = nil
@@ -2290,10 +2380,6 @@
                         if not ms._hotkeysReady then return end
                         if ms._qrCooldown then return end
                         ms._qrCooldown = true
-                        -- Retain the timer in a field: an anonymous doAfter timer
-                        -- can be GC'd mid-reload (heavy allocation churn) before it
-                        -- fires, which would leave _qrCooldown latched true forever
-                        -- and wedge the hotkey after a single use.
                         if ms._qrCooldownTimer then ms._qrCooldownTimer:stop() end
                         ms._qrCooldownTimer = hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
                         pcall(ms.reload)
@@ -2301,11 +2387,6 @@
                     if ok and hotkey then ms._quickReloadHotkey = hotkey end
                 end
 
-                -- Full Reload — native hs.hotkey (same reasoning as Quick Reload:
-                -- the eventtap passed ⌥] through to the game). Already fired
-                -- regardless of target focus, so a global hotkey matches. Its
-                -- handle dies with the Lua state on reload and is recreated at
-                -- boot, so no cross-reload persistence to manage.
                 if ms._fullReloadHotkey then
                     pcall(function() ms._fullReloadHotkey:delete() end)
                     ms._fullReloadHotkey = nil
@@ -2314,18 +2395,11 @@
                 do
                     local ok, hotkey = pcall(hs.hotkey.bind, hk.mods, hk.key, function()
                         if not ms._hotkeysReady then return end
-                        -- ms.restart tears down the way shutdown does and then
-                        -- reloads; bare hs.reload() dropped the state on the floor.
-                        -- (ms.restart self-guards against re-entry, so no cooldown.)
                         if ms.restart then ms.restart() else hs.reload() end
                     end)
                     if ok and hotkey then ms._fullReloadHotkey = hotkey end
                 end
 
-                -- Open / Close Shell — native hs.hotkey so ⌥p is swallowed rather
-                -- than leaking to the game. Always fired regardless of target
-                -- focus (the menu is a Hammerspoon UI, not a game action), so a
-                -- global hotkey is an exact match.
                 if ms._openMenuHotkey then
                     pcall(function() ms._openMenuHotkey:delete() end)
                     ms._openMenuHotkey = nil
@@ -2343,7 +2417,6 @@
                     if ok and hotkey then ms._openMenuHotkey = hotkey end
                 end
 
-                -- Octane Mode
                 hk = ms._hotkeys.octane
                 tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
                     if not ms._hotkeysReady then return end
@@ -2353,7 +2426,6 @@
                 if tap then _register("octane", tap) end
             end
 
-            -- Start the tap watchdog (2s poll)
             ms._tapWatchdog = hs.timer.doEvery(2, function()
                 local revivedHotkey = false
 
@@ -2374,17 +2446,11 @@
 
         -- 8. Utilities --
 
-            -- Control flow logging helpers for hand-written macros
-            -- Usage:  ms.log("if", condition, true)  → "[label] if (condition) → true"
-            --         ms.log("for", "i=1,14", 14)    → "[label] for i=1,14 (14 iterations)"
-            --         ms.log("while", condition, 5)   → "[label] while condition (5 iterations)"
-            --         ms.log("repeat", condition, 3)  → "[label] repeat until condition (3 iterations)"
-            --         ms.log("msg", "doing thing")    → "[label] doing thing"
             ms.log = function(kind, a, b)
                 if not ms.dev then return end
                 local msg
                 if kind == "if" then
-                    msg = "if (" .. tostring(a) .. ") → " .. tostring(b)
+                    msg = "if (" .. tostring(a) .. ") -> " .. tostring(b)
                 elseif kind == "for" then
                     msg = "for " .. tostring(a) .. " (" .. tostring(b) .. " iterations)"
                 elseif kind == "while" then
@@ -2399,8 +2465,12 @@
                 end
             end
 
-            -- Function call accumulator (tracks consecutive same-label calls)
-            ms._fnAccum = { lastLabel = nil, count = 0, startTime = 0, timer = nil }
+            ms._fnAccum = {
+                lastLabel = nil,
+                count = 0,
+                startTime = 0,
+                timer = nil,
+            }
             local _fnFlush = function()
                 local a = ms._fnAccum
                 if a.count > 0 and a.lastLabel then
@@ -2409,7 +2479,11 @@
                     if a.count > 1 then msg = msg .. " \195\151" .. a.count end
                     if dur > 0 then msg = msg .. " (" .. dur .. "ms)" end
                     if ms.dev and ms.dev.log then
-                        ms.dev.log({ type = "step", category = "macro", msg = "[" .. a.lastLabel .. "] " .. msg })
+                        ms.dev.log({
+                            type = "step",
+                            category = "macro",
+                            msg = "[" .. a.lastLabel .. "] " .. msg,
+                        })
                     end
                 end
                 a.count = 0
@@ -2417,7 +2491,6 @@
                 a.timer = nil
             end
 
-            -- ms.fn: wraps a function in a coroutine with error handling and logging
             local _msFnWrap = function(fn, labelOrAsync)
                 assert(type(fn) == "function", "ms.fn: fn must be a function")
                 if labelOrAsync == false then return fn end
@@ -2428,7 +2501,6 @@
                     local label = fnLabel or ms._pendingLabel or "macro"
                     ms._pendingLabel = nil
 
-                    -- Accumulate consecutive calls to the same function
                     local a = ms._fnAccum
                     if a.lastLabel == label then
                         a.count = a.count + 1
@@ -2438,7 +2510,6 @@
                         a.count = 1
                         a.startTime = hs.timer.absoluteTime()
                     end
-                    -- Reset flush timer (fires after 50ms of no new calls)
                     if a.timer then a.timer:stop() end
                     a.timer = hs.timer.doAfter(0.05, _fnFlush)
 
@@ -2450,19 +2521,32 @@
 
                     local coBody = function(...)
                         if ms.dev and ms.dev.log then
-                            ms.dev.log({ type = "step", category = "macro", msg = "[" .. label .. "] ▶" })
+                            ms.dev.log({
+                                type = "step",
+                                category = "macro",
+                                msg = "[" .. label .. "] ▶",
+                            })
                         end
                         local xok, xerr = xpcall(fn, debug.traceback, ...)
                         if ms.dev and ms.dev.log then
-                            ms.dev.log({ type = "step", category = "macro", msg = "[" .. label .. "] ■" })
+                            ms.dev.log({
+                                type = "step",
+                                category = "macro",
+                                msg = "[" .. label .. "] ■",
+                            })
                         end
                         if not xok then
                             local tb = tostring(xerr)
-                            print("═══ ms.fn error [" .. label .. "] ═══\n" .. tb)
+                            print("=== ms.fn error [" .. label .. "] ===\n" .. tb)
                             if ms.dev and ms.dev.log then
-                                ms.dev.log({ type = "error", event = "macro_error", macro = label, msg = tb })
+                                ms.dev.log({
+                                    type = "error",
+                                    event = "macro_error",
+                                    macro = label,
+                                    msg = tb,
+                                })
                             end
-                            ms.alert("Macro error [" .. label .. "] — see console", 6)
+                            ms.alert("Macro error [" .. label .. "], see console", 6)
                         end
                     end
                     local co = coroutine.create(coBody)
@@ -2473,23 +2557,26 @@
 
                     local ok, err = coroutine.resume(co, ...)
                     if not ok then
-                        print("═══ ms.fn resume error [" .. label .. "] ═══\n" .. tostring(err))
+                        print("=== ms.fn resume error [" .. label .. "] ===\n" .. tostring(err))
                     end
 
                     if coroutine.status(co) == "dead" then
                         if ms.dev then ms.devtools:stopTrace(co) end
                         ms._coroContext[co]    = nil
                         ms._activeContexts[ctx] = nil
-                        if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
+                        if _keyFlushTimer then _keyFlushTimer:stop()
+                        _keyFlushTimer = nil end
                         _keyFlush()
                         if ms.dev then ms.devtools:flushAll(ctx and ctx.callStack and ctx.callStack[1]) end
                     end
                 end
             end
 
-            -- ms.fn: callable table with registry
             ms.fn = setmetatable({
-                registry = { _defs = {}, _defList = {} },
+                registry = {
+                    _defs = {},
+                    _defList = {},
+                },
 
                 define = function(id, fn, opts)
                     assert(type(id) == "string", "ms.fn.define: id must be a string")
@@ -2504,9 +2591,9 @@
                         label   = opts.label or id,
                         group   = opts.group or "user",
                         info    = opts.info,
-                        params  = opts.params,      -- e.g. { {name="delay", type="number", default=100} }
+                        params  = opts.params,
                         icon    = opts.icon,
-                        cleared = opts.cleared ~= false,  -- "clear for use" flag, defaults true
+                        cleared = opts.cleared ~= false,
                     }
                     table.insert(ms.fn.registry._defList, id)
                 end,
@@ -2524,11 +2611,8 @@
                 end,
             })
 
-            -- Call stack helpers
             ms._capturedStack = nil
 
-            -- Get current (innermost) label from call stack or captured stack
-            -- Returns nil if not inside a macro context
             ms._getLabel = function()
                 local co = coroutine.running()
                 if co then
@@ -2543,7 +2627,6 @@
                 return nil
             end
 
-            -- Get root (outermost) label — used for pause/resume identification
             ms._getRootLabel = function()
                 local co = coroutine.running()
                 if co then
@@ -2558,7 +2641,6 @@
                 return nil
             end
 
-            -- Get full call chain as "Root › Innermost" string (cap 2 levels)
             ms._getCallChain = function()
                 local co = coroutine.running()
                 local stack = nil
@@ -2573,13 +2655,12 @@
                     if #stack == 1 then
                         return stack[1]
                     else
-                        return stack[1] .. " › " .. stack[#stack]
+                        return stack[1] .. " > " .. stack[#stack]
                     end
                 end
                 return nil
             end
 
-            -- ms.sub: register a sub-function with automatic call stack tracking
             ms.sub = function(label, fn)
                 assert(type(fn) == "function", "ms.sub: fn must be a function")
                 return function(...)
@@ -2592,7 +2673,6 @@
                         table.remove(ctx.callStack)
                         return table.unpack(results)
                     end
-                    -- Not in coroutine — check captured stack (ms.after callback)
                     if ms._capturedStack then
                         table.insert(ms._capturedStack, label)
                         local results = { fn(...) }
@@ -2609,7 +2689,8 @@
                     return
                 end
                 for _, ctx in pairs(ms._activeContexts) do
-                    if ctx.callStack and ctx.callStack[1] == id then ctx.paused = true; return end
+                    if ctx.callStack and ctx.callStack[1] == id then ctx.paused = true
+                    return end
                 end
             end
 
@@ -2621,13 +2702,14 @@
                     if coroutine.status(co) ~= "suspended" then return end
                     local ok, err = coroutine.resume(co)
                     if not ok then
-                        print("═══ ms.resume error [" .. (ctx.callStack and ctx.callStack[1] or "?") .. "] ═══\n" .. tostring(err))
+                        print("=== ms.resume error [" .. (ctx.callStack and ctx.callStack[1] or "?") .. "] ===\n" .. tostring(err))
                     end
                     if coroutine.status(co) == "dead" then
                         if ms.dev then ms.devtools:stopTrace(co) end
                         ms._coroContext[co] = nil
                         ms._activeContexts[ctx] = nil
-                        if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
+                        if _keyFlushTimer then _keyFlushTimer:stop()
+                        _keyFlushTimer = nil end
                         _keyFlush()
                         if ms.dev then ms.devtools:flushAll(ctx.callStack and ctx.callStack[1]) end
                     end
@@ -2637,7 +2719,8 @@
                     return
                 end
                 for co, ctx in pairs(ms._coroContext) do
-                    if ctx.callStack and ctx.callStack[1] == id then _resume(co); return end
+                    if ctx.callStack and ctx.callStack[1] == id then _resume(co)
+                    return end
                 end
             end
 
@@ -2681,16 +2764,17 @@
                 ms._macroHeldButtons = {}
             end
 
-            ms._soundsDirty = true  -- force the first scan at startup
+            ms._soundsDirty = true
 
-            -- What counts as a sound file, in one place. hs.sound is
-            -- NSSound-backed, so this is what it can actually open.
-            --
-            -- The scanner and the auto-sorter used to disagree — the sorter
-            -- looked at .wav and the scanner at any extension at all — so an
-            -- imported .mp3 was indexed and playable but never filed, and a
-            -- .DS_Store or a stray .txt in the library was indexed as a sound.
-            ms.soundExtensions = { "wav", "aiff", "aif", "mp3", "m4a", "caf", "aac" }
+            ms.soundExtensions = {
+                "wav",
+                "aiff",
+                "aif",
+                "mp3",
+                "m4a",
+                "caf",
+                "aac",
+            }
 
             ms.isSoundFile = function(file)
                 local ext = file:match("%.([^%.]+)$")
@@ -2702,19 +2786,21 @@
                 return false
             end
 
-            -- Auto-sort: move misplaced sounds to correct folder based on prefix.
-            -- d_* → sounds/defaults/, a_* → sounds/active/, m_* → sounds/macro/
-            --
-            -- A move never overwrites. The prefix is what a file claims to be,
-            -- and a file dropped into the library gets to claim anything —
-            -- including d_Shutdown, which would land straight on top of the
-            -- shipped default and take the fallback floor with it.
             ms._autoSortSounds = function()
                 local SoundLib = hs.configdir .. "/sounds/"
                 local dirs = {
-                    { dir = SoundLib .. "defaults/", prefix = "d_" },
-                    { dir = SoundLib .. "active/",   prefix = "a_" },
-                    { dir = SoundLib .. "macro/",    prefix = "m_" },
+                    {
+                        dir = SoundLib .. "defaults/",
+                        prefix = "d_",
+                    },
+                    {
+                        dir = SoundLib .. "active/",
+                        prefix = "a_",
+                    },
+                    {
+                        dir = SoundLib .. "macro/",
+                        prefix = "m_",
+                    },
                 }
                 for _, info in ipairs(dirs) do
                     if hs.fs.attributes(info.dir) then
@@ -2743,10 +2829,8 @@
                 ms.sounds      = {}
                 ms.macroSounds = {}
 
-                -- Auto-sort misplaced sounds before scanning
                 pcall(ms._autoSortSounds)
 
-                -- Helper: scan a directory for sound files into a target table
                 local function scanDir(dir, target)
                     target = target or ms.sounds
                     if not hs.fs.attributes(dir) then return end
@@ -2760,18 +2844,14 @@
                     end
                 end
 
-                -- Always load defaults
                 scanDir(SoundDefaultsDir)
 
-                -- Active profile sounds (gated by custom theme setting)
                 if not ms._customThemeDisabled then
                     scanDir(SoundActiveDir)
                 end
 
-                -- Macro-specific sounds (separate category)
                 scanDir(SoundMacroDir, ms.macroSounds)
 
-                -- Imported sounds (MSPKG) also gated by custom theme setting
                 for name, filename in pairs(ms.importedSounds or {}) do
                     if not ms._customThemeDisabled and not ms.sounds[name] then
                         local path = SoundLib .. filename
@@ -2784,13 +2864,11 @@
 
             ms.sound = function(path, async, device)
                 if ms.dev then ms.devtools:flushAll() end
-                -- Resolve name to path if not a file path
                 if path and not path:match("[/\\]") then
                     path = ms.sounds[path] or ms.macroSounds[path] or path
                 end
                 if path then
                     local fname = tostring(path):match("([^/\\]+)$") or tostring(path)
-                    -- Dedup: skip if same sound was logged last time
                     if fname ~= ms._lastSoundLog then
                         ms._lastSoundLog = fname
                         if ms.dev then
@@ -2822,7 +2900,7 @@
                 async = (async ~= false)
                 if not async then
                     local co  = coroutine.running()
-                    local ctx = co and ms._coroContext[co]  -- capture at yield time
+                    local ctx = co and ms._coroContext[co]
                     if co then
                         s:setCallback(function(snd, state)
                             if state == "stop" then
@@ -2836,7 +2914,8 @@
                                     if ms.dev then ms.devtools:stopTrace(co) end
                                     ms._coroContext[co] = nil
                                     if ctx then ms._activeContexts[ctx] = nil end
-                                    if _keyFlushTimer then _keyFlushTimer:stop(); _keyFlushTimer = nil end
+                                    if _keyFlushTimer then _keyFlushTimer:stop()
+                                    _keyFlushTimer = nil end
                                     _keyFlush()
                                     if ms.dev then ms.devtools:flushAll() end
                                 end
@@ -2848,25 +2927,14 @@
                     end
                 end
                 s:play()
-                return s  -- return handle so callers can stop playback
+                return s
             end
 
-            -- One slot's own resolution, in priority order: what the user
-            -- assigned, a library file named after the slot, then the sample
-            -- the registry names as its default.
-            --
-            -- An assignment that resolves to nothing is skipped rather than
-            -- handed to hs.sound as though the name were a path. It used to
-            -- be, and that is what turned "this slot still points at a themed
-            -- sample that custom theming has just un-indexed" into silence
-            -- instead of the default sound.
             local function _resolveSlot(id)
                 local assigned = ms.soundAssign and ms.soundAssign[id]
                 if assigned then
                     local p = (ms.sounds and ms.sounds[assigned])
                         or (ms.macroSounds and ms.macroSounds[assigned])
-                    -- A pack may assign a literal path rather than a library
-                    -- name; only something shaped like one is treated as one.
                     if not p and assigned:find("/", 1, true)
                         and hs.fs.attributes(assigned) then
                         p = assigned
@@ -2885,24 +2953,14 @@
 
             ms.playSlot = function(slotId)
                 if not ms.soundEnabled then return false end
-                -- Suppress all sounds during reload to avoid jarring duplicate close/open sounds
                 if ms._quickReloading then return false end
-                -- Octane sound mute: independent axis from the master octane toggle
                 if ms._octaneMode and ms._octaneMuteSounds then return false end
                 if not ms._startupSoundDone and slotId ~= "load" and slotId ~= "themeLoaded" and slotId ~= "updateAvailable" and slotId ~= "settingsOpen" and slotId ~= "settingsClose" then return false end
                 ms._slotHandles = ms._slotHandles or {}
-                -- If this slot is already playing, stop it and play fresh
-                -- (allows rapid hover/interact sounds without gaps)
                 if ms._slotHandles[slotId] then
                     pcall(function() ms._slotHandles[slotId]:stop() end)
                     ms._slotHandles[slotId] = nil
                 end
-                -- Walk the registry's fallback chain: each slot is resolved in
-                -- full before the next one is tried, so a borrowed sound only
-                -- ever stands in for a slot that has nothing of its own.
-                -- Timing is recorded against the slot that was *asked* for,
-                -- which is what a caller holding the screen open (the exit
-                -- curtain) measures against.
                 local path
                 for _, id in ipairs(ms.soundSlotChain(slotId)) do
                     path = _resolveSlot(id)
@@ -2912,8 +2970,6 @@
                 local handle = ms.sound(path) or false
                 if handle then
                     ms._slotHandles[slotId] = handle
-                    -- Start time, so a caller that needs to outlive the sample
-                    -- (shutdown) can work out what is left of it.
                     ms._slotStartedAt = ms._slotStartedAt or {}
                     ms._slotStartedAt[slotId] = hs.timer.secondsSinceEpoch()
                 end
@@ -2973,16 +3029,25 @@
                     local f = scr:frame()
                     if ax >= f.x and ax < f.x + f.w
                     and ay >= f.y and ay < f.y + f.h then
-                        screen = scr; break
+                        screen = scr
+                        break
                     end
                 end
 
                 local scale = (screen:currentMode() and screen:currentMode().scale) or 1
-                local img = screen:snapshot({ x = ax, y = ay, w = 1, h = 1 })
+                local img = screen:snapshot({
+                    x = ax,
+                    y = ay,
+                    w = 1,
+                    h = 1,
+                })
                 if not img then return nil end
                 local px = math.floor(scale / 2)
                 local py = math.floor(scale / 2)
-                local c = img:colorAt({ x = px, y = py })
+                local c = img:colorAt({
+                    x = px,
+                    y = py,
+                })
                 if not c then return nil end
 
                 return {
@@ -3002,17 +3067,14 @@
                    and math.abs(c.b - b) <= tolerance
             end
 
-            -- Random wait between min and max milliseconds
             ms.randWait = function(min, max)
                 ms.wait(math.random(min, max))
             end
 
-            -- Wait base milliseconds ± jitter
             ms.jitter = function(base, jitterMs)
                 ms.wait(base + math.random(-jitterMs, jitterMs))
             end
 
-            -- Save/restore cursor position
             local _savedCursor = nil
             ms.saveCursor = function()
                 _savedCursor = hs.mouse.absolutePosition()
@@ -3024,18 +3086,15 @@
                 end
             end
 
-            -- Check if an app is running
             ms.appRunning = function(appName)
                 return hs.application.get(appName) ~= nil
             end
 
-            -- Check if an app is the frontmost application
             ms.appIsFront = function(appName)
                 local front = hs.application.frontmostApplication()
                 return front and front:name() == appName
             end
 
-            -- Focus (activate) an app by name
             ms.focus = function(appName)
                 local app = hs.application.get(appName)
                 if app then
@@ -3045,7 +3104,6 @@
                 return false
             end
 
-            -- Toggle a key: press if not held, release if held
             ms.toggle = function(key, mods)
                 if ms.keystate(key) then
                     ms.release(key, mods)
@@ -3054,7 +3112,6 @@
                 end
             end
 
-            -- Wait until a pixel matches expected color (poll loop)
             ms.waitPixel = function(x, y, ref, r, g, b, tol, timeout)
                 timeout = timeout or 5000
                 local deadline = hs.timer.absoluteTime() + timeout * 1000000
@@ -3065,7 +3122,6 @@
                 return false
             end
 
-            -- Wait until a pixel does NOT match expected color (poll loop)
             ms.waitNotPixel = function(x, y, ref, r, g, b, tol, timeout)
                 timeout = timeout or 5000
                 local deadline = hs.timer.absoluteTime() + timeout * 1000000
@@ -3076,7 +3132,6 @@
                 return false
             end
 
-            -- Wait until an app appears (poll loop)
             ms.waitApp = function(appName, timeout)
                 timeout = timeout or 10000
                 local deadline = hs.timer.absoluteTime() + timeout * 1000000
@@ -3087,7 +3142,6 @@
                 return false
             end
 
-            -- Wait until an app disappears (poll loop)
             ms.waitNotApp = function(appName, timeout)
                 timeout = timeout or 10000
                 local deadline = hs.timer.absoluteTime() + timeout * 1000000
@@ -3098,38 +3152,47 @@
                 return false
             end
 
-            -- Get window position of an app (returns {x, y, w, h} or nil)
             ms.windowPos = function(appName)
                 local app = hs.application.get(appName)
                 if not app then return nil end
                 local win = app:mainWindow()
                 if not win then return nil end
                 local f = win:frame()
-                return { x = f.x, y = f.y, w = f.w, h = f.h }
+                return {
+                    x = f.x,
+                    y = f.y,
+                    w = f.w,
+                    h = f.h,
+                }
             end
 
-            -- Move or resize a window (defaults to the focused window). Backs the
-            -- macro recorder's window-action capture and is available as a module.
-            -- op "Move" → top-left to (a,b); "Resize" → size (a,b); "Frame" →
-            -- full frame (a,b,c,d). Coordinates are absolute screen points.
             ms.window = function(operation, a, b, c, d)
                 local win = ms.getTargetWin() or hs.window.focusedWindow()
                 if not win then return false end
                 local op = tostring(operation or "Move"):lower()
                 local ok = pcall(function()
                     if op == "resize" then
-                        win:setSize({ w = tonumber(a) or 0, h = tonumber(b) or 0 })
+                        win:setSize({
+                            w = tonumber(a) or 0,
+                            h = tonumber(b) or 0,
+                        })
                     elseif op == "frame" then
-                        win:setFrame({ x = tonumber(a) or 0, y = tonumber(b) or 0,
-                                       w = tonumber(c) or 0, h = tonumber(d) or 0 })
-                    else -- "move"
-                        win:setTopLeft({ x = tonumber(a) or 0, y = tonumber(b) or 0 })
+                        win:setFrame({
+                            x = tonumber(a) or 0,
+                            y = tonumber(b) or 0,
+                            w = tonumber(c) or 0,
+                            h = tonumber(d) or 0,
+                        })
+                    else
+                        win:setTopLeft({
+                            x = tonumber(a) or 0,
+                            y = tonumber(b) or 0,
+                        })
                     end
                 end)
                 return ok
             end
 
-            -- Press multiple keys in sequence with optional delay between them
             ms.multiPress = function(keys, delayMs, mods)
                 delayMs = delayMs or 15
                 for i, key in ipairs(keys) do
@@ -3138,25 +3201,21 @@
                 end
             end
 
-            -- Set system volume (0-100)
             ms.setVolume = function(level)
                 local dev = hs.audiodevice.defaultOutputDevice()
                 if dev then dev:setVolume(level) end
             end
 
-            -- Mute system audio
             ms.mute = function()
                 local dev = hs.audiodevice.defaultOutputDevice()
                 if dev then dev:setMuted(true) end
             end
 
-            -- Unmute system audio
             ms.unmute = function()
                 local dev = hs.audiodevice.defaultOutputDevice()
                 if dev then dev:setMuted(false) end
             end
 
-            -- Take a screenshot and save to path
             ms.screenshot = function(path)
                 path = path or os.getenv("HOME") .. "/Desktop/screenshot_" .. os.date("%Y%m%d_%H%M%S") .. ".png"
                 local screen = hs.screen.mainScreen()
@@ -3167,7 +3226,6 @@
                 return path
             end
 
-            -- Watch for clipboard changes
             local _clipWatcher = nil
             ms.clipChanged = function(callback)
                 if _clipWatcher then _clipWatcher:stop() end
@@ -3176,7 +3234,6 @@
                 return _clipWatcher
             end
 
-            -- Animated mouse movement (interpolated over duration)
             ms.moveMouse = function(x, y, ref, durationMs)
                 durationMs = durationMs or 200
                 local targetX, targetY = ms.resolvePoint(x, y, ref or "Absolute")
@@ -3189,43 +3246,38 @@
                 local timer = hs.timer.doEvery(0.016, function()
                     step = step + 1
                     local t = math.min(step / steps, 1)
-                    -- Ease out cubic
                     t = 1 - (1 - t) ^ 3
                     hs.mouse.absolutePosition({
                         x = startX + dx * t,
                         y = startY + dy * t,
                     })
                     if step >= steps then
-                        hs.mouse.absolutePosition({ x = targetX, y = targetY })
-                        return false -- stop timer
+                        hs.mouse.absolutePosition({
+                            x = targetX,
+                            y = targetY,
+                        })
+                        return false
                     end
                 end)
                 return timer
             end
 
-            -- Multi-point drag: press at points[1], drag through points[2..N], release
             ms.dragPath = function(points, button, ref, delayMs)
-                -- Accept `points` as a table of {x,y} pairs OR a "x,y;x,y;…"
-                -- string. The visual builder and the drag recorder both author
-                -- the string form; parsing it here means one runtime serves
-                -- authored steps, recordings, and direct Lua callers alike.
-                -- Without this, a builder/recorded dragPath crashed on points[1]
-                -- (string-indexed as a table) — the feature never worked.
                 if type(points) == "string" then
                     local parsed = {}
                     for pair in points:gmatch("[^;]+") do
                         local sx, sy = pair:match("^%s*(-?%d+%.?%d*)%s*,%s*(-?%d+%.?%d*)%s*$")
                         local nx, ny = tonumber(sx), tonumber(sy)
-                        if nx and ny then parsed[#parsed + 1] = { nx, ny } end
+                        if nx and ny then parsed[#parsed + 1] = {
+                            nx,
+                            ny,
+                        } end
                     end
                     points = parsed
                 end
                 if type(points) ~= "table" or #points < 2 then return end
                 button = button or "Left"
                 delayMs = delayMs or 10
-                -- "Center" is what the recorder and ms.Mouse emit for the middle
-                -- button; accept it alongside "Middle" so a middle-button drag
-                -- doesn't silently play back as a left drag.
                 local btnNum = button == "Right" and 1
                     or ((button == "Middle" or button == "Center") and 2 or 0)
                 local downType = btnNum == 1 and hs.eventtap.event.types.rightMouseDown
@@ -3238,32 +3290,40 @@
                     or (btnNum == 2 and hs.eventtap.event.types.otherMouseDragged
                     or hs.eventtap.event.types.leftMouseDragged)
 
-                -- Resolve first point and press
                 local x1, y1 = ms.resolvePoint(points[1][1], points[1][2], ref or "Absolute")
-                hs.mouse.absolutePosition({ x = x1, y = y1 })
-                local downEv = hs.eventtap.event.newMouseEvent(downType, { x = x1, y = y1 })
+                hs.mouse.absolutePosition({
+                    x = x1,
+                    y = y1,
+                })
+                local downEv = hs.eventtap.event.newMouseEvent(downType, {
+                    x = x1,
+                    y = y1,
+                })
                 if btnNum > 0 then downEv:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btnNum) end
                 downEv:post()
                 ms.wait(delayMs)
 
-                -- Drag through remaining points
                 for i = 2, #points do
                     local px, py = ms.resolvePoint(points[i][1], points[i][2], ref or "Absolute")
-                    hs.mouse.absolutePosition({ x = px, y = py })
-                    local dragEv = hs.eventtap.event.newMouseEvent(dragType, { x = px, y = py })
+                    hs.mouse.absolutePosition({
+                        x = px,
+                        y = py,
+                    })
+                    local dragEv = hs.eventtap.event.newMouseEvent(dragType, {
+                        x = px,
+                        y = py,
+                    })
                     if btnNum > 0 then dragEv:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btnNum) end
                     dragEv:post()
                     ms.wait(delayMs)
                 end
 
-                -- Release
                 local finalPos = hs.mouse.absolutePosition()
                 local upEv = hs.eventtap.event.newMouseEvent(upType, finalPos)
                 if btnNum > 0 then upEv:setProperty(hs.eventtap.event.properties.mouseEventButtonNumber, btnNum) end
                 upEv:post()
             end
 
-            -- Native macOS notification
             ms.notify = function(title, subTitle, infoText)
                 local note = hs.notify.new({
                     title = title or "mudscript",
@@ -3273,9 +3333,12 @@
                 return note
             end
 
-            -- Anti-Timeout — generic idle-prevention (e.g. a game's inactivity kick).
-            -- The action + interval come from whichever pack/plugin configures it.
-                ms._antiTimeout = { fn = nil, interval = 900, timer = nil, running = false }
+                ms._antiTimeout = {
+                    fn = nil,
+                    interval = 900,
+                    timer = nil,
+                    running = false,
+                }
 
                 ms.antiTimeout = function(config)
                     assert(type(config) == "table", "ms.antiTimeout: config must be a table")
@@ -3284,17 +3347,14 @@
                     ms._antiTimeout.fn       = config.action
                     ms._antiTimeout.interval = tonumber(config.interval) or 900
 
-                    -- Respect the settings toggle
                     local enabled  = config.enabled
                     if enabled == nil then enabled = true end
-                    -- Settings toggle overrides macro config when explicitly set
                     if ms._antiTimeoutEnabled == true then
                         enabled = true
                     elseif ms._antiTimeoutEnabled == false then
                         enabled = false
                     end
 
-                    -- Stop any existing timer
                     if ms._antiTimeout.timer then
                         ms._antiTimeout.timer:stop()
                         ms._antiTimeout.timer = nil
@@ -3351,16 +3411,14 @@
                 assert(type(id) == "string", "ms.bind.define: id must be a string")
                 local fn   = type(a) == "function" and a or (type(b) == "function" and b or nil)
                 local opts = type(a) == "table"    and a or (type(b) == "table"    and b or {})
-                -- Reject legacy sub/mod syntax — user must update ms_macros.lua
                 if opts.sub or opts.mod then
                     error("bind '" .. id .. "' uses deprecated sub/mod syntax. "
-                        .. "Update to: default = { type = \"<parentID>\", mods = {\"<mod>\"} } "
-                        .. "— see documentation for the unified bind model.", 2)
+                        .. "Update to: default = { type = \"<parentID>\", mods = {\"<mod>\"} }. "
+                        .. "See documentation for the unified bind model.", 2)
                 end
                 local label, group
                 if opts.default and type(opts.default) == "table" and opts.default.type
                     and ms.registry._defs[opts.default.type] then
-                    -- Derived bind: inherit label/group conventions
                     label = opts.label or id
                     group = opts.group
                 else
@@ -3396,38 +3454,45 @@
                     group      = "system",
                     enabled    = true,
                     system     = true,
-                    default    = { type = "key", mods = {"alt"}, key = "F10" },
+                    default    = {
+                        type = "key",
+                        mods = {"alt"},
+                        key = "F10",
+                    },
                 })
                 ms.bind.define("__quickReload", nil, {
                     label      = "Quick Reload",
                     group      = "system",
                     enabled    = true,
                     system     = true,
-                    default    = { type = "key", mods = {"alt"}, key = "[" },
+                    default    = {
+                        type = "key",
+                        mods = {"alt"},
+                        key = "[",
+                    },
                 })
                 ms.bind.define("__fullReload", nil, {
                     label      = "Full Reload",
                     group      = "system",
                     enabled    = true,
                     system     = true,
-                    default    = { type = "key", mods = {"alt"}, key = "]" },
+                    default    = {
+                        type = "key",
+                        mods = {"alt"},
+                        key = "]",
+                    },
                 })
                 ms.bind.define("__openMenu", nil, {
                     label      = "Open Menu",
                     group      = "system",
                     enabled    = true,
                     system     = true,
-                    default    = { type = "key", mods = {"alt"}, key = "p" },
+                    default    = {
+                        type = "key",
+                        mods = {"alt"},
+                        key = "p",
+                    },
                 })
-                -- These system binds are registered for display only — the
-                -- actual dispatch lives in _bindHotkeys() (one resilient tap per
-                -- key). Wiring them here made rebindSystem() spin up a SECOND,
-                -- orphaned _makeKeyWatcher tap on the same key; the two shared a
-                -- latch id (mods:key), so their down/cooldown state collided and
-                -- swallowed each other's fires — quick/full reload and panic
-                -- would intermittently no-op. Leaving them unwired (as the old
-                -- version did) restores single-path dispatch. __openMenu was
-                -- already unwired for the same reason.
             end
 
             local function modsMatch(bindMods, eventMods)
@@ -3438,9 +3503,30 @@
             end
 
             ms.systemBinds._defs = {
-                enable  = { label = "Enable Macros",  default = { type = "key", mods = "any", key = "return" } },
-                disable = { label = "Disable Macros", default = { type = "key", mods = "any", key = "/" } },
-                toggle  = { label = "Toggle Macros",  default = { type = "key", mods = "any", key = "escape" } },
+                enable  = {
+                    label = "Enable Macros",
+                    default = {
+                        type = "key",
+                        mods = "any",
+                        key = "return",
+                    },
+                },
+                disable = {
+                    label = "Disable Macros",
+                    default = {
+                        type = "key",
+                        mods = "any",
+                        key = "/",
+                    },
+                },
+                toggle  = {
+                    label = "Toggle Macros",
+                    default = {
+                        type = "key",
+                        mods = "any",
+                        key = "escape",
+                    },
+                },
             }
 
             ms.systemBinds._actions = {
@@ -3479,14 +3565,6 @@
                     local c = ms.systemBinds.effective(id)
                     if not c then goto sysBindContinue end
                     if c.type == "key" then
-                        -- Ride the central resilient eventtap via ms.key, the way
-                        -- the old version did. _makeKeyWatcher spun up a private
-                        -- tap that was never added to _resilientTaps (so the
-                        -- watchdog never revived it after macOS disabled it) and
-                        -- was never torn down (its handle has no .delete), so the
-                        -- taps leaked and their shared latch state grew unreliable.
-                        -- ms.key handles fire regardless of BindValidity (system
-                        -- flag) and are torn down cleanly on rebind.
                         ms.systemBinds._handles[id] = ms.key(c.mods, c.key, false, function()
                             if not ms._targetActive and not ms._isSafeZone() then return end
                             local co = coroutine.create(action)
@@ -3523,7 +3601,6 @@
                 local def = ms.registry._defs[id]
                 if not def then return "G_" .. tostring(id) end
                 if def.shared then return def.shared end
-                -- Walk derived triggers to find the root bind for group resolution
                 local current, seen = id, {}
                 while true do
                     local d = ms.registry._defs[current]
@@ -3547,129 +3624,381 @@
                 end
             end
 
-            -- Register built-in utility functions for macro lab auto-detection
-            -- Input
             ms.fn.define("ms.press", ms.press, {
                 label  = "Press Key",
                 group  = "input",
                 info   = "Press and release a key",
-                params = { {name = "key", type = "string"}, {name = "mods", type = "table"} },
+                params = {
+                    {
+                        name = "key",
+                        type = "string",
+                    },
+                    {
+                        name = "mods",
+                        type = "table",
+                    },
+                },
                 icon   = "inputs",
             })
             ms.fn.define("ms.release", ms.release, {
                 label  = "Release Key",
                 group  = "input",
                 info   = "Release a held key",
-                params = { {name = "key", type = "string"}, {name = "mods", type = "table"} },
+                params = {
+                    {
+                        name = "key",
+                        type = "string",
+                    },
+                    {
+                        name = "mods",
+                        type = "table",
+                    },
+                },
                 icon   = "inputs",
             })
             ms.fn.define("ms.type", ms.type, {
                 label  = "Type Key",
                 group  = "input",
                 info   = "Type a key with modifiers and optional hold duration",
-                params = { {name = "key", type = "string"}, {name = "mods", type = "table"}, {name = "holdMs", type = "number"} },
+                params = {
+                    {
+                        name = "key",
+                        type = "string",
+                    },
+                    {
+                        name = "mods",
+                        type = "table",
+                    },
+                    {
+                        name = "holdMs",
+                        type = "number",
+                    },
+                },
                 icon   = "inputs",
             })
             ms.fn.define("ms.toggle", ms.toggle, {
                 label  = "Toggle Key",
                 group  = "input",
                 info   = "Toggle a key on/off",
-                params = { {name = "key", type = "string"}, {name = "mods", type = "table"} },
+                params = {
+                    {
+                        name = "key",
+                        type = "string",
+                    },
+                    {
+                        name = "mods",
+                        type = "table",
+                    },
+                },
                 icon   = "inputs",
             })
             ms.fn.define("ms.multiPress", ms.multiPress, {
                 label  = "Multi Press",
                 group  = "input",
                 info   = "Press multiple keys in sequence",
-                params = { {name = "keys", type = "table"}, {name = "delayMs", type = "number"}, {name = "mods", type = "table"} },
+                params = {
+                    {
+                        name = "keys",
+                        type = "table",
+                    },
+                    {
+                        name = "delayMs",
+                        type = "number",
+                    },
+                    {
+                        name = "mods",
+                        type = "table",
+                    },
+                },
                 icon   = "inputs",
             })
             ms.fn.define("ms.Mouse", ms.Mouse, {
                 label  = "Mouse",
                 group  = "mouse",
                 info   = "Full mouse control (Click, Drag, Move, etc.)",
-                params = { {name = "operation", type = "string"}, {name = "button", type = "string"}, {name = "reference", type = "string"}, {name = "x", type = "number"}, {name = "y", type = "number"} },
+                params = {
+                    {
+                        name = "operation",
+                        type = "string",
+                    },
+                    {
+                        name = "button",
+                        type = "string",
+                    },
+                    {
+                        name = "reference",
+                        type = "string",
+                    },
+                    {
+                        name = "x",
+                        type = "number",
+                    },
+                    {
+                        name = "y",
+                        type = "number",
+                    },
+                },
                 icon   = "move",
             })
             ms.fn.define("ms.scroll", ms.scroll, {
                 label  = "Scroll",
                 group  = "mouse",
                 info   = "Scroll the mouse wheel",
-                params = { {name = "direction", type = "string"}, {name = "clicks", type = "number"} },
+                params = {
+                    {
+                        name = "direction",
+                        type = "string",
+                    },
+                    {
+                        name = "clicks",
+                        type = "number",
+                    },
+                },
                 icon   = "scroll",
             })
             ms.fn.define("ms.moveMouse", ms.moveMouse, {
                 label  = "Move Mouse",
                 group  = "mouse",
                 info   = "Move mouse to position with optional duration",
-                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"}, {name = "durationMs", type = "number"} },
+                params = {
+                    {
+                        name = "x",
+                        type = "number",
+                    },
+                    {
+                        name = "y",
+                        type = "number",
+                    },
+                    {
+                        name = "ref",
+                        type = "string",
+                    },
+                    {
+                        name = "durationMs",
+                        type = "number",
+                    },
+                },
                 icon   = "move",
             })
             ms.fn.define("ms.dragPath", ms.dragPath, {
                 label  = "Drag Path",
                 group  = "mouse",
                 info   = "Drag mouse through a series of points",
-                params = { {name = "points", type = "string"}, {name = "button", type = "string"}, {name = "ref", type = "string"}, {name = "delayMs", type = "number"} },
+                params = {
+                    {
+                        name = "points",
+                        type = "string",
+                    },
+                    {
+                        name = "button",
+                        type = "string",
+                    },
+                    {
+                        name = "ref",
+                        type = "string",
+                    },
+                    {
+                        name = "delayMs",
+                        type = "number",
+                    },
+                },
                 icon   = "move",
             })
             ms.fn.define("ms.cam", ms.cam, {
                 label  = "Camera",
                 group  = "mouse",
                 info   = "Move camera by delta",
-                params = { {name = "dx", type = "number"}, {name = "dy", type = "number"} },
+                params = {
+                    {
+                        name = "dx",
+                        type = "number",
+                    },
+                    {
+                        name = "dy",
+                        type = "number",
+                    },
+                },
                 icon   = "move",
             })
 
-            -- Timing
             ms.fn.define("ms.wait", ms.wait, {
                 label  = "Wait",
                 group  = "timing",
                 info   = "Wait for a duration in milliseconds",
-                params = { {name = "ms", type = "number", default = 100} },
+                params = { {
+                    name = "ms",
+                    type = "number",
+                    default = 100,
+                } },
                 icon   = "pause",
             })
             ms.fn.define("ms.randWait", ms.randWait, {
                 label  = "Random Wait",
                 group  = "timing",
                 info   = "Wait for a random duration between min and max",
-                params = { {name = "min", type = "number"}, {name = "max", type = "number"} },
+                params = {
+                    {
+                        name = "min",
+                        type = "number",
+                    },
+                    {
+                        name = "max",
+                        type = "number",
+                    },
+                },
                 icon   = "pause",
             })
             ms.fn.define("ms.jitter", ms.jitter, {
                 label  = "Jitter",
                 group  = "timing",
                 info   = "Wait with random jitter around a base duration",
-                params = { {name = "base", type = "number"}, {name = "jitterMs", type = "number"} },
+                params = {
+                    {
+                        name = "base",
+                        type = "number",
+                    },
+                    {
+                        name = "jitterMs",
+                        type = "number",
+                    },
+                },
                 icon   = "pause",
             })
 
-            -- Sensing
             ms.fn.define("ms.pixelColor", ms.pixelColor, {
                 label  = "Pixel Color",
                 group  = "sensing",
                 info   = "Get the RGB color of a pixel",
-                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"} },
+                params = {
+                    {
+                        name = "x",
+                        type = "number",
+                    },
+                    {
+                        name = "y",
+                        type = "number",
+                    },
+                    {
+                        name = "ref",
+                        type = "string",
+                    },
+                },
                 icon   = "pixelscan",
             })
             ms.fn.define("ms.pixelMatch", ms.pixelMatch, {
                 label  = "Pixel Match",
                 group  = "sensing",
                 info   = "Check if a pixel matches a color",
-                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"}, {name = "r", type = "number"}, {name = "g", type = "number"}, {name = "b", type = "number"}, {name = "tol", type = "number"} },
+                params = {
+                    {
+                        name = "x",
+                        type = "number",
+                    },
+                    {
+                        name = "y",
+                        type = "number",
+                    },
+                    {
+                        name = "ref",
+                        type = "string",
+                    },
+                    {
+                        name = "r",
+                        type = "number",
+                    },
+                    {
+                        name = "g",
+                        type = "number",
+                    },
+                    {
+                        name = "b",
+                        type = "number",
+                    },
+                    {
+                        name = "tol",
+                        type = "number",
+                    },
+                },
                 icon   = "pixelscan",
             })
             ms.fn.define("ms.waitPixel", ms.waitPixel, {
                 label  = "Wait for Pixel",
                 group  = "sensing",
                 info   = "Wait until a pixel matches a color",
-                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"}, {name = "r", type = "number"}, {name = "g", type = "number"}, {name = "b", type = "number"}, {name = "tol", type = "number"}, {name = "timeout", type = "number"} },
+                params = {
+                    {
+                        name = "x",
+                        type = "number",
+                    },
+                    {
+                        name = "y",
+                        type = "number",
+                    },
+                    {
+                        name = "ref",
+                        type = "string",
+                    },
+                    {
+                        name = "r",
+                        type = "number",
+                    },
+                    {
+                        name = "g",
+                        type = "number",
+                    },
+                    {
+                        name = "b",
+                        type = "number",
+                    },
+                    {
+                        name = "tol",
+                        type = "number",
+                    },
+                    {
+                        name = "timeout",
+                        type = "number",
+                    },
+                },
                 icon   = "pixelscan",
             })
             ms.fn.define("ms.waitNotPixel", ms.waitNotPixel, {
                 label  = "Wait for Pixel Change",
                 group  = "sensing",
                 info   = "Wait until a pixel no longer matches a color",
-                params = { {name = "x", type = "number"}, {name = "y", type = "number"}, {name = "ref", type = "string"}, {name = "r", type = "number"}, {name = "g", type = "number"}, {name = "b", type = "number"}, {name = "tol", type = "number"}, {name = "timeout", type = "number"} },
+                params = {
+                    {
+                        name = "x",
+                        type = "number",
+                    },
+                    {
+                        name = "y",
+                        type = "number",
+                    },
+                    {
+                        name = "ref",
+                        type = "string",
+                    },
+                    {
+                        name = "r",
+                        type = "number",
+                    },
+                    {
+                        name = "g",
+                        type = "number",
+                    },
+                    {
+                        name = "b",
+                        type = "number",
+                    },
+                    {
+                        name = "tol",
+                        type = "number",
+                    },
+                    {
+                        name = "timeout",
+                        type = "number",
+                    },
+                },
                 icon   = "pixelscan",
             })
             ms.fn.define("ms.mousePos", ms.mousePos, {
@@ -3683,46 +4012,62 @@
                 label  = "Key State",
                 group  = "sensing",
                 info   = "Check if a key is currently held",
-                params = { {name = "key", type = "string"} },
+                params = { {
+                    name = "key",
+                    type = "string",
+                } },
                 icon   = "inputs",
             })
 
-            -- Clipboard
             ms.fn.define("ms.copy", ms.copy, {
                 label  = "Copy",
                 group  = "clipboard",
                 info   = "Copy text to clipboard",
-                params = { {name = "text", type = "string"} },
+                params = { {
+                    name = "text",
+                    type = "string",
+                } },
                 icon   = "save",
             })
 
-            -- Window/App
             ms.fn.define("ms.appRunning", ms.appRunning, {
                 label  = "App Running",
                 group  = "app",
                 info   = "Check if an app is running",
-                params = { {name = "appName", type = "string"} },
+                params = { {
+                    name = "appName",
+                    type = "string",
+                } },
                 icon   = "window",
             })
             ms.fn.define("ms.appIsFront", ms.appIsFront, {
                 label  = "App in Front",
                 group  = "app",
                 info   = "Check if an app is the frontmost",
-                params = { {name = "appName", type = "string"} },
+                params = { {
+                    name = "appName",
+                    type = "string",
+                } },
                 icon   = "window",
             })
             ms.fn.define("ms.focus", ms.focus, {
                 label  = "Focus App",
                 group  = "app",
                 info   = "Bring an app to the front",
-                params = { {name = "appName", type = "string"} },
+                params = { {
+                    name = "appName",
+                    type = "string",
+                } },
                 icon   = "window",
             })
             ms.fn.define("ms.windowPos", ms.windowPos, {
                 label  = "Window Position",
                 group  = "app",
                 info   = "Get the position of an app's window",
-                params = { {name = "appName", type = "string"} },
+                params = { {
+                    name = "appName",
+                    type = "string",
+                } },
                 icon   = "window",
             })
             ms.fn.define("ms.window", ms.window, {
@@ -3730,47 +4075,92 @@
                 group  = "app",
                 info   = "Move or resize the focused window (Move/Resize/Frame)",
                 params = {
-                    {name = "operation", type = "string"},
-                    {name = "x", type = "number"}, {name = "y", type = "number"},
-                    {name = "w", type = "number"}, {name = "h", type = "number"},
+                    {
+                        name = "operation",
+                        type = "string",
+                    },
+                    {
+                        name = "x",
+                        type = "number",
+                    }, {
+                        name = "y",
+                        type = "number",
+                    },
+                    {
+                        name = "w",
+                        type = "number",
+                    }, {
+                        name = "h",
+                        type = "number",
+                    },
                 },
                 icon   = "window",
             })
 
-            -- System
             ms.fn.define("ms.sound", ms.sound, {
                 label  = "Play Sound",
                 group  = "system",
                 info   = "Play a sound file",
-                params = { {name = "path", type = "string"} },
+                params = { {
+                    name = "path",
+                    type = "string",
+                } },
                 icon   = "play",
             })
             ms.fn.define("ms.alert", ms.alert, {
                 label  = "Alert",
                 group  = "system",
                 info   = "Show a toast notification",
-                params = { {name = "msg", type = "string"}, {name = "duration", type = "number"} },
+                params = {
+                    {
+                        name = "msg",
+                        type = "string",
+                    },
+                    {
+                        name = "duration",
+                        type = "number",
+                    },
+                },
                 icon   = "alert",
             })
             ms.fn.define("ms.notify", ms.notify, {
                 label  = "Notify",
                 group  = "system",
                 info   = "Show a system notification",
-                params = { {name = "title", type = "string"}, {name = "subTitle", type = "string"}, {name = "infoText", type = "string"} },
+                params = {
+                    {
+                        name = "title",
+                        type = "string",
+                    },
+                    {
+                        name = "subTitle",
+                        type = "string",
+                    },
+                    {
+                        name = "infoText",
+                        type = "string",
+                    },
+                },
                 icon   = "alert",
             })
             ms.fn.define("ms.screenshot", ms.screenshot, {
                 label  = "Screenshot",
                 group  = "system",
                 info   = "Take a screenshot",
-                params = { {name = "path", type = "string"} },
+                params = { {
+                    name = "path",
+                    type = "string",
+                } },
                 icon   = "record",
             })
             ms.fn.define("ms.setVolume", ms.setVolume, {
                 label  = "Set Volume",
                 group  = "system",
                 info   = "Set system volume (0-100)",
-                params = { {name = "level", type = "number"} },
+                params = { {
+                    name = "level",
+                    type = "number",
+                } },
                 icon   = "play",
             })
             ms.fn.define("ms.mute", ms.mute, {
@@ -3791,7 +4181,10 @@
                 label  = "Clipboard Changed",
                 group  = "system",
                 info   = "Register a callback for clipboard changes",
-                params = { {name = "callback", type = "function"} },
+                params = { {
+                    name = "callback",
+                    type = "function",
+                } },
                 icon   = "watcher",
             })
             ms.fn.define("ms.saveCursor", ms.saveCursor, {
@@ -3809,7 +4202,6 @@
                 icon   = "upload",
             })
 
-            -- Macro Control
             ms.fn.define("ms.cancelMacros", ms.cancelMacros, {
                 label  = "Cancel Macros",
                 group  = "control",
@@ -3882,15 +4274,10 @@
                     return nil
                 end
 
-                -- Count modifiers for a resolved bind (most-specific-wins ordering)
                 local function modCount(c)
                     if not c then return 0 end
                     local n = 0
                     for _ in ipairs(c.mods or {}) do n = n + 1 end
-                    -- Chords count each key toward specificity so a V+K bind
-                    -- registers ahead of a plain V bind in the shared bucket
-                    -- (first-match-wins), letting the chord claim V+K while the
-                    -- bare key still fires on its own.
                     if c.type == "combo" then
                         for _ in ipairs(c.keys or {}) do n = n + 1 end
                     end
@@ -3899,25 +4286,25 @@
 
                 local conflicted = {}
 
-                -- Single conflict-detection pass: all binds go through the same
-                -- key-conflict path (derived binds resolve via effectiveBind).
                 local rootUsed = {}
                 for _, id in ipairs(ms.registry._defList) do
                     local def = ms.registry._defs[id]
                     if not def then goto c1 end
                     if ms._suppressedMacros and ms._suppressedMacros[id] then goto c1 end
-                    local enabled = ms.binds[id]; if enabled == nil then enabled = def.enabled end
+                    local enabled = ms.binds[id]
+                    if enabled == nil then enabled = def.enabled end
                     if not enabled then goto c1 end
                     local key = bindKey(ms.effectiveBind(id))
                     if key then
                         if rootUsed[key] then
                             local other = rootUsed[key]
-                            conflicted[id] = true; conflicted[other] = true
+                            conflicted[id] = true
+                            conflicted[other] = true
                             local l1 = ms.registry._defs[id].label
                             local l2 = ms.registry._defs[other].label
                             hs.timer.doAfter(0, function()
                                 ms.alert("Bind conflict: \"" .. l1 .. "\" and \"" .. l2
-                                    .. "\" share the same input.\nBoth disabled — right-click the macro in the Macros panel › Rebind to resolve.", 10)
+                                    .. "\" share the same input.\nBoth disabled. Right-click the macro in the Macros panel > Rebind to resolve.", 10)
                             end)
                         else
                             rootUsed[key] = id
@@ -3926,8 +4313,6 @@
                     ::c1::
                 end
 
-                -- Registration: sort most-mods-first so more-specific binds
-                -- are registered before less-specific ones (first-match-wins).
                 local sortedIds = {}
                 for _, id in ipairs(ms.registry._defList) do
                     sortedIds[#sortedIds + 1] = id
@@ -3974,7 +4359,8 @@
                                 end
                                 local _p = {}
                                 for _, m in ipairs(c.mods or {}) do _p[#_p+1] = m end
-                                _p[#_p+1] = c.key or ""; return table.concat(_p, "+")
+                                _p[#_p+1] = c.key or ""
+                                return table.concat(_p, "+")
                             end)()
                             pcall(ms.dev._onMacroFire, id, def.label, nil, nil, _trig)
                         end
@@ -3989,11 +4375,19 @@
                         local tkey = triggerKey(c)
                         local grp  = deviceGroups[tkey]
                         if not grp then
-                            grp = { ctype = c.type, button = c.button, direction = c.direction, claimants = {} }
+                            grp = {
+                                ctype = c.type,
+                                button = c.button,
+                                direction = c.direction,
+                                claimants = {},
+                            }
                             deviceGroups[tkey] = grp
                             deviceOrder[#deviceOrder + 1] = tkey
                         end
-                        grp.claimants[#grp.claimants + 1] = { mods = c.mods or {}, firedFn = firedFn }
+                        grp.claimants[#grp.claimants + 1] = {
+                            mods = c.mods or {},
+                            firedFn = firedFn,
+                        }
                     end
 
                     ::continue::
@@ -4008,10 +4402,12 @@
                             if not match then
                                 match = true
                                 for _, m in ipairs(cl.mods) do
-                                    if not ms.keystate(m) then match = false; break end
+                                    if not ms.keystate(m) then match = false
+                                    break end
                                 end
                             end
-                            if match then cl.firedFn(); return end
+                            if match then cl.firedFn()
+                            return end
                         end
                     end
                     if grp.ctype == "mouse" then
@@ -4033,18 +4429,13 @@
                 ms.bind.rebindSystem()
             end
 
-            -- Suppress a handwritten macro "deleted" from the shell UI. Rather
-            -- than edit ms_macros.lua on disk, park the id: disable it, unbind it
-            -- from the live binds (rebind skips suppressed ids), and persist so it
-            -- stays gone across reloads. _buildMacroList hides suppressed ids, so
-            -- the row leaves the list too. Returns true if it was suppressed.
             ms.suppressMacro = function(id)
                 if type(id) ~= "string" or id == "" then return false end
                 local def = ms.registry._defs and ms.registry._defs[id]
                 if not def or def.system then return false end
                 ms._suppressedMacros = ms._suppressedMacros or {}
                 ms._suppressedMacros[id] = true
-                ms.binds[id] = false          -- also carries as enabled=false in save
+                ms.binds[id] = false
                 if ms.bind and ms.bind.rebind then pcall(ms.bind.rebind) end
                 if ms.saveSettings then pcall(ms.saveSettings) end
                 return true
@@ -4076,7 +4467,8 @@
                             local ok, err = coroutine.resume(co)
                             if not ok then print("ms.systemBind error: " .. tostring(err)) end
                         end)
-                        if tap then ms._systemBindHandles[id] = tap; tap:start() end
+                        if tap then ms._systemBindHandles[id] = tap
+                        tap:start() end
                     elseif c.type == "mouse" then
                         ms._systemBindHandles[id] = ms.mouse(c.button, false, function()
                             if not ms._targetActive and not ms._isSafeZone() then return end
@@ -4112,10 +4504,12 @@
                     if cfg.type == "mouse" then return "mouse:" .. tostring(cfg.button) end
                     if cfg.type == "scroll" then return "scroll:" .. (cfg.direction or "up") end
                     if cfg.type == "gamepad" then return "gamepad:" .. (cfg.button or "?") end
-                    local mods = {}; for _, m in ipairs(cfg.mods or {}) do table.insert(mods, m) end
+                    local mods = {}
+                    for _, m in ipairs(cfg.mods or {}) do table.insert(mods, m) end
                     table.sort(mods)
                     if cfg.type == "combo" then
-                        local ks = {}; for _, k in ipairs(cfg.keys or {}) do ks[#ks+1] = k end
+                        local ks = {}
+                        for _, k in ipairs(cfg.keys or {}) do ks[#ks+1] = k end
                         table.sort(ks)
                         return "combo:" .. table.concat(mods, ",") .. ":" .. table.concat(ks, "+")
                     end
@@ -4138,7 +4532,12 @@
                 return nil
             end
 
-            local _tpModMap = {shift=56, ctrl=59, alt=58, cmd=55}
+            local _tpModMap = {
+                shift=56,
+                ctrl=59,
+                alt=58,
+                cmd=55,
+            }
 
             if not ms._trackpadLeftListener then
                 local leftPhysicallyHeld = false
@@ -4208,12 +4607,11 @@
         -- END 9. Bind System & Settings Panel --
 
         -- 10. Event Bus (ms.bus) --
-            -- Moved to before MsDevTools loads (section 0) so spoons can register handlers.
         -- END 10. Event Bus (ms.bus) --
 
         -- 11. Documentation Accessor (ms.docs) --
             do
-                local _docsCache = nil  -- { [sectionName] = sectionText, ... }
+                local _docsCache = nil
                 local _docsPath = os.getenv("HOME") .. "/.hammerspoon/data/DOCS_MAC.md"
 
                 local function _parseDocs()
@@ -4287,11 +4685,9 @@
                             pcall(function() ms.shell.popOut(data.panel) end)
                         end
                     end)
-                    -- Panel close: hide the shell when any panel sends {action:"close"}
                     ms.bus.on("ui:*:close", function()
                         pcall(function() ms.shell.hide() end)
                     end)
-                    -- Clipboard: write text to system clipboard
                     ms.bus.on("ui:*:clipboard", function(_, body)
                         if body and body.text then
                             pcall(function() hs.pasteboard.setContents(body.text) end)
@@ -4321,20 +4717,12 @@
                         _macroShellEval("if(window.macroLab)macroLab.setMacroList(" .. json .. ")")
                     end)
 
-                    -- Full bind list (every registered macro plus its derived
-                    -- sub-binds, and the system binds) — the macros panel owns
-                    -- rebinding, so it pulls this on open and after any change.
                     ms.bus.on("ui:macros:listBinds", function()
                         if ms.ui and ms.ui.pushBindList then
                             pcall(ms.ui.pushBindList)
                         end
                     end)
 
-                    -- ms.bus.emit calls handlers as (topic, payload); the real
-                    -- message body is the SECOND argument. Declaring these as
-                    -- function(body) bound `body` to the topic string, so every
-                    -- payload-reading handler here silently saw nil fields —
-                    -- which is why save/getMacro/testRun/delete never worked.
                     ms.bus.on("ui:macros:getMacro", function(_, body)
                         if not body or not body.id then return end
                         local def = ms.compiler.get(body.id)
@@ -4344,14 +4732,6 @@
                         end
                     end)
 
-                    -- Push a saved/deleted macro into the live session so it is
-                    -- immediately listable, bindable and runnable without a
-                    -- reboot. write()/delete() only regenerate the .lua file on
-                    -- disk; load() re-defines the macros into the sandbox and
-                    -- ms.bind.rebind() re-applies every hotkey. The panel
-                    -- notify goes through shellReceive (invokes the JS panel
-                    -- handler); shellDispatch would post back to Lua and loop,
-                    -- so macroSaved never actually reached the panel before.
                     local function _registerAndNotify()
                         pcall(ms.compiler.load)
                         if ms.bind and ms.bind.rebind then pcall(ms.bind.rebind) end
@@ -4376,16 +4756,13 @@
                         if not body or not body.id then return end
                         local id = body.id
 
-                        -- Visual-builder macros live in the JSON pack and can be
-                        -- truly deleted. Handwritten macros come from ms_macros.lua,
-                        -- where a "delete" would mean editing source — so those are
-                        -- suppressed (disabled, unbound, hidden, persisted) instead.
                         local isVisual = false
                         if ms.compiler and ms.compiler.list then
                             local okL, ids = pcall(ms.compiler.list)
                             if okL and type(ids) == "table" then
                                 for _, vid in ipairs(ids) do
-                                    if vid == id then isVisual = true; break end
+                                    if vid == id then isVisual = true
+                                    break end
                                 end
                             end
                         end
@@ -4399,8 +4776,6 @@
                                 print("ms.compiler.deleteMacro error: " .. tostring(err))
                             end
                         elseif ms.suppressMacro and ms.suppressMacro(id) then
-                            -- suppressMacro already rebound + saved; just refresh
-                            -- the shell's macro list so the row disappears.
                             print("deleteMacro: suppressed handwritten macro '" .. tostring(id) .. "'")
                             _macroShellEval("if(window.shellReceive)shellReceive('macros','macroSaved',{})")
                             if ms.ui and ms.ui.pushBindList then pcall(ms.ui.pushBindList) end
@@ -4409,10 +4784,6 @@
                         end
                     end)
 
-                    -- Pack meta (ms.macroMeta) for the visual macro pack. The
-                    -- Binds tab reads it on open and writes it on edit; a write
-                    -- recompiles and reloads so ms.macroMeta and the loading
-                    -- screen's credits update live.
                     ms.bus.on("ui:macros:getMeta", function()
                         local ok, meta = pcall(ms.compiler.getMeta)
                         local json = hs.json.encode(ok and meta or {})
@@ -4435,39 +4806,24 @@
                         end
                     end)
 
-                    -- Test Run: compile + run the in-progress macro def once and
-                    -- report ok/err back so the panel's toast resolves instead
-                    -- of timing out. The run is async (a coroutine, like a bound
-                    -- macro), so testRun delivers its result through this
-                    -- callback when the run finishes — not a return value.
                     ms.bus.on("ui:macros:testRun", function(_, body)
                         local reported = false
                         local function report(ok, err)
                             if reported then return end
                             reported = true
-                            local res = hs.json.encode({ ok = ok and true or false, err = err or "" })
+                            local res = hs.json.encode({
+                                ok = ok and true or false,
+                                err = err or "",
+                            })
                             _macroShellEval("if(window.shellReceive)shellReceive('macros','testRunResult'," .. res .. ")")
                         end
-                        if not body then report(false, "no macro definition"); return end
+                        if not body then report(false, "no macro definition")
+                        return end
                         local callOk, cerr = pcall(ms.compiler.testRun, body, report)
-                        -- Only fires if testRun itself throws before/around
-                        -- scheduling the run; the coroutine path reports via
-                        -- `report` on its own.
                         if not callOk then report(false, tostring(cerr)) end
                     end)
 
-                    -- Record Mode: capture keystrokes, clicks and the idle gaps
-                    -- between them, pushing each as a module into the canvas.
-                    -- (Previously start/stopRecording had no handler, so the
-                    -- button toggled its own state and captured nothing.)
                     do
-                        -- opts (all supplied by the panel's record-settings menu):
-                        --   recordDelays        bool  emit ms.wait for idle gaps
-                        --   pressMode           str   "type" | "press" | "pressRelease"
-                        --   recordDrags         bool  capture mouse drags as Drag ops
-                        --   recordMouseButtons  bool  capture click-downs
-                        --   recordWindowMove    bool  capture focused-window moves
-                        --   recordWindowResize  bool  capture focused-window resizes
                         local rec = {
                             tap = nil, winFilter = nil, lastTs = nil,
                             threshold = 50, opts = {}, drag = nil, winFrames = {},
@@ -4475,15 +4831,13 @@
                         ms._macroRecord = rec
 
                         local function pushStep(action, params)
-                            local json = hs.json.encode({ action = action, params = params })
+                            local json = hs.json.encode({
+                                action = action,
+                                params = params,
+                            })
                             _macroShellEval("if(window.shellReceive)shellReceive('macros','recordStep'," .. json .. ")")
                         end
 
-                        -- Emit a wait module for the gap since the last capture,
-                        -- but only once it exceeds the threshold (sub-threshold
-                        -- gaps are noise, not intent). Skipped entirely when the
-                        -- user turns delay recording off — the clock still ticks
-                        -- so a later re-enable measures from the right instant.
                         local function maybeWait()
                             local now = hs.timer.secondsSinceEpoch()
                             if rec.opts.recordDelays ~= false and rec.lastTs then
@@ -4495,8 +4849,6 @@
                             rec.lastTs = now
                         end
 
-                        -- Ignore input that lands on the shell window itself
-                        -- (e.g. the Stop button) so it doesn't get recorded.
                         local function inShell(pt)
                             if not pt then return false end
                             local ok, frame = pcall(function()
@@ -4521,7 +4873,6 @@
                             return mods
                         end
 
-                        -- Map a raw mouse event type to the ms.Mouse button name.
                         local function buttonOf(t, et)
                             if t == et.rightMouseDown or t == et.rightMouseUp
                                 or t == et.rightMouseDragged then return "Right" end
@@ -4546,9 +4897,6 @@
                             rec.drag = nil
                             local et = hs.eventtap.event.types
 
-                            -- Build the tapped-event set from the options. keyDown
-                            -- is always on; the rest are added only when needed so
-                            -- the tap does the least work it can.
                             local mode  = rec.opts.pressMode or "type"
                             local types = { et.keyDown }
                             if mode == "pressRelease" then
@@ -4568,26 +4916,20 @@
                                 types[#types + 1] = et.otherMouseDragged
                             end
 
-                            -- Ramer–Douglas–Peucker path decimation. A recorded
-                            -- drag arrives as a dense stream (~60–120 pts/sec);
-                            -- RDP keeps only points that change the path's shape,
-                            -- so a straight swipe collapses to its endpoints while
-                            -- a curve keeps just enough to hold its form — the
-                            -- point-minimising answer to "won't this flood the
-                            -- steps list?". `granularity` is the record-options
-                            -- slider (1 coarse … 10 fine): higher → smaller
-                            -- tolerance → more points → closer to 1:1. Output is
-                            -- hard-capped so no gesture can bloat the emitted step.
                             local function resampleDrag(pts, granularity)
                                 local n = #pts
                                 if n <= 2 then return pts end
                                 local g = tonumber(granularity) or 5
                                 if g < 1 then g = 1 elseif g > 10 then g = 10 end
-                                local epsilon = 40 / g  -- gran 1 → 40px … gran 10 → 4px
+                                local epsilon = 40 / g
 
                                 local keep = {}
-                                keep[1] = true; keep[n] = true
-                                local stack = { { 1, n } }
+                                keep[1] = true
+                                keep[n] = true
+                                local stack = { {
+                                    1,
+                                    n,
+                                } }
                                 while #stack > 0 do
                                     local seg = table.remove(stack)
                                     local first, last = seg[1], seg[2]
@@ -4613,17 +4955,20 @@
                                     end
                                     if idx and maxD > epsilon then
                                         keep[idx] = true
-                                        stack[#stack + 1] = { first, idx }
-                                        stack[#stack + 1] = { idx, last }
+                                        stack[#stack + 1] = {
+                                            first,
+                                            idx,
+                                        }
+                                        stack[#stack + 1] = {
+                                            idx,
+                                            last,
+                                        }
                                     end
                                 end
 
                                 local out = {}
                                 for i = 1, n do if keep[i] then out[#out + 1] = pts[i] end end
 
-                                -- Absolute ceiling: an enormous, frantic path is
-                                -- thinned to evenly-spaced points so the emitted
-                                -- string stays bounded regardless of RDP's output.
                                 local CAP = 200
                                 if #out > CAP then
                                     local trimmed, stepN, acc = {}, #out / CAP, 1
@@ -4631,7 +4976,8 @@
                                         trimmed[i] = out[math.floor(acc + 0.5)] or out[#out]
                                         acc = acc + stepN
                                     end
-                                    trimmed[1] = out[1]; trimmed[CAP] = out[#out]
+                                    trimmed[1] = out[1]
+                                    trimmed[CAP] = out[#out]
                                     out = trimmed
                                 end
                                 return out
@@ -4641,33 +4987,25 @@
                                 local ok = pcall(function()
                                     local t = ev:getType()
 
-                                    -- ── Keyboard ──
                                     if t == et.keyDown then
                                         local key = hs.keycodes.map[ev:getKeyCode()]
                                         if type(key) ~= "string" or key == "" then return end
-                                        -- Keep the OS auto-repeat keyDowns rather
-                                        -- than dropping them: reproducing them is
-                                        -- the whole point of a "hold to spam a
-                                        -- key" recording. In type mode each repeat
-                                        -- is another ms.type; in press/pressRelease
-                                        -- it is another ms.press — a repeat keyDown
-                                        -- while the key stays held, so a text field
-                                        -- keeps typing and a game (which ignores
-                                        -- autorepeat keyDowns) still reads one
-                                        -- continuous hold. The key only lifts on the
-                                        -- keyUp below, so overlapping holds (e.g. a
-                                        -- W+A diagonal) are still captured intact.
                                         local mods = modsOf(ev)
                                         maybeWait()
                                         if mode == "press" or mode == "pressRelease" then
-                                            pushStep("ms.press", { key = key, mods = mods })
+                                            pushStep("ms.press", {
+                                                key = key,
+                                                mods = mods,
+                                            })
                                         else
-                                            pushStep("ms.type", { key = key, mods = mods })
+                                            pushStep("ms.type", {
+                                                key = key,
+                                                mods = mods,
+                                            })
                                         end
                                         return
                                     end
                                     if t == et.keyUp then
-                                        -- Only reached in pressRelease mode.
                                         local key = hs.keycodes.map[ev:getKeyCode()]
                                         if type(key) ~= "string" or key == "" then return end
                                         maybeWait()
@@ -4675,20 +5013,19 @@
                                         return
                                     end
 
-                                    -- ── Mouse down ──
                                     if t == et.leftMouseDown or t == et.rightMouseDown
                                         or t == et.otherMouseDown then
                                         local pt = ev:location()
                                         if inShell(pt) then return end
                                         local button = buttonOf(t, et)
                                         if rec.opts.recordDrags then
-                                            -- Defer: a plain click and the start of
-                                            -- a drag look identical until the mouse
-                                            -- either moves or releases in place.
                                             rec.drag = {
                                                 button = button, moved = false,
                                                 x1 = pt.x, y1 = pt.y, x2 = pt.x, y2 = pt.y,
-                                                points = { { pt.x, pt.y } },
+                                                points = { {
+                                                    pt.x,
+                                                    pt.y,
+                                                } },
                                             }
                                         elseif rec.opts.recordMouseButtons ~= false then
                                             maybeWait()
@@ -4697,20 +5034,18 @@
                                         return
                                     end
 
-                                    -- ── Mouse drag / up (drag capture only) ──
                                     if t == et.leftMouseDragged or t == et.rightMouseDragged
                                         or t == et.otherMouseDragged then
                                         if rec.drag then
                                             local pt = ev:location()
                                             rec.drag.moved = true
                                             rec.drag.x2, rec.drag.y2 = pt.x, pt.y
-                                            -- Accumulate the real path for dragPath.
-                                            -- Bounded so a very long drag can't grow
-                                            -- memory without limit; RDP + the CAP
-                                            -- thin it down at emit time anyway.
                                             local pts = rec.drag.points
                                             if pts and #pts < 4000 then
-                                                pts[#pts + 1] = { pt.x, pt.y }
+                                                pts[#pts + 1] = {
+                                                    pt.x,
+                                                    pt.y,
+                                                }
                                             end
                                         end
                                         return
@@ -4724,16 +5059,14 @@
                                         d.x2, d.y2 = pt.x, pt.y
                                         if d.moved then
                                             maybeWait()
-                                            -- Seal the path with the release point,
-                                            -- then decimate to the chosen fidelity.
-                                            if d.points then d.points[#d.points + 1] = { d.x2, d.y2 } end
+                                            if d.points then d.points[#d.points + 1] = {
+                                                d.x2,
+                                                d.y2,
+                                            } end
                                             local path = d.points
                                                 and resampleDrag(d.points, rec.opts.dragGranularity)
                                                 or nil
                                             if path and #path >= 3 then
-                                                -- A genuine curve/path → one dragPath
-                                                -- step carrying the whole gesture, so
-                                                -- the steps list never floods.
                                                 local parts = {}
                                                 for _, p in ipairs(path) do
                                                     parts[#parts + 1] = math.floor(p[1] + 0.5)
@@ -4746,8 +5079,6 @@
                                                     delayMs = 10,
                                                 })
                                             else
-                                                -- Straight two-point drag → the
-                                                -- existing compact Mouse Drag op.
                                                 pushStep("ms.Mouse", {
                                                     operation = "Drag", button = d.button,
                                                     reference = "Absolute",
@@ -4756,27 +5087,25 @@
                                                 })
                                             end
                                         elseif rec.opts.recordMouseButtons ~= false
-                                            and not inShell({ x = d.x1, y = d.y1 }) then
-                                            -- Pressed and released in place — a click.
+                                            and not inShell({
+                                                x = d.x1,
+                                                y = d.y1,
+                                            }) then
                                             maybeWait()
-                                            emitClick(d.button, { x = d.x1, y = d.y1 })
+                                            emitClick(d.button, {
+                                                x = d.x1,
+                                                y = d.y1,
+                                            })
                                         end
                                         return
                                     end
                                 end)
                                 if not ok then print("ms.macroRecord: capture error") end
-                                -- Never consume the event — the user's input must
-                                -- still reach the foreground app.
                                 return false
                             end)
 
                             if rec.tap then rec.tap:start() end
 
-                            -- Window move/resize ride a separate hs.window.filter
-                            -- rather than the eventtap: the OS reports the settled
-                            -- frame, and comparing it to the last-seen frame tells
-                            -- move from resize (a title-bar drag changes position,
-                            -- an edge drag changes size).
                             if rec.opts.recordWindowMove or rec.opts.recordWindowResize then
                                 rec.winFrames = {}
                                 local wf = hs.window.filter.new(nil)
@@ -4784,15 +5113,17 @@
                                 local function onWinChange(win)
                                     local okw = pcall(function()
                                         if not win then return end
-                                        -- The shell and any other Hammerspoon-owned
-                                        -- window (console, panels, the webview shell)
-                                        -- must not be captured — only the user's apps.
                                         local app = win:application()
                                         if app and app:name() == "Hammerspoon" then return end
                                         local id = win:id()
                                         local f  = win:frame()
                                         local prev = rec.winFrames[id]
-                                        rec.winFrames[id] = { x = f.x, y = f.y, w = f.w, h = f.h }
+                                        rec.winFrames[id] = {
+                                            x = f.x,
+                                            y = f.y,
+                                            w = f.w,
+                                            h = f.h,
+                                        }
                                         if not prev then return end
                                         local moved   = (f.x ~= prev.x) or (f.y ~= prev.y)
                                         local resized = (f.w ~= prev.w) or (f.h ~= prev.h)
@@ -4812,19 +5143,19 @@
                                     end)
                                     if not okw then print("ms.macroRecord: window capture error") end
                                 end
-                                -- Seed the baseline frames so the first move/resize
-                                -- has something to diff against.
                                 pcall(function()
                                     for _, w in ipairs(wf:getWindows()) do
                                         if w and w.id and w:id() then
                                             local f = w:frame()
-                                            rec.winFrames[w:id()] = { x = f.x, y = f.y, w = f.w, h = f.h }
+                                            rec.winFrames[w:id()] = {
+                                                x = f.x,
+                                                y = f.y,
+                                                w = f.w,
+                                                h = f.h,
+                                            }
                                         end
                                     end
                                 end)
-                                -- windowMoved covers frame changes on most
-                                -- builds; subscribe to windowsChanged too where it
-                                -- exists so an edge-only resize is never missed.
                                 local wEvents = { hs.window.filter.windowMoved }
                                 if hs.window.filter.windowsChanged then
                                     wEvents[#wEvents + 1] = hs.window.filter.windowsChanged
@@ -4837,7 +5168,8 @@
                         end
 
                         rec.stop = function()
-                            if rec.tap then rec.tap:stop(); rec.tap = nil end
+                            if rec.tap then rec.tap:stop()
+                            rec.tap = nil end
                             if rec.winFilter then
                                 pcall(function() rec.winFilter:unsubscribeAll() end)
                                 rec.winFilter = nil
@@ -4856,15 +5188,11 @@
                         end)
                     end
 
-                    -- The macro builder's "Tools" section lists every live,
-                    -- value-bearing setting so a module parameter can be wired
-                    -- to one (compiled to ms.settings.get). These are the same
-                    -- defs the Settings panel renders — both the ones the pack
-                    -- declares in ms_macros.lua and the ones authored through the
-                    -- Setting Builder — so a tool created either way is bindable.
-                    -- Cosmetic types (divider/groupLabel) and keyless/actionable
-                    -- ones carry no value to read, so they are left out.
-                    local _TOOL_TYPES = { toggle = true, slider = true, seg = true }
+                    local _TOOL_TYPES = {
+                        toggle = true,
+                        slider = true,
+                        seg = true,
+                    }
                     ms.bus.on("ui:macros:listTools", function()
                         local tools = {}
                         for _, def in ipairs(ms._userSettingDefs or {}) do
@@ -4881,16 +5209,7 @@
                                     unit    = def.unit,
                                     options = def.options,
                                     default = def.default,
-                                    -- The setting's section becomes its heading
-                                    -- in the picker's Tools list, so a plugin
-                                    -- (or pack) that tags its settings with a
-                                    -- section — e.g. the Roblox plugin's
-                                    -- section="roblox" — gets its own named
-                                    -- group there, like LUA / FLOW / UTILITIES.
                                     section = def.section,
-                                    -- Authored tools can be deleted from the
-                                    -- builder; pack-declared ones live in the
-                                    -- source file and are reference-only.
                                     source  = def.authored and "builder" or "pack",
                                 }
                             end
@@ -4903,9 +5222,6 @@
         -- END 13a. Macro Lab Shell ↔ Compiler bridge --
 
         -- 13b. Install Version (ms.version) --
-            -- MANIFEST.json is the single source of truth for the installed
-            -- version (same file MsUI.spoon and the loading screen read). The
-            -- package fingerprint records it, so it must exist before 13c.
             do
                 local f = io.open(os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json", "r")
                 if f then
@@ -4917,31 +5233,16 @@
         -- END 13b. Install Version --
 
         -- 13c. Package Format (ms.package) --
-            -- Loads after the compiler: installing a macro package that ships
-            -- ms_macros_visual.json compiles it on the way in.
             package.loaded["lib.ms_package"] = nil
             require("lib.ms_package")(ms)
         -- END 13c. Package Format --
 
         -- 13d. Package Registry (ms.registry) --
-            -- Loads after the package format: it validates index entries
-            -- against ms.package.spec, and supplies the trustLookup that
-            -- ms.package.verify takes. Fetch is deferred — boot only reads
-            -- the on-disk cache, so a missing index costs nothing here.
             package.loaded["lib.ms_registry"] = nil
             require("lib.ms_registry")(ms)
         -- END 13d. Package Registry --
 
         -- 13e. Plugins (Spoons/) --
-            -- The one place third-party code enters the process. Loading is
-            -- last on purpose: a plugin sees a finished `ms`, so it can bind,
-            -- subscribe and define settings without ordering against the
-            -- modules it depends on.
-            --
-            -- Nothing is verified here. Guardian has already refused to reach
-            -- this file if Spoons/ holds anything the ledger does not vouch
-            -- for, so by now every bundle on disk arrived through install.
-            -- This section only decides which of them the user wants running.
             package.loaded["lib.ms_plugins"] = nil
             require("lib.ms_plugins")(ms)
             ms.plugins.loadAll()
@@ -4973,19 +5274,11 @@
                                         return function(id, a, b)
                                             local opts = type(a) == "table" and a or (type(b) == "table" and b or {})
                                             opts.system = false
-                                            -- Coexistence guard: handwritten
-                                            -- ms_macros.lua loads first, so any id
-                                            -- already in the registry belongs to it
-                                            -- (or to a system bind). The visual
-                                            -- compiler load runs after, so a
-                                            -- colliding visual macro is skipped
-                                            -- rather than silently clobbering the
-                                            -- hand-authored one.
                                             if type(id) == "string"
                                                 and ms.registry and ms.registry._defs
                                                 and ms.registry._defs[id] then
                                                 print("ms.bind.define: skipping duplicate id '"
-                                                    .. id .. "' — already registered "
+                                                    .. id .. "', already registered "
                                                     .. "(handwritten macros win over visual).")
                                                 return
                                             end
@@ -4996,7 +5289,6 @@
                                 end,
                             })
                         elseif k == "fn" then
-                            -- Wrap ms.fn: expose define with user-group guardrail
                             local origFn = ms.fn
                             return setmetatable({}, {
                                 __call = function(_, fn, label)
@@ -5006,7 +5298,7 @@
                                     if bk == "define" then
                                         return function(id, fn, opts)
                                             opts = opts or {}
-                                            opts.group = "user"  -- force user group in sandbox
+                                            opts.group = "user"
                                             return ms.fn.define(id, fn, opts)
                                         end
                                     end
@@ -5031,21 +5323,11 @@
                     end,
                     __newindex = function(t, k, v)
                         if k == "macroMeta" then
-                            -- Handwritten ms_macros.lua owns the pack credits.
-                            -- The compiled visual pack (loaded afterward, in
-                            -- section 14a) also emits `ms.macroMeta = {...}`;
-                            -- when handwritten already set it, the visual write
-                            -- must yield rather than stomp the real name/author/
-                            -- version. ms.compiler.load raises _macroMetaLocked
-                            -- around the visual chunk (only when handwritten
-                            -- provided meta), so handwritten's own write — and a
-                            -- pure-visual profile with no handwritten meta —
-                            -- still lands. See [[mudscript-dual-macro-format]].
                             if ms._macroMetaLocked then return end
                             rawset(ms, k, v)
                         else
                             error("ms_macros.lua: unauthorized write to ms." .. tostring(k)
-                                .. "  —  only ms.macroMeta and ms.bind.define are permitted.", 2)
+                                .. ". Only ms.macroMeta and ms.bind.define are permitted.", 2)
                         end
                     end,
                 })
@@ -5057,9 +5339,9 @@
                     debug=true, package=true, collectgarbage=true,
                     setfenv=true, getfenv=true,
                     setmetatable=true, getmetatable=true,
-                    __ms_appWatcher=true,        -- hs.eventtap: :stop() kills app monitoring
-                    _integrityPollTimer=true,    -- hs.timer: :stop() disables integrity poll
-                    _initTimer=true,             -- hs.timer: deferred init timer
+                    __ms_appWatcher=true,
+                    _integrityPollTimer=true,
+                    _initTimer=true,
                 }
 
                 local sandbox = {
@@ -5067,7 +5349,7 @@
                     math      = math,
                     string    = string,
                     table     = table,
-                    coroutine = coroutine,  -- needed until ms.fn replaces direct coroutine use
+                    coroutine = coroutine,
                     ipairs    = ipairs,
                     pairs     = pairs,
                     next      = next,
@@ -5081,7 +5363,7 @@
                     error     = error,
                     assert    = assert,
                     print     = print,
-                    sub       = ms.sub,       -- sub-function wrapper with call stack tracking
+                    sub       = ms.sub,
                     Move        = Move,        Click       = Click,       DoubleClick  = DoubleClick,
                     TripleClick = TripleClick, Drag        = Drag,        Press        = Press,
                     Release     = Release,
@@ -5111,17 +5393,13 @@
                     end,
                     __newindex = function(t, k, v)
                         error("ms_macros.lua: cannot write global '" .. tostring(k)
-                            .. "' — use 'local' for all variables.", 2)
+                            .. "', use 'local' for all variables.", 2)
                     end,
                 })
 
                 ms._macroSandbox = sandbox
 
-                -- Preprocessor: wrap local function definitions with sub() for instrumentation
-                -- Transforms: local X = function(...) → local X = sub("X", function(...)
-                -- Finds matching end and adds closing )
                 ms._wrapMacroFunctions = function(src)
-                    -- Split source into lines
                     local srcLines = {}
                     for line in (src .. "\n"):gmatch("([^\n]*)\n") do
                         srcLines[#srcLines + 1] = line
@@ -5131,23 +5409,19 @@
                     local i = 1
                     while i <= #srcLines do
                         local line = srcLines[i]
-                        -- Match: local NAME = function(
                         local indent, name, rest = line:match("^(%s*)local%s+(%w+)%s*=%s*(function%s*%(.*)$")
                         if name and rest then
                             out[#out + 1] = indent .. 'local ' .. name .. ' = sub("' .. name .. '", ' .. rest
-                            -- Track depth to find matching end
                             local depth = 1
                             i = i + 1
                             while i <= #srcLines and depth > 0 do
                                 local l = srcLines[i]
-                                -- Count block-opening keywords
                                 for kw in l:gmatch("(%w+)") do
                                     if kw == "function" or kw == "if" or kw == "for"
                                     or kw == "while" or kw == "repeat" then
                                         depth = depth + 1
                                     end
                                 end
-                                -- Count closing keywords (skip strings)
                                 local stripped = l:gsub('"[^"]*"', '""'):gsub("'[^']*'", "''")
                                 for kw in stripped:gmatch("(%w+)") do
                                     if kw == "end" then
@@ -5157,7 +5431,6 @@
                                 if depth > 0 then
                                     out[#out + 1] = l
                                 else
-                                    -- Matching end — add closing )
                                     local endIndent = l:match("^(%s*)") or ""
                                     out[#out + 1] = endIndent .. "end)"
                                 end
@@ -5177,7 +5450,8 @@
                     if not af then
                         error("ms_macros.lua: cannot open file for security audit: " .. macrosPath)
                     end
-                    rawSrc = af:read("*all"); af:close()
+                    rawSrc = af:read("*all")
+                    af:close()
                     local auditErrs = ms.auditMacros(rawSrc)
                     if #auditErrs > 0 then
                         local msg = "ms_macros.lua failed security audit ("
@@ -5205,11 +5479,6 @@
                     error("ms_macros.lua: error during execution: " .. tostring(runErr))
                 end
 
-                -- Record whether the *handwritten* pack supplied credits. When it
-                -- did, the visual pack's own ms.macroMeta yields to it at load
-                -- (see ms.compiler.load). A profile with no handwritten meta
-                -- leaves this false, so the visual pack may still provide — and
-                -- keep updating — its own credits.
                 ms._macroMetaFromHand = ms.macroMeta ~= nil
                 if not ms.macroMeta then
                     print("Warning: ms_macros.lua did not set ms.macroMeta.")
@@ -5219,19 +5488,11 @@
                 end
                 ms.loading.pushMeta()
                 if not next(ms.registry._defs) then
-                    error("ms_macros.lua: no ms.bind.define calls found — file may be malformed.")
+                    error("ms_macros.lua: no ms.bind.define calls found, file may be malformed.")
                 end
             end
 
             -- 14a. Visual Macros (builder-authored) --
-                -- The visual builder writes data/ms_macros_visual.json and the
-                -- compiler emits data/ms_macros_visual.lua from it. That file is
-                -- loaded here — AFTER handwritten ms_macros.lua has registered —
-                -- into the same ms._macroSandbox, so builder macros and
-                -- hand-authored ones coexist. rebuild-then-load keeps the .lua in
-                -- sync with the .json; both no-op when no visual macros exist.
-                -- Never fatal: a broken visual file must not take down boot, so
-                -- both steps are pcall'd and only warn.
                 if ms.compiler and ms.compiler.paths
                     and hs.fs.attributes(ms.compiler.paths.json) then
                     local rebOk, rebErr = pcall(ms.compiler.rebuild)
@@ -5273,66 +5534,40 @@
                 ms.binds[id] = def.enabled
             end
         end
-        ms._devArchiveLimit   = 15     -- overridden by loadSettings() if previously saved
-        ms._loadComplete   = false  -- gates macro activation; set to true by _announceLoad
-        -- Gates the hotkeys, and deliberately not the same flag as above.
-        -- _loadComplete lands at the end of the boot body; the toast that tells
-        -- the user macros are loaded lands a second and a half later, and in
-        -- between the hotkeys worked with nothing on screen saying they would.
-        -- The toast is the promise, so the toast is the gate — one flag for
-        -- what the user has been told, one for what is actually wired up.
+        ms._devArchiveLimit   = 15
+        ms._loadComplete   = false
         ms._hotkeysReady   = false
-        _G._bootChoreographyStarted = false  -- reset guard for loading screen ready handshake
-        ms.loadSettings()            -- load first so importedSounds/soundAssign are available
-        ms._loadAuthoredSettings()   -- builder-authored setting defs (Tools panel)
-        ms._defineAuthoredSettings() -- register them after the pack + saved values
-        -- Custom theming off means every built-in slot sits on its default,
-        -- not just the three the loading screen needs. Settings written while
-        -- theming was on survive on disk, so this has to run on every boot
-        -- rather than only at the moment the toggle is flipped.
+        _G._bootChoreographyStarted = false
+        ms.loadSettings()
+        ms._loadAuthoredSettings()
+        ms._defineAuthoredSettings()
         if ms._customThemeDisabled then
             for sid, def in pairs(ms.soundSlotDefaults()) do
                 ms.soundAssign[sid] = def
             end
         end
-        ms._soundsDirty = true       -- force re-scan after settings (may have new importedSounds)
+        ms._soundsDirty = true
         ms._discoverSounds()
-        -- Theme loading deferred to after loading screen appears (debounce)
 
         os.remove(os.getenv("HOME") .. "/.hammerspoon/data/.ms_update_pending")
         ms.bind._registerSystemBinds()
         ms.bind.rebind()
         ms.socdApply()
-        BindValidity = 0  -- block macros during loading; _announceLoad re-enables when toasts fire
-        ms._startupSoundDone = false  -- suppresses all non-load sounds until _announceLoad runs
+        BindValidity = 0
+        ms._startupSoundDone = false
 
-        -- Loading Screen — Announce & Boot Completion --
+        -- Loading Screen Announce & Boot Completion --
             ms.loading.create()
 
             _announceLoad = function()
                 if _loadAnnounced then return end
                 _loadAnnounced = true
                 pcall(function() ms.playSlot("load") end)
-                -- Toast lead-in. This delays ONLY the announcement toasts/sound;
-                -- it must not delay the unblocking below, which gates macros,
-                -- all sound, and all alerts. Raise this freely; do NOT raise the
-                -- 0.4s body delay, which must stay under the 1.0s hard-guarantee
-                -- timer near the end of startup — otherwise, on the 7.0s fallback
-                -- path, the guarantee fires first and the body replays everything.
                 local _TOAST_LEAD = 1.0
-                -- Each announcement toast must be fully gone before the next is
-                -- sent, or their timers land on the same deadline and fire in
-                -- undefined order — the toast either overlaps the one fading out
-                -- of its slot, or briefly pushes it up a row. The toasts are 3s
-                -- apart and fadeOut runs after the hold expires, so the hold has
-                -- to leave room for it. Keep _TOAST_HOLD + fade under 3s.
                 local _TOAST_HOLD = 2.5
                 _G._loadTimers.announceBody = hs.timer.doAfter(0.4, function()
                     ms._startupSoundDone = true
                     _G._loadTimers.announce0 = hs.timer.doAfter(_TOAST_LEAD, function()
-                        -- Set here rather than a line later, so the hotkeys
-                        -- open in the same tick the toast is sent rather than
-                        -- after it has faded in.
                         ms._hotkeysReady = true
                         pcall(function() ms.playSlot("launch") end)
                         ms.alert("Macros loaded. Press \xe2\x8c\xa5 and P to open settings.", _TOAST_HOLD, true, { priority = "low" })
@@ -5350,13 +5585,11 @@
                     end)
                     ms.loading.applyTheme()
                     ms._loadComplete = true
-                    -- Load the exit curtain's page now, while nothing is
-                    -- waiting on it. Built at exit time instead, the async
-                    -- html() load is dead air between the send-off starting
-                    -- and the curtain appearing.
                     pcall(function() ms.prewarmExitCurtain() end)
-                    ms.dev.log({ type = "system", event = "startup_complete" })
-                    -- Apply Octane Mode if persisted as on
+                    ms.dev.log({
+                        type = "system",
+                        event = "startup_complete",
+                    })
                     if ms._octaneMode and ms.octane and ms.octane._apply then
                         pcall(ms.octane._apply)
                     end
@@ -5380,10 +5613,8 @@
             end
 
             _G._timers = {}
-            -- Delay loading sequence until boot animation completes (~2.9s)
             _G._timers.animGate = hs.timer.doAfter(2.9, function()
             ms.loading.update(20, "Initializing\u{2026}")
-            -- Timing for loading sequence
             local t1 = 0.3
             local t2 = 0.5
             local t3 = 0.8
@@ -5412,27 +5643,24 @@
             _G._timers[4] = hs.timer.doAfter(t3, function()
                 print("[startup] t=" .. t3 .. ": theme")
                 ms.loading.update(48, "Applying theme\u{2026}")
-                -- Apply theme in sync with themeLoaded sound
                 if ms.loading.isVisible() then
                     local themeJson = hs.json.encode(ms._theme or {})
                     pcall(function() ms.loading.eval("applyTheme(" .. themeJson .. ")") end)
                 end
                 pcall(function() ms.playSlot("themeLoaded") end)
-                -- Show profile name, creator, and version when theme loads (macros loaded by now)
                 if ms.loading.isVisible() then
-                    -- Re-push metadata now that ms_macros.lua has loaded
                     if ms.macroMeta and ms.macroMeta.name then
                         pcall(function() ms.loading.eval("setProfileName('" .. ms.macroMeta.name:gsub("'", "\\'") .. "')") end)
                     end
                     if ms.macroMeta and ms.macroMeta.author and ms.macroMeta.author ~= "" then
                         pcall(function() ms.loading.eval("setCreator('" .. ms.macroMeta.author:gsub("'", "\\'") .. "')") end)
                     end
-                    -- Push version from MANIFEST.json (same source as MsUI.spoon)
                     local _ver = (function()
                         local p = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
                         local f = io.open(p, "r")
                         if not f then return nil end
-                        local ok, m = pcall(hs.json.decode, f:read("*all")); f:close()
+                        local ok, m = pcall(hs.json.decode, f:read("*all"))
+                        f:close()
                         local base = (ok and m and m.version) or nil
                         if not base then return nil end
                         if ms._updateChannel == "testing" then
@@ -5442,7 +5670,8 @@
                                 local buildPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_build_num"
                                 local bf = io.open(buildPath, "r")
                                 local buildNum = 0
-                                if bf then buildNum = tonumber(bf:read("*all")) or 0; bf:close() end
+                                if bf then buildNum = tonumber(bf:read("*all")) or 0
+                                bf:close() end
                                 return nextVer .. "-pre." .. tostring(buildNum)
                             end
                         end
@@ -5514,17 +5743,16 @@
                 print("[startup] t=3: integrity check")
                 pcall(function()
                     if ms.integrity.check() ~= "uninitialized" then return end
-                    -- First install: try to seed from MANIFEST.json
                     local _mPath = os.getenv("HOME") .. "/.hammerspoon/MANIFEST.json"
                     local _mf    = io.open(_mPath, "r")
                     if _mf then
-                        local _ok, _manifest = pcall(hs.json.decode, _mf:read("*all")); _mf:close()
+                        local _ok, _manifest = pcall(hs.json.decode, _mf:read("*all"))
+                        _mf:close()
                         if _ok and type(_manifest) == "table"
                             and type(_manifest.sha256) == "string"
                             and #_manifest.sha256 == 64 then
                             local _cur = ms.integrity.hashFile(corePath)
                             if _cur and _cur:lower() == _manifest.sha256:lower() then
-                                -- MANIFEST matches — seal all tracked files
                                 ms.integrity.trustCurrent()
                                 return
                             end
@@ -5546,8 +5774,8 @@
             end)
 
             _G._integrityPollTimer = hs.timer.doEvery(180, function()
-                if loadfinish ~= 1 then return end  -- skip startup grace period
-                if ms._updateInProgress then return end  -- skip during updates
+                if loadfinish ~= 1 then return end
+                if ms._updateInProgress then return end
                 ms.integrity.check()
             end)
 
@@ -5555,18 +5783,9 @@
                 _G._announceTimer = hs.timer.doAfter(7.0, function()
                     _G._announceTimer = nil
                     pcall(function() _announceLoad() end)
-                    -- Hard guarantee: if _announceLoad failed or returned early,
-                    -- ensure startup flags are set so sounds/macros aren't blocked.
                     _G._announceGuardTimer = hs.timer.doAfter(1, function()
                         _G._announceGuardTimer = nil
                         ms._startupSoundDone = true
-                        -- Unconditional, unlike _loadComplete below: the toast
-                        -- that normally opens the hotkeys rides on
-                        -- _announceLoad, so a boot that got here because
-                        -- _announceLoad faulted or returned early is exactly
-                        -- the boot where the toast never came. Gating on a
-                        -- promise that was never made would leave the hotkeys
-                        -- shut for the rest of the session.
                         ms._hotkeysReady = true
                         if not ms._loadComplete then
                             ms._loadComplete = true
@@ -5576,7 +5795,7 @@
                 end)
                 notice = 1
             end
-            end) -- end animGate
-        -- END Loading Screen — Announce & Boot Completion --
+            end)
+        -- END Loading Screen Announce & Boot Completion --
     -- END Startup Executions --
 -- END Core System --

@@ -1,11 +1,11 @@
 /**
- * ToolEditor — inline parameter editor for macro tool blocks.
+ * ToolEditor, inline parameter editor for macro tool blocks.
  *
  * Opens an editable form below a selected tool block, with appropriate input
  * widgets for each parameter type (key capture, modifier chips, number spinners,
  * text inputs, dropdown selects, condition editors, array editors).
  *
- * Usage (IIFE — in ms_shell.html or other non-module contexts):
+ * Usage (IIFE, in ms_shell.html or other non-module contexts):
  *
  *   // Available as window.ToolEditor after this script loads.
  *   var editor = new ToolEditor({ canvas: toolCanvasInstance });
@@ -15,7 +15,7 @@
  * and auto-closes on click outside or Escape key.
  */
 
-// ── Shell sounds ───────────────────────────────────────────────────────
+// -- Shell sounds --
 // Hover on enter, click sound on activate. Guarded on window.playSlot: this
 // module also loads in contexts that have no sound bus, where it must no-op.
 function _sfx(el, clickSlot) {
@@ -28,7 +28,7 @@ function _sfx(el, clickSlot) {
     return el;
 }
 
-// ── Parameter Definitions ──────────────────────────────────────────────
+// -- Parameter Definitions --
 // Maps action names to their parameter schemas. Unrecognized actions fall back
 // to type inference from the actual parameter values.
 
@@ -65,14 +65,14 @@ const PARAM_DEFS = {
     "var_sub":          { name: "string", amount: "number" },
     "var_mul":          { name: "string", amount: "number" },
     "comment":          { text: "string" },
-    // Raw Lua — reuse the multiline condition/expression editor widget.
+    // Raw Lua, reuse the multiline condition/expression editor widget.
     "code":             { source: "condition" },
 };
 
 // Keys whose values should be hidden in the editor (structural, not user params).
 const STRUCTURAL_KEYS = new Set(["then", "else", "body"]);
 
-// ── Key Normalization ──────────────────────────────────────────────────
+// -- Key Normalization --
 // Must match the normalizeKey function in the function picker.
 
 function normalizeKey(e) {
@@ -112,7 +112,7 @@ function esc(s) {
     return d.innerHTML;
 }
 
-// ── CSS (injected once) ────────────────────────────────────────────────
+// -- CSS (injected once) --
 let _cssInjected = false;
 
 function injectCSS() {
@@ -121,7 +121,7 @@ function injectCSS() {
     const style = document.createElement("style");
     style.id = "tool-editor-css";
     style.textContent = `
-/* ── Step Inline Editor ──────────────────────────────────────────── */
+/* -- Step Inline Editor -- */
 .tool-editor-panel {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -172,7 +172,7 @@ function injectCSS() {
 .tool-editor-close svg { width: 12px; height: 12px; }
 .tool-editor-close svg path { stroke: var(--text); fill: none; }
 
-/* ── Form Grid ──────────────────────────────────────────────────── */
+/* -- Form Grid -- */
 .tool-editor-form {
     display: flex;
     flex-direction: column;
@@ -202,7 +202,7 @@ function injectCSS() {
     gap: 4px;
 }
 
-/* ── Text Input ─────────────────────────────────────────────────── */
+/* -- Text Input -- */
 .tool-ed-text {
     width: 100%;
     background: var(--surface2);
@@ -220,7 +220,7 @@ function injectCSS() {
 }
 .tool-ed-text:focus { border-color: var(--accent); }
 
-/* ── Value / Tool bind switch ───────────────────────────────────── */
+/* -- Value / Tool bind switch -- */
 .tool-editor-control.tool-ed-bindable { flex-wrap: wrap; }
 .tool-ed-bind-switch { display: inline-flex; border: 1px solid var(--border-dim); border-radius: var(--radius-s); overflow: hidden; }
 .tool-ed-bind-opt { background: var(--surface2); border: none; color: var(--text3); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 6px; cursor: pointer; transition: all 0.1s; }
@@ -230,7 +230,7 @@ function injectCSS() {
 .tool-ed-tool-select { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 11px; padding: 4px 7px; outline: none; cursor: pointer; box-sizing: border-box; }
 .tool-ed-tool-select:focus { border-color: var(--accent); }
 
-/* ── Number Input ───────────────────────────────────────────────── */
+/* -- Number Input -- */
 .tool-ed-number-wrap {
     display: flex;
     align-items: center;
@@ -283,7 +283,7 @@ function injectCSS() {
 .tool-ed-num-btn:last-child  { border-radius: 0 var(--radius) var(--radius) 0; border-left: none; }
 .tool-ed-num-btn:only-child  { border-radius: var(--radius); }
 
-/* ── Key Capture Button ─────────────────────────────────────────── */
+/* -- Key Capture Button -- */
 .tool-ed-key-btn {
     display: inline-flex;
     align-items: center;
@@ -320,7 +320,7 @@ function injectCSS() {
     font-style: italic;
 }
 
-/* ── Modifier Chips ─────────────────────────────────────────────── */
+/* -- Modifier Chips -- */
 .tool-ed-mods {
     display: flex;
     gap: 3px;
@@ -354,7 +354,7 @@ function injectCSS() {
     color: var(--accent-hi);
 }
 
-/* ── Select Dropdown ────────────────────────────────────────────── */
+/* -- Select Dropdown -- */
 .tool-ed-select {
     width: 100%;
     background: var(--surface2);
@@ -375,7 +375,7 @@ function injectCSS() {
 .tool-ed-select:focus { border-color: var(--accent); }
 .tool-ed-select option { background: var(--surface); color: var(--text); }
 
-/* ── Condition / Expression Editor ──────────────────────────────── */
+/* -- Condition / Expression Editor -- */
 .tool-ed-condition {
     width: 100%;
     background: var(--surface2);
@@ -398,7 +398,7 @@ function injectCSS() {
 .tool-ed-condition:focus { border-color: var(--accent); }
 .tool-ed-condition::placeholder { color: var(--text3); opacity: 1; }
 
-/* ── Array Editor ───────────────────────────────────────────────── */
+/* -- Array Editor -- */
 .tool-ed-array {
     display: flex;
     flex-direction: column;
@@ -445,7 +445,7 @@ function injectCSS() {
 }
 .tool-ed-array-add:hover { border-color: var(--accent); color: var(--text); }
 
-/* ── No-params ──────────────────────────────────────────────────── */
+/* -- No-params -- */
 .tool-ed-no-params {
     color: var(--text3);
     font-size: 11px;
@@ -461,13 +461,13 @@ function injectCSS() {
     document.head.appendChild(style);
 }
 
-// ── ToolEditor Class ───────────────────────────────────────────────────
+// -- ToolEditor Class --
 
 /**
  * @param {Object} opts
- * @param {Object} opts.canvas — ToolCanvas instance (IIFE or ES module)
- * @param {string} [opts.svgBase] — base URL for svg/ directory (default: "./svg/")
- * @param {function} [opts.onUpdate] — called after a param is updated (sid, params)
+ * @param {Object} opts.canvas, ToolCanvas instance (IIFE or ES module)
+ * @param {string} [opts.svgBase], base URL for svg/ directory (default: "./svg/")
+ * @param {function} [opts.onUpdate], called after a param is updated (sid, params)
  */
 class ToolEditor {
     constructor(opts = {}) {
@@ -506,7 +506,7 @@ class ToolEditor {
         return Array.isArray(window.msMacroTools) ? window.msMacroTools : [];
     }
 
-    // ── Hook into ToolCanvas._render ───────────────────────────────────
+    // -- Hook into ToolCanvas._render --
 
     _hookCanvasRender() {
         if (!this._canvas) return;
@@ -554,11 +554,11 @@ class ToolEditor {
         }
     }
 
-    // ── Open / Close ───────────────────────────────────────────────────
+    // -- Open / Close --
 
     /**
      * Open the editor for a given tool.
-     * @param {string} sid — tool _sid
+     * @param {string} sid, tool _sid
      */
     open(sid) {
         if (!this._canvas) return;
@@ -574,11 +574,11 @@ class ToolEditor {
         );
         if (!stepEl) return;
 
-        // Tear down any existing panel synchronously first — including the
+        // Tear down any existing panel synchronously first, including the
         // same-sid case. Previously this only ran when switching to a
         // different sid, so re-selecting the same block (or a canvas re-render
         // re-inject) overwrote this._panelEl and orphaned the old DOM node,
-        // which close() could no longer reach — leaving stacked, un-closeable
+        // which close() could no longer reach, leaving stacked, un-closeable
         // editors (see bug report). _hardClose also sweeps any strays.
         this._hardClose();
 
@@ -637,7 +637,7 @@ class ToolEditor {
     /**
      * Synchronous, unconditional teardown. Removes listeners, the tracked
      * panel, and any stray .tool-editor-panel nodes left under the canvas root
-     * by a prior re-inject — so panels can never accumulate. Unlike close(),
+     * by a prior re-inject, so panels can never accumulate. Unlike close(),
      * this does not animate; it is used when re-opening, where the old panel
      * must be gone before the new one is built.
      */
@@ -679,7 +679,7 @@ class ToolEditor {
         this._formEl  = null;
     }
 
-    // ── Build Form ─────────────────────────────────────────────────────
+    // -- Build Form --
 
     _buildForm(tool) {
         if (!this._panelEl) return;
@@ -693,7 +693,7 @@ class ToolEditor {
         title.className = "tool-editor-title";
         title.textContent = tool.action === "setting"
             ? "Shared setting"
-            : tool.action + " — parameters";
+            : tool.action + ", parameters";
         header.appendChild(title);
 
         const closeBtn = document.createElement("div");
@@ -795,7 +795,7 @@ class ToolEditor {
         return "string";
     }
 
-    // ── Build Parameter Row ────────────────────────────────────────────
+    // -- Build Parameter Row --
 
     _buildParamRow(key, def, value, sid) {
         const row = document.createElement("div");
@@ -810,7 +810,7 @@ class ToolEditor {
         control.className = "tool-editor-control";
 
         // A parameter can be wired to a tool (an authored setting) instead of a
-        // literal — the same binding the Add Module picker offers. Only value-
+        // literal, the same binding the Add Module picker offers. Only value-
         // like params qualify; keys, modifiers, arrays and raw code do not.
         const bindable = (def.type === "string" || def.type === "number"
             || def.type === "condition" || def.type === undefined);
@@ -871,7 +871,7 @@ class ToolEditor {
         return row;
     }
 
-    // The literal (non-bound) control for a parameter — the original switch.
+    // The literal (non-bound) control for a parameter, the original switch.
     _buildLiteralControl(def, key, value, sid) {
         switch (def.type) {
             case "string":    return this._createStringInput(key, value, sid);
@@ -911,19 +911,19 @@ class ToolEditor {
                 className:   "tool-ed-tool-select",
                 options:     options,
                 value:       current,
-                placeholder: "No tools — create one in Add Module",
+                placeholder: "No tools, create one in Add Module",
                 onChange:    (v) => this._updateParam(sid, key, { __toolRef: v }),
             });
             return sel;
         }
 
-        // Last-resort fallback if createSelect failed to load — a bound param
+        // Last-resort fallback if createSelect failed to load, a bound param
         // must still be editable rather than frozen.
         const sel = document.createElement("select"); // ui-lint-allow-native
         sel.className = "tool-ed-tool-select";
         if (options.length === 0) {
             const o = document.createElement("option");
-            o.value = ""; o.textContent = "No tools — create one in Add Module";
+            o.value = ""; o.textContent = "No tools, create one in Add Module";
             o.disabled = true; o.selected = true;
             sel.appendChild(o);
             sel.disabled = true;
@@ -941,7 +941,7 @@ class ToolEditor {
         return sel;
     }
 
-    // ── Input Widgets ──────────────────────────────────────────────────
+    // -- Input Widgets --
 
     /**
      * String text input.
@@ -951,7 +951,7 @@ class ToolEditor {
         inp.type = "text";
         inp.className = "tool-ed-text";
         inp.value = (value !== undefined && value !== null) ? String(value) : "";
-        inp.placeholder = key + "…";
+        inp.placeholder = key + "...";
         inp.setAttribute("spellcheck", "false");
         inp.setAttribute("autocomplete", "off");
         inp.setAttribute("autocorrect", "off");
@@ -1014,7 +1014,7 @@ class ToolEditor {
     }
 
     /**
-     * Key capture button — press any key to set.
+     * Key capture button, press any key to set.
      */
     _createKeyCapture(key, value, sid) {
         const wrap = document.createElement("div");
@@ -1027,7 +1027,7 @@ class ToolEditor {
 
         const hint = document.createElement("span");
         hint.className = "tool-ed-key-hint";
-        hint.textContent = "press a key…";
+        hint.textContent = "press a key...";
         wrap.appendChild(hint);
 
         _sfx(btn);
@@ -1046,7 +1046,7 @@ class ToolEditor {
         this._cancelCapture();
 
         btn.classList.add("capturing");
-        btn.textContent = "…";
+        btn.textContent = "...";
 
         const handler = (e) => {
             e.preventDefault();
@@ -1130,14 +1130,14 @@ class ToolEditor {
     }
 
     /**
-     * Condition / Lua expression editor — monospace textarea.
+     * Condition / Lua expression editor, monospace textarea.
      */
     _createConditionInput(key, value, sid) {
         const ta = document.createElement("textarea");
         ta.className = "tool-ed-condition";
         ta.rows = 1;
         ta.value = (value !== undefined && value !== null) ? String(value) : "";
-        ta.placeholder = "Lua expression…";
+        ta.placeholder = "Lua expression...";
         ta.setAttribute("spellcheck", "false");
         ta.setAttribute("autocomplete", "off");
         ta.setAttribute("autocorrect", "off");
@@ -1162,7 +1162,7 @@ class ToolEditor {
     }
 
     /**
-     * Array editor — add/remove items.
+     * Array editor, add/remove items.
      */
     _createArrayEditor(key, value, sid) {
         const items = Array.isArray(value) ? [...value] : [];
@@ -1225,7 +1225,7 @@ class ToolEditor {
         return wrap;
     }
 
-    // ── Update Parameter ───────────────────────────────────────────────
+    // -- Update Parameter --
 
     /**
      * Update a single parameter on the tool and notify the canvas.
@@ -1239,7 +1239,7 @@ class ToolEditor {
         this._onUpdate(sid, { [key]: value });
     }
 
-    // ── Destroy ────────────────────────────────────────────────────────
+    // -- Destroy --
 
     destroy() {
         this.close();
@@ -1247,7 +1247,7 @@ class ToolEditor {
     }
 }
 
-// ── Expose for IIFE contexts ───────────────────────────────────────────
+// -- Expose for IIFE contexts --
 if (typeof window !== "undefined") {
     window.ToolEditor = ToolEditor;
 }

@@ -1,7 +1,7 @@
     /* panel: console */
     (function() {
     "use strict";
-// ── Badge labels ────────────────────────────────────────────────
+// -- Badge labels --
             const LABELS = {
                 print: "print",
                 result: "result",
@@ -13,7 +13,7 @@
                 sound: "sound",
             };
 
-            // ── Console buildRow ────────────────────────────────────────────
+            // -- Console buildRow --
             function buildRow(entry) {
                 const type = entry.type || "print";
                 const ts = entry.ts || lp.nowTs();
@@ -55,7 +55,7 @@
                 return row;
             }
 
-            // ── Create LogPanel ─────────────────────────────────────────────
+            // -- Create LogPanel --
             const _panel = document.querySelector('.panel-console');
             const lp = createLogPanel({
                 channel: "console",
@@ -65,13 +65,13 @@
                 scrollThresh: 60,
             });
 
-            // ── Expose globals for inline handlers ──────────────────────────
+            // -- Expose globals for inline handlers --
             window._panelPauseFns['console'] = lp.togglePause;
             window.playSlot    = lp.playSlot;
             window.closePanel  = lp.closePanel;
             window.consoleApplyTheme = lp.applyTheme;
 
-            // ── Console-specific actions ────────────────────────────────────
+            // -- Console-specific actions --
             function doRun() {
                 const input = document.getElementById("code-input");
                 const code = input.value.trim();
@@ -91,7 +91,7 @@
             window.doClear = doClear;
             window._panelClearFns['console'] = doClear;
 
-            // ── First-open danger notice ────────────────────────────────────
+            // -- First-open danger notice --
             // Warn once, the first time the user opens the console, that pasted
             // code runs with full machine access. The ack now lives in
             // ms_settings.json (not localStorage): the host pushes the persisted
@@ -149,7 +149,7 @@
                 }
             }, true);
 
-            // ── Input bar: Enter to run ─────────────────────────────────────
+            // -- Input bar: Enter to run --
             document
                 .getElementById("code-input")
                 .addEventListener("keydown", (e) => {
@@ -159,7 +159,7 @@
                     }
                 });
 
-            // ── Init ────────────────────────────────────────────────────────
+            // -- Init --
             document.addEventListener("DOMContentLoaded", () => {
                 // Shell integration: register for incoming Lua pushes
                 if (typeof registerPanel === "function") {

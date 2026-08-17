@@ -2,7 +2,7 @@
     (function() {
     "use strict";
 
-    /* ── panel-plugins.js ───────────────────────────────────────────────────
+    /* -- panel-plugins.js --
      *
      * The Plugins panel: what is installed under Spoons/, whether it is
      * allowed to load, and how to take it back out.
@@ -13,7 +13,7 @@
      * status: what the user asked for (the toggle), whether the record still
      * matches what is on disk (the pill), and whether it is actually running
      * right now (the note). A plugin can be on, recorded, and still not
-     * running because it threw on load — a single "Active / Inactive" badge
+     * running because it threw on load, a single "Active / Inactive" badge
      * would hide exactly the case worth surfacing.
      *
      * There is no Browse tab. The registry client is wired and the index is
@@ -24,7 +24,7 @@
      * panel-theme.js. This panel owns only the card.
      */
 
-    // ── State ────────────────────────────────────────────────────────────
+    // -- State --
     let S = {};
 
     function ui() { return window.msUI || null; }
@@ -37,7 +37,7 @@
         window.shellPost("plugins", action, Object.assign({ action }, body || {}));
     }
 
-    // ── Status vocabulary ────────────────────────────────────────────────
+    // -- Status vocabulary --
     // Keyed on ms.package.listPlugins()'s `status`. "ok" gets no pill: the
     // normal case should be quiet, or the two that are not stop standing out.
     const STATUS = {
@@ -57,7 +57,7 @@
         },
     };
 
-    // ── Card ─────────────────────────────────────────────────────────────
+    // -- Card --
     function pluginCard(p) {
         const { h, toggle, actionBtn } = ui();
         const flagged = p.status !== "ok";
@@ -69,14 +69,14 @@
             onmouseenter: () => playSlot("hover"),
         });
 
-        // ── Identity ─────────────────────────────────────────────────────
+        // -- Identity --
         const name = h("div", { cls: "plugin-name" }, p.name || p.dir);
         const st = STATUS[p.status];
         if (st) name.appendChild(h("span", { cls: "pill " + st.pill }, st.label));
         if (!p.enabled) name.appendChild(h("span", { cls: "pill" }, "Off"));
 
         // Version, author and install date, in that order and only when known
-        // — an unrecorded plugin has none of them, and "Unknown · Unknown"
+        //, an unrecorded plugin has none of them, and "Unknown · Unknown"
         // reads as a broken panel rather than a missing record.
         const bits = [];
         if (p.version) bits.push("v" + p.version);
@@ -93,7 +93,7 @@
         );
 
         const top = h("div", { cls: "plugin-card-top" }, id);
-        // A flagged plugin's toggle is pointless — it is not going to load
+        // A flagged plugin's toggle is pointless, it is not going to load
         // either way, and offering the switch implies it might.
         if (!flagged) {
             top.appendChild(toggle(p.enabled, (e) => {
@@ -106,11 +106,11 @@
             card.appendChild(h("div", { cls: "plugin-desc" }, p.description));
         }
 
-        // ── Notes ────────────────────────────────────────────────────────
+        // -- Notes --
         // At most one, most urgent first. A modified plugin that also failed
         // to load does not need to be told twice.
         // Toggling now loads and tears down immediately, so "on but not
-        // running" is no longer a waiting state — it means the load failed.
+        // running" is no longer a waiting state, it means the load failed.
         if (st) {
             card.appendChild(h("div", { cls: "plugin-note danger" }, st.note));
         } else if (p.loadError) {
@@ -121,7 +121,7 @@
                 "Enabled, but not running. Reload to try again."));
         }
 
-        // ── Actions ──────────────────────────────────────────────────────
+        // -- Actions --
         const actions = h("div", { cls: "plugin-actions" });
         actions.appendChild(actionBtn("Remove", "danger", () =>
             send("removePlugin", { dir: p.dir, label: p.name || p.dir })));
@@ -134,7 +134,7 @@
         return card;
     }
 
-    // ── Body ─────────────────────────────────────────────────────────────
+    // -- Body --
     function build(body) {
         const { h, groupLabel, btnRow, actionBtn } = ui();
         const list = Array.isArray(S.plugins) ? S.plugins : [];
@@ -163,7 +163,7 @@
         body.appendChild(h("div", { cls: "section" },
             h("div", { cls: "section-body open", style: "padding-top:4px" },
                 btnRow(
-                    actionBtn("Import Plugin…", "", () =>
+                    actionBtn("Import Plugin...", "", () =>
                         send("importPackage", {})),
                     actionBtn("Open Folder", "", () =>
                         send("openPluginsFolder", {})),
@@ -172,7 +172,7 @@
         ));
     }
 
-    // ── Render ───────────────────────────────────────────────────────────
+    // -- Render --
     function renderPluginsPanel(state) {
         if (state) S = state;
         if (!ui()) return; // panel-settings.js hasn't published the kit yet

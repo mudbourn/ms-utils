@@ -1,8 +1,6 @@
-# MsRegistry — signed package index client
+# MsRegistry
 
-Staged rationale from `mac/lib/ms_registry.lua`. Source material for phase-4
-docs. Security invariants are flagged **[SECURITY]**; the code keeps a terse
-guard label at each site.
+Signed package index client. Security invariants are flagged **[SECURITY]**.
 
 ## What it is
 
@@ -61,6 +59,14 @@ signs `jq -c -S … > msg.bin` as-is, so the signed bytes end in `"\n"`. Strippi
 it made the message one byte short of what was signed, and RSA rejected every
 index as "bad signature" — the library then served zero entries. Do not trim;
 match the signer's bytes exactly. (See project memory: registry-signature-trailing-newline.)
+
+**Resolving jq (and other external binaries).** `hs.execute` runs with a minimal
+PATH (`/usr/bin:/bin:/usr/sbin:/sbin`) and does not load the login shell, so a
+Homebrew-only tool like jq is invisible to a bare `jq ...` call on machines that
+lack the system copy. `resolveBin` checks the common absolute locations first
+(`/usr/bin`, `/opt/homebrew/bin`, `/usr/local/bin`), then falls back to a
+login-shell `command -v` lookup so a custom Homebrew prefix is still found, and
+caches the result. (See project memory: registry-verify-needs-jq.)
 
 ## [SECURITY] Download host allowlist
 

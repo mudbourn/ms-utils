@@ -12,7 +12,13 @@ obj.license = "MIT"
 
 -- Config --
     local WS_URL    = "ws://127.0.0.1:47600"
-    local SUBSCRIBE = { "health", "hunger", "armor", "heldItem", "context" }
+    local SUBSCRIBE = {
+        "health",
+        "hunger",
+        "armor",
+        "heldItem",
+        "context",
+    }
 -- END Config --
 
 function obj:init()
@@ -34,7 +40,10 @@ function obj:init()
             if event == "open" then
                 state.connected = true
                 pcall(function()
-                    state.ws:send(hs.json.encode({ q = "subscribe", topics = SUBSCRIBE }))
+                    state.ws:send(hs.json.encode({
+                        q      = "subscribe",
+                        topics = SUBSCRIBE,
+                    }))
                 end)
             elseif event == "closed" or event == "fail" then
                 state.connected = false
@@ -76,7 +85,12 @@ function obj:init()
             timeoutMs = timeoutMs or 300
             state.nextId = state.nextId + 1
             local id = state.nextId
-            pcall(function() state.ws:send(hs.json.encode({ q = q, id = id })) end)
+            pcall(function()
+                state.ws:send(hs.json.encode({
+                    q  = q,
+                    id = id,
+                }))
+            end)
 
             local waited = 0
             while state.pending[id] == nil and waited < timeoutMs do
@@ -98,9 +112,21 @@ function obj:init()
             return state.cache[q]
         end
 
-        ms.mc.health    = function() local d = read("health"); return d and d.health end
-        ms.mc.maxHealth = function() local d = read("health"); return d and d.maxHealth end
-        ms.mc.hunger    = function() local d = read("hunger"); return d and d.food end
+        ms.mc.health = function()
+            local d = read("health")
+            return d and d.health
+        end
+
+        ms.mc.maxHealth = function()
+            local d = read("health")
+            return d and d.maxHealth
+        end
+
+        ms.mc.hunger = function()
+            local d = read("hunger")
+            return d and d.food
+        end
+
         ms.mc.heldItem  = function() return read("heldItem") end
         ms.mc.armor     = function() return read("armor") end
         ms.mc.position  = function() return read("position") end
@@ -159,9 +185,17 @@ function obj:init()
 
     -- Builder Tools --
         if ms.tools and ms.tools.define then
-            ms.tools.define({ id = "mc.health", name = "MC: Health", run = function() return ms.mc.health() end })
+            ms.tools.define({
+                id   = "mc.health",
+                name = "MC: Health",
+                run  = function() return ms.mc.health() end,
+            })
 
-            ms.tools.define({ id = "mc.hunger", name = "MC: Hunger", run = function() return ms.mc.hunger() end })
+            ms.tools.define({
+                id   = "mc.hunger",
+                name = "MC: Hunger",
+                run  = function() return ms.mc.hunger() end,
+            })
 
             ms.tools.define({
                 id   = "mc.mainDurability",

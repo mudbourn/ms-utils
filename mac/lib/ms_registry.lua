@@ -1,4 +1,4 @@
--- ms_registry — Package Registry Client --
+-- ms_registry (Package Registry Client) --
 -- Design notes, trust model & signature invariants: docs/notes/ms_registry.md
 return function(ms)
 
@@ -9,10 +9,8 @@ return function(ms)
     local CACHE_PATH    = _dataDir .. "/ms_registry_cache.json"
     local BUNDLED_PATH  = _dataDir .. "/registry_index.json"
     local FORMAT_VERSION = 1
-    local CACHE_TTL      = 6 * 60 * 60   -- seconds before refresh() refetches
+    local CACHE_TTL      = 6 * 60 * 60
 
-    -- [SECURITY] RSA-2048 index-signature public key.
-    -- Must match _publicKey in lib/ms_guardian.lua and ms._updatePublicKey.
     local PUBLIC_KEY = [[
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pyxWISHUScKsmK0fyqA
@@ -25,21 +23,22 @@ YQIDAQAB
 -----END PUBLIC KEY-----
 ]]
 
-    -- Shared table (bind registry lives here too) — extend in place, never
-    -- reassign, or every bind definition is dropped.
     ms.registry = ms.registry or {}
 
-    -- `_index` is never nil (always the empty shape) so readers need no guard.
     local function emptyIndex()
-        return { formatVersion = FORMAT_VERSION, generated = nil, entries = {} }
+        return {
+            formatVersion = FORMAT_VERSION,
+            generated = nil,
+            entries = {},
+        }
     end
 
     local _index     = emptyIndex()
     local _byId      = {}
     local _byHash    = {}
-    local _signed    = false      -- index verified against PUBLIC_KEY
-    local _fetchedAt = nil        -- os.time() of the bytes currently loaded
-    local _source    = "none"     -- "network" | "cache" | "bundled" | "none"
+    local _signed    = false
+    local _fetchedAt = nil
+    local _source    = "none"
     local _error     = nil
     local _loading   = false
 
@@ -49,7 +48,8 @@ YQIDAQAB
         local function readFile(path)
             local f = io.open(path, "r")
             if not f then return nil end
-            local body = f:read("*all"); f:close()
+            local body = f:read("*all")
+            f:close()
             return body
         end
 
@@ -57,7 +57,8 @@ YQIDAQAB
             hs.execute("mkdir -p " .. sq(_dataDir))
             local f = io.open(path, "w")
             if not f then return false end
-            f:write(body); f:close()
+            f:write(body)
+            f:close()
             return true
         end
 
@@ -71,13 +72,11 @@ YQIDAQAB
             return type(s) == "string" and #s == 64 and s:match("^%x+$") ~= nil
         end
 
-        -- [SECURITY] Only hosts we publish from; an index entry can't redirect
-        -- the downloader elsewhere.
         local ALLOWED_HOSTS = {
-            ["github.com"]                = true,
+            ["github.com"]                    = true,
             ["objects.githubusercontent.com"] = true,
-            ["raw.githubusercontent.com"] = true,
-            ["api.github.com"]            = true,
+            ["raw.githubusercontent.com"]     = true,
+            ["api.github.com"]                = true,
         }
 
         local function urlAllowed(url)
@@ -90,18 +89,16 @@ YQIDAQAB
     -- END Helpers --
 
     -- Signature --
-        -- Resolve an external binary to an absolute path, cached. hs.execute
-        -- runs with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) — it does
-        -- NOT load the login shell — so a Homebrew-only tool like jq is invisible
-        -- to a bare `jq …` call on machines that lack the system copy. Check the
-        -- common absolute locations first, then fall back to a login-shell
-        -- lookup so a custom Homebrew prefix is still found. Returns a path or nil.
         local _binCache = {}
         local function resolveBin(name, candidates)
             if _binCache[name] ~= nil then return _binCache[name] or nil end
             for _, p in ipairs(candidates) do
                 local f = io.open(p, "r")
-                if f then f:close(); _binCache[name] = p; return p end
+                if f then
+                    f:close()
+                    _binCache[name] = p
+                    return p
+                end
             end
             local out = hs.execute("command -v " .. name .. " 2>/dev/null", true)
             out = out and out:gsub("%s+$", "") or ""
@@ -109,19 +106,12 @@ YQIDAQAB
             return _binCache[name] or nil
         end
 
-        -- [SECURITY] Rebuild the signer's exact bytes with `jq -c -S` (key-
-        -- sorted); hs.json.encode alone won't — it does not sort keys.
-        -- Returns (ok, reason). A nil reason on failure means "not signed";
-        -- a string reason (e.g. jq missing) is a surfaceable, actionable error.
         local function verifySignature(doc)
             if type(doc) ~= "table" then return false end
             if type(doc.signature) ~= "string" or doc.signature == "" then
                 return false
             end
 
-            -- [SECURITY] `generated` must be non-empty: a nil is dropped by
-            -- hs.json.encode but written as null by the signer, so the bytes
-            -- diverge and every index reads as a bad signature.
             local payload = {
                 formatVersion = doc.formatVersion,
                 generated     = doc.generated,
@@ -130,7 +120,11 @@ YQIDAQAB
             local okEncode, unsorted = pcall(hs.json.encode, payload)
             if not okEncode or not unsorted then return false end
 
-            local jq = resolveBin("jq", { "/usr/bin/jq", "/opt/homebrew/bin/jq", "/usr/local/bin/jq" })
+            local jq = resolveBin("jq", {
+                "/usr/bin/jq",
+                "/opt/homebrew/bin/jq",
+                "/usr/local/bin/jq",
+            })
             if not jq then
                 return false, "jq is required to verify the registry. Install it with:  brew install jq"
             end
@@ -140,8 +134,6 @@ YQIDAQAB
             local sortedOut = hs.execute(sq(jq) .. " -c -S '.' " .. sq(sortSrc) .. " 2>/dev/null")
             os.remove(sortSrc)
 
-            -- [SECURITY] Verify the jq output VERBATIM, including its trailing
-            -- newline — the signer signs those exact bytes. Do not trim.
             local minified = sortedOut
             if not minified or minified == "" or minified == "\n" then return false end
 
@@ -170,8 +162,6 @@ YQIDAQAB
     -- END Signature --
 
     -- Parse --
-        -- A bad row rejects the whole document (fail loud, not a silent drop).
-        -- Returns nil plus a reason naming the offending row.
         local function normalise(raw, i)
             local function bad(why)
                 return nil, "entry #" .. tostring(i) .. " (" ..
@@ -195,15 +185,11 @@ YQIDAQAB
                 url         = raw.url,
                 size        = tonumber(raw.size) or nil,
                 requires    = type(raw.requires) == "string" and raw.requires or nil,
-                -- Keep a profile row's lightweight components summary verbatim.
                 components  = type(raw.components) == "table" and raw.components or nil,
-                -- Anything not explicitly marked author-published is community.
                 trust       = raw.trust == "trusted" and "trusted" or "community",
             }
         end
 
-        -- Installs `doc` as the live index. Returns false (leaving the previous
-        -- index in place) if the document is not a usable, signed index.
         local function adopt(doc, source, requireSignature)
             if type(doc) ~= "table" or type(doc.entries) ~= "table" then
                 return false, "Malformed index."
@@ -221,7 +207,6 @@ YQIDAQAB
             for i, raw in ipairs(doc.entries) do
                 local e, why = normalise(raw, i)
                 if not e then return false, why end
-                -- Duplicate id/hash is ambiguous about trust — reject, don't order.
                 if byId[e.id] then
                     return false, "entry #" .. i .. ": duplicate id " .. e.id
                 end
@@ -233,7 +218,7 @@ YQIDAQAB
                 byHash[e.sha256]      = e
             end
 
-            _index     = {
+            _index = {
                 formatVersion = FORMAT_VERSION,
                 generated     = doc.generated,
                 entries       = entries,
@@ -255,7 +240,6 @@ YQIDAQAB
     -- END Parse --
 
     -- Load --
-        -- Cache first, then the bundled copy; both signature-checked, failures silent.
         local function loadLocal()
             local cached = decode(readFile(CACHE_PATH))
             if cached and adopt(cached, "cache", true) then return true end
@@ -274,8 +258,6 @@ YQIDAQAB
     -- END Load --
 
     -- Public: refresh --
-        -- opts = { force = bool }   force refetches inside the TTL.
-        -- cb(ok, err) always fires exactly once.
         ms.registry.refresh = function(opts, cb)
             if type(opts) == "function" then opts, cb = {}, opts end
             opts = opts or {}
@@ -297,7 +279,6 @@ YQIDAQAB
             _loading = true
             hs.http.asyncGet(INDEX_URL, nil, function(code, body, _)
                 if code ~= 200 then
-                    -- Network failure is not fatal; keep serving what we had.
                     _error = "Could not reach the registry (HTTP " .. tostring(code) .. ")."
                     if #_index.entries == 0 then loadLocal() end
                     return done(false, _error)
@@ -323,7 +304,6 @@ YQIDAQAB
     -- END refresh --
 
     -- Public: read --
-        -- opts = { type = "theme", query = "substring" }
         ms.registry.list = function(opts)
             opts = opts or {}
             local q = type(opts.query) == "string" and opts.query:lower() or nil
@@ -341,22 +321,18 @@ YQIDAQAB
             return out
         end
 
-        ms.registry.get  = function(id)   return type(id)   == "string" and _byId[id] or nil end
+        ms.registry.get = function(id) return type(id) == "string" and _byId[id] or nil end
 
         ms.registry.find = function(hash)
             if not isHash(hash) then return nil end
             return _byHash[hash:lower()]
         end
 
-        -- trustLookup for ms.package.verify:
-        -- (hash, manifest) -> "trusted" | "community" | "unsigned". Never nil.
         ms.registry.trustLookup = function(hash, manifest)
             if not _signed then return "unsigned" end
             local entry = ms.registry.find(hash)
             if not entry then return "unsigned" end
 
-            -- [SECURITY] The index vouches for a hash under a declared type;
-            -- a package claiming another type is not what was listed.
             if type(manifest) == "table" and manifest.type and manifest.type ~= entry.type then
                 return "unsigned"
             end
@@ -364,7 +340,6 @@ YQIDAQAB
             return entry.trust
         end
 
-        -- Everything D's tab needs to render a state, in one call.
         ms.registry.status = function()
             return {
                 state     = _loading and "loading" or (#_index.entries > 0 and "ready" or "empty"),
@@ -379,8 +354,6 @@ YQIDAQAB
     -- END read --
 
     -- Public: download --
-        -- Fetch an entry's binary to a temp path, hash-verify against the index,
-        -- and hand back the path (does not install). cb(path, err) — one non-nil.
         ms.registry.download = function(idOrEntry, cb)
             local done = function(path, err)
                 if type(cb) == "function" then pcall(cb, path, err) end
@@ -400,7 +373,8 @@ YQIDAQAB
                 local path = tmpPath("dl") .. ".mspkg"
                 local f = io.open(path, "wb")
                 if not f then return done(nil, "Could not write the download.") end
-                f:write(body); f:close()
+                f:write(body)
+                f:close()
 
                 local out = hs.execute("shasum -a 256 " .. sq(path) .. " 2>/dev/null")
                 local got = (out and #out >= 64) and out:sub(1, 64):lower() or nil
@@ -415,7 +389,6 @@ YQIDAQAB
     -- END download --
 
     -- Boot --
-        -- Load disk now so trustLookup answers immediately; refresh is silent.
         loadLocal()
     -- END Boot --
 

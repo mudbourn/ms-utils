@@ -1,17 +1,17 @@
     (function() {
     "use strict";
 
-    /* ── ui-select.js ──────────────────────────────────────────────────── */
+    /* -- ui-select.js -- */
 /**
- * createSelect — themed dropdown, the shell's replacement for <select>.
+ * createSelect, themed dropdown, the shell's replacement for <select>.
  *
  * A native <select> is only half-themeable: the closed control takes CSS, but
  * the *open* popup is drawn by macOS and no stylesheet reaches it, so it breaks
  * out of the shell's look mid-interaction. This is the control panel-macros.js
  * grew to avoid that, lifted out so the other surfaces can stop reinventing it.
  *
- * It presents the surface the native element did — `.value`, an "options"
- * setter, and a "change" event — so a replacement is a swap, not a rewrite.
+ * It presents the surface the native element did, `.value`, an "options"
+ * setter, and a "change" event, so a replacement is a swap, not a rewrite.
  *
  * Usage:
  *
@@ -29,11 +29,11 @@
  * so popout windows that never load the sound bridge behave normally.
  */
 
-// ── Styles ───────────────────────────────────────────────────────────────
+// -- Styles --
 // Travels with the module: the popout windows (ms_keys, ms_window) do not
 // load the shell's stylesheet, and this control has to look the same in both.
 // Selectors match the .macro-select names already in ms_shell.html so the two
-// cannot drift apart visually — that file's copy is now the duplicate, kept
+// cannot drift apart visually, that file's copy is now the duplicate, kept
 // only so existing markup keeps rendering while it is migrated.
 const SELECT_CSS = `
 .macro-select { position: relative; display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 4px 8px; outline: none; font-family: inherit; cursor: pointer; min-width: 120px; }
@@ -52,7 +52,7 @@ const SELECT_CSS = `
 .macro-select-menu::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
 `;
 
-// Idempotent — safe to call from every panel that uses a select.
+// Idempotent, safe to call from every panel that uses a select.
 function injectSelectStyles(doc) {
     doc = doc || document;
     if (doc.getElementById("ui-select-css")) return;
@@ -62,7 +62,7 @@ function injectSelectStyles(doc) {
     (doc.head || doc.documentElement).appendChild(style);
 }
 
-// ── Factory ──────────────────────────────────────────────────────────────
+// -- Factory --
 function createSelect(opts) {
     opts = opts || {};
     injectSelectStyles(opts.doc);
@@ -82,7 +82,7 @@ function createSelect(opts) {
     // The shell's chevdown SVG where it is reachable, the glyph where it is
     // not: ICONS lives in ms_shell.html, and the popout windows this module
     // also serves never load it. Same reason SELECT_CSS travels with the
-    // module — the control has to render in both documents.
+    // module, the control has to render in both documents.
     if (window.ICONS && window.ICONS.chevdown && typeof window.icon === "function") {
         arrow.innerHTML = window.icon("chevdown");
     } else {
@@ -131,7 +131,7 @@ function createSelect(opts) {
     // the control.
     //
     // Absolute positioning keeps it in the panel's scrolling body, and that
-    // body clips — so a dropdown near the bottom of a panel had its list cut
+    // body clips, so a dropdown near the bottom of a panel had its list cut
     // off by the panel edge rather than overlapping it. Nothing in the panel
     // stack can be given `overflow: visible` to fix that: the scroll is the
     // point. `fixed` takes the menu out of the clip entirely.
@@ -195,7 +195,7 @@ function createSelect(opts) {
         render();
     };
 
-    // Assignment sets without firing "change" — same as the native element,
+    // Assignment sets without firing "change", same as the native element,
     // and consumers rely on it to sync the control to external state.
     Object.defineProperty(root, "value", {
         get: () => _value,
@@ -211,7 +211,7 @@ function createSelect(opts) {
         play("interact");
         root.classList.add("open");
         // After the class, so the menu has been laid out and scrollHeight is
-        // real — measuring a display:none element gives zero and every menu
+        // real, measuring a display:none element gives zero and every menu
         // would open downward.
         place();
     });

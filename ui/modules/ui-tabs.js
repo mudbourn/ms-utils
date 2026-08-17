@@ -1,15 +1,15 @@
     (function() {
     "use strict";
 
-    /* ── ui-tabs.js ────────────────────────────────────────────────────── */
+    /* -- ui-tabs.js -- */
 /**
- * createTabs — shared tab-strip factory for mudscript panels.
+ * createTabs, shared tab-strip factory for mudscript panels.
  *
  * Every tabbed surface had its own copy of the same switchTab(): toggle
  * .active on the buttons, toggle .active on the sections, then do one
  * panel-specific thing afterwards. This is that, once.
  *
- * Tabs are for *expansion* — a panel grows new surface. They are not for
+ * Tabs are for *expansion*, a panel grows new surface. They are not for
  * chopping a panel's existing content into pieces.
  *
  * Usage:
@@ -24,11 +24,11 @@
  *
  *   window.switchTab = tabs.switch;
  *
- * The two key functions must agree on the same vocabulary of tab names —
+ * The two key functions must agree on the same vocabulary of tab names ,
  * a button and its section are paired by the string they both return.
  */
 
-// ── Styles ───────────────────────────────────────────────────────────────
+// -- Styles --
 // The canonical tab CSS. Themed surfaces pull their colours from the same
 // CSS variables the rest of the UI uses, so this travels with the module
 // rather than being retyped per page.
@@ -46,7 +46,7 @@ const TABS_CSS = `
 .tab-section.active { display: flex; }
 `;
 
-// Idempotent — safe to call from every panel that uses tabs.
+// Idempotent, safe to call from every panel that uses tabs.
 function injectTabStyles(doc) {
     doc = doc || document;
     if (doc.getElementById("ui-tabs-css")) return;
@@ -56,7 +56,7 @@ function injectTabStyles(doc) {
     (doc.head || doc.documentElement).appendChild(style);
 }
 
-// ── Factory ──────────────────────────────────────────────────────────────
+// -- Factory --
 function createTabs(opts) {
     opts = opts || {};
 
