@@ -11,6 +11,14 @@
 #   bash mac/bin/registry_publish.sh aurora.mspkg --dry-run      # print the row, touch nothing
 #   bash mac/bin/registry_publish.sh aurora.mspkg --no-upload    # asset already uploaded
 #
+# A .spoon plugin bundle can be published directly — the script packs it into a
+# temporary plugin .mspkg (type "plugin", files under Spoons/) and publishes
+# that. Metadata is sniffed from the Spoon's init.lua (version/name/author/
+# homepage) and can be overridden per field:
+#
+#   bash mac/bin/registry_publish.sh MyPlugin.spoon --id my-plugin
+#   bash mac/bin/registry_publish.sh MyPlugin.spoon --id my-plugin --version 1.2.0 --author you
+#
 # Re-running on a package whose id is already listed UPDATES that entry —
 # re-uploads the asset and refreshes sha256/size/version/… from the new bytes.
 # That is the normal way to ship a new version; no flag is needed.
@@ -44,23 +52,34 @@ DO_UPLOAD=true
 DO_SIGN=false
 DRY_RUN=false
 KEY_FILE=""
+# Metadata overrides, only used when packing a .spoon (a .mspkg carries its own).
+P_NAME=""
+P_VERSION=""
+P_AUTHOR=""
+P_WEBSITE=""
+P_DESCRIPTION=""
 
-usage() { sed -n '2,33p' "$0"; }
+usage() { sed -n '2,41p' "$0"; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --id)       ID="${2:-}"; shift 2 ;;
-        --repo)     REPO="${2:-}"; shift 2 ;;
-        --release)  TAG="${2:-}"; shift 2 ;;
-        --trust)    TRUST="${2:-}"; shift 2 ;;
+        --id)        ID="${2:-}"; shift 2 ;;
+        --repo)      REPO="${2:-}"; shift 2 ;;
+        --release)   TAG="${2:-}"; shift 2 ;;
+        --trust)     TRUST="${2:-}"; shift 2 ;;
+        --name)      P_NAME="${2:-}"; shift 2 ;;
+        --version)   P_VERSION="${2:-}"; shift 2 ;;
+        --author)    P_AUTHOR="${2:-}"; shift 2 ;;
+        --website)   P_WEBSITE="${2:-}"; shift 2 ;;
+        --description) P_DESCRIPTION="${2:-}"; shift 2 ;;
         --no-upload) DO_UPLOAD=false; shift ;;
-        --sign)     DO_SIGN=true; shift ;;
-        --key)      KEY_FILE="${2:-}"; shift 2 ;;
-        --dry-run)  DRY_RUN=true; shift ;;
-        --replace)  shift ;;   # accepted for muscle memory; updating is now the default
-        -h|--help)  usage; exit 0 ;;
-        -*)         echo "ERROR: unknown argument '$1'"; exit 2 ;;
-        *)          [ -z "$PKG" ] && PKG="$1" || { echo "ERROR: only one package at a time (got extra '$1')."; exit 2; }; shift ;;
+        --sign)      DO_SIGN=true; shift ;;
+        --key)       KEY_FILE="${2:-}"; shift 2 ;;
+        --dry-run)   DRY_RUN=true; shift ;;
+        --replace)   shift ;;   # accepted for muscle memory; updating is now the default
+        -h|--help)   usage; exit 0 ;;
+        -*)          echo "ERROR: unknown argument '$1'"; exit 2 ;;
+        *)           [ -z "$PKG" ] && PKG="$1" || { echo "ERROR: only one package at a time (got extra '$1')."; exit 2; }; shift ;;
     esac
 done
 
@@ -69,11 +88,80 @@ command -v jq     >/dev/null || { echo "ERROR: jq is required.";     exit 1; }
 command -v unzip  >/dev/null || { echo "ERROR: unzip is required.";  exit 1; }
 command -v shasum >/dev/null || { echo "ERROR: shasum is required."; exit 1; }
 [ -n "$PKG" ]     || { echo "ERROR: no package given."; usage; exit 2; }
-[ -f "$PKG" ]     || { echo "ERROR: package not found: $PKG"; exit 1; }
 [ -f "$INDEX" ]   || { echo "ERROR: index not found at $INDEX"; exit 1; }
-case "$PKG" in *.mspkg) ;; *) echo "ERROR: not a .mspkg file: $PKG"; exit 1 ;; esac
 [ "$TRUST" = "trusted" ] || [ "$TRUST" = "community" ] \
     || { echo "ERROR: --trust must be 'trusted' or 'community'."; exit 1; }
+
+# ── Accept a .spoon: pack it into a temporary plugin .mspkg ───────────────────
+# A .spoon is a Spoon bundle *directory*, not a typed package, so there is no
+# mspkg.json to read. Build one here (type "plugin", files staged under Spoons/,
+# each hashed into the contents map) exactly as ms.package.pack would, then let
+# the rest of the script publish that .mspkg. A real .mspkg skips all of this.
+case "$PKG" in
+    *.spoon)
+        [ -d "$PKG" ]              || { echo "ERROR: a .spoon must be a Spoon bundle directory: $PKG"; exit 1; }
+        command -v zip >/dev/null  || { echo "ERROR: zip is required to pack a .spoon."; exit 1; }
+
+        SPOON_DIR="${PKG%/}"                    # strip any trailing slash
+        SPOON_NAME="$(basename "$SPOON_DIR")"   # Foo.spoon
+        SPOON_BASE="${SPOON_NAME%.spoon}"       # Foo
+        INIT="$SPOON_DIR/init.lua"
+
+        # Metadata: --flags win, else sniff the Spoon's init.lua, else a default.
+        sniff() {  # $1 = lua field (version/name/author/homepage) -> quoted value
+            [ -f "$INIT" ] || return 0
+            grep -oE "\\.$1[[:space:]]*=[[:space:]]*\"[^\"]*\"" "$INIT" 2>/dev/null \
+                | head -1 | sed -E 's/.*"([^"]*)".*/\1/' || true
+        }
+        PK_NAME="${P_NAME:-$(sniff name)}";           PK_NAME="${PK_NAME:-$SPOON_BASE}"
+        PK_VERSION="${P_VERSION:-$(sniff version)}";  PK_VERSION="${PK_VERSION:-1.0.0}"
+        PK_AUTHOR="${P_AUTHOR:-$(sniff author)}"
+        PK_WEBSITE="${P_WEBSITE:-$(sniff homepage)}"
+        PK_DESCRIPTION="$P_DESCRIPTION"
+
+        TMPROOT="$(mktemp -d)"
+        trap 'rm -rf "$TMPROOT"' EXIT
+        STAGE="$TMPROOT/stage"
+        mkdir -p "$STAGE/Spoons"
+        cp -R "$SPOON_DIR" "$STAGE/Spoons/$SPOON_NAME"
+        find "$STAGE/Spoons/$SPOON_NAME" \( -name '.DS_Store' -o -name '._*' \) -delete 2>/dev/null || true
+
+        # contents: { "Spoons/Foo.spoon/rel": sha256 } — the client re-verifies
+        # each of these on install, so the hashes must match the staged bytes.
+        CONTENTS="$(cd "$STAGE" && find Spoons -type f | LC_ALL=C sort | while IFS= read -r rel; do
+            h="$(shasum -a 256 "$rel" | cut -c1-64 | tr '[:upper:]' '[:lower:]')"
+            printf '%s\t%s\n' "$rel" "$h"
+        done | jq -R -s 'split("\n") | map(select(length > 0) | split("\t")) | map({(.[0]): .[1]}) | add // {}')"
+        [ "$(printf '%s' "$CONTENTS" | jq 'length')" != "0" ] \
+            || { echo "ERROR: $SPOON_NAME has no files to pack."; exit 1; }
+
+        ARCH="$(uname -m | tr -d '[:space:]')"
+        jq -n \
+            --arg name "$PK_NAME" --arg version "$PK_VERSION" \
+            --arg author "$PK_AUTHOR" --arg website "$PK_WEBSITE" \
+            --arg description "$PK_DESCRIPTION" --arg arch "$ARCH" \
+            --argjson contents "$CONTENTS" '
+            {formatVersion: 1, type: "plugin", name: $name, version: $version}
+            + (if $author      != "" then {author: $author}          else {} end)
+            + (if $website     != "" then {website: $website}         else {} end)
+            + (if $description != "" then {description: $description} else {} end)
+            + {created: (now | todate),
+               platform: {os: "macos", arch: $arch, mudscript: "unknown"},
+               contents: $contents}
+        ' > "$STAGE/mspkg.json"
+
+        MSPKG="$TMPROOT/$SPOON_BASE.mspkg"
+        ( cd "$STAGE" && zip -qq -r -X "$MSPKG" . )
+        [ -f "$MSPKG" ] || { echo "ERROR: could not build .mspkg from $SPOON_NAME."; exit 1; }
+        echo "Packed $SPOON_NAME → plugin .mspkg (v$PK_VERSION)."
+        PKG="$MSPKG"
+        ;;
+    *.mspkg)
+        [ -f "$PKG" ] || { echo "ERROR: package not found: $PKG"; exit 1; }
+        ;;
+    *)
+        echo "ERROR: not a .mspkg or .spoon: $PKG"; exit 1 ;;
+esac
 
 # GitHub rewrites spaces (and some other characters) in an uploaded asset's
 # name, which silently desyncs the download URL from the real asset — a URL
@@ -134,14 +222,15 @@ SHA="$(shasum -a 256 "$PKG" | cut -c1-64 | tr '[:upper:]' '[:lower:]')"
 SIZE="$(wc -c < "$PKG" | tr -d ' ')"
 
 # ── Resolve OWNER/REPO for the asset URL ─────────────────────────────────────
-if [ -z "$REPO" ]; then
-    URL="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
-    # Handles git@host:owner/repo.git, ssh://…/owner/repo, https://…/owner/repo
-    REPO="$(printf '%s' "$URL" | sed -E 's#\.git$##; s#^.*[:/]([^/]+/[^/]+)$#\1#')"
-fi
+# The registry index and its release assets live in mudbourn/mudscript (this is
+# the repo registry_sign_ci.sh signs and the client fetches from). Do NOT derive
+# it from the local git origin: mudscript is checked out inside ms-utils, so the
+# origin is mudbourn/ms-utils and every asset URL would point at the wrong repo.
+# Default to the canonical repo; --repo still overrides for a one-off.
+REPO="${REPO:-mudbourn/mudscript}"
 case "$REPO" in
     */*) ;;
-    *) echo "ERROR: could not determine owner/repo — pass --repo owner/name."; exit 1 ;;
+    *) echo "ERROR: invalid --repo '$REPO' — expected owner/name."; exit 1 ;;
 esac
 
 ASSET_URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
