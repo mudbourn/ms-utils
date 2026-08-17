@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+/**
+ * ui-lint — guards the shell UI against two recurring regressions:
+ *
+ *   1. Hardcoded theme values. Component modules must read colors and fonts
+ *      from CSS variables (var(--accent), var(--font-mono), …), never bake in
+ *      literals. A literal only looks right on the theme it was copied from —
+ *      e.g. rgba(196,26,26,…) is the OLD default red accent and renders wrong
+ *      on every custom theme. Fonts likewise: "SF Mono", "Menlo", … ignore
+ *      the user's --font-mono.
+ *
+ *   2. Native macOS controls. A native <select>, confirm()/alert()/prompt(),
+ *      or an OS-chrome input (type=date/time/color/file) is drawn by macOS in
+ *      its own style and ignores the theme — and a native modal can sit behind
+ *      the always-on-top shell and softlock. Use createSelect() and the shell's
+ *      own modal instead.
+ *
+ * Scope:
+ *   - color/font literal rules apply to ui/modules/*.js (the consumers that
+ *     must theme). The .html files DEFINE the palette, so their literals are
+ *     the source of truth and are exempt.
+ *   - native-control rules apply to modules and html alike.
+ *
+ * Escape hatch: put `ui-lint-allow` in a comment on the offending line or the
+ * line directly above it to grandfather a deliberate, documented exception.
+ *
+ * Exit code 1 on any violation, 0 when clean. No dependencies — plain Node.
+ */
+
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join, relative } from "node:path";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const UI = join(ROOT, "ui");
+
+// ── File discovery ──────────────────────────────────────────────────────────
+function walk(dir, out = []) {
+    for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        const s = statSync(p);
+        if (s.isDirectory()) walk(p, out);
+        else out.push(p);
+    }
+    return out;
+}
+
+const files = walk(UI).filter((f) => /\.(js|html)$/.test(f));
+
+// Files exempt from the color/native-input rules because their whole job is to
+// edit colors: a theme editor legitimately holds hex strings and an OS color
+// picker (<input type="color">) is the right control for picking a color.
+const COLOR_EDITOR = /ui\/modules\/panel-theme\.js$/;
+
+// ── Rules ───────────────────────────────────────────────────────────────────
+const BANNED_FONTS = /font-family\s*:\s*[^;]*|font\s*:\s*[^;{]*/i;
+const FONT_LITERAL = /["']?(SF Mono|Menlo|Consolas|-apple-system|BlinkMacSystemFont|Segoe UI|Helvetica|Arial|Roboto|Times New Roman)["']?/i;
+
+const OLD_ACCENT = /(rgba?\(\s*196\s*,\s*26\s*,\s*26|#c41a1a)/i;
+
+// A color literal in a stylesheet context. We match hex and functional colors;
+// black/white scrims and shadows are allowed (they are theme-independent).
+const COLOR_LITERAL = /(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\))/g;
+const NEUTRAL = /^(#000000?|#fff(f(ff)?)?|rgba?\(\s*0\s*,\s*0\s*,\s*0[^)]*\)|rgba?\(\s*255\s*,\s*255\s*,\s*255[^)]*\))$/i;
+const SVG_ATTR = /(fill|stroke|stop-color)\s*=\s*["']/i; // colors inside embedded SVG markup
+
+// createElement("select") is always code. The `<select` markup form and the
+// dialog calls are matched only on non-comment lines, so prose that merely
+// names the control (doc comments, rationale) is not a violation.
+const NATIVE_SELECT_CODE = /(document\.)?createElement\(\s*["']select["']\s*\)/i;
+const NATIVE_SELECT_MARKUP = /<select[\s>]/i;
+const NATIVE_DIALOG = /(^|[^.\w])(window\.)?(confirm|alert|prompt)\s*\(/;
+const NATIVE_INPUT = /type\s*=\s*["'](date|time|datetime-local|month|week|color|file)["']/i;
+
+// A line whose meaningful content is a comment (JS // /* */, HTML <!-- -->).
+function isComment(line) {
+    const t = line.trim();
+    return t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")
+        || t.startsWith("<!--") || t.startsWith("-->") || t === "*/";
+}
+// Theme-engine lines that DEFINE a CSS variable's value (the palette source of
+// truth), e.g. root.setProperty("--accent-glow", `rgba(...)`).
+const VAR_DEFINITION = /setProperty\(\s*["']--/;
+
+const findings = [];
+function report(file, lineNo, rule, text, hint) {
+    findings.push({ file: relative(ROOT, file), lineNo, rule, text: text.trim().slice(0, 120), hint });
+}
+
+for (const file of files) {
+    const rel = file.replace(/\\/g, "/");
+    const isModule = /ui\/modules\/[^/]+\.js$/.test(rel);
+    const isColorEditor = COLOR_EDITOR.test(rel);
+    // Themed shell HTML (popouts, overlays) consumes theme vars, so the font
+    // rule applies there too. ms_guardian.html is excluded: it is the pre-boot
+    // integrity screen and renders before the theme vars are injected, so its
+    // font stacks are standalone by necessity.
+    const isThemedHtml = /ui\/[^/]+\.html$/.test(rel) && !/ms_guardian\.html$/.test(rel);
+    const src = readFileSync(file, "utf8");
+    const lines = src.split(/\r?\n/);
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // A `ui-lint-allow` comment on the line itself or within the two lines
+        // above suppresses it — two, so an allow can sit above a multi-line
+        // statement (e.g. an `if (…\n && native(…))` condition).
+        const allowed = /ui-lint-allow/.test(line)
+            || (i > 0 && /ui-lint-allow/.test(lines[i - 1]))
+            || (i > 1 && /ui-lint-allow/.test(lines[i - 2]));
+        if (allowed) continue;
+
+        // Rule 1a — the old default-red accent, wrong on every current theme.
+        if (OLD_ACCENT.test(line)) {
+            report(file, i + 1, "old-accent-literal", line,
+                "This is the retired red accent. Use var(--accent) / color-mix(in srgb, var(--accent) N%, transparent).");
+        }
+
+        // Rule 1b — hardcoded font stacks (consumers must use the var). Applies
+        // to component modules and themed shell HTML alike.
+        if (isModule || isThemedHtml) {
+            const fontDecl = line.match(BANNED_FONTS);
+            if (fontDecl && !/var\(--font/.test(fontDecl[0])
+                && !/--font[\w-]*\s*:/.test(line)   // a --font var DEFINITION is fine
+                && FONT_LITERAL.test(fontDecl[0])) {
+                report(file, i + 1, "hardcoded-font", line,
+                    "Use var(--font-mono) or var(--font) instead of a literal family stack.");
+            }
+        }
+
+        if (isModule) {
+            // Rule 1c — hardcoded color literals (skip the color editor, neutrals,
+            // SVG attributes, and CSS-variable definitions — both `--x:` in a
+            // stylesheet and setProperty("--x", …) in the theme engine).
+            if (!isColorEditor && !SVG_ATTR.test(line)
+                && !/--[\w-]+\s*:/.test(line) && !VAR_DEFINITION.test(line)) {
+                let m;
+                COLOR_LITERAL.lastIndex = 0;
+                while ((m = COLOR_LITERAL.exec(line)) !== null) {
+                    const lit = m[1];
+                    if (NEUTRAL.test(lit)) continue;
+                    report(file, i + 1, "hardcoded-color", line,
+                        `Literal ${lit} — reference a theme var (var(--accent), var(--surface2), …) or color-mix on one.`);
+                    break;
+                }
+            }
+        }
+
+        // Rule 2 — native macOS controls (all UI files). Comment prose that
+        // merely names a control is not a violation.
+        const comment = isComment(line);
+        if (NATIVE_SELECT_CODE.test(line) || (!comment && NATIVE_SELECT_MARKUP.test(line))) {
+            report(file, i + 1, "native-select", line,
+                "Native <select> is drawn by macOS and ignores the theme. Use window.createSelect().");
+        }
+        if (!comment && NATIVE_DIALOG.test(line)) {
+            report(file, i + 1, "native-dialog", line,
+                "confirm()/alert()/prompt() are native macOS dialogs (and can softlock behind the shell). Use the shell's themed modal.");
+        }
+        if (!isColorEditor && NATIVE_INPUT.test(line)) {
+            report(file, i + 1, "native-input", line,
+                "This input renders OS chrome. Build a themed control, or add `ui-lint-allow` if the OS control is intended.");
+        }
+    }
+}
+
+// ── Report ──────────────────────────────────────────────────────────────────
+if (findings.length === 0) {
+    console.log("ui-lint: clean — no hardcoded theme values or native controls found.");
+    process.exit(0);
+}
+
+const byRule = {};
+for (const f of findings) (byRule[f.rule] ||= []).push(f);
+
+console.error(`ui-lint: ${findings.length} violation(s) found\n`);
+for (const rule of Object.keys(byRule)) {
+    console.error(`  [${rule}]`);
+    for (const f of byRule[rule]) {
+        console.error(`    ${f.file}:${f.lineNo}`);
+        console.error(`      ${f.text}`);
+        console.error(`      → ${f.hint}`);
+    }
+    console.error("");
+}
+console.error("Fix these, or annotate a deliberate exception with a `ui-lint-allow` comment on the line (or the line above).");
+process.exit(1);

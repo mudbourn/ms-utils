@@ -451,6 +451,13 @@
                 superJump     = {type="key", mods={}, key="k"},
             }
             ms.binds                 = {}
+            -- Handwritten macros (from ms_macros.lua) that the user "deleted" in
+            -- the shell UI. Deleting one from disk would mean editing source, so
+            -- instead its id is parked here: disabled, unbound, and hidden from
+            -- the macro list, persisted across reloads. Visual-builder macros are
+            -- truly deletable (they live in the JSON pack), so they never land
+            -- here. Keyed id → true.
+            ms._suppressedMacros     = {}
             ms.running   = {}
             ms.cooldowns = {}
             ms._targetActive = false
@@ -2264,47 +2271,77 @@
                 end)
                 if tap then _register("panic", tap) end
 
-                -- Quick Reload
+                -- Quick Reload — a native hs.hotkey, not a _makeKeyWatcher tap.
+                -- The eventtap only swallows when ms._swallowHotkeys is on, so by
+                -- default the combo passed straight through to the target app —
+                -- ⌥[ leaked into the game at the very moment a reload was tearing
+                -- the binds down. hs.hotkey consumes the key itself and is not one
+                -- of the eventtaps torn down during a reload, so the keystroke is
+                -- swallowed cleanly. The combo is fixed (not user-rebindable), so
+                -- a static hotkey is safe. It fires regardless of target focus —
+                -- reloading the config from anywhere is harmless.
+                if ms._quickReloadHotkey then
+                    pcall(function() ms._quickReloadHotkey:delete() end)
+                    ms._quickReloadHotkey = nil
+                end
                 hk = ms._hotkeys.quickReload
-                tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    if not ms._hotkeysReady then return end
-                    if not ms._targetActive and not ms._isSafeZone() then return end
-                    if ms._qrCooldown then return end
-                    ms._qrCooldown = true
-                    -- Retain the timer in a field: an anonymous doAfter timer can
-                    -- be GC'd mid-reload (heavy allocation churn) before it fires,
-                    -- which would leave _qrCooldown latched true forever and wedge
-                    -- the hotkey after a single use.
-                    if ms._qrCooldownTimer then ms._qrCooldownTimer:stop() end
-                    ms._qrCooldownTimer = hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
-                    pcall(ms.reload)
-                end)
-                if tap then _register("quickReload", tap) end
+                do
+                    local ok, hotkey = pcall(hs.hotkey.bind, hk.mods, hk.key, function()
+                        if not ms._hotkeysReady then return end
+                        if ms._qrCooldown then return end
+                        ms._qrCooldown = true
+                        -- Retain the timer in a field: an anonymous doAfter timer
+                        -- can be GC'd mid-reload (heavy allocation churn) before it
+                        -- fires, which would leave _qrCooldown latched true forever
+                        -- and wedge the hotkey after a single use.
+                        if ms._qrCooldownTimer then ms._qrCooldownTimer:stop() end
+                        ms._qrCooldownTimer = hs.timer.doAfter(1.0, function() ms._qrCooldown = false end)
+                        pcall(ms.reload)
+                    end)
+                    if ok and hotkey then ms._quickReloadHotkey = hotkey end
+                end
 
-                -- Full Reload
+                -- Full Reload — native hs.hotkey (same reasoning as Quick Reload:
+                -- the eventtap passed ⌥] through to the game). Already fired
+                -- regardless of target focus, so a global hotkey matches. Its
+                -- handle dies with the Lua state on reload and is recreated at
+                -- boot, so no cross-reload persistence to manage.
+                if ms._fullReloadHotkey then
+                    pcall(function() ms._fullReloadHotkey:delete() end)
+                    ms._fullReloadHotkey = nil
+                end
                 hk = ms._hotkeys.fullReload
-                tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    if not ms._hotkeysReady then return end
-                    -- ms.restart tears down the way shutdown does and then
-                    -- reloads; bare hs.reload() dropped the state on the floor.
-                    if ms.restart then ms.restart() else hs.reload() end
-                end)
-                if tap then _register("fullReload", tap) end
+                do
+                    local ok, hotkey = pcall(hs.hotkey.bind, hk.mods, hk.key, function()
+                        if not ms._hotkeysReady then return end
+                        -- ms.restart tears down the way shutdown does and then
+                        -- reloads; bare hs.reload() dropped the state on the floor.
+                        -- (ms.restart self-guards against re-entry, so no cooldown.)
+                        if ms.restart then ms.restart() else hs.reload() end
+                    end)
+                    if ok and hotkey then ms._fullReloadHotkey = hotkey end
+                end
 
-                -- Open Menu
+                -- Open / Close Shell — native hs.hotkey so ⌥p is swallowed rather
+                -- than leaking to the game. Always fired regardless of target
+                -- focus (the menu is a Hammerspoon UI, not a game action), so a
+                -- global hotkey is an exact match.
+                if ms._openMenuHotkey then
+                    pcall(function() ms._openMenuHotkey:delete() end)
+                    ms._openMenuHotkey = nil
+                end
                 hk = ms._hotkeys.openMenu
-                tap = ms._makeKeyWatcher(hk.mods, hk.key, function()
-                    if not ms._hotkeysReady then return end
-                    -- No _targetActive / _isSafeZone guard: the menu is a
-                    -- Hammerspoon UI, not a game action. It should open
-                    -- regardless of target-app focus.
-                    if ms._macroLabEnabled and ms.shell and ms.shell.toggle then
-                        ms.shell.toggle()
-                    elseif ms.ui and ms.ui.toggle then
-                        ms.ui.toggle()
-                    end
-                end)
-                if tap then _register("openMenu", tap) end
+                do
+                    local ok, hotkey = pcall(hs.hotkey.bind, hk.mods, hk.key, function()
+                        if not ms._hotkeysReady then return end
+                        if ms._macroLabEnabled and ms.shell and ms.shell.toggle then
+                            ms.shell.toggle()
+                        elseif ms.ui and ms.ui.toggle then
+                            ms.ui.toggle()
+                        end
+                    end)
+                    if ok and hotkey then ms._openMenuHotkey = hotkey end
+                end
 
                 -- Octane Mode
                 hk = ms._hotkeys.octane
@@ -3868,6 +3905,7 @@
                 for _, id in ipairs(ms.registry._defList) do
                     local def = ms.registry._defs[id]
                     if not def then goto c1 end
+                    if ms._suppressedMacros and ms._suppressedMacros[id] then goto c1 end
                     local enabled = ms.binds[id]; if enabled == nil then enabled = def.enabled end
                     if not enabled then goto c1 end
                     local key = bindKey(ms.effectiveBind(id))
@@ -3908,6 +3946,7 @@
                     local fn  = ms.bind._wires[id]
                     local def = ms.registry._defs[id]
                     if not fn or not def then goto continue end
+                    if ms._suppressedMacros and ms._suppressedMacros[id] then goto continue end
 
                     local group    = ms.bind.group(id)
                     local cooldown = ms.cooldowns[id] or def.cooldown or 1000
@@ -3993,6 +4032,24 @@
                 end
                 ms.bind.rebindSystem()
             end
+
+            -- Suppress a handwritten macro "deleted" from the shell UI. Rather
+            -- than edit ms_macros.lua on disk, park the id: disable it, unbind it
+            -- from the live binds (rebind skips suppressed ids), and persist so it
+            -- stays gone across reloads. _buildMacroList hides suppressed ids, so
+            -- the row leaves the list too. Returns true if it was suppressed.
+            ms.suppressMacro = function(id)
+                if type(id) ~= "string" or id == "" then return false end
+                local def = ms.registry._defs and ms.registry._defs[id]
+                if not def or def.system then return false end
+                ms._suppressedMacros = ms._suppressedMacros or {}
+                ms._suppressedMacros[id] = true
+                ms.binds[id] = false          -- also carries as enabled=false in save
+                if ms.bind and ms.bind.rebind then pcall(ms.bind.rebind) end
+                if ms.saveSettings then pcall(ms.saveSettings) end
+                return true
+            end
+
             ms.bind.rebindSystem = function()
                 if ms._systemBindHandles then
                     for _, h in pairs(ms._systemBindHandles) do
@@ -4317,12 +4374,38 @@
 
                     ms.bus.on("ui:macros:deleteMacro", function(_, body)
                         if not body or not body.id then return end
-                        local ok, err = pcall(ms.compiler.delete, body.id)
-                        if ok then
-                            print("ms.compiler.deleteMacro: '" .. tostring(body.id) .. "' removed")
-                            _registerAndNotify()
+                        local id = body.id
+
+                        -- Visual-builder macros live in the JSON pack and can be
+                        -- truly deleted. Handwritten macros come from ms_macros.lua,
+                        -- where a "delete" would mean editing source — so those are
+                        -- suppressed (disabled, unbound, hidden, persisted) instead.
+                        local isVisual = false
+                        if ms.compiler and ms.compiler.list then
+                            local okL, ids = pcall(ms.compiler.list)
+                            if okL and type(ids) == "table" then
+                                for _, vid in ipairs(ids) do
+                                    if vid == id then isVisual = true; break end
+                                end
+                            end
+                        end
+
+                        if isVisual then
+                            local ok, err = pcall(ms.compiler.delete, id)
+                            if ok then
+                                print("ms.compiler.deleteMacro: '" .. tostring(id) .. "' removed")
+                                _registerAndNotify()
+                            else
+                                print("ms.compiler.deleteMacro error: " .. tostring(err))
+                            end
+                        elseif ms.suppressMacro and ms.suppressMacro(id) then
+                            -- suppressMacro already rebound + saved; just refresh
+                            -- the shell's macro list so the row disappears.
+                            print("deleteMacro: suppressed handwritten macro '" .. tostring(id) .. "'")
+                            _macroShellEval("if(window.shellReceive)shellReceive('macros','macroSaved',{})")
+                            if ms.ui and ms.ui.pushBindList then pcall(ms.ui.pushBindList) end
                         else
-                            print("ms.compiler.deleteMacro error: " .. tostring(err))
+                            print("deleteMacro: '" .. tostring(id) .. "' is neither a visual macro nor a suppressible bind")
                         end
                     end)
 

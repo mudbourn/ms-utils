@@ -220,7 +220,11 @@ return function(ms)
                 ms._testingSource = data.testingSource
             end
             if data.macros then
+                ms._suppressedMacros = ms._suppressedMacros or {}
                 for id, entry in pairs(data.macros) do
+                    if entry.suppressed then
+                        ms._suppressedMacros[id] = true
+                    end
                     if entry.enabled ~= nil then
                         ms.binds[id] = entry.enabled
                     end
@@ -430,6 +434,13 @@ return function(ms)
                 data.macros[id] = data.macros[id] or {}
                 data.macros[id].cooldown = cooldown
             end
+            -- Handwritten macros the user "deleted" in the shell UI (see
+            -- ms.suppressMacro). Persist the flag so they stay hidden and unbound
+            -- across reloads without touching ms_macros.lua.
+            for id in pairs(ms._suppressedMacros or {}) do
+                data.macros[id] = data.macros[id] or {}
+                data.macros[id].suppressed = true
+            end
             -- Phase 6: Macro Lab & Shell State --
             data.shell = ms._shellState or {
                 x = nil, y = nil, w = 900, h = 600,
@@ -587,6 +598,11 @@ return function(ms)
             end
             ms._saveAuthoredSettings()
             ms.saveSettings()
+            -- Nudge an open macro builder to re-pull its tool list so a
+            -- just-created tool appears at once, without reopening the builder.
+            -- The ui:macros:listTools handler rebuilds from ms._userSettingDefs
+            -- and pushes setToolList to the shell.
+            if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
             return true
         end
 
@@ -626,6 +642,9 @@ return function(ms)
 
             ms._saveAuthoredSettings()
             ms.saveSettings()
+            -- Refresh an open macro builder so the removed tool drops from its
+            -- picker without a reload (mirror of addAuthoredSetting).
+            if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
             return true
         end
 
@@ -900,8 +919,9 @@ return function(ms)
                 -- shell frame is still placed to animate home toward — otherwise
                 -- these standalone webviews sit on screen until hs.reload()/quit
                 -- destroys them live (they are not covered by the exit curtain,
-                -- which only stands over the shell). The EXIT_HOLD_S window keeps
-                -- the runloop alive long enough for the retract fade to finish.
+                -- which only stands over the shell). The exit's hold (max of the
+                -- send-off sound and EXIT_CLEANUP_S) keeps the runloop alive long
+                -- enough for the retract fade to finish.
                 if ms.shell and ms.shell.closePopOuts then ms.shell.closePopOuts() end
                 if ms.shell and ms.shell.hide then ms.shell.hide() end
                 if ms.ui and ms.ui.hide then ms.ui.hide() end
@@ -950,6 +970,26 @@ return function(ms)
             end
 
             return math.min(wait, SLOT_HOLD_MAX)
+        end
+
+        -- Seconds of the send-off sample still to play, measured from now, or 0
+        -- if it has already finished (or never had a real duration). Unlike
+        -- _waitForSlot there is no 0.25 floor: the exit sequence adds its own
+        -- fixed tail, so a sound that is already done should contribute nothing.
+        -- Still capped by SLOT_HOLD_MAX so a lying/huge duration can't hang the
+        -- exit.
+        local function _slotRemaining(slotId)
+            local sound = (ms._slotHandles or {})[slotId]
+            local began = (ms._slotStartedAt or {})[slotId]
+            if sound and began then
+                local ok, dur = pcall(function() return sound:duration() end)
+                if ok and type(dur) == "number" and dur == dur
+                    and dur > 0 and dur < math.huge then
+                    local left = dur - (hs.timer.secondsSinceEpoch() - began)
+                    if left > 0 then return math.min(left, SLOT_HOLD_MAX) end
+                end
+            end
+            return 0
         end
 
         -- ── Exit curtain ──────────────────────────────────────────────────
@@ -1380,11 +1420,16 @@ return function(ms)
         -- behind a curtain with nothing left to fire. That hang has no other
         -- way out; `ms._shuttingDown` is already set, so the power button
         -- cannot even be clicked again.
-        -- The whole exit, from click to gone, is meant to land near 5s: the
-        -- curtain's 600ms entrance, this hold, then the 350ms fade-out.
-        local EXIT_HOLD_S     = 4.0
+        -- How long to allow the cleanup animations to settle after _teardown
+        -- issues them — the popout retract, the panel/toast fade-outs. Teardown
+        -- itself is synchronous; these run on their own timers (all ≲0.3s), so
+        -- this is the floor the exit waits even when the send-off sound is short
+        -- or muted, so nothing is still animating when the process is taken.
+        local EXIT_CLEANUP_S = 0.4
 
-        -- Sits above that total so it only ever fires on the fault path.
+        -- Sits above the longest normal exit (curtain entrance + a full-length
+        -- send-off, capped at SLOT_HOLD_MAX + the fixed tail) so it only ever
+        -- fires on the fault path.
         local EXIT_WATCHDOG_S = 6.0
 
         local function _exit(mode, slot, finish)
@@ -1422,20 +1467,25 @@ return function(ms)
                 -- curtain's, not after it.
                 pcall(function() ms.alert:expireAll() end)
             end, function()
-                -- Scheduled before the teardown, not after it. The teardown
-                -- is the step most able to throw, and the pcall around this
-                -- closure would eat the error along with the exit that was
-                -- still waiting to be scheduled behind it.
-                -- Fixed, not measured. This used to be `_waitForSlot(slot)`,
-                -- which held for however long the send-off sample ran — an
-                -- honest rule that made the exit's length a property of
-                -- whatever sound happened to be assigned. A constant is the
-                -- exit taking a known amount of time.
-                local hold = EXIT_HOLD_S
+                -- The whole exit, stripped down to one linear beat:
+                --
+                --   1. Run the cleanup (key release, bind/tap teardown, save,
+                --      popouts retracting, panels + toasts fading out). Teardown
+                --      issues it synchronously; every step is individually
+                --      pcall'd, so this cannot throw and strand the exit.
+                --   2. Hold for whichever finishes last — the send-off sound or
+                --      those cleanup animations. _slotRemaining is what is left
+                --      of the sample from now; EXIT_CLEANUP_S is the settle floor
+                --      for the fades. If the cleanup outlasts the sound, the
+                --      sound contributes nothing; if the sound outlasts cleanup,
+                --      we wait the rest of it out.
+                --   3. A fixed 200ms beat, then fade the curtain out and take
+                --      the process once the fade has actually rendered.
+                pcall(_teardown, mode)
+                local hold = math.max(_slotRemaining(slot), EXIT_CLEANUP_S) + 0.2
                 hs.timer.doAfter(hold, function()
                     _dropCurtain(finishOnce)
                 end)
-                _teardown(mode)
             end)
         end
 

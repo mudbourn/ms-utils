@@ -1993,9 +1993,19 @@
         tg.addEventListener("click", function(e) {
             e.stopPropagation();
             if (window.playSlot) playSlot("interact");
-            tg.classList.toggle("collapsed");
-            var b = wrap.querySelector(".tool-nest-body");
-            if (b) b.classList.toggle("collapsed");
+            var collapsed = tg.classList.toggle("collapsed");
+            // Collapse every branch of THIS container — an `if` has both a
+            // "then" and an "else" nest, each with its own label. A plain
+            // querySelector(".tool-nest-body") stopped at "then" and left the
+            // "else" nest (and both labels) showing. Only direct children are
+            // touched, so a nested block keeps its own collapse state.
+            for (var ci = 0; ci < wrap.children.length; ci++) {
+                var child = wrap.children[ci];
+                if (child.classList.contains("tool-nest-body")
+                    || child.classList.contains("tool-nest-label")) {
+                    child.classList.toggle("collapsed", collapsed);
+                }
+            }
         });
         header.appendChild(tg);
 
@@ -3297,14 +3307,22 @@
     });
 
     /* ── Fn-picker overlay toggle ────────────────────────────────── */
+    // Closed by default. The overlay is only slid off-screen (transform), not
+    // removed from the DOM, so without `inert` its buttons/inputs stayed in the
+    // tab order — Tab would move focus into the invisible, off-screen panel and
+    // break the illusion that it is closed. `inert` takes its contents out of
+    // the tab order (and pointer/a11y) without touching the slide animation.
+    overlay.inert = true;
     function openFnOverlay() {
         overlay.classList.add("open");
+        overlay.inert = false;
         // Pull the current tool list every time — a tool may have been added
         // or removed from the Settings panel since the overlay last opened.
         refreshToolList();
     }
     function closeFnOverlay() {
         overlay.classList.remove("open");
+        overlay.inert = true;
     }
     addToolBtn.addEventListener("mouseenter", function() {
         if (window.playSlot) playSlot("hover");
@@ -3336,6 +3354,22 @@
 
     function refreshBindList() {
         if (window.shellPost) shellPost("macros", "listBinds", {});
+    }
+
+    // Themed delete confirmation → Promise<boolean>. Uses the shell's own modal
+    // (window.openModal, from panel-settings.js) rather than a native confirm(),
+    // which macOS draws in its own chrome and which can softlock behind the
+    // always-on-top shell. Falls back to a native confirm only if the shell
+    // modal isn't available (e.g. a popout that never loaded panel-settings).
+    function confirmDelete(name) {
+        var msg = 'Delete "' + name + '"? This cannot be undone.';
+        if (typeof window.openModal === "function") {
+            return window.openModal("Delete macro", msg, "Delete", "Cancel")
+                .then(function(r) { return !!(r && r.confirmed); });
+        }
+        // ui-lint-allow-native: last-resort fallback if the shell modal is absent.
+        var ok = (typeof window.confirm !== "function") || window.confirm(msg);
+        return Promise.resolve(ok);
     }
 
     function bindPill(text, onClick, title) {
@@ -3460,12 +3494,11 @@
             // main rows have. Guarded by a confirm like the main path.
             if (m.group !== "system" && !m.systemBind) {
                 acts.appendChild(iconBtn("trash", "Delete macro", function() {
-                    if (typeof window.confirm === "function"
-                        && !window.confirm('Delete "' + (m.label || m.id) + '"? This cannot be undone.')) {
-                        return;
-                    }
-                    if (window.playSlot) playSlot("back");
-                    shellPost("macros", "deleteMacro", { id: m.id });
+                    confirmDelete(m.label || m.id).then(function(ok) {
+                        if (!ok) return;
+                        if (window.playSlot) playSlot("back");
+                        shellPost("macros", "deleteMacro", { id: m.id });
+                    });
                 }));
             }
         } else {
@@ -3491,16 +3524,15 @@
             // "currently editing" context to fall back on.
             if (m.group !== "system" && !m.systemBind) {
                 acts.appendChild(iconBtn("trash", "Delete macro", function() {
-                    if (typeof window.confirm === "function"
-                        && !window.confirm('Delete "' + (m.label || m.id) + '"? This cannot be undone.')) {
-                        return;
-                    }
-                    if (window.playSlot) playSlot("back");
-                    shellPost("macros", "deleteMacro", { id: m.id });
-                    // Optimistic: drop it locally and repaint so the row leaves
-                    // immediately; the host refresh reconciles on its next push.
-                    _bindList = _bindList.filter(function(x) { return x.id !== m.id; });
-                    renderBindList();
+                    confirmDelete(m.label || m.id).then(function(ok) {
+                        if (!ok) return;
+                        if (window.playSlot) playSlot("back");
+                        shellPost("macros", "deleteMacro", { id: m.id });
+                        // Optimistic: drop it locally and repaint so the row leaves
+                        // immediately; the host refresh reconciles on its next push.
+                        _bindList = _bindList.filter(function(x) { return x.id !== m.id; });
+                        renderBindList();
+                    });
                 }));
             }
         }
@@ -4086,7 +4118,7 @@
         doneBtn.className = "primary";
         doneBtn.textContent = "Done";
         doneBtn.style.cssText = "flex:1;padding:8px;border-radius:var(--radius-s);" +
-            "font-size:13px;font-weight:600;background:var(--accent);color:#fff;";
+            "font-size:13px;font-weight:600;background:var(--accent);color:var(--bg);";
         btns.appendChild(resetBtn);
         btns.appendChild(doneBtn);
         card.appendChild(btns);

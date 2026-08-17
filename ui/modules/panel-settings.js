@@ -218,16 +218,16 @@
                         confirmLabel;
                     document.getElementById("modal-cancel").textContent =
                         cancelLabel;
-                    document
-                        .getElementById("modal-overlay")
-                        .classList.add("open");
+                    const ov = document.getElementById("modal-overlay");
+                    ov.inert = false;   // reachable by Tab only while open
+                    ov.classList.add("open");
                 });
             }
             function closeModal(confirmed) {
                 const val = document.getElementById("modal-input").value;
-                document
-                    .getElementById("modal-overlay")
-                    .classList.remove("open");
+                const ov = document.getElementById("modal-overlay");
+                ov.classList.remove("open");
+                ov.inert = true;    // back out of the Tab order while closed
                 if (_modalResolve) {
                     _modalResolve({ confirmed, value: val });
                     _modalResolve = null;

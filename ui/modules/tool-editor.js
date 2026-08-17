@@ -125,7 +125,6 @@ function injectCSS() {
 .tool-editor-panel {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-top: 2px solid var(--accent);
     border-radius: 0 0 var(--radius) var(--radius);
     margin: 0 2px 4px 2px;
     overflow: hidden;
@@ -151,7 +150,7 @@ function injectCSS() {
     border-bottom: 1px solid var(--border-dim);
 }
 .tool-editor-title {
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
@@ -210,7 +209,7 @@ function injectCSS() {
     border: 1px solid var(--border-dim);
     border-radius: var(--radius);
     color: var(--text);
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     padding: 4px 7px;
     outline: none;
@@ -228,7 +227,7 @@ function injectCSS() {
 .tool-ed-bind-opt:hover { color: var(--text); }
 .tool-ed-bind-opt.on { background: var(--accent-glow-faint); color: var(--accent-hi); }
 .tool-ed-bind-holder { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: 4px; }
-.tool-ed-tool-select { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; padding: 4px 7px; outline: none; cursor: pointer; box-sizing: border-box; }
+.tool-ed-tool-select { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 11px; padding: 4px 7px; outline: none; cursor: pointer; box-sizing: border-box; }
 .tool-ed-tool-select:focus { border-color: var(--accent); }
 
 /* ── Number Input ───────────────────────────────────────────────── */
@@ -244,7 +243,7 @@ function injectCSS() {
     border: 1px solid var(--border-dim);
     border-radius: var(--radius);
     color: var(--text);
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     padding: 4px 7px;
     outline: none;
@@ -293,7 +292,7 @@ function injectCSS() {
     border: 1px solid var(--border-dim);
     border-radius: var(--radius);
     color: var(--text);
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     padding: 4px 12px;
     cursor: pointer;
@@ -306,7 +305,7 @@ function injectCSS() {
 .tool-ed-key-btn:hover { border-color: var(--accent); }
 .tool-ed-key-btn.capturing {
     border-color: var(--accent);
-    background: rgba(196, 26, 26, 0.15);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
     color: var(--accent-hi);
     animation: tool-ed-pulse 1s ease-in-out infinite;
 }
@@ -334,7 +333,7 @@ function injectCSS() {
     border: 1px solid var(--border-dim);
     border-radius: var(--radius);
     color: var(--text3);
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 600;
     padding: 3px 8px;
@@ -350,7 +349,7 @@ function injectCSS() {
     color: var(--text);
 }
 .tool-ed-mod-chip.on {
-    background: rgba(196, 26, 26, 0.18);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
     border-color: var(--accent);
     color: var(--accent-hi);
 }
@@ -362,7 +361,7 @@ function injectCSS() {
     border: 1px solid var(--border-dim);
     border-radius: var(--radius);
     color: var(--text);
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     padding: 4px 7px;
     outline: none;
@@ -383,7 +382,7 @@ function injectCSS() {
     border: 1px solid var(--border-dim);
     border-radius: var(--radius);
     color: var(--accent-hi);
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     padding: 5px 8px;
     outline: none;
@@ -397,6 +396,7 @@ function injectCSS() {
     box-sizing: border-box;
 }
 .tool-ed-condition:focus { border-color: var(--accent); }
+.tool-ed-condition::placeholder { color: var(--text3); opacity: 1; }
 
 /* ── Array Editor ───────────────────────────────────────────────── */
 .tool-ed-array {
@@ -889,31 +889,51 @@ class ToolEditor {
     // key even if it is not in the live list (a deleted or not-yet-loaded tool)
     // so editing an unrelated field never silently drops the binding.
     _createToolSelect(key, value, sid) {
-        const sel = document.createElement("select");
-        sel.className = "tool-ed-tool-select";
         const tools = ToolEditor._toolList();
         const current = ToolEditor._isToolRef(value) ? value.__toolRef : "";
-        if (tools.length === 0 && !current) {
+
+        // Build the option list: every live tool, plus a synthesised entry that
+        // preserves a bound-but-missing key so editing never drops the binding.
+        const options = tools.map((t) => ({
+            value: t.key,
+            label: (t.label || t.key) + "  ·  " + t.type,
+        }));
+        let seen = tools.some((t) => t.key === current);
+        if (current && !seen) {
+            options.push({ value: current, label: current + "  (missing)" });
+        }
+
+        // Themed dropdown, never a native <select>: an open native popup is
+        // drawn by macOS in its own chrome and ignores the theme. createSelect
+        // is loaded before this script (see ms_shell.html), so it is present.
+        if (typeof window.createSelect === "function") {
+            const sel = window.createSelect({
+                className:   "tool-ed-tool-select",
+                options:     options,
+                value:       current,
+                placeholder: "No tools — create one in Add Module",
+                onChange:    (v) => this._updateParam(sid, key, { __toolRef: v }),
+            });
+            return sel;
+        }
+
+        // Last-resort fallback if createSelect failed to load — a bound param
+        // must still be editable rather than frozen.
+        const sel = document.createElement("select"); // ui-lint-allow-native
+        sel.className = "tool-ed-tool-select";
+        if (options.length === 0) {
             const o = document.createElement("option");
             o.value = ""; o.textContent = "No tools — create one in Add Module";
             o.disabled = true; o.selected = true;
             sel.appendChild(o);
             sel.disabled = true;
         } else {
-            let seen = false;
-            tools.forEach((t) => {
+            options.forEach((opt) => {
                 const o = document.createElement("option");
-                o.value = t.key;
-                o.textContent = (t.label || t.key) + "  ·  " + t.type;
-                if (t.key === current) { o.selected = true; seen = true; }
+                o.value = opt.value; o.textContent = opt.label;
+                if (opt.value === current) o.selected = true;
                 sel.appendChild(o);
             });
-            if (current && !seen) {
-                const o = document.createElement("option");
-                o.value = current; o.textContent = current + "  (missing)";
-                o.selected = true;
-                sel.appendChild(o);
-            }
         }
         sel.addEventListener("change", () => {
             this._updateParam(sid, key, { __toolRef: sel.value });

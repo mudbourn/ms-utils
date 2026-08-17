@@ -132,7 +132,8 @@ return function(ms)
 
             for _, id in ipairs(ms.registry._defList or {}) do
                 local def = ms.registry._defs[id]
-                if def and not def.system and (not _parentOf(def) or _severedFromParent(id)) then
+                if def and not def.system and not (ms._suppressedMacros and ms._suppressedMacros[id])
+                    and (not _parentOf(def) or _severedFromParent(id)) then
                     local eff = ms.effectiveBind(id)
                     local bindable = eff ~= nil
                     local enabled = ms.binds[id]
@@ -160,7 +161,8 @@ return function(ms)
             for _, id in ipairs(ms.registry._defList or {}) do
                 local def    = ms.registry._defs[id]
                 local parent = _parentOf(def)
-                if def and not def.system and parent and not _severedFromParent(id) then
+                if def and not def.system and not (ms._suppressedMacros and ms._suppressedMacros[id])
+                    and parent and not _severedFromParent(id) then
                     local seen = { [id] = true }
                     while parent and not byId[parent] and not seen[parent] do
                         seen[parent] = true
@@ -918,6 +920,18 @@ return function(ms)
                 end
 
                 -- Phase 2: Teardown + execute (source validated — safe to destroy)
+                -- Unload plugins first, while the registry/bus they registered
+                -- against are still intact so their undo closures land cleanly.
+                -- Boot loads plugins last, onto a finished `ms`; a reload clears
+                -- and rebuilds that `ms`, so plugins must come down here and be
+                -- reloaded at the end. Without this the reload wipes their binds
+                -- but leaves ms.plugins.loaded[dir] true, so load() early-returns
+                -- and the plugins silently vanish until a full hs.reload().
+                if ms.plugins and ms.plugins.loaded then
+                    for dir in pairs(ms.plugins.loaded) do
+                        pcall(ms.plugins.unload, dir, { quiet = true })
+                    end
+                end
                 ms.bind.teardown()
                 -- Clear the bind registry in place — never reassign. ms.registry
                 -- is shared with the package client (ms.registry.list/refresh/
@@ -997,6 +1011,11 @@ return function(ms)
                 if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
                 ms.bind.rebind()
                 ms.socdApply()
+                -- Reload plugins onto the freshly rebuilt registry/bind system,
+                -- exactly as boot does after the macro pack and settings are up.
+                if ms.plugins and ms.plugins.loadAll then
+                    pcall(ms.plugins.loadAll)
+                end
                 if not ms._quickReloading then
                     ms.playSlot("update")
                     ms.alert("Macros reloaded.", 4, true)
@@ -1958,8 +1977,24 @@ return function(ms)
                 local function push()
                     local entries = (ms.registry and ms.registry.list)
                         and ms.registry.list({}) or {}
+                    -- Installed-plugin lookup, keyed by registry id. Plugins are
+                    -- the only browse type with a versioned install record (the
+                    -- ledger); themes/sounds/macros/profiles leave no version on
+                    -- disk, so they can't be labelled "Update" without guessing,
+                    -- and stay "Install". A matching id means the card offers an
+                    -- update (re-install) rather than a first install.
+                    local installedById = {}
+                    if ms.package and ms.package.listPlugins then
+                        local okP, plugins = pcall(ms.package.listPlugins)
+                        if okP and type(plugins) == "table" then
+                            for _, p in ipairs(plugins) do
+                                if p.id then installedById[p.id] = p.version or true end
+                            end
+                        end
+                    end
                     local out = {}
                     for _, e in ipairs(entries) do
+                        local instV = installedById[e.id]
                         out[#out + 1] = {
                             id          = e.id,
                             type        = e.type,
@@ -1970,6 +2005,8 @@ return function(ms)
                             website     = e.website,
                             trust       = e.trust,
                             components  = e.components,
+                            installed        = instV ~= nil or nil,
+                            installedVersion = (type(instV) == "string") and instV or nil,
                             -- url/sha256 travel through so the card can render a
                             -- "View on GitHub" button and the virtual theme/sound
                             -- slices inherit the profile's asset URL.
@@ -2029,6 +2066,14 @@ return function(ms)
                             (result.manifest.name or label) .. " installed (" ..
                             #result.installed .. " files).", 4, true
                         )
+                        -- A freshly installed profile lands on disk but getProfiles
+                        -- serves a cache until _profilesDirty flips, and ms.ui.refresh
+                        -- only rebuilds the pushed state when markDirty was called.
+                        -- Without both, the Profiles panel keeps showing the stale
+                        -- list until an unrelated profile switch invalidates the
+                        -- cache. Invalidate here so the new profile appears at once.
+                        ms._profilesDirty = true
+                        ms.ui.markDirty()
                         ms.ui.refresh()
                     end)
                 end)

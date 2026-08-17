@@ -193,7 +193,7 @@ function injectCSS() {
 .tool-block:hover { background: var(--surface2); border-color: var(--border); }
 .tool-block.selected {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent-glow-faint, rgba(196,26,26,0.12));
+    box-shadow: 0 0 0 1px var(--accent-glow-faint, color-mix(in srgb, var(--accent) 12%, transparent));
 }
 
 .tool-block.drag-over-above::before {
@@ -220,7 +220,7 @@ function injectCSS() {
 }
 .tool-block.drag-over-nest {
     border-color: var(--accent);
-    background: var(--accent-glow-faint, rgba(196,26,26,0.12));
+    background: var(--accent-glow-faint, color-mix(in srgb, var(--accent) 12%, transparent));
 }
 .tool-block.dragging { opacity: 0.4; }
 
@@ -243,12 +243,12 @@ function injectCSS() {
 .tool-icon svg circle, .tool-icon svg rect { stroke: var(--accent); fill: none; }
 
 .step-action-name {
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 11px; color: var(--text); font-weight: 600;
     white-space: nowrap; flex-shrink: 0;
 }
 .step-params {
-    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-family: var(--font-mono);
     font-size: 10px; color: var(--text3);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     flex: 1; min-width: 0;
@@ -283,7 +283,7 @@ function injectCSS() {
 }
 .tool-nest-body.drag-target {
     border-left-color: var(--accent);
-    background: var(--accent-glow-faint, rgba(196,26,26,0.06));
+    background: var(--accent-glow-faint, color-mix(in srgb, var(--accent) 6%, transparent));
     border-radius: var(--radius);
 }
 .step-nest-label {
@@ -308,6 +308,7 @@ function injectCSS() {
 .tool-nest-toggle svg { width: 12px; height: 12px; }
 .tool-nest-toggle svg path { stroke: var(--text); fill: none; }
 .tool-nest-body.collapsed { display: none; }
+.step-nest-label.collapsed { display: none; }
 `;
     document.head.appendChild(style);
 }
@@ -639,9 +640,18 @@ export class ToolCanvas {
         _sfx(toggle);
         toggle.addEventListener("click", e => {
             e.stopPropagation();
-            toggle.classList.toggle("collapsed");
-            const body = wrap.querySelector(".tool-nest-body");
-            if (body) body.classList.toggle("collapsed");
+            const collapsed = toggle.classList.toggle("collapsed");
+            // Collapse every branch of THIS container — an `if` has both a
+            // "then" and an "else" nest, each with its own label. A plain
+            // querySelector(".tool-nest-body") stopped at "then" and left
+            // "else" (and both labels) showing. Only direct children are
+            // touched, so a nested block keeps its own collapse state.
+            for (const child of wrap.children) {
+                if (child.classList.contains("tool-nest-body")
+                    || child.classList.contains("step-nest-label")) {
+                    child.classList.toggle("collapsed", collapsed);
+                }
+            }
         });
         header.appendChild(toggle);
 

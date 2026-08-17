@@ -181,8 +181,13 @@
         // component); everything else installs itself whole.
         const isVirtual = !!e.virtual;
         let includeThemeSounds = false;
-        const installLabel = (e.type === "profile" && !isVirtual)
-            ? "Install profile" : "Install";
+        // A whole (non-virtual) entry already on disk offers an update, not a
+        // first install. Only plugins report installed state today (they carry
+        // a versioned ledger record); everything else stays "Install".
+        const isUpdate = !isVirtual && !!e.installed;
+        const installLabel = isUpdate
+            ? "Update"
+            : ((e.type === "profile" && !isVirtual) ? "Install profile" : "Install");
 
         const actions = h("div", { cls: "browse-actions" });
         actions.appendChild(actionBtn(installLabel, "accent", () => {
@@ -338,6 +343,9 @@
             background:var(--surface); cursor:pointer; position:relative;
             transition:background 0.12s, border-color 0.12s; }
         .browse-bonus input[type="checkbox"]:hover { border-color:var(--accent); }
+        /* The global input:focus-visible rule strips the outline, so a keyboard
+           tab to this checkbox showed nothing — restore a themed focus ring. */
+        .browse-bonus input[type="checkbox"]:focus-visible { box-shadow:0 0 0 2px var(--accent-hi); }
         .browse-bonus input[type="checkbox"]:checked { background:var(--accent);
             border-color:var(--accent); }
         .browse-bonus input[type="checkbox"]:checked::after { content:"";

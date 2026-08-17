@@ -94,6 +94,14 @@
         }
         .rail-item:hover { background: var(--hover); color: var(--text); }
         .rail-item.active { background: var(--surface2); color: var(--accent-hi); box-shadow: inset 0 0 0 1px var(--accent); }
+        /* Keyboard focus on a rail item: the global :focus-visible ring sits
+           outside the element and clips against the narrow rail edges, and it
+           shares --accent with the active item's inset ring — so the two read
+           as the same highlight at two sizes. Give the rail its own ring: inset
+           (never clipped) and in the brighter accent so it stays distinct from
+           the active state's dim-accent border. */
+        .rail-item:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent-hi); }
+        .rail-item.active:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-hi); }
         .rail-item .rail-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 16px; height: 16px; }
         .rail-item .icon { opacity: 0.7; }
         .rail-item.active .icon { opacity: 1; }
@@ -573,6 +581,12 @@
         .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
         .toggle-track { position: absolute; inset: 0; border-radius: 10px; background: var(--surface2); transition: background 0.2s; }
         .toggle input:checked + .toggle-track { background: var(--accent); }
+        /* Keyboard focus: the real control is a 0×0 opacity:0 checkbox, and the
+           global input:focus-visible rule strips its outline — so tabbing to a
+           toggle showed nothing. Trace the visible track instead. box-shadow
+           follows the track's radius (no clipping) and only shows for keyboard
+           focus, matching every other :focus-visible ring in the shell. */
+        .toggle input:focus-visible + .toggle-track { box-shadow: 0 0 0 2px var(--accent-hi); }
         .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
         .toggle input:checked ~ .toggle-thumb { left: 18px; }
 
@@ -984,6 +998,7 @@
         .tool-nest-toggle svg { width: 12px; height: 12px; }
         .tool-nest-toggle svg path { stroke: var(--text); fill: none; }
         .tool-nest-body.collapsed { display: none; }
+        .tool-nest-label.collapsed { display: none; }
 
         .fn-picker-overlay { position: absolute; top: 0; right: 0; bottom: 0; width: 440px; max-width: 70%; background: var(--surface); border-left: 1px solid var(--border-dim); box-shadow: -4px 0 16px rgba(0,0,0,0.3); display: flex; flex-direction: column; z-index: 30; transform: translateX(100%); transition: transform 0.2s ease; }
         .fn-picker-overlay.open { transform: translateX(0); }
@@ -1793,7 +1808,10 @@
          active panel: a rebind captured from Macros › Binds queued a confirm
          that never appeared unless you then switched to Settings. Kept here it
          floats above whichever panel is showing, where the request originates. -->
-    <div id="modal-overlay">
+    <!-- inert while closed: it stays in the DOM (only opacity/pointer-events
+         toggle), so without this its buttons/input leak into the Tab order and
+         focus can land on the hidden modal. openModal/closeModal flip it. -->
+    <div id="modal-overlay" inert>
         <div id="modal">
             <div id="modal-title"></div>
             <div id="modal-msg"></div>
@@ -2163,6 +2181,27 @@
     var _kbNav = false;
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Tab' || (e.key && e.key.indexOf('Arrow') === 0)) _kbNav = true;
+    }, true);
+
+    // Enter commits a text field the way clicking away does. The shell's inputs
+    // live outside any <form>, so the browser fires 'change' only on blur, never
+    // on Enter — which is why an edit "didn't take" until you clicked off (this
+    // affected Tools, the macro builder, Browse, etc.). Blur on Enter to run that
+    // same commit once, keeping the single-source-of-truth 'change' handlers.
+    // Capture phase so it still fires for inputs that stopPropagation on keydown
+    // (the macro-builder param fields do, to shield the shortcut layer).
+    // Left alone: textareas (Enter = newline) and fields that own their Enter —
+    // the console runner (#code-input) and the modal (#modal-input).
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented) return;
+        var t = e.target;
+        if (!t || t.tagName !== 'INPUT') return;
+        var type = (t.type || 'text').toLowerCase();
+        if (type === 'checkbox' || type === 'radio' || type === 'button'
+            || type === 'submit' || type === 'reset' || type === 'range'
+            || type === 'file' || type === 'color') return;
+        if (t.id === 'code-input' || t.id === 'modal-input') return;
+        t.blur();
     }, true);
     document.addEventListener('mousedown', function() { _kbNav = false; }, true);
     document.addEventListener('focusin', function() {

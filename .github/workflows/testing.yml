@@ -8,6 +8,8 @@ on:
       - mac/init.lua
       - mac/lib/*.lua
       - ui/*.html
+      - ui/modules/*.js
+      - bin/ui-lint.mjs
       - win/ms_core_v2.ahk
   workflow_dispatch:
 
@@ -54,10 +56,25 @@ jobs:
           echo "mac=$MAC  win=$WIN"
 
   # ────────────────────────────────────────────────────────────────────────────
+  # UI lint — block hardcoded theme values and native macOS controls
+  # ────────────────────────────────────────────────────────────────────────────
+  ui-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Lint UI (fonts, colors, native controls)
+        run: node bin/ui-lint.mjs
+
+  # ────────────────────────────────────────────────────────────────────────────
   # Build macOS
   # ────────────────────────────────────────────────────────────────────────────
   build-macos:
-    needs: check
+    needs: [check, ui-lint]
     if: needs.check.outputs.mac == 'true'
     runs-on: macos-latest
 
@@ -212,7 +229,7 @@ jobs:
   # Build Windows
   # ────────────────────────────────────────────────────────────────────────────
   build-windows:
-    needs: check
+    needs: [check, ui-lint]
     if: needs.check.outputs.win == 'true'
     runs-on: windows-latest
 

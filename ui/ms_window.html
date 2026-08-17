@@ -56,7 +56,7 @@
             }
             .flag-pill.flag-recent { border-color: var(--accent); color: var(--text); }
             .flag-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
-            #flag-event-name { font: 12px "SF Mono", Menlo, monospace; flex-shrink: 0; }
+            #flag-event-name { font: 12px var(--font-mono); flex-shrink: 0; }
             #flag-event-detail { font-size: 11px; color: var(--text3); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
             /* ── Tabs ───────────────────────────────────────────────────────── */
@@ -64,15 +64,15 @@
 
             /* ── Key/Value grid (structured window + element data) ──────────── */
             .kv-grid { display: grid; grid-template-columns: max-content 1fr; column-gap: 12px; row-gap: 3px; align-items: baseline; }
-            .kv-key { font: 700 10px "SF Mono", Menlo, monospace; letter-spacing: 0.04em; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
-            .kv-val { font: 12px "SF Mono", Menlo, monospace; color: var(--text); word-break: break-word; min-width: 0; }
+            .kv-key { font: 700 10px var(--font-mono); letter-spacing: 0.04em; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
+            .kv-val { font: 12px var(--font-mono); color: var(--text); word-break: break-word; min-width: 0; }
             .kv-val.empty { color: var(--text3); opacity: 0.5; }
 
             /* ── Flag pills (window boolean flags) ──────────────────────────── */
             .flags-row { display: flex; flex-wrap: wrap; gap: 4px; }
             .flag-chip {
                 display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--radius);
-                font: 11px "SF Mono", Menlo, monospace; background: var(--surface2);
+                font: 11px var(--font-mono); background: var(--surface2);
                 border: 1px solid var(--border); color: var(--text3); transition: all 0.15s;
             }
             .flag-chip::before { content: "\25CB"; font-size: 9px; }
@@ -126,18 +126,18 @@
             .entry:hover { background: var(--surface); }
             .entry.selected { background: var(--hover); outline: 1px solid var(--accent-glow); }
             .entry.dim-entry { opacity: 0.55; }
-            .ts { color: var(--text3); font: 10px "SF Mono", Menlo, monospace; flex-shrink: 0; padding-top: 1px; min-width: 52px; }
+            .ts { color: var(--text3); font: 10px var(--font-mono); flex-shrink: 0; padding-top: 1px; min-width: 52px; }
 
             /* ── Badges (event type) ────────────────────────────────────────── */
-            .badge { font: 700 10px "SF Mono", Menlo, monospace; letter-spacing: 0.05em; text-transform: uppercase; padding: 1px 5px; border-radius: var(--radius-s); flex-shrink: 0; }
+            .badge { font: 700 10px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; padding: 1px 5px; border-radius: var(--radius-s); flex-shrink: 0; }
             .badge-focus  { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-hi); }
             .badge-move   { background: color-mix(in srgb, var(--text3) 30%, transparent); color: var(--text2); }
             .badge-resize { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--warning); }
             .badge-state  { background: color-mix(in srgb, var(--success) 26%, transparent); color: var(--accent); }
 
             .ename { color: var(--text); word-break: break-word; }
-            .edetail { color: var(--text3); font: 11px "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
-            .ecount { color: var(--text3); font: 10px "SF Mono", Menlo, monospace; }
+            .edetail { color: var(--text3); font: 11px var(--font-mono); font-variant-numeric: tabular-nums; }
+            .ecount { color: var(--text3); font: 10px var(--font-mono); }
 
             /* ── Context menu ───────────────────────────────────────────────── */
             #ctx-menu { position: fixed; min-width: 140px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); box-shadow: 0 8px 24px rgba(0,0,0,0.55); z-index: 150; overflow: hidden; display: none; }
