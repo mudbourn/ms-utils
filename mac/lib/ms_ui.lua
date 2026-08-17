@@ -1816,6 +1816,19 @@ return function(ms)
                             end
                         end
                     end
+                    -- Non-plugin content (themes/sounds/macros/profiles/packages)
+                    -- reports its installed version from the content ledger.
+                    if ms.package and ms.package.listContent then
+                        local okC, content = pcall(ms.package.listContent)
+                        if okC and type(content) == "table" then
+                            for id, rec in pairs(content) do
+                                if installedById[id] == nil then
+                                    installedById[id] = (type(rec) == "table"
+                                        and rec.version) or true
+                                end
+                            end
+                        end
+                    end
                     local out = {}
                     for _, e in ipairs(entries) do
                         local instV = installedById[e.id]

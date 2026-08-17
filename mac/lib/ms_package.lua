@@ -198,6 +198,51 @@ return function(ms)
             return writeLedger(ledger)
         end
 
+        -- Content ledger: installed-version record for non-plugin content
+        -- (themes, sounds, macros, profiles, packages). Plugins keep their own
+        -- hash-verified ledger above; this one is keyed by manifest id and only
+        -- tracks the version, so Browse can show Install vs Update and the
+        -- update-alert system can diff against a registry version.
+        local _contentLedgerPath = _dataDir .. "/.ms_content_ledger.json"
+
+        local function readContentLedger()
+            local raw = readFile(_contentLedgerPath)
+            if not raw then return nil end
+            local ok, tbl = pcall(hs.json.decode, raw)
+            if ok and type(tbl) == "table" and type(tbl.content) == "table" then
+                return tbl
+            end
+            return nil
+        end
+
+        ms.package.recordContent = function(manifest)
+            if type(manifest) ~= "table" or type(manifest.id) ~= "string"
+                or manifest.id == "" then
+                return false
+            end
+            local ledger = readContentLedger() or { version = 1, content = {} }
+            ledger.content[manifest.id] = {
+                id          = manifest.id,
+                type        = manifest.type,
+                name        = manifest.name,
+                version     = manifest.version,
+                author      = manifest.author,
+                website     = manifest.website,
+                description = manifest.description,
+                installedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            }
+            local ok, json = pcall(hs.json.encode, ledger)
+            if not ok then return false end
+            return writeFile(_contentLedgerPath, json .. "\n")
+        end
+
+        -- Returns { [id] = { version = ..., ... }, ... } for installed content,
+        -- or an empty table. Used by Browse to flag already-installed entries.
+        ms.package.listContent = function()
+            local ledger = readContentLedger()
+            return (ledger and ledger.content) or {}
+        end
+
         local function pathAllowed(kind, rel)
             local spec = TYPE_SPECS[kind]
             if not spec then return false end
@@ -749,6 +794,14 @@ return function(ms)
                 end
                 if next(names) then
                     pcall(function() ms.package.recordPlugins(names, manifest) end)
+                end
+            else
+                -- Every other content type records its installed version so
+                -- Browse can offer Update. A component slice (opts.component) is
+                -- a partial profile install, not the whole entry, so skip it —
+                -- it stays "Install" and doesn't claim the profile is installed.
+                if not opts.component then
+                    pcall(function() ms.package.recordContent(manifest) end)
                 end
             end
 

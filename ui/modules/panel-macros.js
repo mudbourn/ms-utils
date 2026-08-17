@@ -105,6 +105,20 @@
                 ]
             },
             {
+                // Compiler construct (see ms_compiler.lua): sets an ongoing delay
+                // automatically inserted after every following step, until
+                // another action_delay changes it. 0 turns it off. Use a literal
+                // number — a tool-bound value can't be resolved at compile time.
+                id: "action_delay",
+                name: "action_delay",
+                sig: "set action delay (ms)",
+                desc: "Keyboard-Maestro style: auto-insert this pause between all following steps (0 = off).",
+                category: "timing",
+                params: [
+                    { name: "delayMs", type: "number", label: "Delay between steps (ms)", required: true }
+                ]
+            },
+            {
                 id: "ms.randWait",
                 name: "ms.randWait",
                 sig: "ms.randWait(min, max)",
@@ -157,13 +171,14 @@
                 desc: "Unified mouse API (click, move, drag at coordinates).",
                 category: "mouse",
                 params: [
-                    { name: "operation", type: "string", label: "Operation (click/move/drag)", required: true },
-                    { name: "button",    type: "string", label: "Button (left/right/middle)",  required: true },
-                    { name: "reference", type: "string", label: "Reference",                   required: true },
-                    { name: "x1",        type: "number", label: "X1",                          required: true },
-                    { name: "y1",        type: "number", label: "Y1",                          required: true },
-                    { name: "x2",        type: "number", label: "X2",                          required: false },
-                    { name: "y2",        type: "number", label: "Y2",                          required: false }
+                    { name: "operation", type: "string",  label: "Operation (click/move/drag)", required: true },
+                    { name: "button",    type: "string",  label: "Button (left/right/middle)",  required: true },
+                    { name: "reference", type: "string",  label: "Reference",                   required: true },
+                    { name: "unscaled",  type: "boolean", label: "Unscaled (raw pixels, bypass REF scaling)", required: false },
+                    { name: "x1",        type: "number",  label: "X1",                          required: true },
+                    { name: "y1",        type: "number",  label: "Y1",                          required: true },
+                    { name: "x2",        type: "number",  label: "X2",                          required: false },
+                    { name: "y2",        type: "number",  label: "Y2",                          required: false }
                 ]
             },
             {
@@ -935,6 +950,8 @@
                     _modState = { ctrl: false, alt: false, shift: false, cmd: false };
                 } else if (p.type === "number") {
                     _paramValues[p.name] = 0;
+                } else if (p.type === "boolean") {
+                    _paramValues[p.name] = false;
                 } else {
                     _paramValues[p.name] = "";
                 }
@@ -1187,6 +1204,15 @@
                     html += '<input type="number" data-param="' + esc(p.name) + '" value="0" step="1">';
                     break;
 
+                case "boolean":
+                    // Shared .toggle markup (hidden checkbox behind track/thumb),
+                    // same styling as the settings/macro toggles.
+                    html += '<label class="toggle fn-param-toggle">'
+                        + '<input type="checkbox" data-param="' + esc(p.name) + '">'
+                        + '<span class="toggle-track"></span>'
+                        + '<span class="toggle-thumb"></span></label>';
+                    break;
+
                 case "key":
                     html += '<div class="fn-key-capture">';
                     html += '<button class="fn-key-btn" data-param="' + esc(p.name) + '" data-key-capture>Click to set</button>';
@@ -1234,8 +1260,13 @@
             for (var i = 0; i < inputs.length; i++) {
                 (function(inp) {
                     var name = inp.getAttribute("data-param");
-                    inp.addEventListener("input", function() {
-                        if (inp.type === "number") {
+                    // Checkboxes commit their state on "change", not "input".
+                    var evt = (inp.type === "checkbox") ? "change" : "input";
+                    inp.addEventListener(evt, function() {
+                        if (inp.type === "checkbox") {
+                            _paramValues[name] = inp.checked;
+                            if (window.playSlot) playSlot(inp.checked ? "toggleOn" : "toggleOff");
+                        } else if (inp.type === "number") {
                             _paramValues[name] = parseFloat(inp.value) || 0;
                         } else {
                             _paramValues[name] = inp.value;

@@ -179,8 +179,17 @@
                 parts[#parts + 1] = serialize(p.operation or "Click")
                 parts[#parts + 1] = serialize(p.button or "Left")
                 parts[#parts + 1] = serialize(p.reference or "Mouse")
-                parts[#parts + 1] = numArg(p.x, 0)
-                parts[#parts + 1] = numArg(p.y, 0)
+                -- Optional Unscaled flag: raw pixels, bypassing REF-space scaling.
+                -- ms.Mouse reads a leading boolean vararg as this flag.
+                if p.unscaled == true then
+                    parts[#parts + 1] = "true"
+                end
+                -- Builder blocks store coords as x1/y1/x2/y2; older hand-authored
+                -- steps used x/y. Accept both so the start point isn't dropped.
+                local x1 = p.x1 ~= nil and p.x1 or p.x
+                local y1 = p.y1 ~= nil and p.y1 or p.y
+                parts[#parts + 1] = numArg(x1, 0)
+                parts[#parts + 1] = numArg(y1, 0)
                 local op = tostring(p.operation or ""):lower()
                 if op == "drag" or p.x2 ~= nil or p.y2 ~= nil then
                     parts[#parts + 1] = numArg(p.x2, 0)
@@ -225,6 +234,17 @@
             end
 
             local _flowCounter = 0
+
+            -- Per-block action delay (Keyboard-Maestro style): an "action_delay"
+            -- step sets this, and every subsequent leaf step gets a trailing
+            -- ms.wait until another action_delay step changes it. Reset at the
+            -- start of each compile so it never leaks between macros. Container
+            -- steps are skipped — their own children already carry the delay.
+            local _actionDelay = 0
+            local _CONTAINER = {
+                ["if"] = true, ["for"] = true,
+                ["while"] = true, ["repeat"] = true,
+            }
 
             local function stepCond(step)
                 local c = step.condition
@@ -368,15 +388,31 @@
                 return indent(lvl) .. action .. "(" .. serialize(p) .. ")"
             end
 
+            -- Sets the ongoing inter-step delay; emits only a marker comment.
+            -- A literal number is required — a tool-bound delay can't be known
+            -- at compile time and is treated as 0 (off).
+            emitters["action_delay"] = function(step, lvl)
+                local p = step.params or {}
+                local n = tonumber(p.delayMs) or 0
+                if n < 0 then n = 0 end
+                _actionDelay = math.floor(n)
+                return indent(lvl) .. "-- action delay: " .. _actionDelay
+                    .. "ms between steps"
+            end
+
             emitStep = function(step, lvl)
                 lvl = lvl or 1
                 local action = step.action
                 if not action then return indent(lvl) .. "-- [empty step]" end
                 local emitter = emitters[action]
-                if emitter then
-                    return emitter(step, lvl)
+                local line = emitter and emitter(step, lvl) or genericEmitter(step, lvl)
+                -- Append the ongoing action delay after leaf steps.
+                if _actionDelay > 0 and action ~= "action_delay"
+                    and not _CONTAINER[action] then
+                    line = line .. "\n" .. indent(lvl)
+                        .. "ms.wait(" .. _actionDelay .. ")"
                 end
-                return genericEmitter(step, lvl)
+                return line
             end
         -- END Emitters --
 
@@ -401,6 +437,7 @@
 
                 lines[#lines + 1] = "local " .. fnName .. " = ms.fn(function()"
                 lines[#lines + 1] = indent(1) .. "local t = 100"
+                _actionDelay = 0   -- never leak a delay between macros
                 for _, step in ipairs(steps) do
                     lines[#lines + 1] = emitStep(step, 1)
                 end
