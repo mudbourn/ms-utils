@@ -950,7 +950,11 @@
                 f1 = 122, f2 = 120, f3 = 99, f4 = 118,
                 f5 = 96, f6 = 97, f7 = 98, f8 = 100,
                 f9 = 101, f10 = 109, f11 = 103, f12 = 111,
-                rightclick = 999
+                leftclick = 997, mouse1 = 997,
+                rightclick = 999, mouse2 = 999,
+                middleclick = 998, mouse3 = 998,
+                mouse4 = 996, mouseback = 996,
+                mouse5 = 995, mouseforward = 995,
             }
 
             local function getCode(key)
@@ -1400,18 +1404,26 @@
                 ev:post()
             end
 
-            ms.mouse = function(button, swallow, clickFn, isSystem)
-                if not ms._mouseListener then
-                    ms._mouseCallbacks = {}
-                    local types = {
-                        hs.eventtap.event.types.leftMouseDown,
-                        hs.eventtap.event.types.leftMouseUp,
-                        hs.eventtap.event.types.rightMouseDown,
-                        hs.eventtap.event.types.rightMouseUp,
-                        hs.eventtap.event.types.otherMouseDown,
-                        hs.eventtap.event.types.otherMouseUp,
-                    }
-                    ms._mouseListener = hs.eventtap.new(types, function(event)
+            -- Button number (0 = left, 1 = right, 2 = middle) -> keytrack code.
+            -- These magic codes let ms.keystate / ms.mousestate read live button
+            -- state the same way keyboard keys are tracked.
+            local _MOUSE_TRACK_CODE = {
+                [0] = 997, [1] = 999, [2] = 998,  -- left / right / middle
+                [3] = 996, [4] = 995,             -- thumb back / forward
+            }
+
+            ms._ensureMouseListener = function()
+                if ms._mouseListener then return end
+                ms._mouseCallbacks = {}
+                local types = {
+                    hs.eventtap.event.types.leftMouseDown,
+                    hs.eventtap.event.types.leftMouseUp,
+                    hs.eventtap.event.types.rightMouseDown,
+                    hs.eventtap.event.types.rightMouseUp,
+                    hs.eventtap.event.types.otherMouseDown,
+                    hs.eventtap.event.types.otherMouseUp,
+                }
+                ms._mouseListener = hs.eventtap.new(types, function(event)
                         local type = event:getType()
                         local b
                         local isDown
@@ -1425,20 +1437,19 @@
                         elseif type == hs.eventtap.event.types.rightMouseDown then
                             b = 1
                             isDown = true
-                            ms.keytrack[999] = true
                         elseif type == hs.eventtap.event.types.rightMouseUp then
                             b = 1
                             isDown = false
-                            ms.keytrack[999] = false
                         elseif type == hs.eventtap.event.types.otherMouseDown then
                             b = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
                             isDown = true
-                            if b == 2 then ms.keytrack[998] = true end
                         else
                             b = event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
                             isDown = false
-                            if b == 2 then ms.keytrack[998] = false end
                         end
+
+                        local trackCode = _MOUSE_TRACK_CODE[b]
+                        if trackCode then ms.keytrack[trackCode] = isDown end
 
                         if ms.dev and ms.dev._wantsMouseEvents and ms.dev._wantsMouseEvents() then
                             local _mp = hs.mouse.absolutePosition()
@@ -1464,14 +1475,43 @@
 
                         return false
                     end):start()
-                    ms._resilientTaps[#ms._resilientTaps+1] = ms._mouseListener
-                end
+                ms._resilientTaps[#ms._resilientTaps+1] = ms._mouseListener
+            end
+
+            ms.mouse = function(button, swallow, clickFn, isSystem)
+                ms._ensureMouseListener()
                 ms._mouseCallbacks[button] = {
                     fn = clickFn,
                     swallow = swallow,
                     system = isSystem or false,
                 }
             end
+
+            -- Live mouse button state, mirroring ms.keystate for the keyboard.
+            -- Accepts "left"/"right"/"middle", 0/1/2, or the click aliases.
+            local _MOUSE_NAME_CODE = {
+                left = 997, l = 997, ["0"] = 997,
+                right = 999, r = 999, ["1"] = 999,
+                middle = 998, center = 998, m = 998, ["2"] = 998,
+                back = 996, thumb = 996, thumb1 = 996, ["3"] = 996,
+                forward = 995, thumb2 = 995, ["4"] = 995,
+            }
+            ms.mousestate = function(...)
+                ms._ensureMouseListener()
+                local args = { ... }
+                if #args == 0 then args = { "left" } end
+                for _, btn in ipairs(args) do
+                    local code
+                    if type(btn) == "number" then
+                        code = _MOUSE_TRACK_CODE[btn]
+                    else
+                        code = _MOUSE_NAME_CODE[tostring(btn):lower()]
+                    end
+                    if code and ms.keytrack[code] then return true end
+                end
+                return false
+            end
+            ms._ensureMouseListener()
 
             ms._scrollCallbacks = ms._scrollCallbacks or {}
             ms.scrollBind = function(direction, fn)
@@ -4014,6 +4054,16 @@
                 info   = "Check if a key is currently held",
                 params = { {
                     name = "key",
+                    type = "string",
+                } },
+                icon   = "inputs",
+            })
+            ms.fn.define("ms.mousestate", ms.mousestate, {
+                label  = "Mouse State",
+                group  = "sensing",
+                info   = "Check if a mouse button is currently held (left/right/middle)",
+                params = { {
+                    name = "button",
                     type = "string",
                 } },
                 icon   = "inputs",

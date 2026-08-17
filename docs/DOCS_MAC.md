@@ -731,6 +731,37 @@ Pass `true` as the second argument to treat the first argument as a raw keycode:
 ms.keystate(56, true)   -- checks shift by keycode
 ```
 
+Mouse buttons are tracked in the same table and can be queried here by name: `leftclick`/`mouse1`, `rightclick`/`mouse2`, `middleclick`/`mouse3`, `mouse4`/`mouseback`, `mouse5`/`mouseforward`. For clearer intent, prefer `ms.mousestate` (below) — it accepts friendlier names and covers the same buttons.
+
+---
+
+### `ms.mousestate(button [, ...])`
+
+Returns `true` if any of the named mouse buttons are currently held, mirroring `ms.keystate` for the pointer. Button state is tracked from startup, so this works without first registering an `ms.mouse` callback.
+
+```lua
+ms.mousestate("left")
+ms.mousestate("right")
+ms.mousestate("left", "right")   -- true if either is held
+ms.mousestate()                  -- defaults to left
+```
+
+Accepted names (case-insensitive), with the button number in parentheses:
+
+| Button | Names |
+|--------|-------|
+| Left (0) | `left`, `l`, `0` |
+| Right (1) | `right`, `r`, `1` |
+| Middle (2) | `middle`, `center`, `m`, `2` |
+| Thumb back (3) | `back`, `thumb`, `thumb1`, `3` |
+| Thumb forward (4) | `forward`, `thumb2`, `4` |
+
+```lua
+if ms.mousestate("back") then ms.type("z") end   -- thumb button → undo
+```
+
+> Thumb buttons only register if macOS delivers them as button 3/4. Vendor mouse software (Logitech Options, Razer Synapse, SteelSeries GG) that remaps the thumb buttons to keystrokes intercepts them before the event tap sees them, so they won't be tracked while that remapping is active.
+
 ---
 
 ### `ms.held(id)`

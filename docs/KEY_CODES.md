@@ -38,7 +38,13 @@ These are defined in `ms_core.lua` and take priority over Hammerspoon's built-in
 | `f10` | 109 | F10 |
 | `f11` | 103 | F11 |
 | `f12` | 111 | F12 |
-| `rightclick` | 999 | Virtual: right mouse button |
+| `leftclick` / `mouse1` | 997 | Virtual: left mouse button |
+| `rightclick` / `mouse2` | 999 | Virtual: right mouse button |
+| `middleclick` / `mouse3` | 998 | Virtual: middle mouse button |
+| `mouse4` / `mouseback` | 996 | Virtual: thumb button (back) |
+| `mouse5` / `mouseforward` | 995 | Virtual: thumb button (forward) |
+
+These virtual codes are live-tracked and can be read with `ms.keystate` (by name) or, more legibly, with `ms.mousestate`.
 
 ---
 
@@ -159,4 +165,9 @@ Used with `ms.mouse(button, swallow, clickFn)`:
 ms.mouse(0, true, function() print("left click") end)   -- left
 ms.mouse(1, true, function() print("right click") end)  -- right
 ms.mouse(2, true, function() print("middle click") end) -- middle
+```
+
+To poll whether a button is currently held (rather than react to a click), use `ms.mousestate` — it takes the same button numbers plus friendly names (`left`, `right`, `middle`, `back`, `forward`):
+```lua
+if ms.mousestate("back") then ... end   -- thumb button held
 ```
