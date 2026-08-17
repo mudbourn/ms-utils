@@ -74,10 +74,16 @@ ENTRY_COUNT=$(jq '.entries | length' "$INDEX")
 PKG_LUA="$ROOT/mac/lib/ms_package.lua"
 TYPES_JSON=""
 if [ -f "$PKG_LUA" ]; then
-    TYPES_JSON=$(sed -n 's/.*ms\.package\.TYPES *= *{\(.*\)}.*/\1/p' "$PKG_LUA" \
-        | head -1 \
-        | tr -d ' "' \
-        | jq -R 'split(",") | map(select(length > 0))' 2>/dev/null || echo "")
+    # The table may be written on one line or spread across many (either is
+    # valid Lua), so slurp from `ms.package.TYPES = {` to the closing `}` and
+    # pull every quoted string out of that block.
+    TYPES_JSON=$(awk '
+        /ms\.package\.TYPES[[:space:]]*=[[:space:]]*{/ { grab = 1 }
+        grab { print; if (/}/) exit }
+    ' "$PKG_LUA" \
+        | grep -oE '"[^"]+"' \
+        | tr -d '"' \
+        | jq -R . | jq -s '.' 2>/dev/null || echo "")
 fi
 if [ -z "$TYPES_JSON" ] || [ "$(printf '%s' "$TYPES_JSON" | jq 'length')" = "0" ]; then
     fail "could not read ms.package.TYPES from $PKG_LUA — refusing to validate against a guessed type list."
