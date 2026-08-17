@@ -1901,6 +1901,72 @@ return function(ms)
                 end)
             end,
 
+            -- Installed Library --
+            -- The theme/sound/macro panels each manage their own shelf of
+            -- installed, hotswappable slices. Kind comes in on `data.kind`; the
+            -- list is pushed back per-kind so a panel repaints only its section.
+            libraryList = function(data)
+                if not (ms.package and ms.package.libraryList and ms.shell) then return end
+                local kind = data and data.kind
+                if not (ms.package.isLibraryKind and ms.package.isLibraryKind(kind)) then return end
+
+                local entries = ms.package.libraryList(kind)
+                local ok, json = pcall(hs.json.encode, {
+                    kind    = kind,
+                    entries = entries,
+                })
+                if ok and json then
+                    pcall(function()
+                        ms.shell.eval("shellReceive('library', " .. hs.json.encode(kind) ..
+                            ", " .. json .. ")")
+                    end)
+                end
+            end,
+
+            libraryActivate = function(data)
+                if not (data and data.kind and data.slug and ms.package
+                        and ms.package.libraryActivate) then return end
+
+                local res, err = ms.package.libraryActivate(data.kind, data.slug)
+                if not res then
+                    ms.alert("Could not activate:\n" .. tostring(err), 4)
+                    return
+                end
+
+                if ms._soundsDirty and ms._discoverSounds then ms._discoverSounds() end
+                if ms.loadTheme then ms.loadTheme() end
+                ms.playSlot("update")
+                ms.alert((data.name or "Slice") .. " activated.", 3, true)
+                ms.ui.markDirty()
+                ms.ui.refresh()
+            end,
+
+            libraryRemove = function(data)
+                if not (data and data.kind and data.slug and ms.package
+                        and ms.package.libraryRemove) then return end
+
+                local ok, err = ms.package.libraryRemove(data.kind, data.slug)
+                if not ok then
+                    ms.alert("Could not remove:\n" .. tostring(err), 4)
+                    return
+                end
+                ms.playSlot("back")
+                ms.ui._actions.libraryList({ kind = data.kind })
+            end,
+
+            libraryCapture = function(data)
+                if not (data and data.kind and ms.package and ms.package.libraryCapture) then return end
+
+                local rec, err = ms.package.libraryCapture(data.kind, data.name)
+                if not rec then
+                    ms.alert("Could not capture:\n" .. tostring(err), 4)
+                    return
+                end
+                ms.playSlot("update")
+                ms.alert("Saved \"" .. rec.name .. "\" to the library.", 3, true)
+                ms.ui._actions.libraryList({ kind = data.kind })
+            end,
+
             -- Plugins --
             setPluginEnabled = function(data)
                 if not (data and data.dir and ms.package and ms.package.setPluginEnabled) then return end
@@ -2328,6 +2394,7 @@ return function(ms)
             ms.bus.on("ui:tools:*",  _routeAction)
             ms.bus.on("ui:plugins:*", _routeAction)
             ms.bus.on("ui:browse:*", _routeAction)
+            ms.bus.on("ui:library:*", _routeAction)
         end
 
         ms.ui.show = function()

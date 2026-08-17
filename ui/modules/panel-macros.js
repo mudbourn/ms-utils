@@ -592,6 +592,27 @@
                 ]
             },
             {
+                id: "call_fn",
+                name: "call function",
+                sig: "ms.callFn(name)",
+                desc: "Run a function tool by name. Author functions in the Tools panel's Function tab.",
+                category: "logic",
+                params: [
+                    { name: "name", type: "string", label: "Function", required: true }
+                ]
+            },
+            {
+                id: "hvar_set",
+                name: "set helper var",
+                sig: "ms.vars.set(name, value)",
+                desc: "Write a shared, disk-persistent helper variable. Declare it in the Tools panel's Variable tab; read it by wiring a Value field to it.",
+                category: "logic",
+                params: [
+                    { name: "name",  type: "string", label: "Variable", required: true },
+                    { name: "value", type: "string", label: "Value",    required: false }
+                ]
+            },
+            {
                 id: "comment",
                 name: "comment",
                 sig: "-- text",
@@ -1095,32 +1116,117 @@
         // by param name, so setToolList can refresh their options in place.
         var _toolSelects = {};
 
-        // Type and default line under a bound param's tool picker.
-        function toolInfoHTML(key) {
-            var t = key && findTool(key);
-            if (!t) return "";
-            var bits = [];
-            if (t.type === "slider" && (t.min != null || t.max != null)) {
-                bits.push("range " + (t.min != null ? t.min : "?")
-                    + " to " + (t.max != null ? t.max : "?"));
-            }
-            if (t.type === "seg" && t.options) {
-                bits.push(t.options.map(function(o) { return o.label; }).join(" / "));
-            }
-            if (t.default !== undefined && t.default !== null && t.default !== "") {
-                var dv = (t.type === "toggle")
-                    ? ((t.default === true || t.default === "true") ? "On" : "Off")
-                    : String(t.default);
-                bits.push("default " + dv);
-            }
-            var tail = bits.length ? " · " + esc(bits.join(" · ")) : "";
-            return "Reads a <b>" + esc(t.type) + "</b> tool" + tail
-                + ". Edit its value in the Tools panel.";
-        }
-
+        // Header line above the bound tool's value editor, names the tool type.
         function setToolInfo(name, key) {
             var el = detailPane.querySelector('[data-toolinfo="' + name + '"]');
-            if (el) el.innerHTML = toolInfoHTML(key);
+            if (!el) return;
+            var t = key && findTool(key);
+            el.innerHTML = t ? ("Sets the <b>" + esc(t.type) + "</b> tool's value:") : "";
+        }
+
+        // The tool's live value, falling back to its authored default.
+        function currentToolValue(t) {
+            if (t.value !== undefined && t.value !== null) return t.value;
+            return (t.default !== undefined) ? t.default : null;
+        }
+
+        // Persist a tool value to the host (the same setting the Tools panel
+        // edits) and keep the local copy in sync so the control stays live.
+        function commitToolValue(t, value, name) {
+            t.value = value;
+            if (window.shellPost) {
+                shellPost("macros", "userSettingChange", {
+                    action: "userSettingChange",
+                    key: t.key,
+                    value: value,
+                });
+            }
+        }
+
+        // Inline value editor under the tool picker, one control per tool type
+        // (toggle / seg / slider), so a bound tool can be set here directly.
+        function mountToolValue(name, key) {
+            var wrap = detailPane.querySelector('[data-toolval="' + name + '"]');
+            if (!wrap) return;
+            wrap.innerHTML = "";
+            var t = key && findTool(key);
+            if (!t) return;
+            var val = currentToolValue(t);
+
+            if (t.type === "toggle") {
+                var on = (val === true || val === "true");
+                var lab = document.createElement("label");
+                lab.className = "toggle fn-param-toggle";
+                var cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.checked = on;
+                var track = document.createElement("span");
+                track.className = "toggle-track";
+                var thumb = document.createElement("span");
+                thumb.className = "toggle-thumb";
+                lab.appendChild(cb);
+                lab.appendChild(track);
+                lab.appendChild(thumb);
+                cb.addEventListener("change", function() {
+                    if (window.playSlot) playSlot(cb.checked ? "toggleOn" : "toggleOff");
+                    commitToolValue(t, cb.checked, name);
+                });
+                wrap.appendChild(lab);
+
+            } else if (t.type === "seg") {
+                var seg = document.createElement("div");
+                seg.className = "fn-tool-seg";
+                (t.options || []).forEach(function(o) {
+                    var b = document.createElement("button");
+                    b.className = "fn-tool-seg-opt" + (o.value === val ? " on" : "");
+                    b.textContent = o.label;
+                    b.addEventListener("mouseenter", function() {
+                        if (window.playSlot) playSlot("hover");
+                    });
+                    b.addEventListener("click", function() {
+                        var opts = seg.querySelectorAll(".fn-tool-seg-opt");
+                        for (var i = 0; i < opts.length; i++) opts[i].classList.remove("on");
+                        b.classList.add("on");
+                        if (window.playSlot) playSlot("interact");
+                        commitToolValue(t, o.value, name);
+                    });
+                    seg.appendChild(b);
+                });
+                wrap.appendChild(seg);
+
+            } else if (t.type === "slider") {
+                var row = document.createElement("div");
+                row.className = "fn-tool-slider";
+                var range = document.createElement("input");
+                range.type = "range";
+                range.min = (t.min != null ? t.min : 0);
+                range.max = (t.max != null ? t.max : 100);
+                range.step = (t.step != null ? t.step : 1);
+                var num = (typeof val === "number") ? val : parseFloat(val);
+                if (isNaN(num)) num = Number(range.min);
+                range.value = num;
+                var read = document.createElement("span");
+                read.className = "fn-tool-slider-val";
+                var fmt = function(v) { return String(v) + (t.unit ? (" " + t.unit) : ""); };
+                read.textContent = fmt(num);
+                // Live read-out on drag, commit to the host on release, so a drag
+                // does not flood the host with a set per frame.
+                range.addEventListener("input", function() {
+                    read.textContent = fmt(parseFloat(range.value));
+                });
+                range.addEventListener("change", function() {
+                    commitToolValue(t, parseFloat(range.value), name);
+                });
+                row.appendChild(range);
+                row.appendChild(read);
+                wrap.appendChild(row);
+            }
+        }
+
+        // Refresh both the header and the value editor for a param's tool pick.
+        function refreshToolBind(name, key) {
+            setToolInfo(name, key);
+            mountToolValue(name, key);
         }
 
         // Replace each tool-select mount point with a themed createSelect. Falls
@@ -1140,7 +1246,7 @@
                             if (window.playSlot) playSlot("interact");
                             _paramBind[name] = v;
                             _paramValues[name] = { __toolRef: v };
-                            setToolInfo(name, v);
+                            refreshToolBind(name, v);
                             updatePreview(fn);
                         },
                     });
@@ -1148,7 +1254,7 @@
                     sel.setAttribute("data-toolsel", name);
                     mount.appendChild(sel);
                     _toolSelects[name] = sel;
-                    setToolInfo(name, _paramBind[name] || "");
+                    refreshToolBind(name, _paramBind[name] || "");
                 })(mounts[i]);
             }
         }
@@ -1222,6 +1328,7 @@
                 // Themed createSelect mounted after the HTML lands.
                 html += '<div class="fn-tool-select-mount" data-toolmount="' + esc(p.name) + '"></div>';
                 html += '<div class="fn-tool-info" data-toolinfo="' + esc(p.name) + '"></div>';
+                html += '<div class="fn-tool-value" data-toolval="' + esc(p.name) + '"></div>';
                 html += '</div>';
             }
 
@@ -1327,7 +1434,7 @@
                             if (_paramBind[name]) {
                                 _paramValues[name] = { __toolRef: _paramBind[name] };
                             }
-                            setToolInfo(name, _paramBind[name] || "");
+                            refreshToolBind(name, _paramBind[name] || "");
                         } else {
                             group.classList.remove("bound");
                             if (lit)  lit.style.display  = "";
@@ -1546,6 +1653,11 @@
 
 (function() {
     "use strict";
+
+    // The Tools panel's Function tab authors function tools on a second
+    // ToolCanvas instance, so the constructor (a hoisted declaration below)
+    // must be reachable outside this IIFE. ToolEditor is already global.
+    if (typeof window !== "undefined") window.ToolCanvas = ToolCanvas;
 
     var _svgCache = {};
 
@@ -2964,6 +3076,106 @@
     metaCard.appendChild(metaBody);
     bindsSection.insertBefore(metaCard, bindsScroll);
 
+    /* -- Installed Macro Packs (hotswappable library) -- */
+    // A shelf of saved macro packs the host keeps under data/library/macro.
+    // Activating one swaps in its ms_macros.lua + visual json and recompiles;
+    // the list repaints out-of-band on the host's 'library' push. Sits beside
+    // Pack Info, collapsed by default. See the theme/sound managers in
+    // panel-theme.js — same shape, driven by the same msLibraryClient.
+    var _macroLib = [];
+
+    var packCard = document.createElement("div");
+    packCard.className = "section macro-packs-section collapsed";
+
+    var packHead = document.createElement("div");
+    packHead.className = "section-head macro-meta-head";
+    var packChev = document.createElement("span");
+    packChev.className = "macro-meta-chev";
+    packChev.innerHTML = (typeof window.icon === "function"
+        && window.ICONS && window.ICONS.chevdown)
+        ? window.icon("chevdown") : "";
+    var packTitle = document.createElement("span");
+    packTitle.className = "section-title";
+    packTitle.textContent = "Installed Macro Packs";
+    var packDesc = document.createElement("span");
+    packDesc.className = "section-desc";
+    packDesc.textContent = "Hotswap a saved macro set";
+    packHead.appendChild(packChev);
+    packHead.appendChild(packTitle);
+    packHead.appendChild(packDesc);
+    packHead.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+    packHead.addEventListener("click", function() {
+        if (window.playSlot) playSlot("interact");
+        packCard.classList.toggle("collapsed");
+    });
+    packCard.appendChild(packHead);
+
+    var packBody = document.createElement("div");
+    packBody.className = "section-body";
+    var packList = document.createElement("div");
+    packList.id = "library-list-macro";
+    packList.className = "library-list";
+    packBody.appendChild(packList);
+
+    var packSaveRow = document.createElement("div");
+    packSaveRow.className = "macro-meta-save-row";
+    var packSaveBtn = document.createElement("button");
+    packSaveBtn.className = "macro-toolbar-btn";
+    packSaveBtn.textContent = "Save current macros...";
+    packSaveBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
+    packSaveBtn.addEventListener("click", async function() {
+        if (window.playSlot) playSlot("interact");
+        if (!window.openModal || !window.msLibraryClient) return;
+        var r = await window.openModal(
+            "Save current macros",
+            "Name this macro pack so you can hotswap back to it later.",
+            "Save", "Cancel", true, "");
+        if (r.confirmed) window.msLibraryClient.capture("macro", (r.value || "").trim());
+    });
+    packSaveRow.appendChild(packSaveBtn);
+    packBody.appendChild(packSaveRow);
+    packCard.appendChild(packBody);
+    bindsSection.insertBefore(packCard, bindsScroll);
+
+    function fillMacroLib() {
+        var kit = window.msUI;
+        packList.innerHTML = "";
+        if (!kit) return;
+
+        if (!_macroLib.length) {
+            packList.appendChild(kit.h("div", { cls: "theme-note" },
+                "Nothing here yet. Install a macro pack from Browse, or save "
+                + "your current one above."));
+            return;
+        }
+
+        for (var i = 0; i < _macroLib.length; i++) {
+            (function(e) {
+                var meta = [e.origin, e.version].filter(Boolean).join(" · ");
+                packList.appendChild(kit.row(e.name, meta || null, kit.btnRow(
+                    kit.actionBtn("Activate", "accent", function() {
+                        window.msLibraryClient.activate("macro", e.slug, e.name);
+                    }),
+                    kit.actionBtn("Delete", "danger", async function() {
+                        var r = await window.openModal(
+                            "Delete " + e.name + "?",
+                            "Removes it from your library. Macros already applied stay in place.",
+                            "Delete", "Cancel");
+                        if (r.confirmed) window.msLibraryClient.remove("macro", e.slug);
+                    }),
+                )));
+            })(_macroLib[i]);
+        }
+    }
+
+    if (window.msLibraryClient) {
+        window.msLibraryClient.on("macro", function(entries) {
+            _macroLib = entries || [];
+            fillMacroLib();
+        });
+        window.msLibraryClient.request("macro");
+    }
+
     function updateMetaSaveBtn() {
         var on = _metaDirty && !_metaOwned;
         metaSaveBtn.disabled = !on;
@@ -3771,6 +3983,8 @@
         pressMode:          "type", // "type" | "press" | "pressRelease"
         recordDrags:        true,   // capture mouse drags as Drag ops
         dragGranularity:    5,      // 1 (coarse) ... 10 (near 1:1) path fidelity
+        recordMouseMoves:   false,  // capture free cursor motion as moveMouse steps
+        moveGranularity:    5,      // 1 (coarse) ... 10 (near 1:1) move-path fidelity
         recordMouseButtons: true,   // capture mouse-button clicks
         recordWindowMove:   false,  // capture focused-window moves
         recordWindowResize: false,  // capture focused-window resizes
@@ -3959,6 +4173,8 @@
         row("Record mouse buttons", "Capture left/right/middle clicks.", toggle("recordMouseButtons"));
         row("Record mouse drags", "Capture press-move-release as a drag gesture.", toggle("recordDrags"));
         row("Drag fidelity", "How closely a recorded drag follows your real path. Lower is coarser; higher tracks curves near 1:1. The whole gesture stays one module either way.", slider("dragGranularity", 1, 10));
+        row("Record mouse movement", "Capture free cursor motion (no button held) as moveMouse steps.", toggle("recordMouseMoves"));
+        row("Movement fidelity", "How closely recorded movement follows your real path. Lower is coarser, higher tracks curves near 1:1.", slider("moveGranularity", 1, 10));
         row("Record window moves", "Capture moving the focused window.", toggle("recordWindowMove"));
         var lastRow =
         row("Record window resizes", "Capture resizing the focused window.", toggle("recordWindowResize"));
@@ -4128,6 +4344,19 @@
         setToolList: function(list) {
             if (window.fnPicker && window.fnPicker.setToolList) {
                 window.fnPicker.setToolList(list);
+            }
+            // The Tools panel's Variable tab renders from the same list.
+            if (typeof window.renderToolVariablesTab === "function") {
+                window.renderToolVariablesTab();
+            }
+        },
+        // Function tools (authored on the step canvas in the Tools panel).
+        // Stored globally so both the "Call function" picker block and the
+        // Tools panel's Function tab read one source.
+        setFunctionList: function(list) {
+            window.msMacroFunctions = Array.isArray(list) ? list : [];
+            if (typeof window.renderToolFunctionsTab === "function") {
+                window.renderToolFunctionsTab();
             }
         },
         createTool: function(def) {

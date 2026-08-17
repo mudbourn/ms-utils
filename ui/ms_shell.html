@@ -466,6 +466,7 @@
            ui-select.js so every dropdown in the shell stays one control. */
         .panel-theme .theme-select { max-width: 150px; min-width: 0; padding: 3px 6px; font-size: 11px; border-radius: var(--radius-s); }
         .panel-theme .theme-note { padding: 10px 14px 4px; font-size: 11px; line-height: 1.5; color: var(--text3); }
+        .library-list { display: flex; flex-direction: column; margin-bottom: 6px; }
 
         /* Preview / import beside each sound slot. */
         .panel-theme .slot-ctl { display: flex; align-items: center; gap: 6px; }
@@ -773,6 +774,16 @@
         .fn-tool-info { font-size: 10px; color: var(--text3); line-height: 1.5; margin-top: 6px; }
         .fn-tool-info:empty { display: none; }
         .fn-tool-info b { color: var(--accent-hi); font-weight: 600; }
+        /* Inline value editor for a bound tool (toggle / seg / slider). */
+        .fn-tool-value { margin-top: 6px; }
+        .fn-tool-value:empty { display: none; }
+        .fn-tool-seg { display: inline-flex; gap: 0; border: 1px solid var(--border-dim); border-radius: var(--radius-s); overflow: hidden; }
+        .fn-tool-seg-opt { background: var(--surface2); border: none; color: var(--text3); font-size: 11px; font-weight: 600; padding: 4px 10px; cursor: pointer; transition: all 0.1s; }
+        .fn-tool-seg-opt:hover { color: var(--text); }
+        .fn-tool-seg-opt.on { background: var(--accent-glow-faint); color: var(--accent-hi); }
+        .fn-tool-slider { display: flex; align-items: center; gap: 8px; }
+        .fn-tool-slider input[type="range"] { flex: 1; accent-color: var(--accent); }
+        .fn-tool-slider-val { font-family: var(--font-mono); font-size: 11px; color: var(--text); min-width: 3ch; text-align: right; }
         .fn-param-tool select.fn-tool-select { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: var(--font-mono); cursor: pointer; }
         .fn-param-tool select.fn-tool-select:focus { border-color: var(--accent); }
         .fn-param.bound .fn-param-type { color: var(--accent-hi); }
@@ -1597,14 +1608,22 @@
             </div>
         </div>
         <div class="otabs">
-            <button class="otab" data-otab="builder" onmouseenter="playSlot('hover')" onclick="switchToolsTab('builder')">Builder</button>
             <button class="otab active" data-otab="settings" onmouseenter="playSlot('hover')" onclick="switchToolsTab('settings')">Settings</button>
+            <button class="otab" data-otab="builder" onmouseenter="playSlot('hover')" onclick="switchToolsTab('builder')">Setting</button>
+            <button class="otab" data-otab="functions" onmouseenter="playSlot('hover')" onclick="switchToolsTab('functions')">Function</button>
+            <button class="otab" data-otab="variables" onmouseenter="playSlot('hover')" onclick="switchToolsTab('variables')">Variable</button>
         </div>
         <div class="otab-section active" data-osection="settings">
             <div id="tools-scroll" class="tsec-scroll"></div>
         </div>
         <div class="otab-section" data-osection="builder">
             <div id="tools-builder-scroll" class="tsec-scroll"></div>
+        </div>
+        <div class="otab-section" data-osection="functions">
+            <div id="tools-functions-scroll" class="tsec-scroll"></div>
+        </div>
+        <div class="otab-section" data-osection="variables">
+            <div id="tools-variables-scroll" class="tsec-scroll"></div>
         </div>
 </div>
 <div class="panel-theme" style="display:none">
@@ -1972,6 +1991,31 @@
     window.registerPanel = function(name, handler) {
         _panelHandlers[name] = handler;
     };
+
+    // Installed-library client. The theme, sound and macro panels each own a
+    // shelf of hotswappable slices but share this one channel: a panel calls
+    // on(kind, fn) to receive its list, and request/activate/remove/capture to
+    // drive the host. The 'library' push carries the kind as its action.
+    (function() {
+        var kinds = {};
+        function post(action, body) {
+            if (window.shellPost) window.shellPost('library', action,
+                Object.assign({ action: action }, body || {}));
+        }
+        window.msLibraryClient = {
+            on:       function(kind, fn) { kinds[kind] = fn; },
+            request:  function(kind) { post('libraryList', { kind: kind }); },
+            activate: function(kind, slug, name) {
+                post('libraryActivate', { kind: kind, slug: slug, name: name });
+            },
+            remove:   function(kind, slug) { post('libraryRemove', { kind: kind, slug: slug }); },
+            capture:  function(kind, name) { post('libraryCapture', { kind: kind, name: name }); },
+        };
+        window.registerPanel('library', function(kind, payload) {
+            var fn = kinds[kind];
+            if (fn) fn((payload && payload.entries) || []);
+        });
+    })();
 
     // Shell-wide native context menu suppression. Panels install their own
     // contextmenu handlers to build custom menus, but each is gated on that

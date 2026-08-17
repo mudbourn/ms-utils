@@ -60,6 +60,8 @@ const PARAM_DEFS = {
     "while":            { condition: "condition" },
     "repeat":           { condition: "condition" },
     "for":              { var: "string", from: "number", to: "number", step: "number" },
+    "call_fn":          { name: "string" },
+    "hvar_set":         { name: "string", value: "string" },
     "var_set":          { name: "string", value: "string" },
     "var_add":          { name: "string", amount: "number" },
     "var_sub":          { name: "string", amount: "number" },
@@ -497,9 +499,30 @@ class ToolEditor {
         };
     }
 
-    // A value the builder wired to a tool arrives as { __toolRef: "key" }.
+    // A value the builder wired to a tool arrives as { __toolRef: "key" } for
+    // an authored setting, or { __varRef: "name" } for a helper var. Both are
+    // "bound" references the editor renders with the tool dropdown.
     static _isToolRef(v) {
-        return !!(v && typeof v === "object" && typeof v.__toolRef === "string");
+        return !!(v && typeof v === "object"
+            && (typeof v.__toolRef === "string" || typeof v.__varRef === "string"));
+    }
+    // The bound key regardless of which tag carries it.
+    static _refKey(v) {
+        if (!v || typeof v !== "object") return "";
+        if (typeof v.__toolRef === "string") return v.__toolRef;
+        if (typeof v.__varRef === "string")  return v.__varRef;
+        return "";
+    }
+    // Build the correct ref object for a given tool key: helper vars (kind
+    // "var") read via ms.vars.get, everything else via ms.settings.get.
+    static _refFor(key) {
+        const tools = ToolEditor._toolList();
+        for (let i = 0; i < tools.length; i++) {
+            if (tools[i].key === key && tools[i].kind === "var") {
+                return { __varRef: key };
+            }
+        }
+        return { __toolRef: key };
     }
     // The live tool list, shared by the Add Module picker via a global.
     static _toolList() {
@@ -857,7 +880,7 @@ class ToolEditor {
                 e.stopPropagation();
                 const tools = ToolEditor._toolList();
                 const first = tools.length ? tools[0].key : "";
-                value = { __toolRef: first };
+                value = ToolEditor._refFor(first);
                 this._updateParam(sid, key, value);
                 render();
             });
@@ -890,7 +913,7 @@ class ToolEditor {
     // so editing an unrelated field never silently drops the binding.
     _createToolSelect(key, value, sid) {
         const tools = ToolEditor._toolList();
-        const current = ToolEditor._isToolRef(value) ? value.__toolRef : "";
+        const current = ToolEditor._refKey(value);
 
         // Build the option list: every live tool, plus a synthesised entry that
         // preserves a bound-but-missing key so editing never drops the binding.
@@ -912,7 +935,7 @@ class ToolEditor {
                 options:     options,
                 value:       current,
                 placeholder: "No tools, create one in Add Module",
-                onChange:    (v) => this._updateParam(sid, key, { __toolRef: v }),
+                onChange:    (v) => this._updateParam(sid, key, ToolEditor._refFor(v)),
             });
             return sel;
         }
@@ -936,7 +959,7 @@ class ToolEditor {
             });
         }
         sel.addEventListener("change", () => {
-            this._updateParam(sid, key, { __toolRef: sel.value });
+            this._updateParam(sid, key, ToolEditor._refFor(sel.value));
         });
         return sel;
     }

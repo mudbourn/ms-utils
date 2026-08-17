@@ -69,6 +69,18 @@ return function(ms)
         local function rmrf(dir)
             if dir and dir:find("mspkg%-") then hs.execute("/bin/rm -rf " .. sq(dir)) end
         end
+
+        -- Where a packaged relative path lands in the live install. Shared by
+        -- install and the library so an activated slice reaches the same dirs.
+        local function destFor(clean)
+            if clean:find("^ms_") and clean:find("%.json$") then
+                return _dataDir .. "/" .. clean
+            elseif clean == "ms_macros.lua" then
+                return _hsDir .. "/ms_macros.lua"
+            else
+                return _hsDir .. "/" .. clean
+            end
+        end
     -- END Helpers --
 
     -- Type Specs --
@@ -666,6 +678,54 @@ return function(ms)
         end
     -- END Split --
 
+    -- Apply dropped files --
+        -- Post-copy side effects shared by install and library activation:
+        -- recompile visual macros, rehydrate the slot map, and flag sounds
+        -- dirty so the panel rediscovers them. `installed` is the list of
+        -- relative paths that actually landed on disk.
+        local function applyDropped(installed)
+            local sawAudio = false
+
+            for _, rel in ipairs(installed) do
+                if isAudioRel(rel) then sawAudio = true end
+            end
+
+            if ms.compiler and ms.compiler.compile then
+                for _, rel in ipairs(installed) do
+                    if rel == "ms_macros_visual.json" then
+                        pcall(function() ms.compiler.compile() end)
+                        break
+                    end
+                end
+            end
+
+            for _, rel in ipairs(installed) do
+                if rel == "sound_assign.json" then
+                    local dropped = _hsDir .. "/sound_assign.json"
+                    local f = io.open(dropped, "r")
+                    if f then
+                        local raw = f:read("*all")
+                        f:close()
+                        local ok, tbl = pcall(hs.json.decode, raw)
+                        if ok and type(tbl) == "table" then
+                            ms.soundAssign = ms.soundAssign or {}
+                            for slot, name in pairs(tbl) do
+                                if type(slot) == "string" and type(name) == "string" then
+                                    ms.soundAssign[slot] = name
+                                end
+                            end
+                            if ms.saveSettings then pcall(ms.saveSettings) end
+                        end
+                    end
+                    os.remove(dropped)
+                    break
+                end
+            end
+
+            if sawAudio then ms._soundsDirty = true end
+        end
+    -- END Apply dropped files --
+
     -- Install --
         ms.package.install = function(path, opts)
             opts = opts or {}
@@ -730,14 +790,7 @@ return function(ms)
                 local clean = safeRelPath(rel)
                 if clean and (not sliceSet or sliceSet[clean])
                    and (manifest.legacy or pathAllowed(manifest.type, clean)) then
-                    local dest
-                    if clean:find("^ms_") and clean:find("%.json$") then
-                        dest = _dataDir .. "/" .. clean
-                    elseif clean == "ms_macros.lua" then
-                        dest = _hsDir .. "/ms_macros.lua"
-                    else
-                        dest = _hsDir .. "/" .. clean
-                    end
+                    local dest = destFor(clean)
 
                     if opts.backup ~= false and fileExists(dest) then
                         hs.execute("/bin/cp " .. sq(dest) .. " " .. sq(dest .. ".bak"))
@@ -752,41 +805,34 @@ return function(ms)
                 end
             end
 
+            -- Mirror the slice into the installed library so the panels can
+            -- hotswap it later. The kind is the component for a slice install,
+            -- else the package's own type. Named after the manifest, so a slice
+            -- pulled from a profile inherits that profile's name.
+            local libKind = opts.component or manifest.type
+            if #installed > 0 and ms.package.isLibraryKind(libKind) and not opts.noLibrary then
+                local libFiles = {}
+                for _, clean in ipairs(installed) do
+                    if pathAllowed(libKind, clean) then
+                        libFiles[clean] = staging .. "/" .. clean
+                    end
+                end
+                if next(libFiles) then
+                    pcall(function()
+                        ms.package.librarySave(libKind, libFiles, {
+                            name    = manifest.name,
+                            origin  = opts.component and "profile-slice" or "installed",
+                            version = manifest.version,
+                        })
+                    end)
+                end
+            end
+
             rmrf(staging)
 
             if #installed == 0 then return nil, "Nothing could be installed." end
 
-            if ms.compiler and ms.compiler.compile then
-                for _, rel in ipairs(installed) do
-                    if rel == "ms_macros_visual.json" then
-                        pcall(function() ms.compiler.compile() end)
-                        break
-                    end
-                end
-            end
-
-            for _, rel in ipairs(installed) do
-                if rel == "sound_assign.json" then
-                    local dropped = _hsDir .. "/sound_assign.json"
-                    local f = io.open(dropped, "r")
-                    if f then
-                        local raw = f:read("*all")
-                        f:close()
-                        local ok, tbl = pcall(hs.json.decode, raw)
-                        if ok and type(tbl) == "table" then
-                            ms.soundAssign = ms.soundAssign or {}
-                            for slot, name in pairs(tbl) do
-                                if type(slot) == "string" and type(name) == "string" then
-                                    ms.soundAssign[slot] = name
-                                end
-                            end
-                            if ms.saveSettings then pcall(ms.saveSettings) end
-                        end
-                    end
-                    os.remove(dropped)
-                    break
-                end
-            end
+            applyDropped(installed)
 
             if manifest.type == "plugin" then
                 local names = {}
@@ -805,10 +851,6 @@ return function(ms)
                 end
             end
 
-            if manifest.type == "sound" or manifest.type == "profile"
-                or manifest.type == "theme" then
-                ms._soundsDirty = true
-            end
             if manifest.type == "profile" then
                 ms._profilesDirty = true
             end
@@ -981,6 +1023,193 @@ return function(ms)
             return nil
         end
     -- END Export Helpers --
+
+    -- Installed Library --
+        -- A shelf of installed, hotswappable slices — a theme, a sound pack, or
+        -- a macro pack — that Browse fills on install and the panels manage.
+        -- Each entry is a folder under data/library/<kind>/<slug>/ holding the
+        -- slice's files verbatim (by their live relative paths) plus meta.json.
+        -- Activating an entry copies those files into the live dirs, reusing the
+        -- same destinations install writes to. See [[partial-install-single-asset-slices]].
+        local LIBRARY_ROOT = _dataDir .. "/library"
+
+        local LIBRARY_KINDS = {
+            theme = true,
+            sound = true,
+            macro = true,
+        }
+
+        ms.package.isLibraryKind = function(kind) return LIBRARY_KINDS[kind] == true end
+
+        local function librarySlug(name)
+            local slug = tostring(name or "")
+                :gsub("%.mspkg$", "")
+                :gsub("[^%w%-_ ]", "")
+                :gsub("%s+", "-")
+                :gsub("%-+", "-")
+                :gsub("^%-", "")
+                :gsub("%-$", "")
+            if slug == "" then slug = "slice" end
+            return slug:sub(1, 64)
+        end
+
+        local function libraryDir(kind, slug)
+            return LIBRARY_ROOT .. "/" .. kind .. "/" .. slug
+        end
+
+        local function readJSON(path)
+            local raw = readFile(path)
+            if not raw then return nil end
+            local ok, tbl = pcall(hs.json.decode, raw)
+            if ok and type(tbl) == "table" then return tbl end
+            return nil
+        end
+
+        -- Copy a slice into the library. `files` is { relpath = absSource },
+        -- exactly the shape collect() returns. `meta` carries the display name
+        -- (which inherits its origin profile's name), origin, and version.
+        ms.package.librarySave = function(kind, files, meta)
+            if not LIBRARY_KINDS[kind] then return nil, "Not a library kind: " .. tostring(kind) end
+            if type(files) ~= "table" or next(files) == nil then
+                return nil, "Nothing to store."
+            end
+            meta = type(meta) == "table" and meta or {}
+
+            local name = meta.name or "Untitled"
+            local slug = librarySlug(meta.slug or name)
+            local dir  = libraryDir(kind, slug)
+            local filesDir = dir .. "/files"
+
+            hs.execute("/bin/rm -rf " .. sq(dir))
+            hs.execute("mkdir -p " .. sq(filesDir))
+
+            local stored = {}
+            for rel, src in pairs(files) do
+                local clean = safeRelPath(rel)
+                if clean and pathAllowed(kind, clean) and fileExists(src) then
+                    local destDir = (filesDir .. "/" .. clean):match("(.*)/")
+                    if destDir then hs.execute("mkdir -p " .. sq(destDir)) end
+                    local _, ok = hs.execute("/bin/cp " .. sq(src) .. " " .. sq(filesDir .. "/" .. clean))
+                    if ok then stored[#stored + 1] = clean end
+                end
+            end
+
+            if #stored == 0 then
+                hs.execute("/bin/rm -rf " .. sq(dir))
+                return nil, "No readable files to store."
+            end
+
+            local record = {
+                slug        = slug,
+                kind        = kind,
+                name        = name,
+                origin      = meta.origin,
+                version     = meta.version,
+                fileCount   = #stored,
+                installedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            }
+
+            writeFile(dir .. "/meta.json", hs.json.encode(record) .. "\n")
+            return record
+        end
+
+        -- Every stored slice of a kind, newest first.
+        ms.package.libraryList = function(kind)
+            local out = {}
+            if not LIBRARY_KINDS[kind] then return out end
+
+            local base = LIBRARY_ROOT .. "/" .. kind
+            if not hs.fs.attributes(base) then return out end
+
+            for entry in hs.fs.dir(base) do
+                if entry ~= "." and entry ~= ".." and not entry:find("^%.") then
+                    local rec = readJSON(base .. "/" .. entry .. "/meta.json")
+                    if rec then
+                        rec.slug = rec.slug or entry
+                        out[#out + 1] = rec
+                    end
+                end
+            end
+
+            table.sort(out, function(a, b)
+                return tostring(a.installedAt) > tostring(b.installedAt)
+            end)
+            return out
+        end
+
+        -- Copy a stored slice's files into the live install and run the same
+        -- post-copy steps install does. Backs up whatever it overwrites.
+        ms.package.libraryActivate = function(kind, slug)
+            if not LIBRARY_KINDS[kind] then return nil, "Not a library kind." end
+            slug = librarySlug(slug)
+
+            local filesDir = libraryDir(kind, slug) .. "/files"
+            if not hs.fs.attributes(filesDir) then return nil, "No such library entry." end
+
+            local rels = hs.execute(
+                "cd " .. sq(filesDir) .. " && find . -type f ! -name '.DS_Store' 2>/dev/null"
+            ) or ""
+
+            local installed, failed = {}, {}
+            for line in rels:gmatch("[^\r\n]+") do
+                local clean = safeRelPath(line:gsub("^%./", ""))
+                if clean and pathAllowed(kind, clean) then
+                    local src  = filesDir .. "/" .. clean
+                    local dest = destFor(clean)
+
+                    if fileExists(dest) then
+                        hs.execute("/bin/cp " .. sq(dest) .. " " .. sq(dest .. ".bak"))
+                    end
+
+                    local destDir = dest:match("(.*)/")
+                    if destDir then hs.execute("mkdir -p " .. sq(destDir)) end
+
+                    local _, ok = hs.execute("/bin/cp " .. sq(src) .. " " .. sq(dest))
+                    if ok then installed[#installed + 1] = clean
+                    else failed[#failed + 1] = clean end
+                end
+            end
+
+            if #installed == 0 then return nil, "Nothing could be activated." end
+
+            applyDropped(installed)
+
+            return {
+                kind      = kind,
+                slug      = slug,
+                installed = installed,
+                failed    = failed,
+            }
+        end
+
+        ms.package.libraryRemove = function(kind, slug)
+            if not LIBRARY_KINDS[kind] then return false, "Not a library kind." end
+            slug = librarySlug(slug)
+
+            local dir = libraryDir(kind, slug)
+            if not hs.fs.attributes(dir) then return false, "No such library entry." end
+
+            hs.execute("/bin/rm -rf " .. sq(dir))
+            if hs.fs.attributes(dir) then return false, "Could not remove entry." end
+            return true
+        end
+
+        -- Snapshot the current live slice of a kind into the library, so the
+        -- user can bank the setup they are running and hotswap back to it.
+        ms.package.libraryCapture = function(kind, name)
+            if not LIBRARY_KINDS[kind] then return nil, "Not a library kind." end
+
+            local files = ms.package.collect(kind)
+            if next(files) == nil then
+                return nil, "Nothing live to capture as a " .. kind .. "."
+            end
+
+            return ms.package.librarySave(kind, files, {
+                name   = (type(name) == "string" and name ~= "" and name) or "Current " .. kind,
+                origin = "captured",
+            })
+        end
+    -- END Installed Library --
 
     -- Smoke Test --
         ms.package.selfTest = function()

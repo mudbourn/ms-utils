@@ -211,6 +211,7 @@ return function(ms)
             if data.octaneMode ~= nil then ms._octaneMode = (data.octaneMode == true) end
             if data.octaneMuteSounds ~= nil then ms._octaneMuteSounds = (data.octaneMuteSounds == true) end
             if data.swallowHotkeys ~= nil then ms._swallowHotkeys = (data.swallowHotkeys == true) end
+            if data.updateAlertsDisabled ~= nil then ms._updateAlertsDisabled = (data.updateAlertsDisabled == true) end
             if data.antiTimeoutEnabled ~= nil then
                 ms._pendingUserSettings = ms._pendingUserSettings or {}
                 ms._pendingUserSettings["antiTimeoutEnabled"] = (data.antiTimeoutEnabled == true)
@@ -367,6 +368,7 @@ return function(ms)
                 octaneMode         = ms._octaneMode or false,
                 octaneMuteSounds   = ms._octaneMuteSounds or false,
                 swallowHotkeys     = ms._swallowHotkeys or false,
+                updateAlertsDisabled = ms._updateAlertsDisabled or false,
                 macroLabEnabled    = ms._macroLabEnabled ~= false,
                 consoleDangerAck = ms._consoleDangerAck or false,
                 quickReloaded    = ms._quickReloaded or 0,
@@ -3863,6 +3865,72 @@ return function(ms)
             end)
         end
         -- END Check For Update Beta --
+
+        -- Check For Content Updates [installed packages & plugins] --
+        -- Compares the version of every installed plugin / content item against
+        -- the registry catalog and returns the ones the registry now advertises
+        -- a newer version for. Refreshes the registry first (non-forced) so a
+        -- freshly published bump is seen, then reuses the same _remoteIsNewer
+        -- comparator the app-update check uses.
+        ms.integrity.checkContentUpdates = function(callback)
+            local function scan()
+                local installed = {}   -- id -> { version, type, name }
+                if ms.package and ms.package.listPlugins then
+                    local okP, plugins = pcall(ms.package.listPlugins)
+                    if okP and type(plugins) == "table" then
+                        for _, p in ipairs(plugins) do
+                            if p.id and type(p.version) == "string" then
+                                installed[p.id] = {
+                                    version = p.version,
+                                    type    = "plugin",
+                                    name    = p.name or p.id,
+                                }
+                            end
+                        end
+                    end
+                end
+                if ms.package and ms.package.listContent then
+                    local okC, content = pcall(ms.package.listContent)
+                    if okC and type(content) == "table" then
+                        for id, rec in pairs(content) do
+                            if installed[id] == nil and type(rec) == "table"
+                                and type(rec.version) == "string" then
+                                installed[id] = {
+                                    version = rec.version,
+                                    type    = rec.type or "content",
+                                    name    = rec.name or id,
+                                }
+                            end
+                        end
+                    end
+                end
+                local entries = (ms.registry and ms.registry.list)
+                    and ms.registry.list({}) or {}
+                local out = {}
+                for _, e in ipairs(entries) do
+                    local inst = e.id and installed[e.id]
+                    if inst and type(e.version) == "string"
+                        and _remoteIsNewer(inst.version, e.version) then
+                        out[#out + 1] = {
+                            id   = e.id,
+                            name = e.name or inst.name or e.id,
+                            type = e.type or inst.type,
+                            from = inst.version,
+                            to   = e.version,
+                        }
+                    end
+                end
+                return out
+            end
+            if ms.registry and ms.registry.refresh then
+                ms.registry.refresh({ force = false }, function()
+                    if callback then pcall(callback, scan()) end
+                end)
+            else
+                if callback then pcall(callback, scan()) end
+            end
+        end
+        -- END Check For Content Updates --
     -- END System Integrity --
 
     -- ms.showGuardian --
@@ -5315,6 +5383,21 @@ return function(ms)
                             end
                         end)
                     end },
+                    {
+                        title = (ms._updateAlertsDisabled and "\xe2\x9c\x97" or "\xe2\x9c\x93")
+                            .. " Update Alerts on Launch",
+                        fn = function()
+                        ms._updateAlertsDisabled = not ms._updateAlertsDisabled
+                        ms.saveSettings()
+                        if ms._updateAlertsDisabled then
+                            ms.playSlot("reset")
+                            ms.alert("Launch update alerts: Off\nRe-enable here anytime.", 3, true)
+                        else
+                            ms.playSlot("update")
+                            ms.alert("Launch update alerts: On", 2, true)
+                        end
+                    end },
+                    { title = "-" },
                     {
                         title = "Macro Info",
                         fn = function()

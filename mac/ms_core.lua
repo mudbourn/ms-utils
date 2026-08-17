@@ -2681,6 +2681,147 @@
                 return nil
             end
 
+            -- ms.callFn(id) — invoke a named function tool (an authored ms.fn)
+            -- from inside a macro. Compiled macros call this via emitStep's
+            -- "call_fn". Runs the tool's body inline in the current coroutine so
+            -- its ms.wait calls yield just like the caller's.
+            ms.callFn = function(id)
+                if type(id) ~= "string" then return end
+                local def = ms.fn and ms.fn.registry and ms.fn.registry._defs[id]
+                if not def or type(def.fn) ~= "function"
+                    and not (type(def.fn) == "table" and getmetatable(def.fn)
+                        and getmetatable(def.fn).__call) then
+                    print("ms.callFn: no function tool named '" .. tostring(id) .. "'")
+                    return
+                end
+                return def.fn()
+            end
+
+            -- ms.vars — disk-persistent, explicitly-declared shared variables.
+            -- Unlike a macro's `local` (function-scoped) variables, a helper var
+            -- is intentionally visible to every macro and survives reloads, so
+            -- sharing state across macros is a deliberate act, never an accident
+            -- of a name colliding. Declarations + values live together in
+            -- data/ms_helpervars.json, written at runtime like ms_authored.json.
+            do
+                local varsPath = os.getenv("HOME")
+                    .. "/.hammerspoon/data/ms_helpervars.json"
+                local store = { defs = {}, vals = {} }
+                local loaded = false
+
+                local function coerce(def, v)
+                    if not def then return v end
+                    if def.type == "number" then
+                        local n = tonumber(v)
+                        return n or tonumber(def.default) or 0
+                    elseif def.type == "boolean" then
+                        return v == true or v == "true"
+                    end
+                    return v
+                end
+
+                local function persist()
+                    local ok, enc = pcall(hs.json.encode, store, true)
+                    if not ok then return end
+                    local f = io.open(varsPath, "w")
+                    if f then f:write(enc); f:close() end
+                end
+
+                local function ensureLoaded()
+                    if loaded then return end
+                    loaded = true
+                    local f = io.open(varsPath, "r")
+                    if not f then return end
+                    local raw = f:read("*all"); f:close()
+                    local ok, data = pcall(hs.json.decode, raw)
+                    if ok and type(data) == "table" then
+                        store.defs = type(data.defs) == "table" and data.defs or {}
+                        store.vals = type(data.vals) == "table" and data.vals or {}
+                    end
+                end
+
+                ms.vars = {}
+
+                -- Read a helper var live. Falls back to the declared default,
+                -- then nil for an undeclared name.
+                ms.vars.get = function(name)
+                    ensureLoaded()
+                    if type(name) ~= "string" then return nil end
+                    local v = store.vals[name]
+                    if v == nil then
+                        local def = store.defs[name]
+                        return def and def.default or nil
+                    end
+                    return v
+                end
+
+                -- Write a helper var and persist. Auto-declares an untyped var
+                -- on first write so a macro can use one without a prior def,
+                -- but coerces to the declared type when one exists.
+                ms.vars.set = function(name, value)
+                    ensureLoaded()
+                    if type(name) ~= "string"
+                        or not name:match("^[%a_][%w_]*$") then return end
+                    store.vals[name] = coerce(store.defs[name], value)
+                    persist()
+                    return store.vals[name]
+                end
+
+                -- Declare (or update) a helper var from the Tools panel.
+                ms.vars.define = function(def)
+                    ensureLoaded()
+                    if type(def) ~= "table" then return false, "definition must be a table" end
+                    local name = type(def.name) == "string" and def.name or ""
+                    if not name:match("^[%a_][%w_]*$") then
+                        return false, "name must be a valid identifier"
+                    end
+                    local t = def.type
+                    if t ~= "number" and t ~= "string" and t ~= "boolean" then
+                        t = "string"
+                    end
+                    store.defs[name] = {
+                        type    = t,
+                        default = def.default,
+                        label   = type(def.label) == "string" and def.label or name,
+                        hint    = type(def.hint) == "string" and def.hint or nil,
+                    }
+                    if store.vals[name] == nil then
+                        store.vals[name] = coerce(store.defs[name], def.default)
+                    end
+                    persist()
+                    return true
+                end
+
+                ms.vars.remove = function(name)
+                    ensureLoaded()
+                    if store.defs[name] == nil and store.vals[name] == nil then
+                        return false, "'" .. tostring(name) .. "' is not a helper var"
+                    end
+                    store.defs[name] = nil
+                    store.vals[name] = nil
+                    persist()
+                    return true
+                end
+
+                -- List declarations (with live values) for the builder.
+                ms.vars.list = function()
+                    ensureLoaded()
+                    local out = {}
+                    for name, def in pairs(store.defs) do
+                        out[#out + 1] = {
+                            name    = name,
+                            type    = def.type,
+                            default = def.default,
+                            label   = def.label,
+                            hint    = def.hint,
+                            value   = store.vals[name],
+                        }
+                    end
+                    table.sort(out, function(a, b) return a.name < b.name end)
+                    return out
+                end
+            end
+
             ms._getRootLabel = function()
                 local co = coroutine.running()
                 if co then
@@ -4891,6 +5032,7 @@
                         local rec = {
                             tap = nil, winFilter = nil, lastTs = nil,
                             threshold = 50, opts = {}, drag = nil, winFrames = {},
+                            move = nil, _inFlush = false, _resample = nil,
                         }
                         ms._macroRecord = rec
 
@@ -4902,7 +5044,10 @@
                             _macroShellEval("if(window.shellReceive)shellReceive('macros','recordStep'," .. json .. ")")
                         end
 
+                        local flushMoves
+
                         local function maybeWait()
+                            if not rec._inFlush then flushMoves() end
                             local now = hs.timer.secondsSinceEpoch()
                             if rec.opts.recordDelays ~= false and rec.lastTs then
                                 local dt = math.floor((now - rec.lastTs) * 1000 + 0.5)
@@ -4953,12 +5098,37 @@
                             })
                         end
 
+                        -- Emit any buffered free-cursor movement as a run of
+                        -- moveMouse steps, resampled by moveGranularity.
+                        flushMoves = function()
+                            local m = rec.move
+                            rec.move = nil
+                            if not m or not m.points or #m.points < 2 then return end
+                            local resample = rec._resample
+                            local path = resample
+                                and resample(m.points, rec.opts.moveGranularity) or m.points
+                            if not path or #path < 2 then return end
+                            rec._inFlush = true
+                            maybeWait()
+                            for i = 2, #path do
+                                pushStep("ms.moveMouse", {
+                                    x = math.floor(path[i][1] + 0.5),
+                                    y = math.floor(path[i][2] + 0.5),
+                                    ref = "Absolute",
+                                    durationMs = 8,
+                                })
+                            end
+                            rec._inFlush = false
+                        end
+
                         rec.start = function(threshold, opts)
                             if rec.tap then return end
                             rec.threshold = tonumber(threshold) or 50
                             rec.opts = opts or {}
                             rec.lastTs = nil
                             rec.drag = nil
+                            rec.move = nil
+                            rec._inFlush = false
                             local et = hs.eventtap.event.types
 
                             local mode  = rec.opts.pressMode or "type"
@@ -4978,6 +5148,9 @@
                                 types[#types + 1] = et.leftMouseDragged
                                 types[#types + 1] = et.rightMouseDragged
                                 types[#types + 1] = et.otherMouseDragged
+                            end
+                            if rec.opts.recordMouseMoves then
+                                types[#types + 1] = et.mouseMoved
                             end
 
                             local function resampleDrag(pts, granularity)
@@ -5047,6 +5220,8 @@
                                 return out
                             end
 
+                            rec._resample = resampleDrag
+
                             rec.tap = hs.eventtap.new(types, function(ev)
                                 local ok = pcall(function()
                                     local t = ev:getType()
@@ -5074,6 +5249,21 @@
                                         if type(key) ~= "string" or key == "" then return end
                                         maybeWait()
                                         pushStep("ms.release", { key = key })
+                                        return
+                                    end
+
+                                    if t == et.mouseMoved then
+                                        if rec.drag then return end
+                                        local pt = ev:location()
+                                        if inShell(pt) then return end
+                                        if not rec.move then rec.move = { points = {} } end
+                                        local pts = rec.move.points
+                                        if #pts < 4000 then
+                                            pts[#pts + 1] = {
+                                                pt.x,
+                                                pt.y,
+                                            }
+                                        end
                                         return
                                     end
 
@@ -5232,6 +5422,7 @@
                         end
 
                         rec.stop = function()
+                            flushMoves()
                             if rec.tap then rec.tap:stop()
                             rec.tap = nil end
                             if rec.winFilter then
@@ -5239,6 +5430,8 @@
                                 rec.winFilter = nil
                             end
                             rec.drag = nil
+                            rec.move = nil
+                            rec._inFlush = false
                             rec.lastTs = nil
                             rec.winFrames = {}
                             print("ms.macroRecord: stopped")
@@ -5273,13 +5466,100 @@
                                     unit    = def.unit,
                                     options = def.options,
                                     default = def.default,
+                                    value   = ms.settings.get(def.key),
                                     section = def.section,
                                     source  = def.authored and "builder" or "pack",
                                 }
                             end
                         end
+                        -- Helper vars are bindable too: a Value->Tool field can
+                        -- read one live. They carry kind="var" so the editor
+                        -- emits {__varRef} (ms.vars.get) rather than a setting.
+                        if ms.vars and ms.vars.list then
+                            local okV, vlist = pcall(ms.vars.list)
+                            if okV and type(vlist) == "table" then
+                                for _, v in ipairs(vlist) do
+                                    tools[#tools + 1] = {
+                                        key     = v.name,
+                                        label   = v.label or v.name,
+                                        type    = v.type or "string",
+                                        default = v.default,
+                                        value   = v.value,
+                                        hint    = v.hint,
+                                        kind    = "var",
+                                        source  = "helpervar",
+                                    }
+                                end
+                            end
+                        end
                         local json = hs.json.encode(tools)
                         _macroShellEval("if(window.macroLab)macroLab.setToolList(" .. json .. ")")
+
+                        -- Function tools go to a separate list, consumed by the
+                        -- "Call function" block, not the Value->Tool binding.
+                        local fns = {}
+                        if ms.compiler and ms.compiler.listFunctions then
+                            local okF, flist = pcall(ms.compiler.listFunctions)
+                            if okF and type(flist) == "table" then fns = flist end
+                        end
+                        local fjson = hs.json.encode(fns)
+                        _macroShellEval("if(window.macroLab&&window.macroLab.setFunctionList)macroLab.setFunctionList(" .. fjson .. ")")
+                    end)
+
+                    -- Function tool authoring (reuses the macro step canvas).
+                    ms.bus.on("ui:tools:saveFunction", function(_, body)
+                        if type(body) ~= "table" or not body.id or not body.def then return end
+                        local ok, err = pcall(ms.compiler.writeFunction, body.id, body.def)
+                        if ok then
+                            print("ms.compiler.saveFunction: '" .. tostring(body.id) .. "' saved")
+                            if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
+                            _macroShellEval("if(window.shellReceive)shellReceive('tools','functionSaved',{})")
+                        else
+                            print("ms.compiler.saveFunction error: " .. tostring(err))
+                            _macroShellEval("if(window.shellReceive)shellReceive('tools','functionSaved',{error:" .. hs.json.encode(tostring(err)) .. "})")
+                        end
+                    end)
+
+                    ms.bus.on("ui:tools:getFunction", function(_, body)
+                        if type(body) ~= "table" or not body.id then return end
+                        local def = ms.compiler.getFunction(body.id)
+                        if def then
+                            _macroShellEval("if(window.shellReceive)shellReceive('tools','functionDef',"
+                                .. hs.json.encode(def) .. ")")
+                        end
+                    end)
+
+                    ms.bus.on("ui:tools:deleteFunction", function(_, body)
+                        if type(body) ~= "table" or not body.id then return end
+                        local ok, err = pcall(ms.compiler.deleteFunction, body.id)
+                        if ok then
+                            if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
+                            _macroShellEval("if(window.shellReceive)shellReceive('tools','functionSaved',{})")
+                        else
+                            print("ms.compiler.deleteFunction error: " .. tostring(err))
+                        end
+                    end)
+
+                    -- Helper var declaration (disk-persistent shared variables).
+                    ms.bus.on("ui:tools:saveHelperVar", function(_, body)
+                        if type(body) ~= "table" or not body.def then return end
+                        local ok, err = ms.vars.define(body.def)
+                        if ok then
+                            print("ms.vars.define: '" .. tostring(body.def.name) .. "' saved")
+                            if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
+                            _macroShellEval("if(window.shellReceive)shellReceive('tools','helperVarSaved',{})")
+                        else
+                            _macroShellEval("if(window.shellReceive)shellReceive('tools','helperVarSaved',{error:" .. hs.json.encode(tostring(err)) .. "})")
+                        end
+                    end)
+
+                    ms.bus.on("ui:tools:deleteHelperVar", function(_, body)
+                        if type(body) ~= "table" or not body.name then return end
+                        local ok = ms.vars.remove(body.name)
+                        if ok then
+                            if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
+                            _macroShellEval("if(window.shellReceive)shellReceive('tools','helperVarSaved',{})")
+                        end
                     end)
                 end
             end
@@ -5661,14 +5941,37 @@
                     _G._loadTimers.integrityWarn = hs.timer.doAfter(10, function()
                         if _needsIntegrityWarning then
                             ms.alert("\u{26a0} Integrity Error\nNo trusted manifest on record.\nSettings \u{2192} Developer \u{2192} Trust Current Version.", 10)
-                        else
+                        elseif not ms._updateAlertsDisabled then
                             local _checkFn = (ms._updateChannel == "testing")
                                 and ms.integrity.checkForUpdateBeta
                                 or  ms.integrity.checkForUpdate
+                            -- Combine the app-version check with a scan of every
+                            -- installed package / plugin, then announce them all
+                            -- in one alert. Content items report to Settings
+                            -- \u{2192} Browse; the app to Help \u{2192} Check for Update.
                             _checkFn(function(u)
-                                if u then
+                                local function announce(items)
+                                    items = items or {}
+                                    local lines = {}
+                                    if u then
+                                        lines[#lines + 1] = "\xe2\x80\xa2 mudscript " .. (u.version or "?") .. " (app)"
+                                    end
+                                    for _, it in ipairs(items) do
+                                        lines[#lines + 1] = "\xe2\x80\xa2 " .. (it.name or it.id)
+                                            .. " " .. (it.to or "?")
+                                    end
+                                    if #lines == 0 then return end
                                     ms.playSlot("updateAvailable")
-                                    ms.alert("Update " .. u.version .. " available.\nSettings \xe2\x86\x92 Help \xe2\x86\x92 Check for Update to install.", 8, true)
+                                    local header = (#lines == 1) and "Update available:"
+                                        or (#lines .. " updates available:")
+                                    ms.alert(header .. "\n" .. table.concat(lines, "\n")
+                                        .. "\n\nOpen Settings to install \xe2\x80\x94 turn these off under Help.",
+                                        9, true)
+                                end
+                                if ms.integrity and ms.integrity.checkContentUpdates then
+                                    ms.integrity.checkContentUpdates(announce)
+                                else
+                                    announce({})
                                 end
                             end)
                         end

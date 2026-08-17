@@ -2030,8 +2030,305 @@
                             "Compose a new setting and preview it live"),
                     );
                 }
+
+                renderToolFunctionsTab();
+                renderToolVariablesTab();
             }
             window.renderToolsPanel = renderToolsPanel;
+
+            // Post to the Lua tools channel (ui:tools:*), distinct from the
+            // settings channel sendToHost uses.
+            function sendToTools(action, data) {
+                if (window.shellPost) {
+                    window.shellPost("tools", action,
+                        Object.assign({ action: action }, data || {}));
+                }
+            }
+
+            // Build a default step def from the shared picker registry, so a
+            // function tool is composed from the very same modules as a macro.
+            function buildStepDef(fnId) {
+                const reg = window.fnPicker && window.fnPicker.registry;
+                if (!reg) return null;
+                let fn = null;
+                for (let i = 0; i < reg.length; i++) {
+                    if (reg[i].id === fnId) { fn = reg[i]; break; }
+                }
+                if (!fn) return null;
+                const params = {};
+                (fn.params || []).forEach((p) => {
+                    if (p.type === "mods") params[p.name] = [];
+                    else if (p.type === "number") params[p.name] = 0;
+                    else params[p.name] = "";
+                });
+                return { action: fn.name, params: params };
+            }
+
+            // -- Function tab (reuses the macro step canvas) --
+            // State for the in-progress function being authored/edited.
+            let _fnCanvas = null;
+            let _fnEditor = null;
+            let _fnEditingId = null;
+
+            function renderToolFunctionsTab() {
+                const scroll = document.getElementById("tools-functions-scroll");
+                if (!scroll) return;
+                // Build the shell once (canvas is stateful); refresh only the list.
+                if (!scroll.firstChild) {
+                    scroll.appendChild(section("fn-editor", "Function", buildFunctionEditor,
+                        "A reusable block of steps any macro can call"));
+                    scroll.appendChild(section("fn-list", "Your functions", buildFunctionList,
+                        "Authored function tools"));
+                } else {
+                    const listBody = document.getElementById("tool-fn-list-body");
+                    if (listBody) fillFunctionList(listBody);
+                }
+            }
+            window.renderToolFunctionsTab = renderToolFunctionsTab;
+
+            function buildFunctionEditor(body) {
+                // Name + generated id.
+                const nameInput = h("input", {
+                    type: "text", cls: "input-sm", placeholder: "My Function",
+                });
+                body.appendChild(row("Name", "Shown in the Call function block",
+                    nameInput));
+                body.appendChild(divider());
+
+                // The step canvas, same ToolCanvas the macro builder uses.
+                const canvasHost = h("div", { cls: "tool-fn-canvas" });
+                canvasHost.style.cssText =
+                    "min-height:120px;border:1px solid var(--border-dim);"
+                    + "border-radius:var(--radius);padding:4px;margin:4px 0;";
+                body.appendChild(canvasHost);
+
+                if (typeof window.ToolCanvas === "function") {
+                    // onContext must be set at construction; right-click a block
+                    // to edit its parameters, same gesture as the macro builder.
+                    _fnCanvas = new window.ToolCanvas(canvasHost, {
+                        onChange: function() {},
+                        onContext: function(sid) {
+                            if (!_fnEditor || !sid) return;
+                            if (_fnEditor._open && _fnEditor._toolSid === sid) _fnEditor.close();
+                            else _fnEditor.open(sid);
+                        },
+                    });
+                    if (typeof window.ToolEditor === "function") {
+                        _fnEditor = new window.ToolEditor({ canvas: _fnCanvas });
+                    }
+                } else {
+                    canvasHost.textContent = "Step canvas unavailable.";
+                }
+
+                // Add-step control: a picker of the same modules, menu-style so
+                // it works without drag/drop.
+                const mkSelect = window.createSelect || (typeof createSelect === "function" ? createSelect : null);
+                if (mkSelect) {
+                    const addSel = mkSelect({
+                        className: "input-sm",
+                        placeholder: "+ Add step…",
+                        options: buildStepOptions(),
+                        value: undefined,
+                        onChange: (v) => {
+                            if (!v || !_fnCanvas) return;
+                            const def = buildStepDef(v);
+                            if (def) _fnCanvas.addTool(def);
+                            addSel.value = "";
+                        },
+                    });
+                    body.appendChild(row("Step", "Right-click a step to set its parameters",
+                        addSel, "row-sub"));
+                }
+
+                body.appendChild(btnRow(
+                    actionBtn("Save Function", "accent", () => {
+                        const nm = (nameInput.value || "").trim();
+                        if (!nm) { showAlert("A name is required."); return; }
+                        const id = _fnEditingId || slugToId(nm);
+                        if (!id) { showAlert("Name must contain a letter."); return; }
+                        const steps = _fnCanvas ? _fnCanvas.serialize() : [];
+                        sendToTools("saveFunction", {
+                            id: id,
+                            def: { name: nm, steps: steps },
+                        });
+                    }),
+                    actionBtn("Clear", "", () => {
+                        _fnEditingId = null;
+                        nameInput.value = "";
+                        if (_fnCanvas) _fnCanvas.load([]);
+                    }),
+                ));
+
+                // Expose a loader so the list's Edit button can populate this.
+                window._loadFunctionIntoEditor = (fnDef) => {
+                    _fnEditingId = fnDef.id || null;
+                    nameInput.value = fnDef.name || fnDef.id || "";
+                    if (_fnCanvas) _fnCanvas.load(fnDef.steps || []);
+                    switchToolsTab("functions");
+                };
+            }
+
+            // Options for the add-step picker: every non-container module, so a
+            // function stays a flat, beginner-friendly sequence.
+            function buildStepOptions() {
+                const reg = (window.fnPicker && window.fnPicker.registry) || [];
+                const skip = { "if": 1, "for": 1, "while": 1, "repeat": 1 };
+                return reg.filter((f) => !skip[f.id]).map((f) => ({
+                    value: f.id, label: f.name,
+                }));
+            }
+
+            function buildFunctionList(body) {
+                const listBody = h("div", { id: "tool-fn-list-body" });
+                body.appendChild(listBody);
+                fillFunctionList(listBody);
+            }
+
+            function fillFunctionList(host) {
+                host.innerHTML = "";
+                const fns = window.msMacroFunctions || [];
+                if (fns.length === 0) {
+                    host.appendChild(h("div", {
+                        cls: "row-sub",
+                        style: "padding:8px 14px;color:var(--text3);font-style:italic;",
+                    }, "No function tools yet."));
+                    return;
+                }
+                fns.forEach((fn) => {
+                    const r = h("div", { cls: "row row-sub" });
+                    r.appendChild(h("div", { cls: "row-label" }, fn.name || fn.id));
+                    const controls = h("div", { style: "display:flex;gap:6px" });
+                    controls.appendChild(actionBtn("Edit", "", () => {
+                        // The full def (with steps) comes back on the tools
+                        // channel as "functionDef"; load it into the editor there.
+                        sendToTools("getFunction", { id: fn.id });
+                    }));
+                    const del = actionBtn("Delete", "danger", () => {
+                        sendToTools("deleteFunction", { id: fn.id });
+                    });
+                    controls.appendChild(del);
+                    r.appendChild(controls);
+                    host.appendChild(r);
+                });
+            }
+
+            // -- Variable tab (declare disk-persistent helper vars) --
+            function renderToolVariablesTab() {
+                const scroll = document.getElementById("tools-variables-scroll");
+                if (!scroll) return;
+                if (!scroll.firstChild) {
+                    scroll.appendChild(section("var-builder", "Helper Variable",
+                        buildVariableBuilder,
+                        "A shared value macros can read and write, saved to disk"));
+                    scroll.appendChild(section("var-list", "Your variables",
+                        buildVariableList, "Declared helper variables"));
+                } else {
+                    const listBody = document.getElementById("tool-var-list-body");
+                    if (listBody) fillVariableList(listBody);
+                }
+            }
+            window.renderToolVariablesTab = renderToolVariablesTab;
+
+            function buildVariableBuilder(body) {
+                const draft = { name: "", type: "number", default: "", hint: "" };
+                const nameInput = h("input", {
+                    type: "text", cls: "input-sm", placeholder: "myCounter",
+                    oninput: (e) => { draft.name = e.target.value; },
+                });
+                body.appendChild(row("Name", "Identifier macros use to read it",
+                    nameInput));
+                body.appendChild(row("Type", "How the value is stored",
+                    seg([
+                        { label: "Number", value: "number" },
+                        { label: "Text", value: "string" },
+                        { label: "Yes/No", value: "boolean" },
+                    ], draft.type, (v) => { draft.type = v; })));
+                const defInput = h("input", {
+                    type: "text", cls: "input-sm", placeholder: "0",
+                    oninput: (e) => { draft.default = e.target.value; },
+                });
+                body.appendChild(row("Default", "Starting value", defInput, "row-sub"));
+                const hintInput = h("input", {
+                    type: "text", cls: "input-sm", placeholder: "",
+                    oninput: (e) => { draft.hint = e.target.value; },
+                });
+                body.appendChild(row("Hint", "Optional one-line help", hintInput, "row-sub"));
+
+                body.appendChild(btnRow(
+                    actionBtn("Save Variable", "accent", () => {
+                        const nm = (draft.name || "").trim();
+                        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(nm)) {
+                            showAlert("Name must be a valid identifier.");
+                            return;
+                        }
+                        let dv = draft.default;
+                        if (draft.type === "number") dv = parseFloat(dv) || 0;
+                        else if (draft.type === "boolean") dv = (dv === "true" || dv === "1" || dv === "yes");
+                        sendToTools("saveHelperVar", {
+                            def: { name: nm, type: draft.type, default: dv,
+                                   hint: (draft.hint || "").trim() },
+                        });
+                        draft.name = ""; draft.default = ""; draft.hint = "";
+                        nameInput.value = ""; defInput.value = ""; hintInput.value = "";
+                    }),
+                ));
+            }
+
+            function buildVariableList(body) {
+                const listBody = h("div", { id: "tool-var-list-body" });
+                body.appendChild(listBody);
+                fillVariableList(listBody);
+            }
+
+            function fillVariableList(host) {
+                host.innerHTML = "";
+                const vars = (window.msMacroTools || []).filter((t) => t.kind === "var");
+                if (vars.length === 0) {
+                    host.appendChild(h("div", {
+                        cls: "row-sub",
+                        style: "padding:8px 14px;color:var(--text3);font-style:italic;",
+                    }, "No helper variables yet."));
+                    return;
+                }
+                vars.forEach((v) => {
+                    const r = h("div", { cls: "row row-sub" });
+                    const val = (v.value !== undefined && v.value !== null)
+                        ? String(v.value) : "";
+                    r.appendChild(h("div", { cls: "row-label" },
+                        (v.label || v.key) + "  =  " + val));
+                    const del = actionBtn("Delete", "danger", () => {
+                        sendToTools("deleteHelperVar", { name: v.key });
+                    });
+                    r.appendChild(del);
+                    host.appendChild(r);
+                });
+            }
+
+            // A human name -> a valid Lua identifier for the function id.
+            function slugToId(name) {
+                let s = String(name).replace(/[^A-Za-z0-9_]/g, "");
+                if (!s) return "";
+                if (/^[0-9]/.test(s)) s = "fn" + s;
+                return s;
+            }
+
+            // Save acknowledgements from the Lua tools channel refresh the lists
+            // (the fresh data arrives via the listTools push right after).
+            if (window.registerPanel) {
+                window.registerPanel("tools", function(action, body) {
+                    if (action === "functionSaved") {
+                        if (body && body.error) { showAlert(body.error); return; }
+                        _fnEditingId = null;
+                        renderToolFunctionsTab();
+                    } else if (action === "helperVarSaved") {
+                        if (body && body.error) { showAlert(body.error); return; }
+                        renderToolVariablesTab();
+                    } else if (action === "functionDef" && body && body.id) {
+                        if (window._loadFunctionIntoEditor)
+                            window._loadFunctionIntoEditor(body);
+                    }
+                });
+            }
 
             // -- Tools tab strip --
             let _otabs = null;

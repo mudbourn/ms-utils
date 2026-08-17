@@ -10,10 +10,19 @@
 
         -- Helpers --
             local function toolRef(val)
-                if type(val) == "table"
-                    and type(val.__toolRef) == "string"
+                if type(val) ~= "table" then return nil end
+                -- A setting binding: Value->Tool wired to an authored setting.
+                if type(val.__toolRef) == "string"
                     and val.__toolRef:match("^[%a_][%w_]*$") then
                     return 'ms.settings.get("' .. val.__toolRef .. '")'
+                end
+                -- A helper-var binding: Value->Tool wired to a declared, disk-
+                -- persistent shared variable. Read live so several macros see
+                -- the same value; distinct tag from settings so the two pools
+                -- never collide.
+                if type(val.__varRef) == "string"
+                    and val.__varRef:match("^[%a_][%w_]*$") then
+                    return 'ms.vars.get("' .. val.__varRef .. '")'
                 end
                 return nil
             end
@@ -208,6 +217,33 @@
                 local name  = ident(p.name, "v")
                 local value = serialize(p.value)
                 return indent(lvl) .. "local " .. name .. " = " .. value
+            end
+
+            -- Call a function tool (an authored, reusable ms.fn) by name. The
+            -- name is identifier-validated so nothing can break out of the
+            -- string literal; an empty/invalid name emits an inert comment.
+            emitters["call_fn"] = function(step, lvl)
+                local p = step.params or {}
+                local name = type(p.name) == "string"
+                    and p.name:match("^[%a_][%w_]*$") or nil
+                if not name then
+                    return indent(lvl) .. "-- call function (unresolved reference)"
+                end
+                return indent(lvl) .. 'ms.callFn("' .. name .. '")'
+            end
+
+            -- Write a declared helper var (disk-persistent, shared across
+            -- macros). Reads are done by binding a Value field to the var
+            -- (see toolRef); this is the explicit write side.
+            emitters["hvar_set"] = function(step, lvl)
+                local p = step.params or {}
+                local name = type(p.name) == "string"
+                    and p.name:match("^[%a_][%w_]*$") or nil
+                if not name then
+                    return indent(lvl) .. "-- set helper var (unresolved reference)"
+                end
+                return indent(lvl) .. 'ms.vars.set("' .. name .. '", '
+                    .. serialize(p.value) .. ")"
             end
 
             emitters["var_add"] = function(step, lvl)
@@ -460,6 +496,38 @@
 
                 return table.concat(lines, "\n")
             end
+
+            -- Compile a function tool: a named, reusable ms.fn registered so
+            -- any macro can invoke it with ms.callFn("id"). Reuses the exact
+            -- step emitters the macro compiler uses, so a function tool is
+            -- authored on the same canvas and behaves identically at runtime.
+            ms.compiler.compileFunction = function(fnDef)
+                assert(type(fnDef) == "table", "ms.compiler.compileFunction: fnDef must be a table")
+                assert(type(fnDef.id) == "string", "ms.compiler.compileFunction: fnDef.id must be a string")
+                assert(fnDef.id:match("^[%a_][%w_]*$"),
+                    "ms.compiler.compileFunction: invalid id '" .. fnDef.id .. "'")
+
+                local id    = fnDef.id
+                local label = fnDef.name or id
+                local steps = fnDef.steps or {}
+                local fnName = id .. "Tool"
+                local lines = {}
+
+                lines[#lines + 1] = "local " .. fnName .. " = ms.fn(function()"
+                lines[#lines + 1] = indent(1) .. "local t = 100"
+                _actionDelay = 0
+                for _, step in ipairs(steps) do
+                    lines[#lines + 1] = emitStep(step, 1)
+                end
+                lines[#lines + 1] = 'end, "' .. label:gsub('[\r\n"]', " ") .. '")'
+                lines[#lines + 1] = ""
+                lines[#lines + 1] = 'ms.fn.define("' .. id .. '", ' .. fnName .. ", {"
+                lines[#lines + 1] = indent(1) .. 'group = "tool",'
+                lines[#lines + 1] = indent(1) .. 'label = "' .. label:gsub('[\r\n"]', " ") .. '",'
+                lines[#lines + 1] = "})"
+
+                return table.concat(lines, "\n")
+            end
         -- END Compile --
 
         -- Write File --
@@ -541,11 +609,32 @@
                     count = count + 1
                 end
 
+                -- Function tools compile ahead of the macros so a macro that
+                -- calls one finds it already defined in the same chunk.
+                local functions = data.functions or {}
+                local fnSources = {}
+                local fnCount = 0
+                for id, fnDef in pairs(functions) do
+                    fnDef.id = id
+                    local okF, srcF = pcall(ms.compiler.compileFunction, fnDef)
+                    if not okF then
+                        print("ms.compiler: function compile error for '" .. id .. "': " .. tostring(srcF))
+                        srcF = "-- [FUNCTION COMPILE ERROR for " .. id .. "]\n"
+                    end
+                    fnSources[#fnSources + 1] = { id = "fn:" .. id, source = srcF }
+                    fnCount = fnCount + 1
+                end
+                table.sort(fnSources, function(a, b) return a.id < b.id end)
+
                 table.sort(sources, function(a, b) return a.id < b.id end)
 
-                ms.compiler._writeFile(sources, data.meta)
+                local allSources = {}
+                for _, s in ipairs(fnSources) do allSources[#allSources + 1] = s end
+                for _, s in ipairs(sources)   do allSources[#allSources + 1] = s end
+                ms.compiler._writeFile(allSources, data.meta)
 
-                print("ms.compiler.rebuild: compiled " .. count .. " macro(s) -> " .. luaPath)
+                print("ms.compiler.rebuild: compiled " .. count .. " macro(s), "
+                    .. fnCount .. " function tool(s) -> " .. luaPath)
                 return count
             end
         -- END Rebuild --
@@ -566,6 +655,26 @@
                         if ms.bind and ms.bind._wires then ms.bind._wires[id] = nil end
                     end
                     ms.compiler._registeredIds = nil
+                end
+
+                -- Function tools register into ms.fn.registry, not ms.registry,
+                -- so clear the previous batch there too or the second load
+                -- trips ms.fn.define's "already registered" assert.
+                local prevFn = ms.compiler._registeredFnIds
+                if prevFn and ms.fn and ms.fn.registry then
+                    for id in pairs(prevFn) do
+                        ms.fn.registry._defs[id] = nil
+                        for i = #ms.fn.registry._defList, 1, -1 do
+                            if ms.fn.registry._defList[i] == id then
+                                table.remove(ms.fn.registry._defList, i)
+                            end
+                        end
+                    end
+                    ms.compiler._registeredFnIds = nil
+                end
+                local _fnBefore = {}
+                if ms.fn and ms.fn.registry then
+                    for _, id in ipairs(ms.fn.registry._defList) do _fnBefore[id] = true end
                 end
 
                 if not hs.fs.attributes(luaPath) then
@@ -626,6 +735,16 @@
                 local reg = {}
                 for _, id in ipairs(ms.compiler.list()) do reg[id] = true end
                 ms.compiler._registeredIds = reg
+
+                -- Any ms.fn ids that appeared during this load are function
+                -- tools we own; remember them so the next load can clear them.
+                local fnReg = {}
+                if ms.fn and ms.fn.registry then
+                    for _, id in ipairs(ms.fn.registry._defList) do
+                        if not _fnBefore[id] then fnReg[id] = true end
+                    end
+                end
+                ms.compiler._registeredFnIds = fnReg
 
                 print("ms.compiler.load: visual macros loaded into sandbox")
                 return true
@@ -835,6 +954,84 @@
                 return def
             end
         -- END Get --
+
+        -- Function tools (data.functions) --
+            local function readData()
+                local data = {}
+                local f = io.open(jsonPath, "r")
+                if f then
+                    local raw = f:read("*all")
+                    f:close()
+                    local ok, parsed = pcall(hs.json.decode, raw)
+                    if ok and type(parsed) == "table" then data = parsed end
+                end
+                data.macros    = data.macros    or {}
+                data.functions = data.functions or {}
+                return data
+            end
+
+            local function writeData(data)
+                os.execute("mkdir -p '" .. dataDir .. "'")
+                local jf = io.open(jsonPath, "w")
+                if not jf then
+                    error("ms.compiler: cannot open " .. jsonPath .. " for writing")
+                end
+                jf:write(hs.json.encode(data, true))
+                jf:close()
+            end
+
+            ms.compiler.writeFunction = function(fnId, fnDef)
+                assert(type(fnId) == "string" and fnId:match("^[%a_][%w_]*$"),
+                    "ms.compiler.writeFunction: fnId must be a valid identifier")
+                assert(type(fnDef) == "table", "ms.compiler.writeFunction: fnDef must be a table")
+                if ms.compiler.get(fnId) then
+                    error("ms.compiler.writeFunction: '" .. fnId
+                        .. "' collides with a macro of the same id")
+                end
+                local data = readData()
+                data.functions[fnId] = {
+                    name  = fnDef.name,
+                    steps = fnDef.steps,
+                }
+                writeData(data)
+                ms.compiler.rebuild()
+                pcall(ms.compiler.load)
+                print("ms.compiler.writeFunction: saved '" .. fnId .. "' and recompiled")
+                return true
+            end
+
+            ms.compiler.deleteFunction = function(fnId)
+                assert(type(fnId) == "string", "ms.compiler.deleteFunction: fnId must be a string")
+                local data = readData()
+                if not data.functions[fnId] then
+                    print("ms.compiler.deleteFunction: '" .. fnId .. "' not found")
+                    return false
+                end
+                data.functions[fnId] = nil
+                writeData(data)
+                ms.compiler.rebuild()
+                pcall(ms.compiler.load)
+                print("ms.compiler.deleteFunction: removed '" .. fnId .. "'")
+                return true
+            end
+
+            ms.compiler.listFunctions = function()
+                local data = readData()
+                local out = {}
+                for id, def in pairs(data.functions) do
+                    out[#out + 1] = { id = id, name = def.name or id }
+                end
+                table.sort(out, function(a, b) return a.id < b.id end)
+                return out
+            end
+
+            ms.compiler.getFunction = function(fnId)
+                local data = readData()
+                local def = data.functions[fnId]
+                if def then def.id = fnId end
+                return def
+            end
+        -- END Function tools --
 
         -- Meta (pack credits: name / author / website) --
             ms.compiler.getMeta = function()

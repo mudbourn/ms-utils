@@ -152,6 +152,84 @@
         root.appendChild(ui().section(id, title, buildFn, desc));
     }
 
+    // -- Installed library --
+    // The shelf of hotswappable slices the host keeps under data/library. Each
+    // panel that owns a kind (theme and sound here, macro in panel-macros.js)
+    // renders a manager section: the list plus a "save current" button. The
+    // list repaints out-of-band whenever the host pushes it, so it is held in
+    // module state keyed by kind and re-filled into a stable container.
+    const LIB_STATE = { theme: [], sound: [] };
+    const LIB_NOUN  = { theme: "theme", sound: "sound pack" };
+
+    function fillLibList(kind, wrap) {
+        const { h, row, btnRow, actionBtn } = ui();
+        wrap.innerHTML = "";
+
+        const entries = LIB_STATE[kind] || [];
+        if (!entries.length) {
+            wrap.appendChild(h("div", { cls: "theme-note" },
+                "Nothing here yet. Install a " + LIB_NOUN[kind] + " from Browse, "
+                + "or save your current one below."));
+            return;
+        }
+
+        for (const e of entries) {
+            const meta = [e.origin, e.version].filter(Boolean).join(" · ");
+            wrap.appendChild(row(e.name, meta || null, btnRow(
+                actionBtn("Activate", "accent", () =>
+                    window.msLibraryClient.activate(kind, e.slug, e.name)),
+                actionBtn("Delete", "danger", async () => {
+                    const r = await window.openModal(
+                        "Delete " + e.name + "?",
+                        "Removes it from your library. Anything already applied stays in place.",
+                        "Delete", "Cancel");
+                    if (r.confirmed) window.msLibraryClient.remove(kind, e.slug);
+                }),
+            )));
+        }
+    }
+
+    function repaintLib(kind) {
+        const wrap = document.getElementById("library-list-" + kind);
+        if (wrap) fillLibList(kind, wrap);
+    }
+
+    function librarySection(root, kind, title, desc, captureLabel) {
+        const { h, btnRow, actionBtn } = ui();
+
+        sec(root, "installed-" + kind, title, desc, (body) => {
+            const list = h("div", { id: "library-list-" + kind, cls: "library-list" });
+            fillLibList(kind, list);
+            body.appendChild(list);
+
+            body.appendChild(btnRow(
+                actionBtn(captureLabel, "", async () => {
+                    const r = await window.openModal(
+                        "Save current " + LIB_NOUN[kind],
+                        "Name it so you can hotswap back to it later.",
+                        "Save", "Cancel", true, "");
+                    if (r.confirmed) {
+                        window.msLibraryClient.capture(kind, (r.value || "").trim());
+                    }
+                }),
+            ));
+        });
+
+        if (window.msLibraryClient) window.msLibraryClient.request(kind);
+    }
+
+    if (window.msLibraryClient) {
+        window.msLibraryClient.on("theme", (entries) => {
+            LIB_STATE.theme = entries;
+            repaintLib("theme");
+        });
+
+        window.msLibraryClient.on("sound", (entries) => {
+            LIB_STATE.sound = entries;
+            repaintLib("sound");
+        });
+    }
+
     // -- Theme tab --
     function buildTheme(root) {
         const { h, row, toggle, btnRow, actionBtn } = ui();
@@ -278,6 +356,9 @@
                 + "colours, can be hand-written into ms_theme.json and win over "
                 + "the values derived here."));
         });
+
+        librarySection(root, "theme", "Installed Themes",
+            "Hotswap a saved look", "Save current theme...");
     }
 
     // -- Sound picker --
@@ -820,6 +901,9 @@
                    action: () => sendToHost({ action: "setBundleSoundsWithTheme", value: true }) }],
             ));
         });
+
+        librarySection(root, "sound", "Installed Sound Packs",
+            "Hotswap a saved set", "Save current sounds...");
     }
 
     // -- Share tab --
