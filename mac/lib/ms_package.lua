@@ -173,7 +173,11 @@ return function(ms)
             return writeFile(_ledgerPath, json .. "\n")
         end
 
-        ms.package.recordPlugins = function(names, manifest)
+        ms.package.recordPlugins = function(names, manifest, id)
+            -- `id` is the registry entry id (see recordContent); the manifest
+            -- does not carry one, so Browse's Update check needs it recorded.
+            id = (type(id) == "string" and id ~= "" and id)
+                or (manifest and manifest.id) or nil
             local ledger = readLedger() or {
                 version = 1,
                 plugins = {},
@@ -184,7 +188,7 @@ return function(ms)
                 if hash then
                     ledger.plugins[name] = {
                         hash        = hash,
-                        id          = manifest and manifest.id or nil,
+                        id          = id,
                         name        = manifest and manifest.name or nil,
                         version     = manifest and manifest.version or nil,
                         author      = manifest and manifest.author or nil,
@@ -215,14 +219,19 @@ return function(ms)
             return nil
         end
 
-        ms.package.recordContent = function(manifest)
-            if type(manifest) ~= "table" or type(manifest.id) ~= "string"
-                or manifest.id == "" then
+        -- `id` is the registry entry id (the stable handle). It is NOT carried
+        -- in the package manifest — ms.package.pack never writes one — so the
+        -- caller must pass the id it downloaded by. Falls back to manifest.id
+        -- only for the rare package that does embed one.
+        ms.package.recordContent = function(manifest, id)
+            id = (type(id) == "string" and id ~= "" and id)
+                or (type(manifest) == "table" and manifest.id) or nil
+            if type(manifest) ~= "table" or type(id) ~= "string" or id == "" then
                 return false
             end
             local ledger = readContentLedger() or { version = 1, content = {} }
-            ledger.content[manifest.id] = {
-                id          = manifest.id,
+            ledger.content[id] = {
+                id          = id,
                 type        = manifest.type,
                 name        = manifest.name,
                 version     = manifest.version,
@@ -793,7 +802,7 @@ return function(ms)
                     if spoon then names[spoon] = true end
                 end
                 if next(names) then
-                    pcall(function() ms.package.recordPlugins(names, manifest) end)
+                    pcall(function() ms.package.recordPlugins(names, manifest, opts.id) end)
                 end
             else
                 -- Every other content type records its installed version so
@@ -801,7 +810,7 @@ return function(ms)
                 -- a partial profile install, not the whole entry, so skip it —
                 -- it stays "Install" and doesn't claim the profile is installed.
                 if not opts.component then
-                    pcall(function() ms.package.recordContent(manifest) end)
+                    pcall(function() ms.package.recordContent(manifest, opts.id) end)
                 end
             end
 

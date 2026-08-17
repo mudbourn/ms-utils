@@ -1879,6 +1879,12 @@ return function(ms)
                         trustLookup   = ms.registry.trustLookup,
                         component     = (data.component ~= "" and data.component) or nil,
                         includeSounds = data.includeSounds == true,
+                        -- The registry id we downloaded by: recorded into the
+                        -- ledger so Browse can offer Update next time. The
+                        -- manifest itself carries no id. For a component slice
+                        -- data.id is the profile's id; install skips recording
+                        -- those, so it stays "Install".
+                        id            = data.id,
                     })
                     hs.timer.doAfter(0.15, function()
                         if not result then

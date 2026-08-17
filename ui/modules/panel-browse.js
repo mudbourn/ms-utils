@@ -145,17 +145,18 @@
             onmouseenter: () => playSlot("hover"),
         });
 
-        // Unified display name: "<base>  [Type]" for every kind, the profile
-        // and its slices read the same way. Strip any type word the source name
-        // already carries (a trailing "profile", or a ", Theme" from a virtual
-        // entry) so it is never doubled.
+        // Display name is just the base name — the type is already conveyed by
+        // the group header (when browsing "all"), the type filter, and the type
+        // word in the meta line, so a "[Type]" suffix on the title only repeats
+        // it. Strip any type word the source name carries (a trailing "profile",
+        // or a ", Theme" from a virtual entry) so the title stays clean.
         const typeLabel = String((TYPES.find((x) => x.value === e.type) || {}).label
             || e.type).replace(/s$/, ""); // "Themes" -> "Theme"
         const baseName = (e.name || e.id)
             .replace(/\s*[,–-]\s*(Theme|Sound|Macro|Profile|Plugin)\s*$/i, "")
             .replace(/\s+(profile|theme|sound|macro|plugin)$/i, "")
             .trim() || (e.name || e.id);
-        const displayName = baseName + "  [" + typeLabel + "]";
+        const displayName = baseName;
 
         // No trust badge: the registry is curator-published, every entry is
         // vetted before it lands, so presence in the library IS the trust
@@ -188,9 +189,7 @@
         // first install. Only plugins report installed state today (they carry
         // a versioned ledger record); everything else stays "Install".
         const isUpdate = !isVirtual && !!e.installed;
-        const installLabel = isUpdate
-            ? "Update"
-            : ((e.type === "profile" && !isVirtual) ? "Install profile" : "Install");
+        const installLabel = isUpdate ? "Update" : "Install";
 
         const actions = h("div", { cls: "browse-actions" });
         actions.appendChild(actionBtn(installLabel, "accent", () => {
