@@ -769,6 +769,10 @@
            macro toolbar, so it must not claim the row's leftover space the way
            the param-panel switch does. */
         .macro-class-seg { margin-left: 0; align-self: center; flex-shrink: 0; }
+        /* Bound-parameter tool read-out. */
+        .fn-tool-info { font-size: 10px; color: var(--text3); line-height: 1.5; margin-top: 6px; }
+        .fn-tool-info:empty { display: none; }
+        .fn-tool-info b { color: var(--accent-hi); font-weight: 600; }
         .fn-param-tool select.fn-tool-select { width: 100%; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: var(--font-mono); cursor: pointer; }
         .fn-param-tool select.fn-tool-select:focus { border-color: var(--accent); }
         .fn-param.bound .fn-param-type { color: var(--accent-hi); }

@@ -1,5 +1,4 @@
 -- ms_plugins (Plugin Loading & Teardown) --
--- Design notes: docs/notes/ms_plugins.md
 return function(ms)
 
     local _home    = os.getenv("HOME")

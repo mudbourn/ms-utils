@@ -1,5 +1,4 @@
 -- ms_registry (Package Registry Client) --
--- Design notes, trust model & signature invariants: docs/notes/ms_registry.md
 return function(ms)
 
     local _home    = os.getenv("HOME")

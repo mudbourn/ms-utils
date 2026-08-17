@@ -1817,7 +1817,7 @@ return function(ms)
                         end
                     end
                     -- Non-plugin content reports its version from the content
-                    -- ledger. See docs/notes/ms_ui.md, Browse refresh.
+                    -- ledger.
                     if ms.package and ms.package.listContent then
                         local okC, content = pcall(ms.package.listContent)
                         if okC and type(content) == "table" then
@@ -1880,7 +1880,6 @@ return function(ms)
                         component     = (data.component ~= "" and data.component) or nil,
                         includeSounds = data.includeSounds == true,
                         -- Registry id, recorded for Update detection.
-                        -- See docs/notes/ms_package.md.
                         id            = data.id,
                     })
                     hs.timer.doAfter(0.15, function()

@@ -202,7 +202,6 @@ return function(ms)
         end
 
         -- Installed-version record for non-plugin content, keyed by registry id.
-        -- See docs/notes/ms_package.md, Install-vs-Update ledger.
         local _contentLedgerPath = _dataDir .. "/.ms_content_ledger.json"
 
         local function readContentLedger()
@@ -216,7 +215,7 @@ return function(ms)
         end
 
         -- `id` is the registry entry id, which the manifest does not carry, so
-        -- the caller passes it. See docs/notes/ms_package.md.
+        -- the caller passes it.
         ms.package.recordContent = function(manifest, id)
             id = (type(id) == "string" and id ~= "" and id)
                 or (type(manifest) == "table" and manifest.id) or nil

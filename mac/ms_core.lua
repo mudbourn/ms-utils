@@ -1,5 +1,4 @@
 -- Core System (PLEASE EDIT CAREFULLY) --
--- Design notes: docs/notes/ms_core.md
     -- Hammerspoon mudscript Utility Library --
         -- 0. Bootstrap & Spoons --
             if _G.__ms_core_running then return end

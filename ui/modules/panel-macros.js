@@ -105,10 +105,7 @@
                 ]
             },
             {
-                // Compiler construct (see ms_compiler.lua): sets an ongoing delay
-                // automatically inserted after every following step, until
-                // another action_delay changes it. 0 turns it off. Use a literal
-                // number. A tool-bound value can't be resolved at compile time.
+                // Compiler construct, value must be a literal.
                 id: "action_delay",
                 name: "action_delay",
                 sig: "set action delay (ms)",
@@ -506,11 +503,7 @@
                 params: []
             },
 
-            /* -- logic --
-               Lua language constructs, not ms.* calls. `name` is the raw
-               action the compiler emits an emitter for (see ms_compiler.lua):
-               if / for / while / repeat are containers (they nest child
-               modules); var_* / comment / code are leaves. */
+            /* -- logic -- */
             {
                 id: "if",
                 name: "if",
@@ -622,10 +615,7 @@
 
         var MOD_LIST = ["ctrl", "alt", "shift", "cmd"];
 
-        // Parameter types whose value can be wired to a tool (an authored
-        // setting) instead of a literal. A bound param compiles to
-        // ms.settings.get("key"), so it only makes sense where a plain value is
-        // expected, not for key captures, modifier sets, or raw Lua blocks.
+        // Parameter types that can be wired to a tool.
         var BINDABLE = { number: true, string: true };
 
         /* -- State -- */
@@ -679,10 +669,7 @@
         toast.className = "fn-toast";
         document.body.appendChild(toast);
 
-        /* -- Render Function List --
-           Grouped by category into collapsible sections, in REGISTRY order.
-           A search query flattens the collapse, every matching category is
-           forced open so results are never hidden behind a folded header. */
+        /* -- Render Function List -- */
         var _catCollapsed = {};   // category -> true when folded shut
 
         function makeEntryRow(fn) {
@@ -695,15 +682,11 @@
             sigSpan.textContent = fn.name;
             row.appendChild(sigSpan);
 
-            // Draggable straight onto the canvas as a new module (with default
-            // params), as an alternative to selecting it and clicking Add Module.
-            // The canvas reads this MIME type; see the drop wiring on the canvas.
+            // Draggable onto the canvas as a new module (default params).
             row.setAttribute("draggable", "true");
             row.addEventListener("dragstart", function(e) {
                 e.dataTransfer.effectAllowed = "copy";
                 e.dataTransfer.setData("application/x-ms-fn", fn.id);
-                // A plain-text fallback keeps the drag valid where the custom
-                // type is filtered; the canvas prefers the typed payload.
                 e.dataTransfer.setData("text/plain", fn.name);
             });
 
@@ -717,11 +700,6 @@
             return row;
         }
 
-        // The Tools group sits above the module categories: it is not part of
-        // REGISTRY (tools are live settings, not code the compiler emits) so it
-        // is rendered on its own. Every tool is a row you can inspect; a final
-        // "New Tool..." row opens the creator. A module parameter is wired to a
-        // tool from that parameter's own field, not from here.
         // Build one draggable tool row (a shared-setting reference).
         function makeToolRow(t) {
             var row = document.createElement("div");
@@ -739,9 +717,7 @@
             tag.textContent = t.type;
             row.appendChild(tag);
 
-            // Draggable onto the canvas as a shared-setting reference block,
-            // mirroring the module rows. The canvas drop wiring reads this MIME
-            // type and inserts a { action:"setting" } step.
+            // Draggable onto the canvas as a shared-setting reference block.
             row.setAttribute("draggable", "true");
             row.addEventListener("dragstart", function(e) {
                 e.dataTransfer.effectAllowed = "copy";
@@ -758,12 +734,7 @@
             return row;
         }
 
-        // The Tools live above the module categories (they are settings, not
-        // code the compiler emits). Each tool's `section` becomes its own
-        // collapsible heading here, so a plugin that tags its settings with a
-        // section (e.g. the Roblox plugin's section="roblox") gets its own named
-        // group alongside the module categories, exactly like LUA / FLOW /
-        // UTILITIES. Tools with no section fall under a default "tools" group.
+        // Group tools by their section into collapsible headings.
         function renderToolsGroup(filter, searching) {
             var q = (filter || "").toLowerCase();
             var matches = _tools.filter(function(t) {
@@ -775,16 +746,14 @@
             });
             var searchingTools = q && "tool".indexOf(q) === -1;
 
-            // With no tools at all, keep the single default header + a hint so
-            // tools stay discoverable; a no-match search just hides the group.
+            // With no tools, keep the default header and a hint so tools stay discoverable.
             if (matches.length === 0) {
                 if (searchingTools) return;
                 renderToolSection("tools", [], filter, searching, true);
                 return;
             }
 
-            // Group by section, preserving first-seen order. The default "tools"
-            // group, when present, is emitted first so ungrouped tools lead.
+            // Group by section in first-seen order, default "tools" group leads.
             var order = [];
             var groups = {};
             matches.forEach(function(t) {
@@ -842,8 +811,7 @@
 
             rows.forEach(function(t) { entriesDiv.appendChild(makeToolRow(t)); });
 
-            // Tools are authored in the dedicated Tools panel (Setting Builder),
-            // not here. When none exist yet, a hint points at where to make one.
+            // A hint points at the Tools panel when none exist yet.
             if (emptyHint && rows.length === 0) {
                 var hint = document.createElement("div");
                 hint.className = "fn-entry fn-tool-hint";
@@ -900,9 +868,7 @@
                 head.addEventListener("mouseenter", function() {
                     if (window.playSlot) playSlot("hover");
                 });
-                // While searching the sections are forced open, so the header
-                // is inert, toggling collapse state would just be undone by
-                // the next keystroke's re-render.
+                // While searching, sections are forced open so the header is inert.
                 if (!searching) {
                     head.addEventListener("click", function() {
                         if (window.playSlot) playSlot("interact");
@@ -960,12 +926,7 @@
             renderDetail(fn);
         }
 
-        /* -- Tools --
-           A tool is an authored setting: it defines a value the person running
-           the pack can adjust from the Settings panel, and a module parameter
-           can be wired to it so the macro reads that value live instead of a
-           number baked into the source. selectTool shows one read-only; tools
-           are authored in the dedicated Tools panel, not here. */
+        /* -- Tools -- */
         function findTool(key) {
             for (var i = 0; i < _tools.length; i++) {
                 if (_tools[i].key === key) return _tools[i];
@@ -973,11 +934,7 @@
             return null;
         }
 
-        // Canvas step for a tool reference. Only the key/label/type are kept ,
-        // the setting itself lives globally (authored in the Tools panel), so
-        // the block just points at it. The compiler emits an inert, documented
-        // marker; the live value is read via ms.settings.get(key) wherever a
-        // parameter is wired to this tool.
+        // Canvas step for a tool reference, keeps only key/label/type.
         function settingDefFor(t) {
             return {
                 action: "setting",
@@ -1030,9 +987,6 @@
 
             html += '<div class="fn-detail-footer">';
             // Add the tool to the macro as a shared-setting reference block.
-            // Tools are independent of macros, this places an anchor that says
-            // "this macro uses this setting"; it never redefines the setting,
-            // so several macros can reference the same one.
             html += '<button class="fn-add-btn" id="fn-tool-add">Add to Macro</button>';
             if (t.source === "builder") {
                 html += '<button class="fn-add-btn fn-tool-delete" id="fn-tool-delete">Delete Tool</button>';
@@ -1073,10 +1027,6 @@
                 + esc(label) + '</div><div class="fn-tool-meta-val">'
                 + esc(String(value)) + '</div></div>';
         }
-
-        // The tool CREATOR was removed: tools are authored in the dedicated
-        // Tools panel (Setting Builder) and only referenced here. selectTool /
-        // renderToolDetail below still show a tool read-only for wiring.
 
         /* -- Render Detail Panel -- */
         function renderDetail(fn) {
@@ -1129,9 +1079,7 @@
         }
 
         /* -- Render a single parameter field -- */
-        // Option list for a createSelect tool picker, as the {value,label}
-        // array the themed dropdown consumes. The empty "" row is the
-        // placeholder / "no tool chosen" state.
+        // Option list for the tool picker, the empty row is the placeholder.
         function toolSelectOptions() {
             if (_tools.length === 0) {
                 return [{ value: "", label: "No tools, create one first" }];
@@ -1146,6 +1094,34 @@
         // Live createSelect nodes for the currently rendered param fields, keyed
         // by param name, so setToolList can refresh their options in place.
         var _toolSelects = {};
+
+        // Type and default line under a bound param's tool picker.
+        function toolInfoHTML(key) {
+            var t = key && findTool(key);
+            if (!t) return "";
+            var bits = [];
+            if (t.type === "slider" && (t.min != null || t.max != null)) {
+                bits.push("range " + (t.min != null ? t.min : "?")
+                    + " to " + (t.max != null ? t.max : "?"));
+            }
+            if (t.type === "seg" && t.options) {
+                bits.push(t.options.map(function(o) { return o.label; }).join(" / "));
+            }
+            if (t.default !== undefined && t.default !== null && t.default !== "") {
+                var dv = (t.type === "toggle")
+                    ? ((t.default === true || t.default === "true") ? "On" : "Off")
+                    : String(t.default);
+                bits.push("default " + dv);
+            }
+            var tail = bits.length ? " · " + esc(bits.join(" · ")) : "";
+            return "Reads a <b>" + esc(t.type) + "</b> tool" + tail
+                + ". Edit its value in the Tools panel.";
+        }
+
+        function setToolInfo(name, key) {
+            var el = detailPane.querySelector('[data-toolinfo="' + name + '"]');
+            if (el) el.innerHTML = toolInfoHTML(key);
+        }
 
         // Replace each tool-select mount point with a themed createSelect. Falls
         // back to a native <select> only if createSelect isn't loaded.
@@ -1164,6 +1140,7 @@
                             if (window.playSlot) playSlot("interact");
                             _paramBind[name] = v;
                             _paramValues[name] = { __toolRef: v };
+                            setToolInfo(name, v);
                             updatePreview(fn);
                         },
                     });
@@ -1171,6 +1148,7 @@
                     sel.setAttribute("data-toolsel", name);
                     mount.appendChild(sel);
                     _toolSelects[name] = sel;
+                    setToolInfo(name, _paramBind[name] || "");
                 })(mounts[i]);
             }
         }
@@ -1241,11 +1219,9 @@
             if (bindable) {
                 html += '<div class="fn-param-tool" data-toolwrap="' + esc(p.name) + '"'
                     + (bound ? '' : ' style="display:none"') + '>';
-                // A themed createSelect is mounted here after the HTML lands, a
-                // native <select> can style its closed control but not its open
-                // popup (macOS draws that), so the tool picker broke the shell's
-                // look mid-interaction. See mountToolSelects().
+                // Themed createSelect mounted after the HTML lands.
                 html += '<div class="fn-tool-select-mount" data-toolmount="' + esc(p.name) + '"></div>';
+                html += '<div class="fn-tool-info" data-toolinfo="' + esc(p.name) + '"></div>';
                 html += '</div>';
             }
 
@@ -1326,10 +1302,7 @@
                 })(modChips[k]);
             }
 
-            // Value/Tool switch, flips a parameter between a literal and a
-            // tool binding. Switching to Tool with no tool chosen yet leaves the
-            // binding empty until the select fires; switching back to Value
-            // clears the binding and restores the literal value in state.
+            // Value/Tool switch: flips a parameter between a literal and a tool binding.
             var switches = detailPane.querySelectorAll(".fn-bind-opt");
             for (var s = 0; s < switches.length; s++) {
                 (function(btn) {
@@ -1354,6 +1327,7 @@
                             if (_paramBind[name]) {
                                 _paramValues[name] = { __toolRef: _paramBind[name] };
                             }
+                            setToolInfo(name, _paramBind[name] || "");
                         } else {
                             group.classList.remove("bound");
                             if (lit)  lit.style.display  = "";
@@ -1537,10 +1511,7 @@
             }
         }
 
-        // Refresh the tool list (pushed from Lua). Keeps the shared global in
-        // sync so the inline step editor can read the same set, re-renders the
-        // list, and, if a tool detail or a param's tool picker is open ,
-        // refreshes what is on screen so a just-created tool shows up at once.
+        // Refresh the tool list pushed from Lua.
         function setToolList(list) {
             _tools = Array.isArray(list) ? list : [];
             window.msMacroTools = _tools;
@@ -1549,9 +1520,6 @@
                 var t = findTool(_selectedId);
                 if (t) renderToolDetail(t); else { detailPane.innerHTML = ''; _view = "module"; }
             } else {
-                // A module detail may be open and mid-edit, re-rendering it
-                // would wipe half-typed fields, so only the tool picker option
-                // lists are refreshed in place, keeping each current selection.
                 for (var name in _toolSelects) {
                     if (!_toolSelects.hasOwnProperty(name)) continue;
                     var picked = _paramBind[name] || "";
@@ -1660,18 +1628,12 @@
         this._el = container;
         this._onChange = (opts && opts.onChange) || function(){};
         this._onSelect = (opts && opts.onSelect) || function(){};
-        // Opening the parameter editor is its own gesture (right-click a
-        // module) rather than a side effect of selecting one, selection alone
-        // no longer forces the params panel open, which read as persistent.
+        // The parameter editor opens on right-click, not on selection.
         this._onContext = (opts && opts.onContext) || function(){};
         this._tools = [];
         this._map = {};
-        // Selection model (Keyboard-Maestro style, text-like):
-        //   _selSet  , every currently selected sid (map sid -> true)
-        //   _anchorId, the pivot for shift-range selection
-        // _selId is kept as the "primary" single selection: it is non-null
-        // ONLY when exactly one block is selected, and it is what drives the
-        // inline parameter editor. Multi-selection ⇒ _selId null ⇒ no params.
+        // Selection model: _selSet (all selected), _anchorId (shift pivot),
+        // _selId (primary, non-null only for one block).
         this._selSet   = {};
         this._anchorId = null;
         this._selId    = null;
@@ -2110,10 +2072,7 @@
         return body;
     };
 
-    /* -- Selection engine --
-     * The set of selected blocks is _selSet. _selId mirrors it only when the
-     * selection is a single block, that is the signal the parameter editor
-     * uses, so a multi-selection (or empty selection) shows no params. */
+    /* -- Selection engine -- */
 
     ToolCanvas.prototype._isSelected = function(sid) {
         return !!this._selSet[sid];
@@ -2241,36 +2200,19 @@
     };
 
     // Pointer-based reorder (mousedown -> mousemove -> mouseup).
-    //
-    // The HTML5 Drag-and-Drop API does NOT reliably deliver `drop` inside this
-    // WKWebView: dragstart/dragover fired but the drop was swallowed, so a
-    // dragged block silently bounced back to its origin. Reordering is a pure
-    // in-webview interaction, so it can only ever be JavaScript, Lua/Hammerspoon
-    // lives outside the webview and never sees the drag (the macro reaches the
-    // host only on Save). The fix is to abandon the flaky native API and drive
-    // the drag with plain mouse events plus a hand-drawn ghost, the same move
-    // the shell already made when the native <select> misbehaved here.
     ToolCanvas.prototype._wireDrag = function(el, step) {
         var self = this;
         el.addEventListener("mousedown", function(e) {
             if (e.button !== 0) return;                          // left button only
             if (e.target.closest(".tool-action-btn")) return;    // copy/paste/delete
             if (e.target.closest(".tool-nest-toggle")) return;   // collapse arrow
-            // Suppress the native text-selection drag. Without this, WKWebView
-            // treats a held-button move as a selection gesture and swallows every
-            // mousemove until release, so begin() (gated on the move threshold)
-            // never fires during the hold, and the ghost only latches to the
-            // cursor after mouseup, dropping on the next click ("sticky tape").
-            // preventDefault on mousedown blocks selection/focus but still lets
-            // the synthesised click through, so plain click-select is untouched.
+            // Suppress the native text-selection drag.
             e.preventDefault();
             self._beginPointerDrag(el, step, e);
         });
     };
 
-    // Runs a single reorder gesture. A drag only actually begins once the
-    // pointer crosses a small threshold, so a plain click still falls through
-    // to the click-select handler untouched.
+    // Runs a single reorder gesture (drag begins past a small threshold).
     ToolCanvas.prototype._beginPointerDrag = function(el, step, downEvt) {
         var self = this;
         var startX = downEvt.clientX, startY = downEvt.clientY;
@@ -2283,8 +2225,7 @@
 
         function begin() {
             started = true;
-            // Single block, or the whole multi-selection when the grabbed block
-            // is part of one, matching the old drag-group behaviour.
+            // Single block, or the whole multi-selection when the grabbed block is part of one.
             if (self._isSelected(step._sid) && self._selCount() > 1) {
                 group = self._selList();
             } else {
@@ -2421,9 +2362,7 @@
         document.addEventListener("keydown", onKey, true);
     };
 
-    // Drop a group into a container branch (then/else/body). Mirrors moveTools
-    // for the nest case, but keeps the explicit branch, moveTools' "nest" can
-    // only reach a container's default branch, not an if-block's else.
+    // Drop a group into a container branch (then/else/body), keeping the explicit branch.
     ToolCanvas.prototype._commitNest = function(group, parentSid, branch) {
         var parent = this._map[parentSid];
         if (!parent) return;
@@ -2454,11 +2393,7 @@
     ToolCanvas.prototype.updateTool = function(sid, params, opts) {
         var s = this._map[sid]; if (!s) return;
         for (var k in params) { if (params.hasOwnProperty(k)) s.params[k] = params[k]; }
-        // Live typing passes { quiet:true }. A full _render() here rebuilds the
-        // canvas and (via the editor's render hook) the parameter form, tearing
-        // down the very input being typed into, so each keystroke kicked focus
-        // out of the field. Quiet updates patch only the block's on-canvas
-        // summary and leave the DOM (and focus) intact.
+        // Live typing passes { quiet:true } to patch the summary without re-rendering.
         if (opts && opts.quiet) {
             this._patchSummary(sid);
             this._fireChange();
@@ -2490,12 +2425,8 @@
     };
 
     /* -- Clipboard (copy / cut / paste) -- */
-    // Copy a specific module (by id) onto the module clipboard. Adding the
-    // .has-clip class to the canvas root is what reveals every module's paste
-    // button, see the CSS rule that gates .tool-action-btn.paste.
-    // The clipboard holds an array of stripped module defs (one entry for a
-    // single copy, several for a multi-selection). The .has-clip class on the
-    // root reveals every block's paste button.
+    // Copy a module onto the clipboard (an array of stripped defs). The
+    // .has-clip class on the root reveals every paste button.
     ToolCanvas.prototype._setClipboard = function(steps) {
         var clones = deepClone(steps);
         this._strip(clones);
@@ -2544,9 +2475,7 @@
         if (!entries.length) return false;
         var newIds = [];
         var insertAt = afterId ? this._findIdx(this._tools, afterId) : -1;
-        // No anchor (nothing selected) -> paste at the TOP of the macro, the only
-        // way to insert above every existing module. With an anchor we insert
-        // directly after it, preserving group order.
+        // No anchor pastes at the top, with an anchor directly after it.
         var atTop = (insertAt === -1);
         for (var i = 0; i < entries.length; i++) {
             var clone = deepClone(entries[i]);
@@ -2602,10 +2531,7 @@
     macroLabel.textContent = "Macro";
     toolbar.appendChild(macroLabel);
 
-    // Custom dropdown rather than <select>: the closed control can be themed,
-    // but an open native <select> renders as a macOS popup menu that no CSS
-    // reaches, so it broke out of the shell's look. Exposes .value + "change"
-    // so the rest of this panel treats it like the select it replaced.
+    // Custom dropdown rather than <select>, exposing .value + "change".
     var macroSelect = (function() {
         var root = document.createElement("div");
         root.className = "macro-select";
@@ -2617,9 +2543,7 @@
 
         var arrow = document.createElement("span");
         arrow.className = "macro-select-arrow";
-        // chevdown from the shell's ICONS rather than a "▾" glyph: the
-        // custom dropdown exists so this control can be themed, and a
-        // typographic arrow is the one part of it that never was.
+        // chevdown from the shell's ICONS rather than a typographic arrow.
         arrow.innerHTML = (typeof window.icon === "function" && window.ICONS
             && window.ICONS.chevdown)
             ? window.icon("chevdown")
@@ -2725,9 +2649,7 @@
     });
     toolbar.appendChild(nameInput);
 
-    // Bind field, the compiler already emits a ms.bind.define default block
-    // from macroDef.bind; without this control the builder never supplied one,
-    // so builder-authored macros were never bindable.
+    // Bind field, sets macroDef.bind for the compiler.
     var bindLabel = document.createElement("span");
     bindLabel.style.cssText = "font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-left:8px;margin-right:4px";
     bindLabel.textContent = "Bind";
@@ -2739,11 +2661,7 @@
     bindBtn.title = "Click to capture a bind for this macro";
     toolbar.appendChild(bindBtn);
 
-    // Class field, whether this visual macro is a MAIN or OPTIONAL one. It
-    // drives the compiled ms.bind.define group ("visual - main" / "visual -
-    // optional"), which is what the Binds tab groups under. Purely a grouping
-    // convention (only "system" is functionally special), so this needs no
-    // host change, the compiler already emits macroDef.group verbatim.
+    // Class field: marks the macro MAIN or OPTIONAL, driving its bind group.
     var _currentMacroClass = "main";   // "main" | "optional"
 
     var classLabel = document.createElement("span");
@@ -2789,10 +2707,7 @@
         return (typeof group === "string" && /optional/i.test(group)) ? "optional" : "main";
     }
 
-    // Right-side action cluster. `margin-left:auto` pins it to the right edge,
-    // and because it's a single flex child it drops down as one right-aligned
-    // unit when the toolbar wraps, rather than the buttons scattering to the
-    // left of a new row (which is what a bare flex spacer + loose buttons did).
+    // Right-side action cluster, margin-left:auto pins it right.
     var actions = document.createElement("div");
     actions.className = "macro-toolbar-actions";
 
@@ -2808,9 +2723,7 @@
     saveBtn.textContent = "Save";
     actions.appendChild(saveBtn);
 
-    // Secondary actions live under an overflow "⋯" menu so the toolbar never
-    // clips them when the shell is shrunk to its smallest width (Test/Record/
-    // Delete/Edit File used to run off the edge). New/Save/Bind stay inline.
+    // Secondary actions live under an overflow menu so the toolbar never clips them. New/Save/Bind stay inline.
     var overflowWrap = document.createElement("div");
     overflowWrap.className = "macro-overflow";
     var overflowBtn = document.createElement("button");
@@ -2835,9 +2748,7 @@
     overflowMenu.addEventListener("click", function() { closeOverflow(); });
     document.addEventListener("click", closeOverflow);
 
-    // Every overflow item is icon + label, in that order, so the menu reads as
-    // one consistent list rather than the old mix of symbol+label / label-only
-    // / icon-only entries. `menuLabel()` renders one via the shell's icon().
+    // Every overflow item is icon + label so the menu reads as one consistent list.
     function menuLabel(name, text) {
         return (window.icon ? window.icon(name) : "") + '<span>' + text + '</span>';
     }
@@ -2849,9 +2760,7 @@
     testBtn.title = "Test Run current macro";
     overflowMenu.appendChild(testBtn);
 
-    // Record button, with a paired "⋯" that opens the recording-settings
-    // menu. The two sit in one row so the options live right next to the
-    // action they configure.
+    // Record button, with a paired menu button for recording settings.
     var recordRow = document.createElement("div");
     recordRow.className = "macro-record-row";
     var recordBtn = document.createElement("button");
@@ -2876,18 +2785,14 @@
     delMacroBtn.title = "Delete macro";
     overflowMenu.appendChild(delMacroBtn);
 
-    // Edit raw macro file, the escape hatch for anything the visual builder
-    // doesn't cover. Lives here, with the builder that owns ms_macros.lua,
-    // rather than in the Settings > Developer section it used to share.
+    // Edit raw macro file, the escape hatch for anything the builder doesn't cover.
     var editFileBtn = document.createElement("button");
     editFileBtn.className = "macro-toolbar-btn";
     editFileBtn.innerHTML = menuLabel("edit", "Edit File");
     editFileBtn.title = "Open ms_macros.lua in your editor";
     overflowMenu.appendChild(editFileBtn);
 
-    // Change the app "Edit File" opens in. The editMacros confirm only offers a
-    // picker when no editor is set yet, so this is how a wrong/stale choice is
-    // switched.
+    // Change the app "Edit File" opens in.
     var editorBtn = document.createElement("button");
     editorBtn.className = "macro-toolbar-btn";
     editorBtn.innerHTML = menuLabel("settings", "Change Editor");
@@ -2906,10 +2811,7 @@
     toolArea.className = "macros-tool-area";
     // Canvas container (ToolCanvas will be mounted here)
     var canvasContainer = document.createElement("div");
-    // overflow-y:auto (not hidden) so the module list scrolls: the inner
-    // .tool-canvas grows to its content height, and this bounded flex child is
-    // the scroller. The inline editor panel lives inside that flow, so it
-    // scrolls into view instead of being clipped.
+    // overflow-y:auto so the module list scrolls.
     canvasContainer.className = "macros-canvas-scroll";
     canvasContainer.style.cssText = "flex:1;overflow-y:auto;overflow-x:hidden;position:relative";
     toolArea.appendChild(canvasContainer);
@@ -2958,14 +2860,11 @@
     mainArea.appendChild(overlay);
 
     // -- Tab strip: Builder | Binds --
-    // Rebinding lives here rather than in Settings: the macros panel owns
-    // every macro, whether it was authored in the builder or declared in
-    // ms_macros.lua.
+    // Rebinding lives here, this panel owns every macro.
     var mtabs = document.createElement("div");
     mtabs.className = "mtabs";
 
-    // Binds is the landing tab: it is the panel people open the shell to
-    // read, where Builder is a thing you go to deliberately.
+    // Binds is the landing tab.
     var builderSection = document.createElement("div");
     builderSection.className = "mtab-section";
     builderSection.setAttribute("data-msec", "builder");
@@ -2978,13 +2877,7 @@
     bindsScroll.className = "binds-scroll";
     bindsSection.appendChild(bindsScroll);
 
-    /* -- Pack Info (ms.macroMeta) editor --
-       The visual macro pack carries an ms.macroMeta credit block (name /
-       author / website) that the compiler bakes into the generated file and
-       the loading screen shows. It lives at the top of the Binds tab so the
-       pack's identity is edited alongside its binds. Saving round-trips
-       through the host, which rewrites the JSON, recompiles, and reloads so
-       ms.macroMeta updates live. */
+    /* -- Pack Info (ms.macroMeta) editor -- */
     var _metaLoaded  = false;   // suppress dirty-marking during programmatic fill
     var _metaDirty   = false;
     var _metaOwned   = false;   // true when handwritten ms_macros.lua owns the meta
@@ -3009,9 +2902,7 @@
         return { wrap: wrap, input: inp };
     }
 
-    // Collapsed by default: the editor is set-once, but it sits above the
-    // bind list and expanded it ate a third of the tab. Collapsed it is a
-    // single header row, and the chevron says there is more.
+    // Collapsed by default: it is set-once and sits above the bind list.
     var metaCard = document.createElement("div");
     metaCard.className = "section macro-meta-section collapsed";
     var metaHead = document.createElement("div");
@@ -3094,9 +2985,7 @@
         _metaLoaded = true;
         _metaDirty  = false;
 
-        // When a handwritten ms_macros.lua supplies credits it owns them: the
-        // visual copy is inert, so present these as read-only, sourced from the
-        // handwritten file rather than a second set the runtime ignores.
+        // Handwritten ms_macros.lua credits are shown read-only.
         _metaOwned = meta.owned === true;
         [_metaName, _metaVersion, _metaAuthor, _metaWebsite].forEach(function(f) {
             f.input.readOnly = _metaOwned;
@@ -3153,20 +3042,14 @@
         },
         onSelect: function(sid, step) {
             if (!_toolEditor) return;
-            // Selecting a block no longer opens its params, that panel stayed
-            // up persistently and got in the way. Selection only *closes* a
-            // stale editor: if the open block is no longer the sole selection,
-            // drop the panel. Opening is now the right-click gesture (onContext).
+            // Selecting only closes a stale editor when the block is no longer the sole selection. Opening is the right-click gesture.
             if (_toolEditor._open && (!sid || _toolEditor._toolSid !== sid)) {
                 _toolEditor.close();
             }
         },
         onContext: function(sid) {
             if (!_toolEditor || !sid) return;
-            // Right-click toggles the parameter editor: if this module's panel is
-            // already the open one, close it; otherwise open it. Without the
-            // toggle a second right-click just re-opened the same panel, so the
-            // menu felt impossible to dismiss by the gesture that summoned it.
+            // Right-click toggles the parameter editor open or closed for this module.
             if (_toolEditor._open && _toolEditor._toolSid === sid) {
                 _toolEditor.close();
             } else {
@@ -3176,12 +3059,7 @@
     });
 
     // -- Picker -> canvas drag-drop --
-    // Dropping a module from the Add-Module picker onto the canvas inserts it
-    // as a new top-level module. Listeners are bound on the container in the
-    // CAPTURE phase and only act on our custom MIME type: this lets them
-    // intercept the external drag before the per-block reorder handlers (which
-    // stopPropagation on drop) can swallow it, while internal reorder drags ,
-    // which carry no such type, fall straight through untouched.
+    // Dropping a picker module onto the canvas inserts a new top-level module.
     (function() {
         var FN_MIME   = "application/x-ms-fn";
         var TOOL_MIME = "application/x-ms-tool";
@@ -3276,17 +3154,13 @@
     })();
 
     // -- Tool keyboard shortcuts (copy/cut/paste/delete) --
-    // Bound on document, not toolArea: the tool blocks and their area are not
-    // focusable, so a keydown never landed on toolArea and every shortcut was
-    // dead. Gate on the builder being the visible section and a module being
-    // selected, and bail while typing into a field so editing text is normal.
+    // Bound on document, gated on the builder being visible and a module selected.
     document.addEventListener("keydown", function(e) {
         if (!builderSection.classList.contains("active")) return;
         var t = e.target;
         if (t && t.closest && t.closest("input, textarea, [contenteditable='true']")) return;
         var mod = e.metaKey || e.ctrlKey;
-        // ⌘A selects every top-level block; paste works even with nothing
-        // selected (lands at the end). Everything else needs a selection.
+        // Cmd-A selects all top-level blocks. Paste works with nothing selected, everything else needs a selection.
         if (mod && (e.key === "a" || e.key === "A")) {
             e.preventDefault();
             _canvas.selectAll();
@@ -3338,17 +3212,12 @@
     });
 
     /* -- Fn-picker overlay toggle -- */
-    // Closed by default. The overlay is only slid off-screen (transform), not
-    // removed from the DOM, so without `inert` its buttons/inputs stayed in the
-    // tab order, Tab would move focus into the invisible, off-screen panel and
-    // break the illusion that it is closed. `inert` takes its contents out of
-    // the tab order (and pointer/a11y) without touching the slide animation.
+    // Closed by default, slid off-screen and marked inert so it leaves the tab order.
     overlay.inert = true;
     function openFnOverlay() {
         overlay.classList.add("open");
         overlay.inert = false;
-        // Pull the current tool list every time, a tool may have been added
-        // or removed from the Settings panel since the overlay last opened.
+        // Pull the current tool list every time it opens.
         refreshToolList();
     }
     function closeFnOverlay() {
@@ -3375,23 +3244,14 @@
         }
     }
 
-    /* -- Binds tab --
-       Lists every registered macro (builder-authored and ms_macros.lua
-       alike) with its effective bind, its derived sub-binds, and controls
-       to rebind, reset, or disable it. The actions are the same ones the
-       settings panel used, they are routed to ms.ui._actions by the
-       ui:macros:* bus subscription.                                     */
+    /* -- Binds tab -- */
     var _bindList = [];
 
     function refreshBindList() {
         if (window.shellPost) shellPost("macros", "listBinds", {});
     }
 
-    // Themed delete confirmation -> Promise<boolean>. Uses the shell's own modal
-    // (window.openModal, from panel-settings.js) rather than a native confirm(),
-    // which macOS draws in its own chrome and which can softlock behind the
-    // always-on-top shell. Falls back to a native confirm only if the shell
-    // modal isn't available (e.g. a popout that never loaded panel-settings).
+    // Themed delete confirmation -> Promise<boolean>, using the shell modal.
     function confirmDelete(name) {
         var msg = 'Delete "' + name + '"? This cannot be undone.';
         if (typeof window.openModal === "function") {
@@ -3419,10 +3279,7 @@
         return b;
     }
 
-    // Takes an ICONS name, not a glyph. It used to take the character itself,
-    // which is how a lone "↺" ended up standing in for the refresh icon the
-    // shell already ships, a text arrow next to real SVGs reads as a
-    // different weight and does not follow --accent on hover.
+    // Takes an ICONS name, not a glyph.
     function iconBtn(iconName, title, onClick) {
         var b = document.createElement("button");
         b.className = "bind-act";
@@ -3463,17 +3320,9 @@
         var acts = document.createElement("div");
         acts.className = "bind-acts";
 
-        // A sub-bind's trigger is inherited from its parent, only its modifier
-        // is its own. Rebinding it as a whole key would sever it from the parent
-        // and turn it into a standalone bind, so its pill drives the modifier
-        // flow (startModRebind), and its reset clears the modifier rather than
-        // resetting a bind that doesn't independently exist.
+        // A sub-bind inherits its parent's trigger and owns only its modifier.
         if (isSub) {
-            // A sub-bind inherits its parent's trigger and owns only its
-            // modifier. Two rebind modes: "Mod" changes just that modifier and
-            // stays attached to the parent; "Full" captures a whole new trigger
-            // and branches this bind off into its own adjacent top-level bind.
-            // The mode toggle drives which flow the pill starts.
+            // Two rebind modes: Mod changes the modifier, Full captures a new trigger.
             var mode = { full: false };
             var modeBtn = document.createElement("button");
             modeBtn.className = "bind-act bind-mode-toggle";
@@ -3520,9 +3369,7 @@
                 });
             }));
 
-            // Delete, a peer/sub macro is a real macro of its own (it just
-            // borrows another's trigger), so it deserves the same delete the
-            // main rows have. Guarded by a confirm like the main path.
+            // Delete a peer/sub macro, guarded by a confirm.
             if (m.group !== "system" && !m.systemBind) {
                 acts.appendChild(iconBtn("trash", "Delete macro", function() {
                     confirmDelete(m.label || m.id).then(function(ok) {
@@ -3549,18 +3396,14 @@
                 });
             }));
 
-            // Delete, only user-authored macros can be removed; system macros
-            // and the built-in system binds have no delete affordance. A single
-            // confirm guards against a misclick since the Manager list has no
-            // "currently editing" context to fall back on.
+            // Delete. Only user-authored macros can be removed.
             if (m.group !== "system" && !m.systemBind) {
                 acts.appendChild(iconBtn("trash", "Delete macro", function() {
                     confirmDelete(m.label || m.id).then(function(ok) {
                         if (!ok) return;
                         if (window.playSlot) playSlot("back");
                         shellPost("macros", "deleteMacro", { id: m.id });
-                        // Optimistic: drop it locally and repaint so the row leaves
-                        // immediately; the host refresh reconciles on its next push.
+                        // Optimistic: drop locally and repaint, host refresh reconciles.
                         _bindList = _bindList.filter(function(x) { return x.id !== m.id; });
                         renderBindList();
                     });
@@ -3568,14 +3411,9 @@
             }
         }
 
-        // System binds are always live; only real macros can be disabled.
+        // System binds are always live, only real macros can be disabled.
         if (!isSub && m.group !== "system" && !m.systemBind) {
-            // Same markup as the settings panel's toggle() so it picks up the
-            // shared .toggle track/thumb styling rather than a native checkbox.
-            // A macro with no bind has no trigger, so it cannot be enabled. The
-            // host refuses setMacroEnabled(true) for it too; locking the toggle
-            // here just makes that unreachable state legible instead of a click
-            // that silently snaps back.
+            // Reuses the settings panel toggle markup. A macro with no bind is locked off.
             var bindable = (m.bindable !== false);
             var lbl = document.createElement("label");
             lbl.className = "toggle bind-toggle" + (bindable ? "" : " disabled");
@@ -3630,9 +3468,7 @@
             groups[g].push(m);
         });
 
-        // A group is a settings section: a sticky heading naming it, and its
-        // binds in a card. It used to be a bare uppercase label over a flat
-        // run of rows, which left nothing to tell you where one group ended.
+        // A group is a settings section: a sticky heading and its binds in a card.
         order.forEach(function(g) {
             var rows = [];
             groups[g].forEach(function(m) {
@@ -3657,9 +3493,7 @@
         });
     }
 
-    // The settings panel publishes section() through window.msUI, but it
-    // takes a build function and this list already has its rows. Same markup,
-    // built from a row array instead.
+    // Same markup as msUI.section(), built from a row array.
     function bindSection(title, desc, rows) {
         var wrap = document.createElement("div");
         wrap.className = "section";
@@ -3848,8 +3682,7 @@
     editFileBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
     editFileBtn.addEventListener("click", function() {
         if (window.playSlot) playSlot("interact");
-        // The action router keys on body.action (ms_ui _routeAction), so an
-        // empty body silently no-ops, every other macros action includes it.
+        // The action router keys on body.action, so include it.
         if (window.shellPost) shellPost("macros", "editMacros", { action: "editMacros" });
     });
 
@@ -3931,9 +3764,7 @@
     /* -- Record Mode -- */
     var _isRecording = false;
 
-    // Recording options, tweaked through the "⋯" menu next to Record and
-    // persisted so a chosen recording style survives a reload. The Lua
-    // recorder reads the same shape (see ms_core startRecording handler).
+    // Recording options, persisted so a chosen style survives a reload.
     var _REC_OPTS_KEY = "ms.macroRecordOpts";
     var _recOptDefaults = {
         recordDelays:       true,   // emit ms.wait for idle gaps
@@ -3951,8 +3782,7 @@
         try {
             var saved = JSON.parse(localStorage.getItem(_REC_OPTS_KEY) || "{}");
             for (var k2 in saved) if (k2 in o) o[k2] = saved[k2];
-            // The key-down-only "press" mode was removed; fold any stored value
-            // into the press+release mode so recording never stays down-only.
+            // Fold any stored down-only value into the press+release mode.
             if (o.pressMode === "press") o.pressMode = "pressRelease";
         } catch (e) { /* corrupt/absent, fall back to defaults */ }
         return o;
@@ -4072,10 +3902,7 @@
             return wrap;
         }
 
-        // Integer slider with a live value read-out. Used for drag fidelity:
-        // the value is the number of RDP retention steps the Lua recorder uses
-        // (higher = more points kept = closer to a 1:1 path). One dragPath step
-        // still results regardless, so a high value never floods the canvas.
+        // Integer slider for drag fidelity (RDP retention steps).
         function slider(key, min, max) {
             var wrap = document.createElement("div");
             wrap.style.cssText = "display:flex;align-items:center;gap:10px;";
@@ -4297,8 +4124,7 @@
         setMeta: setMeta,
         refreshMeta: refreshMeta,
         addTool: function(def) { _canvas.addTool(def); closeFnOverlay(); },
-        // Tools (authored settings), list is pushed from Lua; create/delete
-        // round-trip through the host, which re-pushes the updated list.
+        // Tools list is pushed from Lua, create/delete round-trip through the host.
         setToolList: function(list) {
             if (window.fnPicker && window.fnPicker.setToolList) {
                 window.fnPicker.setToolList(list);

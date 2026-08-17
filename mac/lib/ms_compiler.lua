@@ -1,5 +1,4 @@
 -- ms_compiler (Visual Macro Compiler) --
--- Design notes: docs/notes/ms_compiler.md
     return function(ms)
 
         local home       = os.getenv("HOME")
@@ -179,7 +178,6 @@
                 parts[#parts + 1] = serialize(p.operation or "Click")
                 parts[#parts + 1] = serialize(p.button or "Left")
                 parts[#parts + 1] = serialize(p.reference or "Mouse")
-                -- Unscaled flag and x/y fallback: see docs/notes/ms_compiler.md.
                 if p.unscaled == true then
                     parts[#parts + 1] = "true"
                 end
@@ -233,7 +231,6 @@
             local _flowCounter = 0
 
             -- Ongoing inter-step delay set by an action_delay step. See
-            -- docs/notes/ms_compiler.md, Per-block action delay.
             local _actionDelay = 0
             local _CONTAINER = {
                 ["if"]     = true,

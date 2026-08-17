@@ -594,7 +594,7 @@
 
         -- finderInterlude --
         -- Runs `fn` (a blocking Finder panel) with the shell and popouts hidden,
-        -- then restores them. See docs/notes/ms_shell.md.
+        -- then restores them.
         ms.shell.finderInterlude = function(fn)
             local restore = {}
             if _shellView and ms._shellState and ms._shellState.visible then
@@ -633,7 +633,6 @@
         end
 
         -- Route every Finder file/folder panel through the interlude, once.
-        -- See docs/notes/ms_shell.md.
         if hs.dialog and type(hs.dialog.chooseFileOrFolder) == "function"
             and not hs.dialog._msFinderShimInstalled then
             local _origChoose = hs.dialog.chooseFileOrFolder
