@@ -1,40 +1,7 @@
-    (function() {
+(function() {
     "use strict";
 
-    /* -- log-panel.js -- */
-/**
- * LogPanel, shared factory for mudscript dev-tool log panels.
- *
- * Encapsulates the near-identical boilerplate copied across Console, Watcher,
- * Keys, and Window panels: pause toggle, entry selection, copy, context menu,
- * keyboard shortcuts, header drag, scroll management, and theme injection.
- *
- * Each panel supplies its own buildRow(), channel name, and optional overrides.
- *
- * Usage (in an HTML <script type="module">):
- *
- *   import { createLogPanel } from "./modules/log-panel.js";
- *
- *   const lp = createLogPanel({
- *     channel: "msConsole",
- *     buildRow(entry) { ... return HTMLElement; },
- *     container: document.querySelector('.panel-console'), // scopes #log lookups
- *     // optional overrides:
- *     entrySelector: "#log .entry, #log .step",
- *     extractCopyText(el) { return "..."; },
- *     clearAction: "clearLog",
- *   });
- *
- *   // Expose for inline handlers
- *   window.togglePause = lp.togglePause;
- *   window.appendEntry = lp.appendEntry;
- *   window.loadHistory = lp.loadHistory;
- *   window.closePanel  = lp.closePanel;
- *   window.clearLog    = lp.clearLog;
- *   window.playSlot    = lp.playSlot;
- */
-
-// -- Theme --
+// Theme //
 function hexToRgb(hex) {
     hex = hex.replace(/^#/, "");
     if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
@@ -45,24 +12,24 @@ function hexToRgb(hex) {
 function applyTheme(t) {
     if (!t) return;
     const r = document.documentElement.style;
-    if (t.bg) r.setProperty("--bg", t.bg);
-    if (t.surface) r.setProperty("--surface", t.surface);
-    if (t.surface2) r.setProperty("--surface2", t.surface2);
-    if (t.hover) r.setProperty("--hover", t.hover);
-    if (t.accent) r.setProperty("--accent", t.accent);
-    if (t.accentHi) r.setProperty("--accent-hi", t.accentHi);
-    if (t.success) r.setProperty("--success", t.success);
-    if (t.dangerBg) r.setProperty("--danger-bg", t.dangerBg);
-    if (t.danger) r.setProperty("--danger", t.danger);
-    if (t.warning) r.setProperty("--warning", t.warning);
-    if (t.text) r.setProperty("--text", t.text);
+    if (t.bg) r.setProperty("//bg", t.bg);
+    if (t.surface) r.setProperty("//surface", t.surface);
+    if (t.surface2) r.setProperty("//surface2", t.surface2);
+    if (t.hover) r.setProperty("//hover", t.hover);
+    if (t.accent) r.setProperty("//accent", t.accent);
+    if (t.accentHi) r.setProperty("//accent-hi", t.accentHi);
+    if (t.success) r.setProperty("//success", t.success);
+    if (t.dangerBg) r.setProperty("//danger-bg", t.dangerBg);
+    if (t.danger) r.setProperty("//danger", t.danger);
+    if (t.warning) r.setProperty("//warning", t.warning);
+    if (t.text) r.setProperty("//text", t.text);
     if (t.text && !t.text2) {
         const c = hexToRgb(t.text);
-        if (c) r.setProperty("--text2", `rgba(${c.r},${c.g},${c.b},0.85)`);
+        if (c) r.setProperty("//text2", `rgba(${c.r},${c.g},${c.b},0.85)`);
     }
     if (t.text && !t.text3) {
         const c = hexToRgb(t.text);
-        if (c) r.setProperty("--text3", `rgba(${c.r},${c.g},${c.b},0.55)`);
+        if (c) r.setProperty("//text3", `rgba(${c.r},${c.g},${c.b},0.55)`);
     }
     if (t.accent && t.hover && !t.border) {
         const a = hexToRgb(t.accent);
@@ -71,40 +38,40 @@ function applyTheme(t) {
             const mr = Math.round(a.r * 0.5 + h.r * 0.5);
             const mg = Math.round(a.g * 0.5 + h.g * 0.5);
             const mb = Math.round(a.b * 0.5 + h.b * 0.5);
-            r.setProperty("--border", `rgba(${mr},${mg},${mb},0.55)`);
-            r.setProperty("--border-dim", `rgba(${mr},${mg},${mb},0.18)`);
+            r.setProperty("//border", `rgba(${mr},${mg},${mb},0.55)`);
+            r.setProperty("//border-dim", `rgba(${mr},${mg},${mb},0.18)`);
         }
     }
     if (t.accent && !t.accentGlow) {
         const a = hexToRgb(t.accent);
-        if (a) r.setProperty("--accent-glow", `rgba(${a.r},${a.g},${a.b},0.4)`);
+        if (a) r.setProperty("//accent-glow", `rgba(${a.r},${a.g},${a.b},0.4)`);
     }
     if (t.accent && !t.accentGlowFaint) {
         const a = hexToRgb(t.accent);
-        if (a) r.setProperty("--accent-glow-faint", `rgba(${a.r},${a.g},${a.b},0.12)`);
+        if (a) r.setProperty("//accent-glow-faint", `rgba(${a.r},${a.g},${a.b},0.12)`);
     }
     if (t.danger && !t.dangerGlow) {
         const d = hexToRgb(t.danger);
-        if (d) r.setProperty("--danger-glow", `rgba(${d.r},${d.g},${d.b},0.6)`);
+        if (d) r.setProperty("//danger-glow", `rgba(${d.r},${d.g},${d.b},0.6)`);
     }
     if (t.danger && !t.dangerBorder) {
         const d = hexToRgb(t.danger);
-        if (d) r.setProperty("--danger-border", `rgba(${d.r},${d.g},${d.b},0.3)`);
+        if (d) r.setProperty("//danger-border", `rgba(${d.r},${d.g},${d.b},0.3)`);
     }
-    if (t.text2) r.setProperty("--text2", t.text2);
-    if (t.text3) r.setProperty("--text3", t.text3);
-    if (t.border) r.setProperty("--border", t.border);
-    if (t.borderDim) r.setProperty("--border-dim", t.borderDim);
-    if (t.accentGlow) r.setProperty("--accent-glow", t.accentGlow);
-    if (t.accentGlowFaint) r.setProperty("--accent-glow-faint", t.accentGlowFaint);
-    if (t.dangerGlow) r.setProperty("--danger-glow", t.dangerGlow);
-    if (t.dangerBorder) r.setProperty("--danger-border", t.dangerBorder);
-    if (t.key) r.setProperty("--key", t.key);
-    if (t.mouse) r.setProperty("--mouse", t.mouse);
-    if (t.scroll) r.setProperty("--scroll", t.scroll);
+    if (t.text2) r.setProperty("//text2", t.text2);
+    if (t.text3) r.setProperty("//text3", t.text3);
+    if (t.border) r.setProperty("//border", t.border);
+    if (t.borderDim) r.setProperty("//border-dim", t.borderDim);
+    if (t.accentGlow) r.setProperty("//accent-glow", t.accentGlow);
+    if (t.accentGlowFaint) r.setProperty("//accent-glow-faint", t.accentGlowFaint);
+    if (t.dangerGlow) r.setProperty("//danger-glow", t.dangerGlow);
+    if (t.dangerBorder) r.setProperty("//danger-border", t.dangerBorder);
+    if (t.key) r.setProperty("//key", t.key);
+    if (t.mouse) r.setProperty("//mouse", t.mouse);
+    if (t.scroll) r.setProperty("//scroll", t.scroll);
     if (t.radius !== undefined) {
-        r.setProperty("--radius", t.radius + "px");
-        r.setProperty("--radius-s", Math.max(0, t.radius - 1) + "px");
+        r.setProperty("//radius", t.radius + "px");
+        r.setProperty("//radius-s", Math.max(0, t.radius - 1) + "px");
     }
     if (t.font) {
         if (t.fontURL) {
@@ -120,7 +87,7 @@ function applyTheme(t) {
     }
 }
 
-// -- Default copy text extractor --
+// Default copy text extractor //
 function defaultExtractCopyText(el) {
     const ts = el.querySelector(".ts")?.textContent || "";
     const badge = (el.querySelector(".badge")?.textContent || "").toUpperCase();
@@ -142,7 +109,7 @@ function defaultExtractCopyText(el) {
     return msg ? `${prefix} ${msg}${suffix}` : `${prefix}${suffix}`;
 }
 
-// -- Time helpers --
+// Time helpers //
 function pad2(n) { return String(n).padStart(2, "0"); }
 
 function nowTs() {
@@ -154,7 +121,7 @@ function nowTs() {
     );
 }
 
-// -- Scroll primitives --
+// Scroll primitives //
 function _isNearBottom(logEl, thresh) {
     if (!logEl) return false;
     return (
@@ -169,7 +136,7 @@ function _trimLog(logEl, max) {
     }
 }
 
-// -- Factory --
+// Factory //
 /**
  * @param {Object} config
  * @param {string} config.channel        - WebKit message handler name
@@ -199,7 +166,7 @@ function createLogPanel(config) {
     function _byId(id) { return _root.querySelector('#' + id); }
     function _queryAll(sel) { return _root.querySelectorAll(sel); }
 
-    // -- Host bridge --
+    // Host bridge //
     function sendToHost(msg) {
         const s = typeof msg === "string" ? msg : JSON.stringify(msg);
         if (window.shellPost) {
@@ -218,7 +185,7 @@ function createLogPanel(config) {
         sendToHost({ action: "playSlot", slot });
     }
 
-    // -- Pause state --
+    // Pause state //
     let _paused = false;
     function togglePause() {
         _paused = !_paused;
@@ -226,7 +193,7 @@ function createLogPanel(config) {
         if (btn) btn.textContent = _paused ? "Resume" : "Pause";
     }
 
-    // -- Selection state --
+    // Selection state //
     const _selected = new Set();
     let _lastClicked = null;
 
@@ -296,7 +263,7 @@ function createLogPanel(config) {
         _updateSelectionVisuals();
     }
 
-    // -- Context menu --
+    // Context menu //
     function closeCtxMenu() {
         const el = _byId("ctx-menu");
         if (el) el.classList.remove("open");
@@ -376,7 +343,7 @@ function createLogPanel(config) {
 
     document.addEventListener("click", () => closeCtxMenu());
 
-    // -- Keyboard shortcuts --
+    // Keyboard shortcuts //
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeCtxMenu();
         // Only handle shortcuts when this panel is visible
@@ -393,7 +360,7 @@ function createLogPanel(config) {
         }
     });
 
-    // -- Window drag (title header + rail top strip) --
+    // Window drag (title header + rail top strip) //
     // A webview reports pointer coords relative to its own (moving) window, so any
     // JS-side delta feeds back and flings the panel off-screen. We only tell Lua
     // when the drag starts/ends; it tracks the real OS mouse position itself.
@@ -417,7 +384,7 @@ function createLogPanel(config) {
         });
     })();
 
-    // -- Resize grab zones --
+    // Resize grab zones //
     (function () {
         document.querySelectorAll(".resize-zone").forEach(function(zone) {
             zone.addEventListener("mousedown", function(e) {
@@ -437,14 +404,14 @@ function createLogPanel(config) {
         });
     })();
 
-    // -- Minimum size --
+    // Minimum size //
     // The floor is enforced entirely in the Lua resize math (_resizeEdgeMath),
     // which clamps smoothly as you drag an edge. The old JS approach watched the
     // resize event and asked Lua to grow the window back to a minimum, holding
     // x/y fixed, which snapped a small window back to a "default" size and
     // shimmied it sideways on a west-edge resize. Removed: one source of truth.
 
-    // -- Default appendEntry / loadHistory (single #log) --
+    // Default appendEntry / loadHistory (single #log) //
     let _lastEntry = null;
     const _pendingHolds = {}; // label+key -> { row, ts }
 
@@ -559,7 +526,7 @@ function createLogPanel(config) {
         log.scrollTop = log.scrollHeight;
     }
 
-    // -- Actions --
+    // Actions //
     function clearLog() {
         const log = _byId("log");
         if (log) log.innerHTML = "";
@@ -570,7 +537,7 @@ function createLogPanel(config) {
         sendToHost({ action: "close" });
     }
 
-    // -- Controller --
+    // Controller //
     return {
         sendToHost,
         playSlot,

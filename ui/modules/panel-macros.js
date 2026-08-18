@@ -1,5 +1,4 @@
-    /* panel: macros, Function Picker + Step Canvas + Macro Management */
-    (function() {
+(function() {
     "use strict";
 (function() {
         "use strict";
@@ -593,9 +592,9 @@
             },
             {
                 id: "call_fn",
-                name: "call function",
+                name: "call_fn",
                 sig: "ms.callFn(name)",
-                desc: "Run a function tool by name. Author functions in the Tools panel's Function tab.",
+                desc: "Run a function tool or pack macro by name. Author functions in the Tools panel's Function tab.",
                 category: "logic",
                 params: [
                     { name: "name", type: "string", label: "Function", required: true }
@@ -603,7 +602,7 @@
             },
             {
                 id: "hvar_set",
-                name: "set helper var",
+                name: "hvar_set",
                 sig: "ms.vars.set(name, value)",
                 desc: "Write a shared, disk-persistent helper variable. Declare it in the Tools panel's Variable tab; read it by wiring a Value field to it.",
                 category: "logic",
@@ -2989,6 +2988,10 @@
     bindsScroll.className = "binds-scroll";
     bindsSection.appendChild(bindsScroll);
 
+    // Rebuilt by renderBindList; the cards inserted above it persist.
+    var bindList = document.createElement("div");
+    bindsScroll.appendChild(bindList);
+
     /* -- Pack Info (ms.macroMeta) editor -- */
     var _metaLoaded  = false;   // suppress dirty-marking during programmatic fill
     var _metaDirty   = false;
@@ -3014,52 +3017,15 @@
         return { wrap: wrap, input: inp };
     }
 
-    // Collapsed by default: it is set-once and sits above the bind list.
-    var metaCard = document.createElement("div");
-    metaCard.className = "section macro-meta-section collapsed";
-    var metaHead = document.createElement("div");
-    metaHead.className = "section-head macro-meta-head";
-    var metaChev = document.createElement("span");
-    metaChev.className = "macro-meta-chev";
-    metaChev.innerHTML = (typeof window.icon === "function"
-        && window.ICONS && window.ICONS.chevdown)
-        ? window.icon("chevdown") : "";
-    var metaTitle = document.createElement("span");
-    metaTitle.className = "section-title";
-    metaTitle.textContent = "Pack Info";
-    var metaDesc = document.createElement("span");
-    metaDesc.className = "section-desc";
-    metaDesc.textContent = "Credits baked into your visual macros (ms.macroMeta)";
-    metaHead.appendChild(metaChev);
-    metaHead.appendChild(metaTitle);
-    metaHead.appendChild(metaDesc);
-    metaHead.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
-    metaHead.addEventListener("click", function() {
-        if (window.playSlot) playSlot("interact");
-        metaCard.classList.toggle("collapsed");
-    });
-    metaCard.appendChild(metaHead);
-
-    var metaBody = document.createElement("div");
-    metaBody.className = "section-body macro-meta-body";
+    // Pack Info: credits editor, standard always-open section (msUI kit).
+    var _kit = window.msUI;
     var _metaName    = metaField("Name",    "My Macros");
     var _metaVersion = metaField("Version", "1.0.0");
     var _metaAuthor  = metaField("Author",  "You");
     var _metaWebsite = metaField("Website", "https://...");
-    metaBody.appendChild(_metaName.wrap);
-    metaBody.appendChild(_metaVersion.wrap);
-    metaBody.appendChild(_metaAuthor.wrap);
-    metaBody.appendChild(_metaWebsite.wrap);
 
-    var metaSaveRow = document.createElement("div");
-    metaSaveRow.className = "macro-meta-save-row";
-    var metaSaveBtn = document.createElement("button");
-    metaSaveBtn.className = "macro-toolbar-btn meta-save-btn";
-    metaSaveBtn.textContent = "Save Pack Info";
-    metaSaveBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
-    metaSaveBtn.addEventListener("click", function() {
+    var metaSaveBtn = _kit.actionBtn("Save Pack Info", "", function() {
         if (!_metaDirty) return;
-        if (window.playSlot) playSlot("interact");
         if (window.shellPost) {
             shellPost("macros", "setMeta", {
                 name:    _metaName.input.value.trim(),
@@ -3071,60 +3037,25 @@
         _metaDirty = false;
         updateMetaSaveBtn();
     });
-    metaSaveRow.appendChild(metaSaveBtn);
-    metaBody.appendChild(metaSaveRow);
-    metaCard.appendChild(metaBody);
-    bindsSection.insertBefore(metaCard, bindsScroll);
+    var metaSaveRow = _kit.btnRow(metaSaveBtn);
 
-    /* -- Installed Macro Packs (hotswappable library) -- */
-    // A shelf of saved macro packs the host keeps under data/library/macro.
-    // Activating one swaps in its ms_macros.lua + visual json and recompiles;
-    // the list repaints out-of-band on the host's 'library' push. Sits beside
-    // Pack Info, collapsed by default. See the theme/sound managers in
-    // panel-theme.js — same shape, driven by the same msLibraryClient.
+    var metaCard = _kit.section("macro-meta", "Pack Info", function(body) {
+        var form = _kit.h("div", { cls: "meta-form" });
+        form.appendChild(_metaName.wrap);
+        form.appendChild(_metaVersion.wrap);
+        form.appendChild(_metaAuthor.wrap);
+        form.appendChild(_metaWebsite.wrap);
+        form.appendChild(metaSaveRow);
+        body.appendChild(form);
+    }, "Credits baked into your visual macros (ms.macroMeta)");
+    var metaDesc = metaCard.querySelector(".section-desc");
+    bindsScroll.insertBefore(metaCard, bindList);
+
+    // Installed Macro Packs: hotswap library, mirrors the theme/sound managers.
     var _macroLib = [];
+    var packList;
 
-    var packCard = document.createElement("div");
-    packCard.className = "section macro-packs-section collapsed";
-
-    var packHead = document.createElement("div");
-    packHead.className = "section-head macro-meta-head";
-    var packChev = document.createElement("span");
-    packChev.className = "macro-meta-chev";
-    packChev.innerHTML = (typeof window.icon === "function"
-        && window.ICONS && window.ICONS.chevdown)
-        ? window.icon("chevdown") : "";
-    var packTitle = document.createElement("span");
-    packTitle.className = "section-title";
-    packTitle.textContent = "Installed Macro Packs";
-    var packDesc = document.createElement("span");
-    packDesc.className = "section-desc";
-    packDesc.textContent = "Hotswap a saved macro set";
-    packHead.appendChild(packChev);
-    packHead.appendChild(packTitle);
-    packHead.appendChild(packDesc);
-    packHead.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
-    packHead.addEventListener("click", function() {
-        if (window.playSlot) playSlot("interact");
-        packCard.classList.toggle("collapsed");
-    });
-    packCard.appendChild(packHead);
-
-    var packBody = document.createElement("div");
-    packBody.className = "section-body";
-    var packList = document.createElement("div");
-    packList.id = "library-list-macro";
-    packList.className = "library-list";
-    packBody.appendChild(packList);
-
-    var packSaveRow = document.createElement("div");
-    packSaveRow.className = "macro-meta-save-row";
-    var packSaveBtn = document.createElement("button");
-    packSaveBtn.className = "macro-toolbar-btn";
-    packSaveBtn.textContent = "Save current macros...";
-    packSaveBtn.addEventListener("mouseenter", function() { if (window.playSlot) playSlot("hover"); });
-    packSaveBtn.addEventListener("click", async function() {
-        if (window.playSlot) playSlot("interact");
+    var packSaveBtn = _kit.actionBtn("Save current macros...", "", async function() {
         if (!window.openModal || !window.msLibraryClient) return;
         var r = await window.openModal(
             "Save current macros",
@@ -3132,10 +3063,13 @@
             "Save", "Cancel", true, "");
         if (r.confirmed) window.msLibraryClient.capture("macro", (r.value || "").trim());
     });
-    packSaveRow.appendChild(packSaveBtn);
-    packBody.appendChild(packSaveRow);
-    packCard.appendChild(packBody);
-    bindsSection.insertBefore(packCard, bindsScroll);
+
+    var packCard = _kit.section("installed-macro", "Installed Macro Packs", function(body) {
+        packList = _kit.h("div", { id: "library-list-macro", cls: "library-list" });
+        body.appendChild(packList);
+        body.appendChild(_kit.btnRow(packSaveBtn));
+    }, "Hotswap a saved macro set");
+    bindsScroll.insertBefore(packCard, bindList);
 
     function fillMacroLib() {
         var kit = window.msUI;
@@ -3145,7 +3079,7 @@
         if (!_macroLib.length) {
             packList.appendChild(kit.h("div", { cls: "theme-note" },
                 "Nothing here yet. Install a macro pack from Browse, or save "
-                + "your current one above."));
+                + "your current one below."));
             return;
         }
 
@@ -3661,13 +3595,13 @@
     }
 
     function renderBindList() {
-        bindsScroll.innerHTML = "";
+        bindList.innerHTML = "";
 
         if (!_bindList.length) {
             var empty = document.createElement("div");
             empty.className = "binds-empty";
             empty.textContent = "No macros registered.";
-            bindsScroll.appendChild(empty);
+            bindList.appendChild(empty);
             return;
         }
 
@@ -3689,7 +3623,7 @@
                     rows.push(bindRow(sub, true));
                 });
             });
-            bindsScroll.appendChild(bindSection(
+            bindList.appendChild(bindSection(
                 titleCaseGroup(g),
                 g === "system" ? "Always live, these cannot be disabled" : null,
                 rows,

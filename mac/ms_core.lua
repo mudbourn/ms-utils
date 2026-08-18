@@ -2687,14 +2687,20 @@
             -- its ms.wait calls yield just like the caller's.
             ms.callFn = function(id)
                 if type(id) ~= "string" then return end
-                local def = ms.fn and ms.fn.registry and ms.fn.registry._defs[id]
-                if not def or type(def.fn) ~= "function"
-                    and not (type(def.fn) == "table" and getmetatable(def.fn)
-                        and getmetatable(def.fn).__call) then
-                    print("ms.callFn: no function tool named '" .. tostring(id) .. "'")
-                    return
+                local function callable(f)
+                    return type(f) == "function"
+                        or (type(f) == "table" and getmetatable(f)
+                            and getmetatable(f).__call)
                 end
-                return def.fn()
+                -- First a registered function tool (builder-authored).
+                local def = ms.fn and ms.fn.registry and ms.fn.registry._defs[id]
+                if def and callable(def.fn) then return def.fn() end
+                -- Then any bound macro from the pack, by its bind id. This is
+                -- what lets a macro call the pack's own functions (which are
+                -- authored as `local X = ms.fn(...)` and bound, not registered).
+                local wired = ms.bind and ms.bind._wires and ms.bind._wires[id]
+                if callable(wired) then return wired() end
+                print("ms.callFn: no function tool or macro named '" .. tostring(id) .. "'")
             end
 
             -- ms.vars — disk-persistent, explicitly-declared shared variables.
@@ -3214,43 +3220,46 @@
                 return relX, relY
             end
 
+            -- Single source of truth for reading one screen pixel.
+            -- Mirrors the window-monitor inspect sampler exactly: snapshot a
+            -- 1x1 rect at absolute (ax, ay) and read colorAt(0, 0). Reading the
+            -- top-left subpixel (not scale/2) keeps macro samples identical to
+            -- what the inspect eyedropper reports on Retina displays.
+            ms.screen = ms.screen or {}
+            ms.screen.sampleAt = function(ax, ay)
+                if not ax or not ay then return nil end
+
+                local scr = hs.screen.mainScreen()
+                for _, s in ipairs(hs.screen.allScreens()) do
+                    local f = s:frame()
+                    if ax >= f.x and ax < f.x + f.w
+                    and ay >= f.y and ay < f.y + f.h then
+                        scr = s
+                        break
+                    end
+                end
+                if not scr then return nil end
+
+                local snap = scr:snapshot(hs.geometry.rect(ax, ay, 1, 1))
+                if not snap then return nil end
+                local c = snap:colorAt({ x = 0, y = 0 })
+                if not c or c.red == nil then return nil end
+
+                local r = math.floor((c.red   or 0) * 255 + 0.5)
+                local g = math.floor((c.green or 0) * 255 + 0.5)
+                local b = math.floor((c.blue  or 0) * 255 + 0.5)
+                local a = math.floor((c.alpha or 1) * 255 + 0.5)
+                return {
+                    r = r, g = g, b = b, a = a,
+                    hex = string.format("#%02X%02X%02X", r, g, b),
+                }
+            end
+
             ms.pixelColor = function(x, y, reference)
                 reference = reference or "Absolute"
                 local ax, ay = ms.resolvePoint(x, y, reference)
                 if not ax or not ay then return nil end
-
-                local screen = hs.screen.mainScreen()
-                for _, scr in ipairs(hs.screen.allScreens()) do
-                    local f = scr:frame()
-                    if ax >= f.x and ax < f.x + f.w
-                    and ay >= f.y and ay < f.y + f.h then
-                        screen = scr
-                        break
-                    end
-                end
-
-                local scale = (screen:currentMode() and screen:currentMode().scale) or 1
-                local img = screen:snapshot({
-                    x = ax,
-                    y = ay,
-                    w = 1,
-                    h = 1,
-                })
-                if not img then return nil end
-                local px = math.floor(scale / 2)
-                local py = math.floor(scale / 2)
-                local c = img:colorAt({
-                    x = px,
-                    y = py,
-                })
-                if not c then return nil end
-
-                return {
-                    r = math.floor((c.red   or 0) * 255 + 0.5),
-                    g = math.floor((c.green or 0) * 255 + 0.5),
-                    b = math.floor((c.blue  or 0) * 255 + 0.5),
-                    a = math.floor((c.alpha or 1) * 255 + 0.5),
-                }
+                return ms.screen.sampleAt(ax, ay)
             end
 
             ms.pixelMatch = function(x, y, reference, r, g, b, tolerance)
@@ -5496,11 +5505,36 @@
                         _macroShellEval("if(window.macroLab)macroLab.setToolList(" .. json .. ")")
 
                         -- Function tools go to a separate list, consumed by the
-                        -- "Call function" block, not the Value->Tool binding.
+                        -- "Call function" block and the Tools panel Function tab.
+                        -- Two sources: builder-authored function tools (editable)
+                        -- and the current pack's bound macros (reference-only,
+                        -- callable via ms.callFn by their bind id).
                         local fns = {}
+                        local seenFn = {}
                         if ms.compiler and ms.compiler.listFunctions then
                             local okF, flist = pcall(ms.compiler.listFunctions)
-                            if okF and type(flist) == "table" then fns = flist end
+                            if okF and type(flist) == "table" then
+                                for _, f in ipairs(flist) do
+                                    f.source = "builder"
+                                    seenFn[f.id] = true
+                                    fns[#fns + 1] = f
+                                end
+                            end
+                        end
+                        if ms.registry and ms.registry._defList then
+                            for _, id in ipairs(ms.registry._defList) do
+                                local d = ms.registry._defs[id]
+                                if d and not d.system and not seenFn[id]
+                                    and ms.bind and ms.bind._wires
+                                    and ms.bind._wires[id] then
+                                    fns[#fns + 1] = {
+                                        id     = id,
+                                        name   = d.label or id,
+                                        group  = d.group,
+                                        source = "pack",
+                                    }
+                                end
+                            end
                         end
                         local fjson = hs.json.encode(fns)
                         _macroShellEval("if(window.macroLab&&window.macroLab.setFunctionList)macroLab.setFunctionList(" .. fjson .. ")")

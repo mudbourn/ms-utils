@@ -1,5 +1,4 @@
-    /* panel: keys */
-    (function() {
+(function() {
     "use strict";
 // -- Panel container --
             const _panel = document.querySelector('.panel-keys');

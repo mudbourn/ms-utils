@@ -873,15 +873,8 @@
         /* -- Binds list -- */
         .binds-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--surface2) transparent; }
         .binds-empty { padding: 20px 14px; font-size: 12px; color: var(--text3); text-align: center; }
-        /* Pack Info (ms.macroMeta) editor, sits above the bind list.
-           Collapsible so it does not permanently steal room from the binds. */
-        .macro-meta-section { flex-shrink: 0; }
-        .macro-meta-head { cursor: pointer; user-select: none; }
-        .macro-meta-chev { display: flex; align-items: center; flex-shrink: 0; transition: transform 0.15s; color: var(--text3); }
-        .macro-meta-chev .icon { width: 12px; height: 12px; }
-        .macro-meta-section.collapsed .macro-meta-chev { transform: rotate(-90deg); }
-        .macro-meta-section.collapsed .macro-meta-body { display: none; }
-        .macro-meta-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+        /* Pack Info (ms.macroMeta) editor form, inside a standard section card. */
+        .meta-form { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
         .meta-field { display: flex; align-items: center; gap: 10px; }
         .meta-field-label { flex: 0 0 64px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
         .meta-input { flex: 1; min-width: 0; background: var(--surface2); border: 1px solid var(--border-dim); border-radius: var(--radius); color: var(--text); -webkit-text-fill-color: var(--text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; user-select: text; -webkit-user-select: text; }
@@ -889,9 +882,6 @@
         .meta-input:focus { border-color: var(--accent); }
         .meta-input-locked { opacity: 0.6; cursor: default; }
         .meta-input-locked:focus { border-color: var(--border-dim); }
-        .macro-meta-save-row { display: flex; justify-content: flex-end; margin-top: 2px; }
-        .meta-save-btn { cursor: pointer; }
-        .meta-save-btn:disabled { cursor: default; }
         /* Bind rows live inside the shared .section-body card, so they follow
            the settings row metrics rather than the tighter list metrics they
            had when the tab was one flat scroll. */
@@ -1608,7 +1598,7 @@
             </div>
         </div>
         <div class="otabs">
-            <button class="otab active" data-otab="settings" onmouseenter="playSlot('hover')" onclick="switchToolsTab('settings')">Settings</button>
+            <button class="otab active" data-otab="settings" onmouseenter="playSlot('hover')" onclick="switchToolsTab('settings')">Tuning</button>
             <button class="otab" data-otab="builder" onmouseenter="playSlot('hover')" onclick="switchToolsTab('builder')">Setting</button>
             <button class="otab" data-otab="functions" onmouseenter="playSlot('hover')" onclick="switchToolsTab('functions')">Function</button>
             <button class="otab" data-otab="variables" onmouseenter="playSlot('hover')" onclick="switchToolsTab('variables')">Variable</button>

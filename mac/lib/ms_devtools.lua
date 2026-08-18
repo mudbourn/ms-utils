@@ -2248,25 +2248,11 @@ return function(ms)
                 if _stationaryDue or not (_winLastMouse and p.x == _winLastMouse.x and p.y == _winLastMouse.y) then
                     _winLastMouse = p
                     _winLastInspectAt = _now
+                    -- Shared sampler (ms.screen.sampleAt) is the single source of
+                    -- truth so inspect and macro pixelColor can never drift apart.
                     local pixel = _winG(function()
-                        local scr = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
-                        if not scr then return nil end
-                        local snap = scr:snapshot(hs.geometry.rect(p.x, p.y, 1, 1))
-                        if not snap then return nil end
-                        local c = snap:colorAt({
-                            x = 0,
-                            y = 0,
-                        })
-                        if not c or c.red == nil then return nil end
-                        local r = math.floor((c.red or 0) * 255 + 0.5)
-                        local g = math.floor((c.green or 0) * 255 + 0.5)
-                        local b = math.floor((c.blue or 0) * 255 + 0.5)
-                        return {
-                            r = r,
-                            g = g,
-                            b = b,
-                            hex = string.format("#%02X%02X%02X", r, g, b),
-                        }
+                        return ms.screen and ms.screen.sampleAt
+                           and ms.screen.sampleAt(p.x, p.y) or nil
                     end)
                     local win = hs.window.focusedWindow()
                     local wf = win and _winG(function() return win:frame() end)

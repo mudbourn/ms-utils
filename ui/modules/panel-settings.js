@@ -1,13 +1,12 @@
-    /* panel: settings */
-    (function() {
+(function() {
     "use strict";
-// -- State --
+// State //
             let S = {};
             let _modalResolve = null;
             let _toastTimer = null;
-            let _ctxTarget = null; // { macro: m }, what was right-clicked
+            let _ctxTarget = null;
 
-            // -- Context menu --
+            // Context menu //
             function closeCtxMenu() {
                 const el = document.getElementById("ctx-menu-settings");
                 if (el) el.classList.remove("open");
@@ -52,9 +51,6 @@
                     el.appendChild(row);
                 }
 
-                // Keep the menu fully visible: clamp horizontally, flip up when
-                // there's more room above, and cap the height so a tall menu scrolls
-                // internally rather than spilling past the window border.
                 el.classList.add("open");
                 el.style.maxHeight = "";
                 const MARGIN = 6;
@@ -74,8 +70,6 @@
                 el.style.maxHeight = maxH + "px";
             }
 
-            // Close ctx menu on any left-click or Escape. preventDefault on
-            // contextmenu suppresses the native WebKit menu everywhere.
             document.addEventListener("click", () => closeCtxMenu());
             const _settingsPanel = document.querySelector('.panel-settings');
             document.addEventListener("contextmenu", (e) => {
@@ -88,11 +82,10 @@
                 if (e.key === "Escape") closeCtxMenu();
             });
 
-            // -- Bridge --
+            // Bridge //
             function sendToHost(msg) {
                 const s = typeof msg === "string" ? msg : JSON.stringify(msg);
                 if (window.shellPost) {
-                    // Running inside the Macro Lab shell, route through msShell channel
                     const data = typeof msg === "string" ? JSON.parse(msg) : msg;
                     window.shellPost("settings", data.action || "unknown", data);
                 } else if (window.chrome?.webview) {
@@ -102,9 +95,7 @@
                 }
             }
 
-            // -- Shell integration --
-            // When loaded inside the shell, register as a panel so shellDispatch
-            // can route incoming Lua pushes (state, theme) to receiveState().
+            // Shell integration //
             if (window.registerPanel) {
                 window.registerPanel("settings", function(action, body) {
                     if (action === "state" && body) {
@@ -115,10 +106,8 @@
                 });
             }
 
-            // -- Window drag --
-            // borderless windows ignore -webkit-app-region (isMovable=false by default)
-            // so we implement drag manually via the Lua moveWindow action.
-            let _dragging = false; // script-level so playSlot can read it
+            // Window drag //
+            let _dragging = false;
             (function () {
                 let _drag = null;
                 document
@@ -153,10 +142,10 @@
                     });
             })();
 
-            // -- Sound --
+            // Sound //
             const _lastSlot = {};
             function playSlot(slot) {
-                if (_dragging) return; // window is being dragged; skip hover sounds
+                if (_dragging) return;
                 if (slot === "hover" && !document.hasFocus()) return;
                 const now = Date.now();
                 if (now - (_lastSlot[slot] || 0) < 50) return;
@@ -164,7 +153,7 @@
                 sendToHost({ action: "playSlot", slot });
             }
 
-            // -- Toast --
+            // Toast //
             function showAlert(msg, duration) {
                 const el = document.getElementById("toast");
                 el.textContent = msg;
@@ -183,7 +172,7 @@
                 _toastTimer = null;
             }
 
-            // -- Modal --
+            // Modal //
             function openModal(
                 title,
                 msg,
@@ -204,13 +193,8 @@
                     } else {
                         inp.classList.remove("show");
                     }
-                    // A previous live-capture modal may have hidden a button
-                    // (see updateLuaModal). Restore both to visible on every
-                    // fresh open so a plain confirm modal isn't missing a button.
                     document.getElementById("modal-confirm").style.display = "";
                     document.getElementById("modal-cancel").style.display = "";
-                    // The detected-key strip is rebind-only; keep it out of
-                    // plain modals until a keys[] payload turns it on.
                     const keysBox = document.getElementById("modal-keys");
                     keysBox.innerHTML = "";
                     keysBox.style.display = "none";
@@ -219,7 +203,7 @@
                     document.getElementById("modal-cancel").textContent =
                         cancelLabel;
                     const ov = document.getElementById("modal-overlay");
-                    ov.inert = false;   // reachable by Tab only while open
+                    ov.inert = false;
                     ov.classList.add("open");
                 });
             }
@@ -227,7 +211,7 @@
                 const val = document.getElementById("modal-input").value;
                 const ov = document.getElementById("modal-overlay");
                 ov.classList.remove("open");
-                ov.inert = true;    // back out of the Tab order while closed
+                ov.inert = true;
                 if (_modalResolve) {
                     _modalResolve({ confirmed, value: val });
                     _modalResolve = null;
@@ -236,9 +220,6 @@
             window.openModal = openModal;
             window.closeModal = closeModal;
 
-            // Called by Lua via evaluateJavaScript to show a modal and report the
-            // result back through the 'modalResult' action. Always displayed above
-            // all panel content via the existing z-index: 400 modal overlay.
             function openLuaModal(d) {
                 openModal(
                     d.title || "",
@@ -255,21 +236,8 @@
                     });
                 });
             }
-            // Lua calls this via ms.shell.eval, which runs at global scope, so
-            // the IIFE-local declaration has to be published to window, same as
-            // openModal/closeModal above. Without it the confirm modal never
-            // opens (ReferenceError), so rebinds capture but never save.
             window.openLuaModal = openLuaModal;
 
-            // Mutate the already-open modal in place without opening a new one
-            // or resolving the pending promise. The rebind flow uses this to
-            // drive a single modal through two phases, a live "capturing" phase
-            // that streams the keys being held, then a "confirm" phase, so the
-            // one prompt both informs the user and shows the detected bind,
-            // replacing the old floating alert toast. Any field may be omitted
-            // to leave it untouched; showConfirm/showCancel toggle each button
-            // (the confirm button is hidden while capturing, since a click in
-            // that phase would itself register as a mouse bind).
             function updateLuaModal(d) {
                 if (d.title !== undefined)
                     document.getElementById("modal-title").textContent = d.title;
@@ -287,13 +255,6 @@
                 if (d.showCancel !== undefined)
                     document.getElementById("modal-cancel").style.display =
                         d.showCancel ? "" : "none";
-                // keys: render the detected combo as spotlighted key caps. An
-                // array (even empty) shows the strip, empty renders a dim "..."
-                // placeholder so the user can see where their keys will land
-                // before pressing anything. Omit the field to leave it as is;
-                // openModal hides the strip for ordinary (non-rebind) modals.
-                // hs.json encodes an empty Lua table as {}, not [], so anything
-                // that isn't a real array is treated as the empty/placeholder case.
                 if (d.keys !== undefined) {
                     const box = document.getElementById("modal-keys");
                     box.innerHTML = "";
@@ -327,8 +288,6 @@
                 .addEventListener("click", (e) => {
                     if (e.target === e.currentTarget) closeModal(false);
                 });
-            // Global Enter/Escape for all modals (including confirm-only where
-            // the input field is hidden and its own keydown handler won't fire).
             document.addEventListener("keydown", (e) => {
                 const overlay = document.getElementById("modal-overlay");
                 if (!overlay || !overlay.classList.contains("open")) return;
@@ -358,18 +317,7 @@
                     }
                 });
 
-            // -- Shutdown --
-            // The power button is the only destructive control in the title
-            // bar, so it confirms first. Once confirmed the panel's job is
-            // over: it hands off to the host and goes quiet.
-            //
-            // Deliberately no curtain and no send-off sound here. Both used to
-            // live in this page, and both were wrong for the same reason ,
-            // this window is what the host's teardown closes, so the curtain
-            // went dark while the sample was still playing, leaving the
-            // desktop on screen for the rest of the send-off. The host puts up
-            // a full-screen curtain that outlives this window, and starts the
-            // sound itself so the legacy UI's power button gets one too.
+            // Shutdown //
             let _shuttingDown = false;
 
             async function requestShutdown() {
@@ -390,7 +338,7 @@
                 sendToHost({ action: "shutdown" });
             }
 
-            // -- Helpers --
+            // Helpers //
             function h(tag, attrs = {}, ...children) {
                 const el = document.createElement(tag);
                 for (const [k, v] of Object.entries(attrs)) {
@@ -414,11 +362,6 @@
                     { cls: "toggle", onmouseenter: () => playSlot("hover") },
                     h("input", {
                         type: "checkbox",
-                        // The shell owns the toggle sound for every toggle; host
-                        // handlers must not play one or they double up. Sounding
-                        // after onchange keeps the mute toggles honest, the host
-                        // processes messages in order, so muting silences its own
-                        // click and unmuting is audible.
                         onchange: (e) => {
                             const on = e.target.checked;
                             try { if (onchange) onchange(e); }
@@ -444,11 +387,6 @@
                             onmouseenter: () => playSlot("hover"),
                             onclick: () => {
                                 playSlot("interact");
-                                // Move the highlight ourselves: some callers
-                                // (the Type picker) never rebuild this control,
-                                // so relying on a re-render to reflect the
-                                // selection left the active class stuck on the
-                                // initial option.
                                 for (const b of wrap.children)
                                     b.classList.remove("active");
                                 btn.classList.add("active");
@@ -462,11 +400,6 @@
                 return wrap;
             }
 
-            // A settings group: a sticky heading and its rows, always open.
-            // Groups used to collapse because settings was one narrow panel
-            // sharing space with everything else; it has its own window and a
-            // nav rail now, so a chevron only hides content for no gain.
-            // `desc` is an optional one-line explanation of the group.
             function section(id, title, buildFn, desc) {
                 const head = h(
                     "div",
@@ -537,23 +470,14 @@
                 return h("div", { cls: "group-label" }, txt);
             }
 
-            // The row/toggle/section vocabulary is the settings panel's, but it
-            // is what every settings-shaped surface in the shell is built from.
-            // Panels split out of here (panel-theme.js, and the library and
-            // trust tabs to come) build with the same kit rather than growing a
-            // second, drifting copy of it.
             window.msUI = {
                 h, toggle, seg, section, row, btnRow, actionBtn, divider,
                 groupLabel, showCtxMenu,
             };
 
-            // -- Sections --
+            // Sections //
 
 
-            // -- Reusable slider row builder --
-            // Builds a complete slider row element and returns it.
-            // label (string), hint (string|null), min/max/step (number),
-            // unit (string|null), val (number), onChange(v), ctxItems (array|null)
             function buildSlider(
                 label,
                 hint,
@@ -625,11 +549,6 @@
                 return wrap;
             }
 
-            // -- buildRuntime, macro engine + reload --
-            // The macros switch and the reload menu used to live in the title
-            // bar as compact ghost buttons, back when the title bar was the
-            // only chrome settings had. They are settings, so they read as
-            // settings rows now; the title bar keeps only window controls.
             function buildRuntime(body) {
                 body.appendChild(
                     row(
@@ -652,10 +571,6 @@
                         + "its current state."),
                 );
 
-                // Which subsystems the Reload button rebuilds. Same qrOptions
-                // the old dropdown's checkboxes wrote to. Four short labels
-                // sharing one explanation, rather than four rows each
-                // restating what its own name already says.
                 const qr = S.qrOptions || {};
                 const targets = [
                     ["macros", "Macro pack"],
@@ -711,13 +626,12 @@
                 );
             }
 
-            // -- buildAccessibility, input and motion settings --
+            // buildAccessibility, input and motion settings //
             function buildAccessibility(body) {
                 const hidden = S.hiddenFeatures || {};
                 const hasTrackpad = !hidden.trackpad;
                 const hasSocd = !hidden.socd;
 
-                // Trackpad Mode
                 if (hasTrackpad) {
                     body.appendChild(
                         row(
@@ -813,7 +727,6 @@
                     }
                 }
 
-                // Octane Mode
                 if (hasTrackpad || hasSocd) body.appendChild(divider());
                 const octane = S.octaneMode === true;
                 body.appendChild(
@@ -829,7 +742,6 @@
                     ),
                 );
 
-                // Octane sound mute sub-toggle
                 const octaneMute = S.octaneMuteSounds === true;
                 body.appendChild(
                     row(
@@ -845,14 +757,6 @@
                 );
             }
 
-            // -- renderUserItem, shared renderer for user-defined items --
-            // Used by both buildSettings (Settings section) and buildUserSection.
-            // Context-menu items shared by every user setting row. "Reset to
-            // default" appears when the def carries a default; "Delete tool"
-            // appears only for settings the user authored in the Setting
-            // Builder (item.authored, set by the host), pack-declared settings
-            // are not ours to remove. Returns null when neither applies so the
-            // row menu stays hidden.
             function userCtxItems(item) {
                 const out = [];
                 if (item.default !== undefined) {
@@ -966,7 +870,6 @@
                         body.appendChild(btnRow(btn));
                     }
                 } else if (item.type === "group") {
-                    // Collapsible group containing nested settings items.
                     const det = document.createElement("details");
                     det.className = "user-group";
                     det.open = item.open !== false;
@@ -989,10 +892,6 @@
                 }
             }
 
-            // -- buildDefaults, save / restore the whole settings file --
-            // These act on every setting, app-level and pack-defined alike ,
-            // not just the user-defined ones, so they live in the Settings
-            // panel, not in Tools with the pack's own controls.
             function buildDefaults(body) {
                 body.appendChild(
                     btnRow(
@@ -1018,9 +917,8 @@
                 );
             }
 
-            // -- buildSettings, the pack's own user-defined settings --
+            // buildSettings, the pack's own user-defined settings //
             function buildSettings(body) {
-                // User-defined settings targeting the Settings section
                 const items = S.userSettings || [];
                 if (items.length > 0) {
                     for (const item of items) {
@@ -1042,17 +940,13 @@
                 }
             }
 
-            // -- buildUserSection, custom user-defined sections --
+            // buildUserSection, custom user-defined sections //
             function buildUserSection(body, menu) {
                 for (const item of menu.items || []) {
                     renderUserItem(body, item);
                 }
             }
 
-            // The profiles tab is laid out the way the settings list is: the
-            // saved profiles, what you can do to them, and what travels off
-            // the machine, each in its own named section. It used to be one
-            // undifferentiated run of rows and button pairs.
             function buildProfiles(root) {
                 const current = S.currentProfile || "";
                 const profiles = S.profiles || [];
@@ -1071,10 +965,6 @@
                     "Moving a profile between machines"));
             }
 
-            // The row menu (also opened by right-click). Switch/Delete only make
-            // sense for a saved, non-active profile; Export works for either ,
-            // the active one exports live, a saved one exports its snapshot plus
-            // the live assets (see exportPackage/collect in the host).
             function profileMenuItems(name, isCurrent) {
                 const items = [];
                 if (!isCurrent) {
@@ -1140,8 +1030,6 @@
 
                 for (const name of profiles) {
                     const isCurrent = name === current;
-                    // No "disabled" on the active row, it must stay interactive
-                    // so its actions button (Export) is clickable.
                     const r = h("div", {
                         cls: "row",
                         onmouseenter: () => playSlot("hover"),
@@ -1152,8 +1040,6 @@
                             h("span", { cls: "pill success" }, "Active"),
                         );
 
-                    // Visible actions affordance, right-click is not reliable in
-                    // the host webview, so every action is reachable from here.
                     const menuBtn = h(
                         "button",
                         {
@@ -1277,10 +1163,6 @@
                         ),
                     ),
                 );
-                // A profile carries everything; this is the narrow one, just
-                // ms_macros.lua / ms_macros_visual.json and sounds/macro/. Both
-                // macro formats travel if both are present; the manifest's
-                // macroFormat records which.
                 body.appendChild(
                     btnRow(
                         actionBtn("Export Macros...", "", () =>
@@ -1291,9 +1173,6 @@
             }
 
             function buildDeveloper(body) {
-                // Edit Macros lives in the Macros panel toolbar and Edit Theme
-                // in the Theme panel's Theme File section, each raw-file escape
-                // hatch sits with the builder that owns that file.
                 body.appendChild(
                     btnRow(
                         actionBtn("Open Log Folder", "", () =>
@@ -1304,7 +1183,6 @@
 
                 body.appendChild(divider());
 
-                // Log archive limit
                 body.appendChild(
                     buildSlider(
                         "Log archive limit",
@@ -1333,7 +1211,6 @@
                     ),
                 );
 
-                // Update channel selector
                 const chan = S.updateChannel || "stable";
                 body.appendChild(divider());
                 body.appendChild(
@@ -1362,7 +1239,6 @@
 
                 body.appendChild(divider());
 
-                // Testing source selector (only shown when channel is testing)
                 if (chan === "testing") {
                     const src = S.testingSource || "release";
                     body.appendChild(
@@ -1389,7 +1265,6 @@
                         ),
                     );
 
-                    // GitHub token (only needed for artifacts)
                     if (src === "artifact") {
                         const token = S.githubToken || "";
                         body.appendChild(
@@ -1415,7 +1290,6 @@
 
                 body.appendChild(divider());
 
-                // System Integrity
                 const status = S.integrityStatus || "uninitialized";
                 const hash = S.integrityHash
                     ? S.integrityHash.slice(0, 16) + "..."
@@ -1438,7 +1312,6 @@
                 else statusPill = h("span", { cls: "pill", style: "font-weight:600" }, "Not set");
                 body.appendChild(row("System Integrity", hash, statusPill));
 
-                // Trust row, greyed when trusted
                 const trustRow = h("div", {
                     cls: "row" + (trusted ? " disabled" : ""),
                     onmouseenter: () => {
@@ -1480,7 +1353,6 @@
                     ),
                 );
 
-                // Delete hash, only shown when a hash is actually on record
                 if (status !== "uninitialized") {
                     body.appendChild(divider());
                     body.appendChild(
@@ -1578,17 +1450,12 @@
                 body.appendChild(btnRow(docBtn, githubBtn));
             }
 
-            // -- Render --
+            // Render //
             function render() {
                 const scroll = document.getElementById("scroll");
                 const scrollTop = scroll.scrollTop;
                 scroll.innerHTML = "";
 
-                // Everything user-defined, the pack's own Settings section,
-                // its Calibration group, and any custom menus, lives in the
-                // Tools panel now (renderToolsPanel, below). Macros moved to
-                // the macros panel, which owns rebinding. Settings keeps only
-                // the app-level surfaces that have no panel of their own.
                 scroll.appendChild(
                     section("runtime", "Runtime", buildRuntime,
                         "Macro engine and what a reload touches"),
@@ -1612,16 +1479,7 @@
                 scroll.scrollTop = scrollTop;
             }
 
-            // -- buildSettingBuilder, author a setting from the Tools panel --
-            // A live form for composing a setting definition without hand-
-            // editing ms_macros.lua: pick a type, fill the fields, watch it
-            // render in the preview using the very same renderUserItem the real
-            // rows use, then Add it. The Add posts the finished def to the host
-            // on the tools channel (ui:tools:addUserSetting), the Lua side that
-            // persists it into the pack is the next step; until then this
-            // models the authoring flow end to end and previews the result.
             function buildSettingBuilder(body) {
-                // The one field of type shape shared by every kind of setting.
                 const draft = {
                     type: "toggle",
                     key: "",
@@ -1649,16 +1507,8 @@
                     { label: "Label", value: "groupLabel" },
                     { label: "Divider", value: "divider" },
                 ];
-                // Types that carry a key/value; label and divider are cosmetic.
                 const keyed = (t) =>
                     t !== "divider" && t !== "groupLabel";
-
-                // A labelled text field on its own row, matching the input-sm
-                // house style. Re-renders nothing on input beyond the preview,
-                // so focus stays put while typing. The input elements are kept
-                // in `identityInputs` so Add/Reset can push cleared draft values
-                // back into the DOM, the builder no longer rebuilds itself, so
-                // clearing `draft` alone would leave stale text on screen.
                 const identityInputs = {};
                 const textField = (labelText, sub, key, placeholder) => {
                     const input = h("input", {
@@ -1674,8 +1524,6 @@
                     identityInputs[key] = input;
                     return row(labelText, sub, input);
                 };
-                // Sync the identity inputs' visible text from `draft`, used
-                // after Add/Reset clears the draft.
                 const syncIdentityInputs = () => {
                     for (const k in identityInputs)
                         identityInputs[k].value = draft[k] || "";
@@ -1699,10 +1547,7 @@
                         "row-sub row-compact",
                     );
 
-                // -- Stable containers --
-                // Type picker never rebuilds; the type-specific block (dyn) and
-                // the preview do. Keeping the picker and the common text fields
-                // out of the rebuilt region is what preserves input focus.
+                // Stable containers //
                 body.appendChild(
                     row(
                         "Type",
@@ -1719,13 +1564,13 @@
                 const dyn = h("div", { cls: "setting-builder-dyn" });
                 body.appendChild(dyn);
 
-                // -- Preview --
+                // Preview //
                 body.appendChild(divider());
                 body.appendChild(groupLabel("Preview"));
                 const preview = h("div", { cls: "setting-builder-preview" });
                 body.appendChild(preview);
 
-                // -- Add / Reset --
+                // Add / Reset //
                 body.appendChild(
                     btnRow(
                         actionBtn("Add Setting", "accent", () => {
@@ -1735,12 +1580,6 @@
                                 showAlert(err);
                                 return;
                             }
-                            // The host validates (duplicate keys, etc.) and is
-                            // the source of truth for the success/failure
-                            // notice. Clear the identity fields so the next
-                            // setting starts fresh, the builder no longer
-                            // rebuilds on the host's state push, so push the
-                            // cleared values into the inputs directly.
                             sendToHost({ action: "addUserSetting", def: def });
                             draft.key = "";
                             draft.label = "";
@@ -1760,9 +1599,7 @@
                     ),
                 );
 
-                // -- Builders --
-                // Assemble the serialized item the preview and the host both
-                // consume, same shape ms_ui.lua emits for a defined setting.
+                // Builders //
                 function buildDef() {
                     const d = { type: draft.type, target: draft.target };
                     if (keyed(draft.type)) {
@@ -1808,7 +1645,7 @@
                     return null;
                 }
 
-                // -- Type-specific fields --
+                // Type-specific fields //
                 function renderDynamic() {
                     dyn.innerHTML = "";
                     const t = draft.type;
@@ -1904,9 +1741,6 @@
                     }
                 }
 
-                // The segmented-control options editor: a stack of label/value
-                // pairs with add and remove. Structural changes rebuild the
-                // list; typing only touches the draft and the preview.
                 function renderOptions(host) {
                     const list = h("div", { cls: "setting-builder-opts" });
                     draft.options.forEach((opt, i) => {
@@ -1958,8 +1792,6 @@
                     );
                 }
 
-                // The payoff: the exact renderUserItem the live rows use, so the
-                // preview can never drift from the real thing.
                 function updatePreview() {
                     preview.innerHTML = "";
                     const def = buildDef();
@@ -1976,13 +1808,6 @@
                 updatePreview();
             }
 
-            // -- Tools panel (rendered into #tools-scroll) --
-            // Home for everything the macro pack defines: the generic Settings
-            // section (with Save/Reset as Default), the Calibration group, and
-            // any custom menus. Built from the same section()/renderUserItem
-            // kit as the Settings panel, same document, so it renders straight
-            // into the Tools panel's scroll container. Rendered from
-            // panel-settings.js exactly as the Profiles panel is.
             function renderToolsPanel() {
                 const scroll = document.getElementById("tools-scroll");
                 if (!scroll) return;
@@ -1990,7 +1815,7 @@
                 scroll.innerHTML = "";
 
                 scroll.appendChild(
-                    section("settings", "Settings", buildSettings,
+                    section("settings", "Tuning", buildSettings,
                         "Defined by your macro pack"),
                 );
 
@@ -2016,13 +1841,6 @@
 
                 scroll.scrollTop = scrollTop;
 
-                // Setting Builder lives in its own tab. Build it ONCE: it is a
-                // self-contained compose form backed by local `draft` state and
-                // reads nothing from host state, so there is no reason to rebuild
-                // it on a state push, and doing so destroyed the focused input
-                // mid-keystroke. With the shell being a non-activating panel,
-                // the lost focus meant the next keys fell through to whatever app
-                // was actually active instead of the field.
                 const bscroll = document.getElementById("tools-builder-scroll");
                 if (bscroll && !bscroll.firstChild) {
                     bscroll.appendChild(
@@ -2036,8 +1854,6 @@
             }
             window.renderToolsPanel = renderToolsPanel;
 
-            // Post to the Lua tools channel (ui:tools:*), distinct from the
-            // settings channel sendToHost uses.
             function sendToTools(action, data) {
                 if (window.shellPost) {
                     window.shellPost("tools", action,
@@ -2045,8 +1861,6 @@
                 }
             }
 
-            // Build a default step def from the shared picker registry, so a
-            // function tool is composed from the very same modules as a macro.
             function buildStepDef(fnId) {
                 const reg = window.fnPicker && window.fnPicker.registry;
                 if (!reg) return null;
@@ -2064,8 +1878,7 @@
                 return { action: fn.name, params: params };
             }
 
-            // -- Function tab (reuses the macro step canvas) --
-            // State for the in-progress function being authored/edited.
+            // Function tab (reuses the macro step canvas) //
             let _fnCanvas = null;
             let _fnEditor = null;
             let _fnEditingId = null;
@@ -2073,7 +1886,6 @@
             function renderToolFunctionsTab() {
                 const scroll = document.getElementById("tools-functions-scroll");
                 if (!scroll) return;
-                // Build the shell once (canvas is stateful); refresh only the list.
                 if (!scroll.firstChild) {
                     scroll.appendChild(section("fn-editor", "Function", buildFunctionEditor,
                         "A reusable block of steps any macro can call"));
@@ -2087,7 +1899,6 @@
             window.renderToolFunctionsTab = renderToolFunctionsTab;
 
             function buildFunctionEditor(body) {
-                // Name + generated id.
                 const nameInput = h("input", {
                     type: "text", cls: "input-sm", placeholder: "My Function",
                 });
@@ -2095,7 +1906,6 @@
                     nameInput));
                 body.appendChild(divider());
 
-                // The step canvas, same ToolCanvas the macro builder uses.
                 const canvasHost = h("div", { cls: "tool-fn-canvas" });
                 canvasHost.style.cssText =
                     "min-height:120px;border:1px solid var(--border-dim);"
@@ -2103,8 +1913,6 @@
                 body.appendChild(canvasHost);
 
                 if (typeof window.ToolCanvas === "function") {
-                    // onContext must be set at construction; right-click a block
-                    // to edit its parameters, same gesture as the macro builder.
                     _fnCanvas = new window.ToolCanvas(canvasHost, {
                         onChange: function() {},
                         onContext: function(sid) {
@@ -2120,8 +1928,6 @@
                     canvasHost.textContent = "Step canvas unavailable.";
                 }
 
-                // Add-step control: a picker of the same modules, menu-style so
-                // it works without drag/drop.
                 const mkSelect = window.createSelect || (typeof createSelect === "function" ? createSelect : null);
                 if (mkSelect) {
                     const addSel = mkSelect({
@@ -2159,7 +1965,6 @@
                     }),
                 ));
 
-                // Expose a loader so the list's Edit button can populate this.
                 window._loadFunctionIntoEditor = (fnDef) => {
                     _fnEditingId = fnDef.id || null;
                     nameInput.value = fnDef.name || fnDef.id || "";
@@ -2168,8 +1973,6 @@
                 };
             }
 
-            // Options for the add-step picker: every non-container module, so a
-            // function stays a flat, beginner-friendly sequence.
             function buildStepOptions() {
                 const reg = (window.fnPicker && window.fnPicker.registry) || [];
                 const skip = { "if": 1, "for": 1, "while": 1, "repeat": 1 };
@@ -2195,24 +1998,37 @@
                     return;
                 }
                 fns.forEach((fn) => {
+                    const isPack = fn.source === "pack";
                     const r = h("div", { cls: "row row-sub" });
-                    r.appendChild(h("div", { cls: "row-label" }, fn.name || fn.id));
+                    const lbl = h("div", { cls: "row-label" }, fn.name || fn.id);
+                    if (isPack) lbl.appendChild(h("small", {}, "from pack · call by id “" + fn.id + "”"));
+                    r.appendChild(lbl);
                     const controls = h("div", { style: "display:flex;gap:6px" });
-                    controls.appendChild(actionBtn("Edit", "", () => {
-                        // The full def (with steps) comes back on the tools
-                        // channel as "functionDef"; load it into the editor there.
-                        sendToTools("getFunction", { id: fn.id });
-                    }));
-                    const del = actionBtn("Delete", "danger", () => {
-                        sendToTools("deleteFunction", { id: fn.id });
-                    });
-                    controls.appendChild(del);
+                    if (isPack) {
+                        controls.appendChild(actionBtn("Call in macro", "", () => {
+                            if (window.macroLab && window.macroLab.addTool) {
+                                window.macroLab.addTool({
+                                    action: "call_fn",
+                                    params: { name: fn.id },
+                                });
+                            } else {
+                                showAlert("Open a macro in the Macros panel first.");
+                            }
+                        }));
+                    } else {
+                        controls.appendChild(actionBtn("Edit", "", () => {
+                            sendToTools("getFunction", { id: fn.id });
+                        }));
+                        controls.appendChild(actionBtn("Delete", "danger", () => {
+                            sendToTools("deleteFunction", { id: fn.id });
+                        }));
+                    }
                     r.appendChild(controls);
                     host.appendChild(r);
                 });
             }
 
-            // -- Variable tab (declare disk-persistent helper vars) --
+            // Variable tab (declare disk-persistent helper vars) //
             function renderToolVariablesTab() {
                 const scroll = document.getElementById("tools-variables-scroll");
                 if (!scroll) return;
@@ -2304,7 +2120,6 @@
                 });
             }
 
-            // A human name -> a valid Lua identifier for the function id.
             function slugToId(name) {
                 let s = String(name).replace(/[^A-Za-z0-9_]/g, "");
                 if (!s) return "";
@@ -2312,8 +2127,6 @@
                 return s;
             }
 
-            // Save acknowledgements from the Lua tools channel refresh the lists
-            // (the fresh data arrives via the listTools push right after).
             if (window.registerPanel) {
                 window.registerPanel("tools", function(action, body) {
                     if (action === "functionSaved") {
@@ -2330,7 +2143,7 @@
                 });
             }
 
-            // -- Tools tab strip --
+            // Tools tab strip //
             let _otabs = null;
             function toolsTabs() {
                 if (_otabs) return _otabs;
@@ -2354,32 +2167,25 @@
             }
             window.switchToolsTab = switchToolsTab;
 
-            // -- Profiles panel (rendered into #profiles-scroll) --
+            // Profiles panel (rendered into #profiles-scroll) //
             function renderProfilesPanel() {
                 const el = document.getElementById("profiles-scroll");
                 if (!el) return;
                 el.innerHTML = "";
                 buildProfiles(el);
-                // Coming soon note
                 const note = h("div", {
                     style: "padding:16px 14px 8px;font-size:11px;color:var(--text3);opacity:0.6;font-style:italic;",
                 }, "More profile features coming soon.");
                 el.appendChild(note);
-                // The Profiles panel no longer has a Browse tab, discovery and
-                // install moved to the universal Browse stage (panel-browse.js).
             }
             window.renderProfilesPanel = renderProfilesPanel;
-            // The Profiles panel is a single view now, its old Profiles/Browse
-            // tab strip was removed once Browse moved to its own stage.
 
-            // -- Theme application --
-
+            // Theme application //
             window.settingsApplyTheme = settingsApplyTheme;
 
             function applyFont(font, fontURL) {
                 if (!font) return;
                 if (fontURL) {
-                    // Inject or replace a @font-face rule for a local font file.
                     let el = document.getElementById("_ms-custom-font");
                     if (!el) {
                         el = document.createElement("style");
@@ -2391,7 +2197,6 @@
                 document.body.style.fontFamily = `"${font}", Almendra, Palatino, Georgia, serif`;
             }
 
-            // Parse #rrggbb or #rgb -> { r, g, b }
             function hexToRgb(hex) {
                 hex = hex.replace(/^#/, "");
                 if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
@@ -2402,7 +2207,7 @@
             function settingsApplyTheme(t) {
                 if (!t) return;
                 const r = document.documentElement.style;
-                // -- Base colors --
+                // Base colors //
                 if (t.bg) r.setProperty("--bg", t.bg);
                 if (t.surface) r.setProperty("--surface", t.surface);
                 if (t.surface2) r.setProperty("--surface2", t.surface2);
@@ -2415,7 +2220,7 @@
                 if (t.warning) r.setProperty("--warning", t.warning);
                 if (t.text) r.setProperty("--text", t.text);
 
-                // -- Derived: text2/text3 from text --
+                // Derived: text2/text3 from text //
                 if (t.text && !t.text2) {
                     const c = hexToRgb(t.text);
                     if (c) r.setProperty("--text2", `rgba(${c.r},${c.g},${c.b},0.85)`);
@@ -2425,7 +2230,7 @@
                     if (c) r.setProperty("--text3", `rgba(${c.r},${c.g},${c.b},0.55)`);
                 }
 
-                // -- Derived: border from accent + hover mix --
+                // Derived: border from accent + hover mix //
                 if (t.accent && t.hover && !t.border) {
                     const a = hexToRgb(t.accent);
                     const h = hexToRgb(t.hover);
@@ -2437,7 +2242,7 @@
                     }
                 }
 
-                // -- Derived: accent glow --
+                // Derived: accent glow //
                 if (t.accent && !t.accentGlow) {
                     const a = hexToRgb(t.accent);
                     if (a) r.setProperty("--accent-glow", `rgba(${a.r},${a.g},${a.b},0.4)`);
@@ -2447,7 +2252,7 @@
                     if (a) r.setProperty("--accent-glow-faint", `rgba(${a.r},${a.g},${a.b},0.12)`);
                 }
 
-                // -- Derived: danger glow/border --
+                // Derived: danger glow/border //
                 if (t.danger && !t.dangerGlow) {
                     const d = hexToRgb(t.danger);
                     if (d) r.setProperty("--danger-glow", `rgba(${d.r},${d.g},${d.b},0.6)`);
@@ -2457,7 +2262,7 @@
                     if (d) r.setProperty("--danger-border", `rgba(${d.r},${d.g},${d.b},0.3)`);
                 }
 
-                // -- Explicit overrides always win --
+                // Explicit overrides always win //
                 if (t.text2) r.setProperty("--text2", t.text2);
                 if (t.text3) r.setProperty("--text3", t.text3);
                 if (t.border) r.setProperty("--border", t.border);
@@ -2466,7 +2271,7 @@
                 if (t.dangerGlow) r.setProperty("--danger-glow", t.dangerGlow);
                 if (t.dangerBorder) r.setProperty("--danger-border", t.dangerBorder);
 
-                // -- Radius, font --
+                // Radius, font //
                 if (t.radius !== undefined) {
                     r.setProperty("--radius", t.radius + "px");
                     r.setProperty(
@@ -2477,7 +2282,7 @@
                 applyFont(t.font, t.fontURL);
             }
 
-            // -- receiveState --
+            // receiveState //
             function receiveState(state) {
                 S = state;
                 applyTheme(S.theme);
@@ -2486,15 +2291,12 @@
                 render();
                 renderToolsPanel();
                 renderProfilesPanel();
-                // Theme & sound live in panel-theme.js, it gets the state it
-                // needs handed to it rather than reaching back for S.
                 if (window.renderThemePanel) window.renderThemePanel(state);
                 if (window.renderPluginsPanel) window.renderPluginsPanel(state);
             }
 
-            // -- Init --
+            // Init //
             document.addEventListener("DOMContentLoaded", () => {
-                // When embedded in the shell iframe, strip window-chrome styling
                 if (window.shellPost) {
                     var p = document.getElementById("panel");
                     if (p) {
@@ -2502,14 +2304,11 @@
                         p.style.clipPath = "none";
                     }
                 }
-                // Header drag (settings panel is outside log-panel.js scope)
                 (function() {
-                    // Drag is handled by the main header drag handler (event delegation)
                 })();
                 sendToHost({ action: "ready" });
             });
 
-            // Expose for inline onclick handlers in the HTML
             window.sendToHost = sendToHost;
             window.playSlot = playSlot;
             window.closePanel = function() { sendToHost({ action: 'close' }); };
