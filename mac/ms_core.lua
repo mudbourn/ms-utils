@@ -6392,7 +6392,7 @@
                                     local header = (#lines == 1) and "Update available:"
                                         or (#lines .. " updates available:")
                                     ms.alert(header .. "\n" .. table.concat(lines, "\n")
-                                        .. "\n\nOpen Browse to install. Turn these off under Help.",
+                                        .. "\n\nOpen Browse or Settings to install. Turn these off under Help.",
                                         9, true)
                                 end
                                 if ms.integrity and ms.integrity.checkContentUpdates then
