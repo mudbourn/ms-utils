@@ -142,6 +142,19 @@
                         _shellEvalQ = {}
                         hs.timer.doAfter(0.1, function()
                             if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
+                            -- Proactively push every installed-library kind now
+                            -- that the bus is definitely wired. The manager
+                            -- panels each fire a one-shot request() during HTML
+                            -- load, which can beat the host's "ui:library:*"
+                            -- subscription and be dropped — leaving Installed
+                            -- Macro Packs (and the theme/sound shelves) empty
+                            -- until a reload. This re-push does not depend on
+                            -- that early request landing.
+                            if ms.ui and ms.ui._actions and ms.ui._actions.libraryList then
+                                for _, k in ipairs({ "theme", "sound", "macro" }) do
+                                    pcall(ms.ui._actions.libraryList, { kind = k })
+                                end
+                            end
                         end)
                         if ms._shellState and ms._shellState.visible and _shellView then
                             local view = _shellView

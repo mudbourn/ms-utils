@@ -311,6 +311,7 @@ return function(ms)
                 elseif k == "_keysOpen"     then return _keysOpen
                 elseif k == "_windowOpen"   then return _windowOpen
                 elseif k == "recolor"       then return function() self:recolor() end
+                elseif k == "rezoom"        then return function(_, a, b, c) return self:rezoom(a, b, c) end
                 end
             end,
         })
