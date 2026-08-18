@@ -61,8 +61,11 @@ const OLD_ACCENT = /(rgba?\(\s*196\s*,\s*26\s*,\s*26|#c41a1a)/i;
 // A color literal in a stylesheet context. We match hex and functional colors;
 // black/white scrims and shadows are allowed (they are theme-independent).
 const COLOR_LITERAL = /(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\))/g;
-const NEUTRAL = /^(#000000?|#fff(f(ff)?)?|rgba?\(\s*0\s*,\s*0\s*,\s*0[^)]*\)|rgba?\(\s*255\s*,\s*255\s*,\s*255[^)]*\))$/i;
+const NEUTRAL = /^(#(0{3,4}|0{6}|0{8})|#(f{3,4}|f{6}|f{8})|rgba?\(\s*0\s*,\s*0\s*,\s*0[^)]*\)|rgba?\(\s*255\s*,\s*255\s*,\s*255[^)]*\))$/i;
 const SVG_ATTR = /(fill|stroke|stop-color)\s*=\s*["']/i; // colors inside embedded SVG markup
+// var(--x, <fallback>) — the variable IS referenced; the literal is only a
+// defensive fallback for a missing token, so it is not a theming violation.
+const VAR_FALLBACK = /var\(\s*--[\w-]+\s*,[^)]*\)/g;
 
 // createElement("select") is always code. The `<select` markup form and the
 // dialog calls are matched only on non-comment lines, so prose that merely
@@ -109,6 +112,10 @@ for (const file of files) {
             || (i > 1 && /ui-lint-allow/.test(lines[i - 2]));
         if (allowed) continue;
 
+        // A line whose meaningful content is a comment; several rules skip these
+        // so prose that merely names a color or control is not a violation.
+        const comment = isComment(line);
+
         // Rule 1a — the old default-red accent, wrong on every current theme.
         if (OLD_ACCENT.test(line)) {
             report(file, i + 1, "old-accent-literal", line,
@@ -127,15 +134,33 @@ for (const file of files) {
             }
         }
 
-        if (isModule) {
-            // Rule 1c — hardcoded color literals (skip the color editor, neutrals,
-            // SVG attributes, and CSS-variable definitions — both `--x:` in a
-            // stylesheet and setProperty("--x", …) in the theme engine).
-            if (!isColorEditor && !SVG_ATTR.test(line)
+        // Rule 1d — a CSS custom property written with the wrong sigil. A theme
+        // applier that calls setProperty("//accent", …) or ("-accent", …) sets
+        // an invalid property name the browser silently drops, so the theme
+        // never lands. Custom properties must begin with exactly two dashes.
+        // Only a name starting with "//" or a single "-" (not "--") is flagged,
+        // so legitimate setProperty("opacity", …) on a real property is untouched.
+        const badProp = line.match(/setProperty\(\s*["'](\/\/[^"']*|-(?!-)[^"']*)["']/);
+        if (badProp) {
+            report(file, i + 1, "bad-custom-prop", line,
+                `setProperty("${badProp[1]}", …) — a theme variable must start with "--" (this "//"/"-" name is silently ignored).`);
+        }
+
+        // Rule 1c — hardcoded color literals in the modules that must theme, and
+        // in the shell/popout HTML component rules (the palette DEFINITIONS in
+        // :root are exempted below by the `--x:` / setProperty("--x") guards, so
+        // only literal colors baked into component rules are flagged).
+        if (isModule || isThemedHtml) {
+            // (skip the color editor, neutrals, SVG attributes, and CSS-variable
+            // definitions — both `--x:` in a stylesheet and setProperty("--x", …)).
+            if (!isColorEditor && !comment && !SVG_ATTR.test(line)
                 && !/--[\w-]+\s*:/.test(line) && !VAR_DEFINITION.test(line)) {
+                // Drop var(--x, fallback) groups first so a defensive fallback
+                // literal is not mistaken for a hardcoded component color.
+                const scan = line.replace(VAR_FALLBACK, "var()");
                 let m;
                 COLOR_LITERAL.lastIndex = 0;
-                while ((m = COLOR_LITERAL.exec(line)) !== null) {
+                while ((m = COLOR_LITERAL.exec(scan)) !== null) {
                     const lit = m[1];
                     if (NEUTRAL.test(lit)) continue;
                     report(file, i + 1, "hardcoded-color", line,
@@ -147,7 +172,6 @@ for (const file of files) {
 
         // Rule 2 — native macOS controls (all UI files). Comment prose that
         // merely names a control is not a violation.
-        const comment = isComment(line);
         if (NATIVE_SELECT_CODE.test(line) || (!comment && NATIVE_SELECT_MARKUP.test(line))) {
             report(file, i + 1, "native-select", line,
                 "Native <select> is drawn by macOS and ignores the theme. Use window.createSelect().");

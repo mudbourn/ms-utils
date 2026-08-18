@@ -2057,7 +2057,7 @@
                     seg([
                         { label: "Number", value: "number" },
                         { label: "Text", value: "string" },
-                        { label: "Yes/No", value: "boolean" },
+                        { label: "True/False", value: "boolean" },
                     ], draft.type, (v) => { draft.type = v; })));
                 const defInput = h("input", {
                     type: "text", cls: "input-sm", placeholder: "0",

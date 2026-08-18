@@ -170,7 +170,7 @@
             font-weight: 600; transition: opacity 0.15s;
         }
         .btn-macro:hover { opacity: 0.8; }
-        .btn-enable { background: var(--success); color: #1e2214; }
+        .btn-enable { background: var(--success); color: var(--bg); }
         .btn-disable { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
 
         /* -- Input -- */
@@ -241,9 +241,9 @@
             flex-shrink: 0;
         }
         .pill.accent { background: var(--accent); color: #fff; }
-        .pill.success { background: var(--success); color: #1e2214; }
+        .pill.success { background: var(--success); color: var(--bg); }
         .pill.danger { background: var(--danger); color: #fff; }
-        .pill.warning { background: var(--warning); color: #1a1208; }
+        .pill.warning { background: var(--warning); color: var(--bg); }
 
         /* -- Input Bar -- */
         #inputbar {
@@ -617,7 +617,7 @@
         .btn-action:hover { background: var(--hover); }
         .btn-action.accent { background: var(--accent); color: #fff; }
         .btn-action.danger { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
-        .btn-action.danger:hover { background: #2a0a0a; }
+        .btn-action.danger:hover { background: color-mix(in srgb, var(--danger) 20%, var(--danger-bg)); }
         .btn-action.disabled { opacity: 0.35; pointer-events: none; cursor: default; }
 
         .sound-picker-wrap { position: relative; flex-shrink: 0; }
@@ -840,7 +840,7 @@
         .macro-toolbar-btn.primary:hover { opacity: 0.85; }
         .macro-toolbar-btn.danger:hover { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
         .macro-toolbar-btn.recording { background: var(--recording-bg); border-color: var(--recording); color: var(--recording-text); animation: macro-rec-pulse 1.2s ease-in-out infinite; }
-        .macro-toolbar-btn.recording:hover { background: rgba(220,50,50,0.35); border-color: var(--recording); color: var(--recording-text); }
+        .macro-toolbar-btn.recording:hover { background: color-mix(in srgb, var(--recording) 35%, transparent); border-color: var(--recording); color: var(--recording-text); }
         @keyframes macro-rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
         .macro-toolbar-btn.running { background: var(--running-bg); border-color: var(--running); color: var(--running-text); animation: macro-run-pulse 1s ease-in-out infinite; pointer-events: none; }
         @keyframes macro-run-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }

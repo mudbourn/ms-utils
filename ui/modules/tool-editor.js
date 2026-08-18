@@ -821,36 +821,25 @@
             }
 
             if (typeof window.createSelect === "function") {
-                const sel = window.createSelect({
+                return window.createSelect({
                     className:   "tool-ed-tool-select",
                     options:     options,
                     value:       current,
                     placeholder: "No tools, create one in Add Module",
                     onChange:    (v) => this._updateParam(sid, key, ToolEditor._refFor(v)),
                 });
-                return sel;
             }
 
-            const sel = document.createElement("select");
-            sel.className = "tool-ed-tool-select";
-            if (options.length === 0) {
-                const o = document.createElement("option");
-                o.value = ""; o.textContent = "No tools, create one in Add Module";
-                o.disabled = true; o.selected = true;
-                sel.appendChild(o);
-                sel.disabled = true;
-            } else {
-                options.forEach((opt) => {
-                    const o = document.createElement("option");
-                    o.value = opt.value; o.textContent = opt.label;
-                    if (opt.value === current) o.selected = true;
-                    sel.appendChild(o);
-                });
-            }
-            sel.addEventListener("change", () => {
-                this._updateParam(sid, key, ToolEditor._refFor(sel.value));
-            });
-            return sel;
+            // createSelect is a shell global and should always be present; the
+            // fallback is a themed, non-interactive placeholder (never a native
+            // <select>, which would ignore the theme) so a missing global fails
+            // visibly instead of rendering OS chrome.
+            const ph = document.createElement("div");
+            ph.className = "tool-ed-tool-select";
+            const chosen = options.find((o) => o.value === current);
+            ph.textContent = chosen ? chosen.label
+                : (options.length ? "Select a tool…" : "No tools, create one in Add Module");
+            return ph;
         }
       // END Build Parameter Row //
 
