@@ -36,12 +36,20 @@ SIGN_SH="$SCRIPT_DIR/registry_sign_ci.sh"
 
 SIGN_REPO="mudbourn/mudscript"          # the repo CI signs and the client reads
 SIGN_BRANCH="main"
-RAW="https://raw.githubusercontent.com/$SIGN_REPO/$SIGN_BRANCH/registry/index.json"
 WAIT_TIMEOUT=1800                       # give up waiting for the push after 30 min
 
 # Canonical hash of an index the exact way CI/the client canonicalize it - the
 # signature field is excluded on purpose, since CI rewrites it when it signs.
 canon() { jq -c -S '{formatVersion, generated, entries}' | shasum -a 256 | cut -c1-64; }
+
+# Canonical hash of the index currently on SIGN_REPO's branch, read through the
+# GitHub *contents API* rather than raw.githubusercontent.com. The raw CDN caches
+# aggressively and can serve a pushed file's OLD bytes for minutes, which would
+# stall the push-wait forever; the API reflects a push immediately.
+remote_canon() {
+    gh api "repos/$SIGN_REPO/contents/registry/index.json?ref=$SIGN_BRANCH" \
+        -q '.content' 2>/dev/null | base64 -D 2>/dev/null | canon 2>/dev/null || true
+}
 
 # ── Non-shipping invocations delegate straight to publish and stop ────────────
 for a in "$@"; do
@@ -75,7 +83,7 @@ fi
 WANT="$(canon < "$INDEX")"
 
 # Already live? (re-run with no real change, or you pushed before this got here)
-if [ "$(curl -sf "$RAW" | canon 2>/dev/null || true)" = "$WANT" ]; then
+if [ "$(remote_canon)" = "$WANT" ]; then
     echo "The committed index is already on $SIGN_REPO $SIGN_BRANCH - skipping the push wait."
 else
     # ── 3. Wait for the push ──────────────────────────────────────────────────
@@ -87,7 +95,7 @@ else
     echo "================================================================"
     START="$(date +%s)"
     while true; do
-        if [ "$(curl -sf "$RAW" | canon 2>/dev/null || true)" = "$WANT" ]; then
+        if [ "$(remote_canon)" = "$WANT" ]; then
             echo "-> Push detected."
             break
         fi
