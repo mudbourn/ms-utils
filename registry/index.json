@@ -29,9 +29,9 @@
       "id": "plugin-roblox",
       "type": "plugin",
       "name": "Roblox",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "author": "mudbourn",
-      "sha256": "b48805b536c2431214953e183a77207cc12fa34579cfaa09ae34d36668e0ed2c",
+      "sha256": "cf26435212bcd1f3184ffcc877bb859cbccab8d8beda644117c7ce4c3d4ca700",
       "url": "https://github.com/mudbourn/mudscript/releases/download/packages/Roblox.mspkg",
       "size": 7675,
       "trust": "trusted"
