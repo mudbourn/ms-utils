@@ -125,8 +125,46 @@
     const LIB_STATE = { theme: [], sound: [] };
     const LIB_NOUN  = { theme: "theme", sound: "sound pack" };
 
+    // Per-entry actions, mirroring the profiles panel's profileMenuItems so
+    // a pack row and a profile row offer the same shape of ⋯ menu.
+    function libMenuItems(kind, e) {
+        const items = [];
+        if (!e.active) items.push({
+            icon: "", label: "Activate this " + LIB_NOUN[kind],
+            action: () => window.msLibraryClient.activate(kind, e.slug, e.name),
+        });
+        items.push({
+            icon: "", label: "Export this " + LIB_NOUN[kind] + "...",
+            action: () => sendToHost({
+                action: "exportPackage", type: kind, slug: e.slug, name: e.name,
+            }),
+        });
+        items.push({
+            icon: "", label: "Rename...",
+            action: async () => {
+                const r = await window.openModal(
+                    "Rename " + LIB_NOUN[kind],
+                    "New name for \"" + e.name + "\".",
+                    "Rename", "Cancel", true, e.name);
+                const v = (r.value || "").trim();
+                if (r.confirmed && v) window.msLibraryClient.rename(kind, e.slug, v);
+            },
+        });
+        items.push({
+            icon: "", label: "Remove from library", danger: true,
+            action: async () => {
+                const r = await window.openModal(
+                    "Delete " + e.name + "?",
+                    "Removes it from your library. Anything already applied stays in place.",
+                    "Delete", "Cancel");
+                if (r.confirmed) window.msLibraryClient.remove(kind, e.slug);
+            },
+        });
+        return items;
+    }
+
     function fillLibList(kind, wrap) {
-        const { h, row, btnRow, actionBtn } = ui();
+        const { h, showCtxMenu } = ui();
         wrap.innerHTML = "";
 
         const entries = LIB_STATE[kind] || [];
@@ -138,23 +176,38 @@
         }
 
         for (const e of entries) {
-            const meta = [e.active ? "active" : null, e.origin, e.version]
-                .filter(Boolean).join(" · ");
-            const activateBtn = e.active
-                ? actionBtn("Active", "", () => {})
-                : actionBtn("Activate", "accent", () =>
-                    window.msLibraryClient.activate(kind, e.slug, e.name));
-            if (e.active) activateBtn.disabled = true;
-            wrap.appendChild(row(e.name, meta || null, btnRow(
-                activateBtn,
-                actionBtn("Delete", "danger", async () => {
-                    const r = await window.openModal(
-                        "Delete " + e.name + "?",
-                        "Removes it from your library. Anything already applied stays in place.",
-                        "Delete", "Cancel");
-                    if (r.confirmed) window.msLibraryClient.remove(kind, e.slug);
-                }),
-            )));
+            const meta = [e.origin, e.version].filter(Boolean).join(" · ");
+            const r = h("div", { cls: "row", onmouseenter: () => playSlot("hover") });
+            const lbl = h("div", { cls: "row-label" }, e.name);
+            if (meta) lbl.appendChild(h("small", {}, meta));
+            r.appendChild(lbl);
+            if (e.active) r.appendChild(h("span", { cls: "pill success" }, "Active"));
+
+            const menuBtn = h("button", {
+                cls: "row-menu-btn",
+                title: LIB_NOUN[kind] + " actions",
+                onmouseenter: () => playSlot("hover"),
+            }, "⋯");
+            const openMenu = (x, y) => {
+                playSlot("interact");
+                showCtxMenu(x, y, libMenuItems(kind, e), e.name);
+            };
+            menuBtn.addEventListener("click", (ev) => {
+                ev.preventDefault(); ev.stopPropagation();
+                const rect = menuBtn.getBoundingClientRect();
+                openMenu(rect.right, rect.bottom);
+            });
+            r.appendChild(menuBtn);
+
+            // Click the row to activate (unless it is already live), matching
+            // the profiles panel's click-to-switch affordance.
+            if (!e.active) r.addEventListener("click", () =>
+                window.msLibraryClient.activate(kind, e.slug, e.name));
+            r.addEventListener("contextmenu", (ev) => {
+                ev.preventDefault(); ev.stopImmediatePropagation();
+                openMenu(ev.clientX, ev.clientY);
+            });
+            wrap.appendChild(r);
         }
     }
 
@@ -163,30 +216,49 @@
         if (wrap) fillLibList(kind, wrap);
     }
 
+    // Three sub-sections mirroring the profiles panel: Installed (the hotswap
+    // list), Manage (Create New / Save current), and Packages (Import/Export).
     function librarySection(root, kind, title, desc, captureLabel) {
         const { h, btnRow, actionBtn } = ui();
+        const noun = LIB_NOUN[kind];
 
         sec(root, "installed-" + kind, title, desc, (body) => {
             const list = h("div", { id: "library-list-" + kind, cls: "library-list" });
             fillLibList(kind, list);
             body.appendChild(list);
+        });
 
-            // Save current / Import / Export — the manager's own actions,
-            // folded in from the retired Import / Export tab. Export is scoped
-            // to this section's kind; Import routes by the package's manifest.
+        sec(root, "manage-" + kind, "Manage",
+            "Creating and saving " + noun + "s", (body) => {
             body.appendChild(btnRow(
+                actionBtn("Create New " + noun, "", async () => {
+                    const r = await window.openModal(
+                        "Create New " + noun,
+                        "Name a fresh, empty " + noun + " you can save into later.",
+                        "Create", "Cancel", true, "");
+                    const v = (r.value || "").trim();
+                    if (r.confirmed && v) window.msLibraryClient.createEmpty(kind, v);
+                }),
                 actionBtn(captureLabel, "", async () => {
                     const r = await window.openModal(
-                        "Save current " + LIB_NOUN[kind],
+                        "Save current " + noun,
                         "Name it so you can hotswap back to it later.",
                         "Save", "Cancel", true, "");
                     if (r.confirmed) {
                         window.msLibraryClient.capture(kind, (r.value || "").trim());
                     }
                 }),
-                actionBtn("Import " + LIB_NOUN[kind] + "...", "", () =>
+            ));
+        });
+
+        sec(root, "packages-" + kind, "Packages",
+            "Moving a " + noun + " between machines", (body) => {
+            // Import routes by the package's manifest; Export here is scoped to
+            // the live slice of this kind (per-pack export lives in the ⋯ menu).
+            body.appendChild(btnRow(
+                actionBtn("Import " + noun + "...", "", () =>
                     sendToHost({ action: "importPackage" })),
-                actionBtn("Export " + LIB_NOUN[kind] + "...", "", () =>
+                actionBtn("Export current " + noun + "...", "", () =>
                     sendToHost({ action: "exportPackage", type: kind })),
             ));
         });

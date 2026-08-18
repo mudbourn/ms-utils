@@ -35,6 +35,22 @@ return function(ms)
         local corePath        = os.getenv("HOME") .. "/.hammerspoon/ms_core.lua"
         local trustedHashPath = os.getenv("HOME") .. "/.hammerspoon/data/.ms_trusted_hash"
         local themePath       = os.getenv("HOME") .. "/.hammerspoon/data/ms_theme.json"
+        local visualJsonPath  = os.getenv("HOME") .. "/.hammerspoon/data/ms_macros_visual.json"
+        local visualLuaPath   = os.getenv("HOME") .. "/.hammerspoon/data/ms_macros_visual.lua"
+        local helperVarsPath  = os.getenv("HOME") .. "/.hammerspoon/data/ms_helpervars.json"
+
+        -- Builder content that belongs to a profile beyond ms_macros.lua: the
+        -- visual macro source + its compiled output, authored tools, and helper
+        -- vars. Each rides with the profile like ms_theme.json — otherwise it
+        -- lives in the global data/ dir and leaks across every profile.
+        local function profileContentFiles()
+            return {
+                { live = visualJsonPath, name = "ms_macros_visual.json" },
+                { live = visualLuaPath,  name = "ms_macros_visual.lua" },
+                { live = authoredPath,   name = "ms_authored.json" },
+                { live = helperVarsPath, name = "ms_helpervars.json" },
+            }
+        end
 
         ms.bindConfig = {}
         ms.bindHandles = {}
@@ -1862,6 +1878,23 @@ return function(ms)
             return moved
         end
 
+        -- Copy (not move) a dir's contents into dst — used to bank sounds into a
+        -- profile folder on save/seed while leaving the live copies in place.
+        -- Skips .bak scratch files so profile folders stay clean.
+        local function copyDirContents(src, dst)
+            if not hs.fs.attributes(src) then return 0 end
+            local q = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+            os.execute("mkdir -p " .. q(dst))
+            local copied = 0
+            for file in hs.fs.dir(src) do
+                if file ~= "." and file ~= ".." and not file:find("%.bak$") then
+                    local _, ok = hs.execute("/bin/cp -R " .. q(src .. file) .. " " .. q(dst .. file))
+                    if ok then copied = copied + 1 end
+                end
+            end
+            return copied
+        end
+
         local function readMacroMeta(filePath)
             local captured = {}
             local dummyFn  = function() end
@@ -2003,6 +2036,14 @@ return function(ms)
             local curSoundsDir = profilesPath .. currentName .. "/sounds/"
             moveDirContents(SoundActiveDir, curSoundsDir .. "active/")
             moveDirContents(SoundMacroDir,  curSoundsDir .. "macro/")
+            -- Archive the current profile's visual macros, tools, and vars so
+            -- they do not leak into the target. Moving clears the live copies;
+            -- a target with none stays cleared (a fresh profile is empty).
+            for _, cf in ipairs(profileContentFiles()) do
+                if hs.fs.attributes(cf.live) then
+                    moveFile(cf.live, profilesPath .. currentName .. "/" .. cf.name)
+                end
+            end
 
             if hasMacros then
                 local ok, err = moveFile(profilesPath .. targetName .. "/ms_macros.lua", macrosPath)
@@ -2013,6 +2054,10 @@ return function(ms)
                     if hadTheme    then moveFile(profilesPath .. currentName .. "/ms_theme.json",            themePath)   end
                     moveDirContents(profilesPath .. currentName .. "/sounds/active/", SoundActiveDir)
                     moveDirContents(profilesPath .. currentName .. "/sounds/macro/",  SoundMacroDir)
+                    for _, cf in ipairs(profileContentFiles()) do
+                        local arch = profilesPath .. currentName .. "/" .. cf.name
+                        if hs.fs.attributes(arch) then moveFile(arch, cf.live) end
+                    end
                     ms.alert("Profile switch failed: could to activate \"" .. targetName .. "\".\n" .. tostring(err), 5)
                     return
                 end
@@ -2029,6 +2074,11 @@ return function(ms)
             local tgtSoundsDir = profilesPath .. targetName .. "/sounds/"
             moveDirContents(tgtSoundsDir .. "active/", SoundActiveDir)
             moveDirContents(tgtSoundsDir .. "macro/",  SoundMacroDir)
+            -- Restore the target's visual macros, tools, and vars (if any).
+            for _, cf in ipairs(profileContentFiles()) do
+                local arch = profilesPath .. targetName .. "/" .. cf.name
+                if hs.fs.attributes(arch) then moveFile(arch, cf.live) end
+            end
 
             ms.alert("Switched to \"" .. targetName .. "\".\nReloading in 3 seconds...", 4)
             ms.dev.log({
@@ -2294,7 +2344,7 @@ return function(ms)
         -- without touching or reloading the active profile. The name auto-indexes
         -- ("New Profile 1", "New Profile 2", …) so repeated creates never collide;
         -- the index climbs until the user renames one.
-        local function createNewProfile()
+        local function createNewProfile(seed)
             local sq = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
             hs.fs.mkdir(profilesPath)
 
@@ -2329,6 +2379,23 @@ return function(ms)
             end
             mf:write(blankSrc)
             mf:close()
+
+            -- Seed from the current setup so a new profile need not come up
+            -- default/silent. Macros stay blank (it is a fresh macro profile);
+            -- only the look + settings + sounds are carried in.
+            if seed then
+                if hs.fs.attributes(jsonPath) then
+                    hs.execute("/bin/cp " .. sq(jsonPath) .. " " .. sq(dir .. "/ms_settings.json"))
+                end
+                if hs.fs.attributes(defaultPath) then
+                    hs.execute("/bin/cp " .. sq(defaultPath) .. " " .. sq(dir .. "/ms_settings_default.json"))
+                end
+                if hs.fs.attributes(themePath) then
+                    hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(dir .. "/ms_theme.json"))
+                end
+                copyDirContents(SoundActiveDir, dir .. "/sounds/active/")
+                copyDirContents(SoundMacroDir,  dir .. "/sounds/macro/")
+            end
 
             ms._profilesDirty = true
             ms.playSlot("update")
@@ -2375,6 +2442,18 @@ return function(ms)
             if hs.fs.attributes(themePath) then
                 hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(profilesPath .. folderName .. "/ms_theme.json"))
             end
+            -- Sounds travel with the profile too. Previously omitted, which
+            -- silently dropped a profile's sound set on save and left switches
+            -- promoting nothing (root cause of the lost theme+sounds recovery).
+            local sndDst = profilesPath .. folderName .. "/sounds/"
+            copyDirContents(SoundActiveDir, sndDst .. "active/")
+            copyDirContents(SoundMacroDir,  sndDst .. "macro/")
+            -- Visual macros, authored tools, and helper vars travel too.
+            for _, cf in ipairs(profileContentFiles()) do
+                if hs.fs.attributes(cf.live) then
+                    hs.execute("/bin/cp " .. sq(cf.live) .. " " .. sq(profilesPath .. folderName .. "/" .. cf.name))
+                end
+            end
             ms.playSlot("update")
             ms._profilesDirty = true
             ms.ui.markDirty()
@@ -2407,6 +2486,13 @@ return function(ms)
             end
             if hs.fs.attributes(themePath) then
                 hs.execute("/bin/cp " .. sq(themePath) .. " " .. sq(tmpDir .. "ms_theme.json"))
+            end
+            -- Visual macros, authored tools, and helper vars travel with the
+            -- profile package too, matching ms.package.collect.
+            for _, cf in ipairs(profileContentFiles()) do
+                if hs.fs.attributes(cf.live) then
+                    hs.execute("/bin/cp " .. sq(cf.live) .. " " .. sq(tmpDir .. cf.name))
+                end
             end
             local soundsDir = tmpDir .. "sounds/"
             local soundsCopied = 0
@@ -3854,8 +3940,10 @@ return function(ms)
         -- Check For Content Updates [installed packages & plugins] --
         -- Compares the version of every installed plugin / content item against
         -- the registry catalog and returns the ones the registry now advertises
-        -- a newer version for. Refreshes the registry first (non-forced) so a
-        -- freshly published bump is seen, then reuses the same _remoteIsNewer
+        -- a newer version for. Forces a registry refresh first (bypassing the
+        -- CACHE_TTL) so a freshly published bump is actually seen -- a non-forced
+        -- refresh returns the up-to-6h-old cache and would silently miss the new
+        -- version, dropping no alert. Then reuses the same _remoteIsNewer
         -- comparator the app-update check uses.
         ms.integrity.checkContentUpdates = function(callback)
             local function scan()
@@ -3908,7 +3996,7 @@ return function(ms)
                 return out
             end
             if ms.registry and ms.registry.refresh then
-                ms.registry.refresh({ force = false }, function()
+                ms.registry.refresh({ force = true }, function()
                     if callback then pcall(callback, scan()) end
                 end)
             else
@@ -3988,12 +4076,30 @@ return function(ms)
             end)
         end
 
+        -- A trackpad has left (1) and right/two-finger (2) clicks but none of
+        -- the extra mouse buttons, so a resolved trigger on Mouse 3+ can never
+        -- fire there. When trackpad mode is on, swap such a trigger for the
+        -- owning bind's declared fallback key (opts.trackpad on ms.bind.define).
+        -- If no fallback is declared the trigger is left as-is: the bind simply
+        -- can't fire on a trackpad, rather than being silently hijacked.
+        local TRACKPAD_MAX_BUTTON = 2
+        local function trackpadFallback(bind, rootId)
+            if not ms.trackpadMode or type(bind) ~= "table" then return bind end
+            if bind.type ~= "mouse" then return bind end
+            local n = tonumber(bind.button)
+            if not (n and n > TRACKPAD_MAX_BUTTON) then return bind end
+            local rootDef = ms.registry._defs and ms.registry._defs[rootId]
+            local fb = rootDef and rootDef.trackpad
+            if type(fb) ~= "table" or not fb.key then return bind end
+            -- Keep the resolved bind's own modifiers (so V+Mouse3 -> V+key),
+            -- unless the fallback explicitly overrides them.
+            return { type = "key", key = fb.key, mods = fb.mods or bind.mods or {} }
+        end
+
         ms.effectiveBind = function(id)
-            if ms.trackpadMode and ms.trackpadBindOverrides and ms.trackpadBindOverrides[id] then
-                return ms.trackpadBindOverrides[id]
-            end
             local def = ms.registry._defs and ms.registry._defs[id]
             local raw = ms.bindConfig[id] or (def and def.default)
+            local resolved, rootId = raw, id
             if raw and type(raw) == "table" and raw.type and ms.registry._defs[raw.type] then
                 local visited = {}
                 local accum = {}
@@ -4012,23 +4118,25 @@ return function(ms)
                 while current and type(current) == "table" and current.type
                     and ms.registry._defs[current.type] and not visited[current.type] do
                     visited[current.type] = true
+                    rootId = current.type
                     local parentDef = ms.registry._defs[current.type]
                     local parentBind = ms.bindConfig[current.type] or (parentDef and parentDef.default)
                     if parentBind and type(parentBind) == "table" and parentBind.type
                         and not ms.registry._defs[parentBind.type] then
                         addMods(parentBind.mods)
-                        return {
+                        resolved = {
                             type = parentBind.type,
                             key = parentBind.key,
                                  button = parentBind.button,
                                  direction = parentBind.direction,
                                  mods = accum }
+                        break
                     end
                     addMods(parentBind and parentBind.mods)
                     current = parentBind
                 end
             end
-            return raw
+            return trackpadFallback(resolved, rootId)
         end
     -- END ms.showGuardian --
 

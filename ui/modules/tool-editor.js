@@ -377,6 +377,19 @@
         .tool-ed-condition:focus { border-color: var(--accent); }
         .tool-ed-condition::placeholder { color: var(--text3); opacity: 1; }
 
+        /* // Live condition truth note // */
+        .tool-ed-cond-live {
+            margin-top: 6px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            line-height: 1.4;
+            letter-spacing: .3px;
+            color: var(--text3);
+        }
+        .tool-ed-cond-live.cond-true    { color: var(--success); }
+        .tool-ed-cond-live.cond-false   { color: var(--text3); }
+        .tool-ed-cond-live.cond-missing { color: var(--warning); }
+
         /* // Array Editor // */
         .tool-ed-array {
             display: flex;
@@ -489,6 +502,31 @@
       }
       static _toolList() {
           return Array.isArray(window.msMacroTools) ? window.msMacroTools : [];
+      }
+      // Evaluate a Lua-style truthiness for a tool/var's current value: only
+      // nil and false are falsey (0 and "" are true), matching the runtime.
+      static _luaTruthy(v) {
+          return !(v === null || v === undefined || v === false);
+      }
+      // Paint the live-truth note for a condition wired to a tool/var. Reads
+      // the tool's current value from the same list the picker shows.
+      static _renderCondLive(el, value) {
+          el.className = "tool-ed-cond-live";
+          el.textContent = "";
+          if (!value || typeof value !== "object") { el.style.display = "none"; return; }
+          const key = ToolEditor._refKey(value);
+          const t = ToolEditor._toolList().find((x) => x.key === key);
+          if (!t) {
+              el.style.display = "";
+              el.classList.add("cond-missing");
+              el.textContent = "⚠ unknown tool “" + key + "” — branch will run the else path";
+              return;
+          }
+          const truthy = ToolEditor._luaTruthy(t.value);
+          el.style.display = "";
+          el.classList.add(truthy ? "cond-true" : "cond-false");
+          el.textContent = (truthy ? "● true" : "○ false")
+              + " → runs the " + (truthy ? "then" : "else") + " branch";
       }
 
       _hookCanvasRender() {
@@ -758,6 +796,12 @@
                 control.appendChild(sw);
                 control.appendChild(holder);
 
+                // For a condition wired to a tool/var, show how it evaluates
+                // right now, so the branch's live truth is visible at a glance.
+                const note = (def.type === "condition")
+                    ? document.createElement("div") : null;
+                if (note) { note.className = "tool-ed-cond-live"; control.appendChild(note); }
+
                 const render = () => {
                     holder.innerHTML = "";
                     const nowBound = ToolEditor._isToolRef(value);
@@ -768,6 +812,7 @@
                     } else {
                         holder.appendChild(this._buildLiteralControl(def, key, value, sid));
                     }
+                    if (note) ToolEditor._renderCondLive(note, nowBound ? value : null);
                 };
                 _sfx(litBtn); _sfx(toolBtn);
                 litBtn.addEventListener("click", (e) => {

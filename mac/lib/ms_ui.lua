@@ -49,6 +49,11 @@ return function(ms)
             for _, m in ipairs(c.mods or {}) do
                 table.insert(parts, m:sub(1, 1):upper() .. m:sub(2))
             end
+            -- A modifier-only bind is just its modifiers, no trailing key.
+            if c.type == "mods" then
+                if #parts == 0 then return "unset" end
+                return table.concat(parts, "+")
+            end
             local trigger
             if c.type == "mouse" then
                 trigger = "Mouse " .. tostring(c.button)
@@ -74,7 +79,9 @@ return function(ms)
             for _, m in ipairs(c.mods or {}) do
                 out[#out + 1] = m:sub(1, 1):upper() .. m:sub(2)
             end
-            if c.type == "mouse" then
+            if c.type == "mods" then
+                return out -- modifiers only, no trigger token
+            elseif c.type == "mouse" then
                 out[#out + 1] = "Mouse " .. tostring(c.button)
             elseif c.type == "scroll" then
                 local d = c.direction or "?"
@@ -89,18 +96,18 @@ return function(ms)
             return out
         end
 
-        local function _parentOf(def)
+        -- The macro this one currently follows, honoring a live bindConfig
+        -- tether over the compiled default. nil = standalone / top-level. This
+        -- is what makes a UI-created link nest and severing (overriding to a
+        -- real key) un-nest, without special-casing either direction.
+        local function _effectiveParent(id)
+            local def = ms.registry._defs and ms.registry._defs[id]
             if not def then return nil end
-            local d = def.default
-            if type(d) ~= "table" or not d.type then return nil end
-            if ms.registry._defs[d.type] then return d.type end
-            return nil
-        end
-
-        local function _severedFromParent(id)
             local cfg = ms.bindConfig and ms.bindConfig[id]
-            if type(cfg) ~= "table" or not cfg.type then return false end
-            return ms.registry._defs[cfg.type] == nil
+            local src = (type(cfg) == "table" and cfg.type) and cfg or def.default
+            if type(src) ~= "table" or not src.type then return nil end
+            if ms.registry._defs[src.type] then return src.type end
+            return nil
         end
 
         local function _buildMacroList()
@@ -110,7 +117,7 @@ return function(ms)
             for _, id in ipairs(ms.registry._defList or {}) do
                 local def = ms.registry._defs[id]
                 if def and not def.system and not (ms._suppressedMacros and ms._suppressedMacros[id])
-                    and (not _parentOf(def) or _severedFromParent(id)) then
+                    and not _effectiveParent(id) then
                     local eff = ms.effectiveBind(id)
                     local bindable = eff ~= nil
                     local enabled = ms.binds[id]
@@ -130,22 +137,32 @@ return function(ms)
             end
 
             for _, id in ipairs(ms.registry._defList or {}) do
-                local def    = ms.registry._defs[id]
-                local parent = _parentOf(def)
+                local def          = ms.registry._defs[id]
+                local directParent = _effectiveParent(id)
                 if def and not def.system and not (ms._suppressedMacros and ms._suppressedMacros[id])
-                    and parent and not _severedFromParent(id) then
+                    and directParent then
+                    -- Nest under the nearest top-level ancestor, but report the
+                    -- DIRECT parent so the Link control shows what it follows.
+                    local parent = directParent
                     local seen = { [id] = true }
                     while parent and not byId[parent] and not seen[parent] do
                         seen[parent] = true
-                        parent = _parentOf(ms.registry._defs[parent])
+                        parent = _effectiveParent(parent)
                     end
                     local host = parent and byId[parent]
                     if host then
+                        local eff = ms.effectiveBind(id)
+                        local subEnabled = ms.binds[id]
+                        if subEnabled == nil then subEnabled = def.enabled end
+                        local subBindable = eff ~= nil
                         table.insert(host.subs, {
-                            id     = id,
-                            label  = def.label,
-                            bind   = _bindDisplay(ms.effectiveBind(id)),
-                            parent = parent,
+                            id       = id,
+                            label    = def.label,
+                            group    = def.group,
+                            bind     = _bindDisplay(eff),
+                            parent   = directParent,
+                            enabled  = (subEnabled and subBindable) and true or false,
+                            bindable = subBindable,
                         })
                     end
                 end
@@ -580,10 +597,12 @@ return function(ms)
             local comboSeen = {}
             local comboMods = {}
             local started   = false
+            local modOnly   = false
 
             local INSTRUCTIONS =
-                "Press a key, or hold a combo. Mouse buttons, scroll,\n"
-                .. "and controller buttons work too.\n"
+                "Press a key, or hold a combo. Modifiers on their own\n"
+                .. "(Option, Option+Shift), mouse buttons, scroll, and\n"
+                .. "controller buttons work too.\n"
                 .. "Release to set  ·  Escape to cancel."
 
             local function captureMsg()
@@ -674,6 +693,7 @@ return function(ms)
                 comboKeys = {}
                 comboSeen = {}
                 comboMods = {}
+                modOnly   = false
                 ms._inputOpen = true
 
                 ms.ui.modal({
@@ -728,12 +748,38 @@ return function(ms)
                 capture = hs.eventtap.new({
                     hs.eventtap.event.types.keyDown,
                     hs.eventtap.event.types.keyUp,
+                    hs.eventtap.event.types.flagsChanged,
                     hs.eventtap.event.types.leftMouseDown,
                     hs.eventtap.event.types.rightMouseDown,
                     hs.eventtap.event.types.otherMouseDown,
                     hs.eventtap.event.types.scrollWheel,
                 }, function(event)
                     local t = event:getType()
+
+                    -- Modifier-only capture: hold modifiers with no other key,
+                    -- release to set. We accumulate the largest set seen (so
+                    -- Option then +Shift lands on Option+Shift) and finalize when
+                    -- every modifier is released. A real key at any point routes
+                    -- to the key path below instead.
+                    if t == hs.eventtap.event.types.flagsChanged then
+                        if settled then return true end
+                        if heldCount > 0 or #comboKeys > 0 then return true end
+                        local f = event:getFlags()
+                        local any = false
+                        if f.cmd   then comboMods.cmd   = true; any = true end
+                        if f.alt   then comboMods.alt   = true; any = true end
+                        if f.ctrl  then comboMods.ctrl  = true; any = true end
+                        if f.shift then comboMods.shift = true; any = true end
+                        if any then
+                            modOnly = true
+                            started = true -- suppress mouse/scroll while composing
+                            ms.ui.modalUpdate({ keys = _bindTokens({ type = "mods", mods = modList() }) })
+                        elseif modOnly then
+                            local mods = modList()
+                            if #mods > 0 then toConfirm({ type = "mods", mods = mods }) end
+                        end
+                        return true
+                    end
 
                     if t == hs.eventtap.event.types.keyDown then
                         local keyCode = event:getKeyCode()
@@ -1334,7 +1380,7 @@ return function(ms)
             end,
 
             importProfile     = function() ms.importProfile() end,
-            createNewProfile  = function() ms.createNewProfile() end,
+            createNewProfile  = function(data) ms.createNewProfile(data and data.seed == true) end,
             saveCurrentProfile = function() ms.saveCurrentProfile() end,
 
             importSounds = function()
@@ -1715,8 +1761,23 @@ return function(ms)
                     namedProfile = safe
                 end
 
+                -- Export a specific stored library slice (from a pack's ⋯ menu)
+                -- rather than the live one. Its files sit verbatim under the
+                -- slice's files/ dir, so collect() reads them via baseDir.
+                local isSlice = false
+                if data.slug and ms.package.libraryFilesDir then
+                    local fdir = ms.package.libraryFilesDir(kind, data.slug)
+                    if not (fdir and hs.fs.attributes(fdir)) then
+                        ms.alert("Pack not found in library.", 4)
+                        return
+                    end
+                    collectOpts = { baseDir = fdir }
+                    namedProfile = ms.sanitizeName(data.name or "")
+                    isSlice = true
+                end
+
                 local files = ms.package.collect(kind, collectOpts)
-                if kind == "sound" then
+                if kind == "sound" and not isSlice then
                     local assignPath = ms.package.exportSoundAssign()
                     if assignPath then files["sound_assign.json"] = assignPath end
                 end
@@ -1873,10 +1934,13 @@ return function(ms)
                     end
                 end
 
+                -- Force a network refresh whenever Browse asks for the catalog:
+                -- the cached copy (already painted by push() above) can be up to
+                -- CACHE_TTL old, so a non-forced refresh would leave a freshly
+                -- published bump invisible here. push() first keeps it flicker-free.
                 push()
                 if ms.registry and ms.registry.refresh then
-                    local force = data and data.force == true
-                    ms.registry.refresh({ force = force }, function(ok)
+                    ms.registry.refresh({ force = true }, function(ok)
                         if ok then push() end
                     end)
                 end
@@ -1981,6 +2045,31 @@ return function(ms)
                 end
                 ms.playSlot("update")
                 ms.alert("Saved \"" .. rec.name .. "\" to the library.", 3, true)
+                ms.ui._actions.libraryList({ kind = data.kind })
+            end,
+
+            libraryRename = function(data)
+                if not (data and data.kind and data.slug and ms.package
+                        and ms.package.libraryRename) then return end
+                local rec, err = ms.package.libraryRename(data.kind, data.slug, data.name)
+                if not rec then
+                    ms.alert("Could not rename:\n" .. tostring(err), 4)
+                    return
+                end
+                ms.playSlot("update")
+                ms.ui._actions.libraryList({ kind = data.kind })
+            end,
+
+            libraryCreateEmpty = function(data)
+                if not (data and data.kind and ms.package
+                        and ms.package.libraryCreateEmpty) then return end
+                local rec, err = ms.package.libraryCreateEmpty(data.kind, data.name)
+                if not rec then
+                    ms.alert("Could not create:\n" .. tostring(err), 4)
+                    return
+                end
+                ms.playSlot("update")
+                ms.alert("Created \"" .. rec.name .. "\".", 3, true)
                 ms.ui._actions.libraryList({ kind = data.kind })
             end,
 
@@ -2122,6 +2211,66 @@ return function(ms)
                         ms.bind.rebind()
                     end,
                 })
+            end,
+
+            -- Tether one macro's trigger to another macro (a "peer" bind:
+            -- { type = <otherId>, mods = {...} }). This is what handwritten packs
+            -- express as `default = { type = "superJump", mods = {"v"} }`; here it
+            -- is driven from the binds UI. The key trigger is inherited from the
+            -- target at dispatch time via ms.effectiveBind's chain resolution.
+            bindToMacro = function(data)
+                if not data.id or type(data.targetId) ~= "string" then return end
+                local def        = ms.registry._defs and ms.registry._defs[data.id]
+                local targetDef  = ms.registry._defs and ms.registry._defs[data.targetId]
+                if not def or not targetDef then return end
+                if data.id == data.targetId then
+                    ms.playSlot("alert")
+                    ms.alert("A macro can't be bound to itself.", 4)
+                    return
+                end
+                -- Refuse anything that would form a loop: walk the target's bind
+                -- chain and make sure it never leads back to this macro.
+                local visited = {}
+                local cur = data.targetId
+                while cur and not visited[cur] do
+                    if cur == data.id then
+                        ms.playSlot("alert")
+                        ms.alert("That would create a bind loop.", 4)
+                        return
+                    end
+                    visited[cur] = true
+                    local c = ms.bindConfig[cur]
+                        or (ms.registry._defs[cur] and ms.registry._defs[cur].default)
+                    cur = (type(c) == "table" and c.type and ms.registry._defs[c.type])
+                        and c.type or nil
+                end
+                -- Keep whatever modifiers the macro already carried (its sub
+                -- modifier, or a prior key bind's mods) so re-tethering doesn't
+                -- collapse it onto the parent's exact trigger. An explicit
+                -- data.mods overrides; otherwise inherit, else empty.
+                local existing = ms.bindConfig[data.id]
+                local mods = (type(data.mods) == "table") and data.mods
+                    or (type(existing) == "table" and type(existing.mods) == "table" and existing.mods)
+                    or {}
+                ms.bindConfig[data.id] = { type = data.targetId, mods = mods }
+                if not def.system then ms.binds[data.id] = true end
+                ms.saveSettings()
+                ms.playSlot("update")
+                ms.bind.rebind()
+                -- With no modifier the tether is the parent's exact trigger, so
+                -- prompt for one straight away — this is how a macro gets bound
+                -- to e.g. Alt (Alt + the parent's trigger) instead of colliding.
+                if #mods == 0 then
+                    hs.timer.doAfter(0.15, function()
+                        ms.ui._actions.startModRebind({ id = data.id })
+                    end)
+                    return
+                end
+                hs.timer.doAfter(0.1, function()
+                    ms.alert((def.label or data.id) .. " now follows "
+                        .. (targetDef.label or data.targetId) .. ".", 2, true)
+                    ms.ui.refresh()
+                end)
             end,
 
             resetSetting = function(data)
@@ -2286,11 +2435,16 @@ return function(ms)
             startModRebind = function(data)
                 if not data.id then return end
                 local def = ms.registry._defs[data.id]
-                if not def or not def.default then return end
-                local label = def.label or data.id
+                if not def then return end
                 local curCfg  = ms.bindConfig[data.id] or def.default
+                if not curCfg then return end
+                local label = def.label or data.id
                 local curMods = curCfg and curCfg.mods or {}
                 local cur     = curMods[1]
+                -- Preserve the current trigger type (a tether to another macro
+                -- set via the binds UI, or the handwritten default) so setting a
+                -- modifier only changes the modifier, never re-parents the bind.
+                local curType = curCfg.type or (def.default and def.default.type)
 
                 ms.alert("Modifier for \"" .. label .. "\""
                     .. "\nCurrent: " .. (cur or "unset")
@@ -2307,12 +2461,12 @@ return function(ms)
                     if not cancelled then
                         if newKey then
                             ms.bindConfig[data.id] = {
-                                type = def.default.type,
+                                type = curType,
                                 mods = { newKey },
                             }
                         else
                             ms.bindConfig[data.id] = {
-                                type = def.default.type,
+                                type = curType,
                                 mods = {},
                             }
                         end

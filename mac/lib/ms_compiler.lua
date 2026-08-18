@@ -74,7 +74,11 @@
 
             local function serialize(val)
                 local ref = toolRef(val)
-                if ref then return ref end
+                -- A wired var/setting value used as string text may itself embed
+                -- {name} tokens; expand them at runtime. (Numeric contexts go
+                -- through numArg, which stays bare, and conditions resolve the
+                -- ref directly — so this only affects value/text fields.)
+                if ref then return "ms.interp(" .. ref .. ")" end
                 local t = type(val)
                 if t == "string"  then return interpString(val) end
                 if t == "number"  then return tostring(val) end
@@ -331,6 +335,13 @@
             local function stepCond(step)
                 local c = step.condition
                 if c == nil then c = step.params and step.params.condition end
+                -- A condition wired to a tool/var arrives as a {__toolRef} /
+                -- {__varRef} table. Resolve it to the live read expression
+                -- (ms.settings.get / ms.vars.get) instead of interpolating a
+                -- string — otherwise the branch silently compiles to `true`.
+                local ref = toolRef(c)
+                if ref then return ref end
+                if type(c) == "table" then c = nil end
                 if c == nil or c == "" then c = "true" end
                 return interpExpr(c)
             end
@@ -616,9 +627,20 @@
                 lines[#lines + 1] = "-- END Creator Credits --"
                 lines[#lines + 1] = ""
 
+                -- Indent the body one level inside its fold markers, matching
+                -- the Creator Credits block, so each section collapses cleanly
+                -- in Zed. Blank lines stay bare (no trailing whitespace).
+                local function indentBlock(src)
+                    local out = {}
+                    for line in (src .. "\n"):gmatch("([^\n]*)\n") do
+                        out[#out + 1] = line == "" and "" or (INDENT .. line)
+                    end
+                    return table.concat(out, "\n")
+                end
+
                 for _, entry in ipairs(sources) do
                     lines[#lines + 1] = "-- " .. entry.id .. " --"
-                    lines[#lines + 1] = entry.source
+                    lines[#lines + 1] = indentBlock(entry.source)
                     lines[#lines + 1] = "-- END " .. entry.id .. " --"
                     lines[#lines + 1] = ""
                 end

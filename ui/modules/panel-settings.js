@@ -1195,9 +1195,18 @@
                                 {
                                     cls: "btn-action",
                                     onmouseenter: () => playSlot("hover"),
-                                    onclick: () => {
+                                    onclick: async () => {
                                         playSlot("interact");
-                                        sendToHost({ action: "createNewProfile" });
+                                        const r = await openModal(
+                                            "Create New Profile",
+                                            "Start it from your current theme, settings, and sounds — or blank?",
+                                            "Seed from current",
+                                            "Start blank",
+                                        );
+                                        sendToHost({
+                                            action: "createNewProfile",
+                                            seed: r.confirmed,
+                                        });
                                     },
                                 },
                                 "Create New Profile",
@@ -1913,6 +1922,11 @@
             function renderToolsPanel() {
                 const scroll = document.getElementById("tools-scroll");
                 if (!scroll) return;
+                // Populate window.msMacroTools so the Function/Setting builders'
+                // Value->Tool dropdowns have data. It is otherwise filled only when
+                // the macro builder calls refreshToolList(), so opening Tools
+                // without ever opening the macro builder left those dropdowns empty.
+                if (window.shellPost) window.shellPost("macros", "listTools", {});
                 const scrollTop = scroll.scrollTop;
                 scroll.innerHTML = "";
 
@@ -2222,6 +2236,10 @@
             }
 
             // Variable tab (declare disk-persistent helper vars) //
+            // Reference to the builder's Default input so each variable's Insert
+            // button can append a {name} token straight into it (same window, no
+            // cross-webview focus tracking needed).
+            let _varDefaultInput = null;
             function renderToolVariablesTab() {
                 const scroll = document.getElementById("tools-variables-scroll");
                 if (!scroll) return;
@@ -2231,7 +2249,7 @@
                         "A shared value macros can read and write, saved to disk"));
                     scroll.appendChild(section("var-list", "Your variables",
                         buildVariableList,
-                        "Insert drops a {name} token into the focused Value field — "
+                        "Insert appends a {name} token into the Default field above — "
                         + "it resolves to the variable's value when the macro runs"));
                 } else {
                     const listBody = document.getElementById("tool-var-list-body");
@@ -2264,6 +2282,7 @@
                     type: "text", cls: "input-sm", placeholder: DEF_PLACEHOLDER[draft.type],
                     oninput: (e) => { draft.default = e.target.value; },
                 });
+                _varDefaultInput = defInput;
                 body.appendChild(row("Default", "Starting value", defInput, "row-sub"));
                 const hintInput = h("input", {
                     type: "text", cls: "input-sm", placeholder: "",
@@ -2299,7 +2318,13 @@
 
             function fillVariableList(host) {
                 host.innerHTML = "";
-                const vars = (window.msMacroTools || []).filter((t) => t.kind === "var");
+                // Read the authoritative helper-var list from S.userVariables --
+                // the same source the Tuning tab uses, delivered to this popout
+                // via receiveState(). window.msMacroTools is only populated by the
+                // macro builder in the MAIN shell webview, so in this (Tools popout)
+                // window it is never filled -- reading it here left this list
+                // permanently empty even when variables existed.
+                const vars = (S && Array.isArray(S.userVariables)) ? S.userVariables : [];
                 if (vars.length === 0) {
                     host.appendChild(h("div", {
                         cls: "row-sub",
@@ -2312,24 +2337,33 @@
                     const val = (v.value !== undefined && v.value !== null)
                         ? String(v.value) : "";
                     r.appendChild(h("div", { cls: "row-label" },
-                        (v.label || v.key) + "  =  " + val));
+                        (v.label || v.name) + "  =  " + val));
                     // Insert the {name} interpolation token into the last-focused
                     // Value field; if none is focused, copy it so it can be pasted.
-                    const token = "{" + v.key + "}";
+                    const token = "{" + v.name + "}";
                     const ins = actionBtn("Insert", "", () => {
-                        const placed = typeof window.msInsertValueToken === "function"
-                            && window.msInsertValueToken(token);
-                        if (placed) {
-                            showAlert("Inserted " + token);
-                        } else {
-                            try { navigator.clipboard.writeText(token); } catch (e) {}
-                            showAlert("Copied " + token + " — paste into a Value field");
+                        const el = _varDefaultInput;
+                        if (!el || !el.isConnected) {
+                            showAlert("Open the Default field above first.");
+                            return;
                         }
+                        // Insert at the caret when the Default field is focused,
+                        // otherwise append to the end.
+                        let start = el.selectionStart, end = el.selectionEnd;
+                        if (typeof start !== "number" || document.activeElement !== el) {
+                            start = el.value.length; end = start;
+                        }
+                        el.value = el.value.slice(0, start) + token + el.value.slice(end);
+                        const caret = start + token.length;
+                        // Fire input so the draft.default binding stays in sync.
+                        el.dispatchEvent(new Event("input", { bubbles: true }));
+                        el.focus();
+                        try { el.setSelectionRange(caret, caret); } catch (e) {}
                     });
-                    ins.title = "Insert " + token + " into the focused Value field";
+                    ins.title = "Append " + token + " to the Default field";
                     r.appendChild(ins);
                     const del = actionBtn("Delete", "danger", () => {
-                        sendToTools("deleteHelperVar", { name: v.key });
+                        sendToTools("deleteHelperVar", { name: v.name });
                     });
                     r.appendChild(del);
                     host.appendChild(r);

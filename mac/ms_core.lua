@@ -469,6 +469,9 @@
             ms._keyBindingsByCode = {}
             ms.bindConfig = {}
             ms.bindHandles = {}
+            -- Modifier-only triggers ({ type="mods", mods={...} }). Evaluated in
+            -- the keyboard listener's flagsChanged branch, not via keycode.
+            ms._modBindings = {}
             ms.systemBinds             = {
                 _config = {},
                 _handles = {},
@@ -481,13 +484,6 @@
             }
             ms.socdMode              = "lastWins"
             ms.socdEnabled           = false
-            ms.trackpadBindOverrides = {
-                superJump     = {
-                    type="key",
-                    mods={},
-                    key="k",
-                },
-            }
             ms.binds                 = {}
             ms._suppressedMacros     = {}
             ms.running   = {}
@@ -1012,6 +1008,21 @@
                 cmd = false,
             }
 
+            -- Keycodes that are themselves modifiers, so a modifier-only bind can
+            -- tell "just Option held" from "Option + a real key held".
+            local _MOD_CODES = {
+                [54] = true, [55] = true,             -- cmd
+                [56] = true, [60] = true, [62] = true, -- shift
+                [58] = true, [61] = true,             -- alt / right-ctrl slot
+                [59] = true,                          -- ctrl
+            }
+            local function _anyRealKeyHeld()
+                for kc, down in pairs(ms.keytrack) do
+                    if down and not _MOD_CODES[kc] then return true end
+                end
+                return false
+            end
+
             ms._keyListener = hs.eventtap.new({
                 hs.eventtap.event.types.keyDown,
                 hs.eventtap.event.types.keyUp,
@@ -1032,6 +1043,29 @@
                     ms.keytrack[61] = flags.ctrl
                     ms.keytrack[55] = flags.cmd
                     ms.keytrack[54] = flags.cmd
+                    -- Modifier-only binds fire on the rising edge when the active
+                    -- modifier set exactly matches, once per press (the `fired`
+                    -- latch clears when the set no longer matches). Only when no
+                    -- ordinary key is held, so Alt+K never trips an Alt bind.
+                    if ms._modBindings and #ms._modBindings > 0 and not _anyRealKeyHeld() then
+                        for _, mb in ipairs(ms._modBindings) do
+                            local exact =
+                                ((not mb.modSet.cmd)   == (not flags.cmd)) and
+                                ((not mb.modSet.alt)   == (not flags.alt)) and
+                                ((not mb.modSet.ctrl)  == (not flags.ctrl)) and
+                                ((not mb.modSet.shift) == (not flags.shift))
+                            if exact and not mb.fired then
+                                mb.fired = true
+                                if BindValidity == 1 or mb.system then
+                                    local co = coroutine.create(mb.firedFn)
+                                    local ok, err = coroutine.resume(co)
+                                    if not ok then print("ms.modBind error: " .. tostring(err)) end
+                                end
+                            elseif not exact then
+                                mb.fired = false
+                            end
+                        end
+                    end
                     if ms.dev and ms.dev._wantsKeyEvents and ms.dev._wantsKeyEvents() then
                         local now = {
                             shift = flags.shift and true or false,
@@ -2941,6 +2975,43 @@
                 hs.pasteboard.setContents(text)
             end
 
+            ms.paste = function()
+                if ms.dev then ms.devtools:flushAll() end
+                if ms.dev._watcherPanel then
+                    ms.devtools:watcherStep("paste")
+                end
+                if ms.dev then
+                    ms.devtools:macroLog("paste")
+                end
+                -- Cmd+V through the synthetic event source (userData 999), so
+                -- the app's own eventtaps ignore it like every other injected key.
+                ms.type("v", { "cmd" })
+            end
+
+            -- Expand {name} tokens in a string at runtime against helper vars.
+            -- Literal builder fields are interpolated at compile time (their
+            -- braces are gone by the time they run), but a value read out of a
+            -- helper var or setting still carries raw {name} tokens — this is
+            -- what resolves those. Non-strings pass through untouched; bounded
+            -- passes let a var reference another var without looping forever.
+            ms.interp = function(s)
+                if type(s) ~= "string" then return s end
+                if not s:find("{", 1, true) then return s end
+                local depth = 0
+                while depth < 8 and s:find("{[%a_][%w_]*}") do
+                    local changed = false
+                    s = s:gsub("{([%a_][%w_]*)}", function(name)
+                        changed = true
+                        local v = ms.vars and ms.vars.get and ms.vars.get(name)
+                        if v == nil then return "" end
+                        return tostring(v)
+                    end)
+                    depth = depth + 1
+                    if not changed then break end
+                end
+                return s
+            end
+
             ms.cancelMacros = function()
                 for co, ctx in pairs(ms._coroContext) do
                     ctx.cancelled = true
@@ -4481,6 +4552,14 @@
                 icon   = "save",
             })
 
+            ms.fn.define("ms.paste", ms.paste, {
+                label  = "Paste",
+                group  = "clipboard",
+                info   = "Paste the clipboard (Cmd+V)",
+                params = {},
+                icon   = "save",
+            })
+
             ms.fn.define("ms.appRunning", ms.appRunning, {
                 label  = "App Running",
                 group  = "app",
@@ -4687,6 +4766,7 @@
                     if handle and handle.delete then handle:delete() end
                 end
                 ms.bindHandles = {}
+                ms._modBindings = {}
                 ms._mouseCallbacks = {}
                 ms._scrollCallbacks = {}
                 if ms._scrollListener then
@@ -4715,6 +4795,7 @@
                         table.sort(ks)
                         return "combo:" .. table.concat(ks, "+") .. modStr
                     end
+                    if c.type == "mods"    then return "mods:" .. table.concat(mods, ",") end
                     return "key:" .. table.concat(mods, ",") .. ":" .. (c.key or "")
                 end
 
@@ -4820,6 +4901,17 @@
                     end
                     if c.type == "key" then
                         ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
+                    elseif c.type == "mods" then
+                        local modSet = {}
+                        for _, m in ipairs(c.mods or {}) do modSet[m] = true end
+                        -- Ignore an empty set (would fire on every key release).
+                        if next(modSet) then
+                            ms._modBindings[#ms._modBindings + 1] = {
+                                modSet  = modSet,
+                                firedFn = firedFn,
+                                fired   = false,
+                            }
+                        end
                     elseif c.type == "combo" then
                         ms.bindHandles[id] = ms.keyCombo(c.mods, c.keys, false, firedFn)
                     elseif c.type == "mouse" or c.type == "scroll" or c.type == "gamepad" then
@@ -4964,6 +5056,7 @@
                         table.sort(ks)
                         return "combo:" .. table.concat(mods, ",") .. ":" .. table.concat(ks, "+")
                     end
+                    if cfg.type == "mods" then return "mods:" .. table.concat(mods, ",") end
                     return "key:" .. table.concat(mods, ",") .. ":" .. (cfg.key or "")
                 end
                 local ck = key(c)
@@ -5837,6 +5930,11 @@
                         if ok then
                             print("ms.vars.define: '" .. tostring(body.def.name) .. "' saved")
                             if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
+                            -- Rebuild + push UI state so S.userVariables (the source
+                            -- the Variable list renders from) includes the new var;
+                            -- without this the list re-renders from stale state.
+                            if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+                            if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
                             _macroShellEval("if(window.shellReceive)shellReceive('tools','helperVarSaved',{})")
                         else
                             _macroShellEval("if(window.shellReceive)shellReceive('tools','helperVarSaved',{error:" .. hs.json.encode(tostring(err)) .. "})")
@@ -5848,6 +5946,8 @@
                         local ok = ms.vars.remove(body.name)
                         if ok then
                             if ms.bus and ms.bus.emit then pcall(ms.bus.emit, "ui:macros:listTools") end
+                            if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+                            if ms.ui and ms.ui.refresh then pcall(ms.ui.refresh) end
                             _macroShellEval("if(window.shellReceive)shellReceive('tools','helperVarSaved',{})")
                         end
                     end)

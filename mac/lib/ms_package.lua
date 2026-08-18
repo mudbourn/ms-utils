@@ -73,10 +73,13 @@ return function(ms)
         -- Where a packaged relative path lands in the live install. Shared by
         -- install and the library so an activated slice reaches the same dirs.
         local function destFor(clean)
-            if clean:find("^ms_") and clean:find("%.json$") then
-                return _dataDir .. "/" .. clean
-            elseif clean == "ms_macros.lua" then
+            if clean == "ms_macros.lua" then
                 return _hsDir .. "/ms_macros.lua"
+            elseif clean == "ms_macros_visual.lua" then
+                -- The compiled visual macros live in data/, not the top level.
+                return _dataDir .. "/ms_macros_visual.lua"
+            elseif clean:find("^ms_") and clean:find("%.json$") then
+                return _dataDir .. "/" .. clean
             else
                 return _hsDir .. "/" .. clean
             end
@@ -90,6 +93,9 @@ return function(ms)
                 paths    = {
                     "ms_macros.lua",
                     "ms_macros_visual.json",
+                    "ms_macros_visual.lua",
+                    "ms_authored.json",
+                    "ms_helpervars.json",
                     "sounds/macro/",
                 },
                 required = {
@@ -127,6 +133,9 @@ return function(ms)
                 paths    = {
                     "ms_macros.lua",
                     "ms_macros_visual.json",
+                    "ms_macros_visual.lua",
+                    "ms_authored.json",
+                    "ms_helpervars.json",
                     "ms_settings.json",
                     "ms_settings_default.json",
                     "ms_theme.json",
@@ -487,6 +496,8 @@ return function(ms)
                 if includeSoundsInTheme and isAudioRel(r) then add(comp.theme.files, r) end
                 if isAudioRel(r) then add(comp.sound.files, r) end
                 if r == "ms_macros.lua" or r == "ms_macros_visual.json"
+                    or r == "ms_macros_visual.lua" or r == "ms_authored.json"
+                    or r == "ms_helpervars.json"
                     or r:sub(1, 13) == "sounds/macro/" then add(comp.macro.files, r) end
                 if r == "ms_settings.json" or r == "ms_settings_default.json" then
                     add(comp.settings.files, r)
@@ -981,9 +992,13 @@ return function(ms)
                 -- baseDir lets us collect a pack from an arbitrary folder (a
                 -- profile dir) rather than the live locations, for migration.
                 local base = opts and opts.baseDir
-                addIf("ms_macros.lua",         base and (base .. "/ms_macros.lua")         or (_hsDir   .. "/ms_macros.lua"))
-                addIf("ms_macros_visual.json", base and (base .. "/ms_macros_visual.json") or (_dataDir .. "/ms_macros_visual.json"))
-                addDir("sounds/macro/",        base and (base .. "/sounds/macro/")         or (_hsDir   .. "/sounds/macro/"))
+                local dataSrc = function(f) return base and (base .. "/" .. f) or (_dataDir .. "/" .. f) end
+                addIf("ms_macros.lua",         base and (base .. "/ms_macros.lua") or (_hsDir .. "/ms_macros.lua"))
+                addIf("ms_macros_visual.json", dataSrc("ms_macros_visual.json"))
+                addIf("ms_macros_visual.lua",  dataSrc("ms_macros_visual.lua"))
+                addIf("ms_authored.json",      dataSrc("ms_authored.json"))
+                addIf("ms_helpervars.json",    dataSrc("ms_helpervars.json"))
+                addDir("sounds/macro/",        base and (base .. "/sounds/macro/") or (_hsDir .. "/sounds/macro/"))
 
             elseif kind == "theme" then
                 addIf("ms_theme.json", _dataDir .. "/ms_theme.json")
@@ -1007,6 +1022,9 @@ return function(ms)
                 local dataSrc   = function(f) return cfg and (cfg .. f)       or (_dataDir .. "/" .. f) end
                 addIf("ms_macros.lua",            macrosSrc)
                 addIf("ms_macros_visual.json",    dataSrc("ms_macros_visual.json"))
+                addIf("ms_macros_visual.lua",     dataSrc("ms_macros_visual.lua"))
+                addIf("ms_authored.json",         dataSrc("ms_authored.json"))
+                addIf("ms_helpervars.json",       dataSrc("ms_helpervars.json"))
                 addIf("ms_settings.json",         dataSrc("ms_settings.json"))
                 addIf("ms_settings_default.json", dataSrc("ms_settings_default.json"))
                 addIf("ms_theme.json",            dataSrc("ms_theme.json"))
@@ -1238,6 +1256,52 @@ return function(ms)
                 ms.package.librarySetActive(kind, nil)
             end
             return true
+        end
+
+        -- Rename a stored slice in place. The slug (folder name + .active
+        -- marker) stays put so nothing has to move on disk; only the display
+        -- name in meta.json changes. Mirrors the profiles panel's rename.
+        ms.package.libraryRename = function(kind, slug, newName)
+            if not LIBRARY_KINDS[kind] then return nil, "Not a library kind." end
+            slug = librarySlug(slug)
+            local dir = libraryDir(kind, slug)
+            local rec = readJSON(dir .. "/meta.json")
+            if not rec then return nil, "No such library entry." end
+            newName = type(newName) == "string" and newName:gsub("^%s+", ""):gsub("%s+$", "") or ""
+            if newName == "" then return nil, "Name cannot be empty." end
+            rec.name = newName
+            writeFile(dir .. "/meta.json", hs.json.encode(rec) .. "\n")
+            return rec
+        end
+
+        -- Create a bare-bones, empty library slot the user can populate later —
+        -- the pack analogue of Create New Profile ([[create-new-profile-makes-empty-entry]]).
+        -- Meta only, no files; activating it copies nothing (the live slice
+        -- stays put) until the user saves their current setup into it.
+        ms.package.libraryCreateEmpty = function(kind, name)
+            if not LIBRARY_KINDS[kind] then return nil, "Not a library kind." end
+            name = (type(name) == "string" and name ~= "") and name or ("New " .. kind)
+            local slug = librarySlug(name)
+            local dir  = libraryDir(kind, slug)
+            if hs.fs.attributes(dir) then return nil, "A pack with that name already exists." end
+            hs.execute("mkdir -p " .. sq(dir .. "/files"))
+            local record = {
+                slug        = slug,
+                kind        = kind,
+                name        = name,
+                origin      = "new",
+                fileCount   = 0,
+                installedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            }
+            writeFile(dir .. "/meta.json", hs.json.encode(record) .. "\n")
+            return record
+        end
+
+        -- Absolute path to a stored slice's files, so export can pack a
+        -- specific library entry rather than only the live one.
+        ms.package.libraryFilesDir = function(kind, slug)
+            if not LIBRARY_KINDS[kind] then return nil end
+            return libraryDir(kind, librarySlug(slug)) .. "/files"
         end
 
         -- Snapshot the current live slice of a kind into the library, so the

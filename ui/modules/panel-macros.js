@@ -703,6 +703,7 @@
         var _keyCapture  = null; // param name currently capturing
         var _toastTimer  = null;
         var _tools       = [];   // current tools (authored settings + pack settings)
+        var _fnList      = [];   // callable function tools (authored / pack / plugin)
         var _view        = "module"; // "module" | "tool"
 
         /* -- Build DOM -- */
@@ -811,7 +812,46 @@
             return row;
         }
 
-        // Group tools by their section into collapsible headings.
+        // Build one draggable function row. Dropping (or clicking) it drops a
+        // "Call function" step preset to this function's id, so authored/pack/
+        // plugin functions are usable from the builder, not just the Tools panel.
+        function makeFnCallRow(fn) {
+            var id  = fn.id || fn.name;
+            var row = document.createElement("div");
+            row.className = "fn-entry fn-tool-entry";
+            row.setAttribute("data-fn-call", id);
+
+            var sig = document.createElement("span");
+            sig.className = "fn-entry-sig";
+            sig.textContent = fn.name || id;
+            row.appendChild(sig);
+
+            var tag = document.createElement("span");
+            tag.className = "fn-tool-tag fn-tool-tag-" + (fn.source || "builder");
+            tag.textContent = "function";
+            row.appendChild(tag);
+
+            row.setAttribute("draggable", "true");
+            row.addEventListener("dragstart", function(e) {
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData("application/x-ms-callfn", id);
+                e.dataTransfer.setData("text/plain", fn.name || id);
+            });
+            row.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
+            row.addEventListener("click", function() {
+                if (window.playSlot) playSlot("interact");
+                if (window.macroLab && window.macroLab.addTool) {
+                    window.macroLab.addTool({ action: "call_fn", params: { name: id } });
+                }
+            });
+            return row;
+        }
+
+        // Group tools by their section into collapsible headings. Functions are
+        // tools too, so they ride in the default "tools" section alongside
+        // settings and helper vars rather than in their own group.
         function renderToolsGroup(filter, searching) {
             var q = (filter || "").toLowerCase();
             var matches = _tools.filter(function(t) {
@@ -821,12 +861,19 @@
                     || (t.section || "").toLowerCase().indexOf(q) !== -1
                     || "tool".indexOf(q) !== -1;
             });
-            var searchingTools = q && "tool".indexOf(q) === -1;
+            var fnMatches = _fnList.filter(function(f) {
+                if (!q) return true;
+                return (String(f.name || f.id)).toLowerCase().indexOf(q) !== -1
+                    || "function tool".indexOf(q) !== -1;
+            });
+            var searchingTools = q && "tool".indexOf(q) === -1
+                && "function".indexOf(q) === -1;
 
-            // With no tools, keep the default header and a hint so tools stay discoverable.
-            if (matches.length === 0) {
+            // With nothing to show, keep the default header and a hint so tools
+            // stay discoverable.
+            if (matches.length === 0 && fnMatches.length === 0) {
                 if (searchingTools) return;
-                renderToolSection("tools", [], filter, searching, true);
+                renderToolSection("tools", [], [], filter, searching, true);
                 return;
             }
 
@@ -838,17 +885,20 @@
                 if (!groups[s]) { groups[s] = []; order.push(s); }
                 groups[s].push(t);
             });
+            // Functions always live in the default "tools" section.
+            if (fnMatches.length && !groups["tools"]) { groups["tools"] = []; order.push("tools"); }
             if (groups["tools"]) {
                 order = ["tools"].concat(order.filter(function(s) { return s !== "tools"; }));
             }
             order.forEach(function(s) {
-                renderToolSection(s, groups[s], filter, searching, false);
+                renderToolSection(s, groups[s], s === "tools" ? fnMatches : [], filter, searching, false);
             });
         }
 
         // Render one Tools sub-section: a category-style header keyed by section
         // name, with its own independent collapse state, then its tool rows.
-        function renderToolSection(section, rows, filter, searching, emptyHint) {
+        function renderToolSection(section, rows, fns, filter, searching, emptyHint) {
+            fns = fns || [];
             var key = "__tools:" + section;
             var collapsed = searching ? false : (_catCollapsed[key] !== false);
 
@@ -869,7 +919,7 @@
 
             var count = document.createElement("span");
             count.className = "fn-cat-count";
-            count.textContent = String(rows.length);
+            count.textContent = String(rows.length + fns.length);
             head.appendChild(count);
 
             head.addEventListener("mouseenter", function() {
@@ -887,9 +937,10 @@
             if (collapsed) return;
 
             rows.forEach(function(t) { entriesDiv.appendChild(makeToolRow(t)); });
+            fns.forEach(function(f) { entriesDiv.appendChild(makeFnCallRow(f)); });
 
             // A hint points at the Tools panel when none exist yet.
-            if (emptyHint && rows.length === 0) {
+            if (emptyHint && rows.length === 0 && fns.length === 0) {
                 var hint = document.createElement("div");
                 hint.className = "fn-entry fn-tool-hint";
                 hint.innerHTML = '<span class="fn-entry-sig">No tools, add one in the Tools panel</span>';
@@ -1664,10 +1715,16 @@
             e.stopPropagation();
         });
 
+        // Refresh the callable-function list pushed from Lua (setFunctionList).
+        function setFunctionList(list) {
+            _fnList = Array.isArray(list) ? list : [];
+            renderList(searchInput.value);
+        }
+
         /* -- Panel handler (called by consolidated registerPanel below) -- */
         function _fnPickerHandler(action, body) {
             if (action === "functions" && Array.isArray(body)) {
-                // Future: merge dynamically-loaded functions from Lua
+                setFunctionList(body);
             }
             if (action === "selectFunction" && body && body.name) {
                 selectFunction(body.name);
@@ -1698,6 +1755,7 @@
             registry: REGISTRY,
             showToast: showToast,
             setToolList: setToolList,
+            setFunctionList: setFunctionList,
             settingDef: settingDefFor,
             handler: _fnPickerHandler
         };
@@ -1756,12 +1814,24 @@
 
     function iconFor(action) { return ACTION_ICON[action] || "macros"; }
 
+    // A condition may be a raw Lua string or a {__toolRef}/{__varRef} wire.
+    // Render the wired forms as their live-read expression so the block header
+    // reads "if ms.settings.get(...)" instead of "if [object Object]".
+    function condSummary(c) {
+        if (c && typeof c === "object") {
+            if (typeof c.__toolRef === "string") return 'ms.settings.get("' + c.__toolRef + '")';
+            if (typeof c.__varRef === "string")  return 'ms.vars.get("' + c.__varRef + '")';
+            return "";
+        }
+        return c || "";
+    }
+
     /* -- Param summary -- */
     function paramSummary(action, params) {
         if (!params) return "";
         var keys = Object.keys(params);
         if (keys.length === 0) return "";
-        if (action === "if" || action === "while" || action === "repeat") return params.condition || "";
+        if (action === "if" || action === "while" || action === "repeat") return condSummary(params.condition);
         if (action === "for") return (params.var||"i") + " = " + (params.from||1) + " -> " + (params.to||1);
         if (action === "comment") return params.text || "";
         if (action === "code") return (params.source||"").split("\n")[0] || "";
@@ -3110,9 +3180,60 @@
     bindsScroll.insertBefore(metaCard, bindList);
 
     // Installed Macro Packs: hotswap library, mirrors the theme/sound managers.
+    // Full parity with the profiles panel: ⋯ menu per pack, plus Create New /
+    // Save current (Manage) and Import / Export (Packages) sub-sections.
     var _macroLib = [];
     var packList;
 
+    // Per-pack actions, matching libMenuItems in panel-theme and the profiles
+    // panel's profileMenuItems so all three surfaces share one menu shape.
+    function macroMenuItems(e) {
+        var items = [];
+        if (!e.active) items.push({
+            icon: "", label: "Activate this macro pack",
+            action: function() { window.msLibraryClient.activate("macro", e.slug, e.name); },
+        });
+        items.push({
+            icon: "", label: "Export this macro pack...",
+            action: function() {
+                if (window.sendToHost) window.sendToHost({
+                    action: "exportPackage", type: "macro", slug: e.slug, name: e.name,
+                });
+            },
+        });
+        items.push({
+            icon: "", label: "Rename...",
+            action: async function() {
+                var r = await window.openModal(
+                    "Rename macro pack",
+                    "New name for \"" + e.name + "\".",
+                    "Rename", "Cancel", true, e.name);
+                var v = (r.value || "").trim();
+                if (r.confirmed && v) window.msLibraryClient.rename("macro", e.slug, v);
+            },
+        });
+        items.push({
+            icon: "", label: "Remove from library", danger: true,
+            action: async function() {
+                var r = await window.openModal(
+                    "Delete " + e.name + "?",
+                    "Removes it from your library. Macros already applied stay in place.",
+                    "Delete", "Cancel");
+                if (r.confirmed) window.msLibraryClient.remove("macro", e.slug);
+            },
+        });
+        return items;
+    }
+
+    var packCreateBtn = _kit.actionBtn("Create New macro pack", "", async function() {
+        if (!window.openModal || !window.msLibraryClient) return;
+        var r = await window.openModal(
+            "Create New macro pack",
+            "Name a fresh, empty macro pack you can save into later.",
+            "Create", "Cancel", true, "");
+        var v = (r.value || "").trim();
+        if (r.confirmed && v) window.msLibraryClient.createEmpty("macro", v);
+    });
     var packSaveBtn = _kit.actionBtn("Save current macros...", "", async function() {
         if (!window.openModal || !window.msLibraryClient) return;
         var r = await window.openModal(
@@ -3122,22 +3243,29 @@
         if (r.confirmed) window.msLibraryClient.capture("macro", (r.value || "").trim());
     });
 
-    // Import routes by the package's manifest; Export is scoped to macros.
-    // Same Save / Import / Export trio the theme & sound managers carry.
+    // Import routes by the package's manifest; Export here is the live pack
+    // (per-pack export lives in each row's ⋯ menu).
     var packImportBtn = _kit.actionBtn("Import macro pack...", "", function() {
         if (window.sendToHost) window.sendToHost({ action: "importPackage" });
     });
-    var packExportBtn = _kit.actionBtn("Export macro pack...", "", function() {
+    var packExportBtn = _kit.actionBtn("Export current macros...", "", function() {
         if (window.sendToHost) window.sendToHost({ action: "exportPackage", type: "macro" });
     });
 
     var packCard = _kit.section("installed-macro", "Installed Macro Packs", function(body) {
         packList = _kit.h("div", { id: "library-list-macro", cls: "library-list" });
         body.appendChild(packList);
-        body.appendChild(_kit.btnRow(packSaveBtn, packImportBtn, packExportBtn));
     }, "Hotswap a saved macro set");
-    // Installed list sits at the bottom, matching the theme/sound managers.
+    var packManageCard = _kit.section("manage-macro", "Manage", function(body) {
+        body.appendChild(_kit.btnRow(packCreateBtn, packSaveBtn));
+    }, "Creating and saving macro packs");
+    var packPackagesCard = _kit.section("packages-macro", "Packages", function(body) {
+        body.appendChild(_kit.btnRow(packImportBtn, packExportBtn));
+    }, "Moving a macro pack between machines");
+    // Managers sit at the bottom, matching the theme/sound panels' order.
     bindsScroll.appendChild(packCard);
+    bindsScroll.appendChild(packManageCard);
+    bindsScroll.appendChild(packPackagesCard);
 
     function fillMacroLib() {
         var kit = window.msUI;
@@ -3153,24 +3281,37 @@
 
         for (var i = 0; i < _macroLib.length; i++) {
             (function(e) {
-                var meta = [e.active ? "active" : null, e.origin, e.version]
-                    .filter(Boolean).join(" · ");
-                var activateBtn = e.active
-                    ? kit.actionBtn("Active", "", function() {})
-                    : kit.actionBtn("Activate", "accent", function() {
-                        window.msLibraryClient.activate("macro", e.slug, e.name);
-                    });
-                if (e.active) activateBtn.disabled = true;
-                packList.appendChild(kit.row(e.name, meta || null, kit.btnRow(
-                    activateBtn,
-                    kit.actionBtn("Delete", "danger", async function() {
-                        var r = await window.openModal(
-                            "Delete " + e.name + "?",
-                            "Removes it from your library. Macros already applied stay in place.",
-                            "Delete", "Cancel");
-                        if (r.confirmed) window.msLibraryClient.remove("macro", e.slug);
-                    }),
-                )));
+                var meta = [e.origin, e.version].filter(Boolean).join(" · ");
+                var r = kit.h("div", { cls: "row",
+                    onmouseenter: function() { if (window.playSlot) playSlot("hover"); } });
+                var lbl = kit.h("div", { cls: "row-label" }, e.name);
+                if (meta) lbl.appendChild(kit.h("small", {}, meta));
+                r.appendChild(lbl);
+                if (e.active) r.appendChild(kit.h("span", { cls: "pill success" }, "Active"));
+
+                var menuBtn = kit.h("button", {
+                    cls: "row-menu-btn", title: "macro pack actions",
+                    onmouseenter: function() { if (window.playSlot) playSlot("hover"); },
+                }, "⋯");
+                var openMenu = function(x, y) {
+                    if (window.playSlot) playSlot("interact");
+                    kit.showCtxMenu(x, y, macroMenuItems(e), e.name);
+                };
+                menuBtn.addEventListener("click", function(ev) {
+                    ev.preventDefault(); ev.stopPropagation();
+                    var rect = menuBtn.getBoundingClientRect();
+                    openMenu(rect.right, rect.bottom);
+                });
+                r.appendChild(menuBtn);
+
+                if (!e.active) r.addEventListener("click", function() {
+                    window.msLibraryClient.activate("macro", e.slug, e.name);
+                });
+                r.addEventListener("contextmenu", function(ev) {
+                    ev.preventDefault(); ev.stopImmediatePropagation();
+                    openMenu(ev.clientX, ev.clientY);
+                });
+                packList.appendChild(r);
             })(_macroLib[i]);
         }
     }
@@ -3280,14 +3421,20 @@
     // -- Picker -> canvas drag-drop --
     // Dropping a picker module onto the canvas inserts a new top-level module.
     (function() {
-        var FN_MIME   = "application/x-ms-fn";
-        var TOOL_MIME = "application/x-ms-tool";
+        var FN_MIME     = "application/x-ms-fn";
+        var TOOL_MIME   = "application/x-ms-tool";
+        var CALLFN_MIME = "application/x-ms-callfn";
         function hasType(e, mime) {
             var types = e.dataTransfer && e.dataTransfer.types;
             if (!types) return false;
             return Array.prototype.indexOf.call(types, mime) !== -1;
         }
-        function hasFn(e)   { return hasType(e, FN_MIME) || hasType(e, TOOL_MIME); }
+        function hasFn(e)   { return hasType(e, FN_MIME) || hasType(e, TOOL_MIME) || hasType(e, CALLFN_MIME); }
+        // Build a "Call function" step preset to a dragged function id.
+        function buildCallFnDef(id) {
+            if (!id) return null;
+            return { action: "call_fn", params: { name: id } };
+        }
         // Build a shared-setting reference step for a dragged tool key.
         function buildToolDef(key) {
             var tools = window.msMacroTools || [];
@@ -3360,6 +3507,8 @@
             var def = null;
             if (hasType(e, TOOL_MIME)) {
                 def = buildToolDef(e.dataTransfer.getData(TOOL_MIME));
+            } else if (hasType(e, CALLFN_MIME)) {
+                def = buildCallFnDef(e.dataTransfer.getData(CALLFN_MIME));
             } else {
                 def = buildDefaultDef(e.dataTransfer.getData(FN_MIME));
             }
@@ -3498,6 +3647,63 @@
         return b;
     }
 
+    // Candidate macros this one can be tethered to: every real, non-system
+    // bind except itself and its own descendants (which would loop). The host
+    // re-checks for cycles, this just keeps obviously-bad picks out of the menu.
+    function linkTargets(m) {
+        var exclude = {};
+        exclude[m.id] = true;
+        (function walk(node) {
+            (node.subs || []).forEach(function(s) { exclude[s.id] = true; walk(s); });
+        })(m);
+        var out = [];
+        _bindList.forEach(function(top) {
+            function consider(x) {
+                if (exclude[x.id]) return;
+                if (x.group === "system" || x.systemBind) return;
+                out.push({ value: x.id, label: x.label || x.id, group: top.label || top.id });
+            }
+            consider(top);
+            (top.subs || []).forEach(consider);
+        });
+        return out;
+    }
+
+    // A compact "link to another macro" menu. Reuses the shell's dropdown so it
+    // matches the app's styling and outside-click behaviour. When the macro is
+    // already a peer, the control shows its current parent (a plain select) so
+    // you can see and change what it follows; otherwise it's an action menu
+    // that reads "Link…".
+    function macroLinkControl(m) {
+        var opts    = linkTargets(m);
+        var current = m.parent || "";
+        var linked  = !!current;
+        var sel = window.createSelect({
+            className:   "bind-link-select",
+            action:      !linked,
+            searchable:  opts.length > 6,
+            placeholder: "Link…",
+            options:     opts,
+            value:       linked ? current : undefined,
+            onChange:    function(targetId) {
+                if (!targetId) return;
+                shellPost("macros", "bindToMacro", {
+                    action:   "bindToMacro",
+                    id:       m.id,
+                    targetId: targetId,
+                });
+            },
+        });
+        sel.title = linked
+            ? "Following another macro — pick a different one to re-link"
+            : "Bind this macro to follow another macro's trigger";
+        if (!opts.length) {
+            sel.classList.add("disabled");
+            sel.title = "No other macros to link to";
+        }
+        return sel;
+    }
+
     // Takes an ICONS name, not a glyph.
     function iconBtn(iconName, title, onClick) {
         var b = document.createElement("button");
@@ -3588,6 +3794,11 @@
                 });
             }));
 
+            // Re-tether this sub to a different parent macro.
+            if (m.group !== "system" && !m.systemBind && typeof window.createSelect === "function") {
+                acts.appendChild(macroLinkControl(m));
+            }
+
             // Delete a peer/sub macro, guarded by a confirm.
             if (m.group !== "system" && !m.systemBind) {
                 acts.appendChild(iconBtn("trash", "Delete macro", function() {
@@ -3615,6 +3826,12 @@
                 });
             }));
 
+            // Tether this macro to another macro's trigger. Not offered for
+            // system binds (their triggers are fixed).
+            if (m.group !== "system" && !m.systemBind && typeof window.createSelect === "function") {
+                acts.appendChild(macroLinkControl(m));
+            }
+
             // Delete. Only user-authored macros can be removed.
             if (m.group !== "system" && !m.systemBind) {
                 acts.appendChild(iconBtn("trash", "Delete macro", function() {
@@ -3630,8 +3847,9 @@
             }
         }
 
-        // System binds are always live, only real macros can be disabled.
-        if (!isSub && m.group !== "system" && !m.systemBind) {
+        // System binds are always live; every other macro — including peers
+        // (subs) — can be enabled/disabled on its own.
+        if (m.group !== "system" && !m.systemBind) {
             // Reuses the settings panel toggle markup. A macro with no bind is locked off.
             var bindable = (m.bindable !== false);
             var lbl = document.createElement("label");
@@ -3796,6 +4014,7 @@
         if (!text && _currentMacroDef && _currentMacroDef.bind) {
             var b = _currentMacroDef.bind;
             if (b.type === "mouse") text = "Mouse " + b.button;
+            else if (b.type === "mods") text = (b.mods || []).join("+");
             else if (b.key) text = (b.mods || []).concat([b.key]).join("+");
         }
         bindBtn.textContent = text || "unset";
@@ -4362,6 +4581,11 @@
         // Tools panel's Function tab read one source.
         setFunctionList: function(list) {
             window.msMacroFunctions = Array.isArray(list) ? list : [];
+            // Surface them in the builder's picker (Functions group) too, not
+            // just the Tools panel's Function tab.
+            if (window.fnPicker && window.fnPicker.setFunctionList) {
+                window.fnPicker.setFunctionList(window.msMacroFunctions);
+            }
             if (typeof window.renderToolFunctionsTab === "function") {
                 window.renderToolFunctionsTab();
             }
