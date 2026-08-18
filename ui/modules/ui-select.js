@@ -16,6 +16,11 @@
         .macro-select-menu::-webkit-scrollbar { width: 4px; }
         .macro-select-menu::-webkit-scrollbar-track { background: transparent; }
         .macro-select-menu::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
+        .macro-select-search { position: sticky; top: 0; z-index: 1; background: var(--surface2); padding: 5px; border-bottom: 1px solid var(--border-dim); }
+        .macro-select-search input { width: 100%; box-sizing: border-box; background: var(--surface); border: 1px solid var(--border-dim); border-radius: var(--radius-s); color: var(--text); font-size: 11px; padding: 4px 7px; outline: none; font-family: inherit; }
+        .macro-select-search input:focus { border-color: var(--accent); }
+        .macro-select-group { padding: 6px 10px 2px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); pointer-events: none; }
+        .macro-select-empty { padding: 8px 10px; font-size: 11px; color: var(--text3); font-style: italic; }
         `;
 
       function injectSelectStyles(doc) {
@@ -58,18 +63,49 @@
 
           let _opts = [];
           let _value = "";
+          let _filter = "";
+
+          // Optional structure: a sticky search box that filters the list, and
+          // per-item group headers. Both are opt-in (opts.searchable / an option
+          // carrying a `group`), so existing flat call sites are unaffected.
+          let searchInput = null;
+          let entriesWrap = menu;
+          if (opts.searchable) {
+              const searchWrap = doc.createElement("div");
+              searchWrap.className = "macro-select-search";
+              searchInput = doc.createElement("input");
+              searchInput.type = "text";
+              searchInput.placeholder = opts.searchPlaceholder || "Search…";
+              searchInput.setAttribute("spellcheck", "false");
+              searchInput.setAttribute("autocomplete", "off");
+              searchInput.setAttribute("autocorrect", "off");
+              searchInput.setAttribute("autocapitalize", "off");
+              searchWrap.appendChild(searchInput);
+              menu.appendChild(searchWrap);
+              entriesWrap = doc.createElement("div");
+              menu.appendChild(entriesWrap);
+              // Typing filters; keep clicks/keys inside the control so the menu
+              // stays open and global shortcuts don't fire.
+              searchInput.addEventListener("input", () => { _filter = searchInput.value; renderEntries(); });
+              searchInput.addEventListener("click", (e) => e.stopPropagation());
+              searchInput.addEventListener("keydown", (e) => { if (e.key !== "Escape") e.stopPropagation(); });
+          }
 
           function play(slot) { if (window.playSlot) window.playSlot(slot); }
 
           function normalise(list) {
               return (list || []).map((o) =>
                   (o && typeof o === "object")
-                      ? { value: String(o.value), label: String(o.label == null ? o.value : o.label) }
-                      : { value: String(o), label: String(o) }
+                      ? { value: String(o.value), label: String(o.label == null ? o.value : o.label),
+                          group: o.group == null ? "" : String(o.group) }
+                      : { value: String(o), label: String(o), group: "" }
               );
           }
 
           function labelFor(v) {
+              // Action selects (e.g. "+ Add step…") are menus, not a persistent
+              // choice — always show the placeholder.
+              if (opts.action) return opts.placeholder || "";
               for (const o of _opts) if (o.value === v) return o.label;
               return _opts.length ? _opts[0].label : (opts.placeholder || "");
           }
@@ -105,26 +141,52 @@
               }
           }
 
-          function render() {
-              label.textContent = labelFor(_value);
-              menu.innerHTML = "";
-              _opts.forEach((o) => {
+          function renderEntries() {
+              entriesWrap.innerHTML = "";
+              const q = _filter.trim().toLowerCase();
+              const vis = q
+                  ? _opts.filter((o) => o.label.toLowerCase().indexOf(q) !== -1
+                        || (o.group && o.group.toLowerCase().indexOf(q) !== -1))
+                  : _opts;
+              if (!vis.length) {
+                  const empty = doc.createElement("div");
+                  empty.className = "macro-select-empty";
+                  empty.textContent = "No matches";
+                  entriesWrap.appendChild(empty);
+                  return;
+              }
+              let lastGroup = null;
+              vis.forEach((o) => {
+                  if (o.group && o.group !== lastGroup) {
+                      const hdr = doc.createElement("div");
+                      hdr.className = "macro-select-group";
+                      hdr.textContent = o.group;
+                      entriesWrap.appendChild(hdr);
+                      lastGroup = o.group;
+                  }
                   const item = doc.createElement("div");
-                  item.className = "macro-select-item" + (o.value === _value ? " active" : "");
+                  item.className = "macro-select-item" + (!opts.action && o.value === _value ? " active" : "");
                   item.textContent = o.label;
                   item.addEventListener("mouseenter", () => play("hover"));
                   item.addEventListener("click", (e) => {
                       e.stopPropagation();
                       play("interact");
                       close();
-                      if (o.value === _value) return;
+                      // Action menus fire every pick (including a repeat); plain
+                      // selects ignore re-picking the current value.
+                      if (!opts.action && o.value === _value) return;
                       _value = o.value;
                       render();
                       if (opts.onChange) opts.onChange(_value);
                       root.dispatchEvent(new Event("change"));
                   });
-                  menu.appendChild(item);
+                  entriesWrap.appendChild(item);
               });
+          }
+
+          function render() {
+              label.textContent = labelFor(_value);
+              renderEntries();
           }
 
           root.setOptions = function(list) {
@@ -148,6 +210,12 @@
               if (root.classList.contains("open")) { close(); return; }
               play("interact");
               root.classList.add("open");
+              if (searchInput) {
+                  _filter = "";
+                  searchInput.value = "";
+                  renderEntries();
+                  setTimeout(() => searchInput.focus(), 0);
+              }
               place();
           });
           doc.addEventListener("scroll", function(e) {

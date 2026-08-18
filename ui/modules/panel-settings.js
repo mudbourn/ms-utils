@@ -1533,6 +1533,23 @@
                     body.appendChild(btnRow(aboutBtn));
                 }
                 body.appendChild(btnRow(docBtn, githubBtn));
+
+                // Launch update alerts toggle — the same setting as the menubar
+                // Help item, surfaced here so the update alert's "turn these off
+                // under Help" points at something the user can actually see.
+                body.appendChild(divider());
+                body.appendChild(
+                    row(
+                        "Update Alerts on Launch",
+                        "Notify about app, plugin, and content updates at startup",
+                        toggle(!(S.updateAlertsDisabled ?? false), (e) =>
+                            sendToHost({
+                                action: "setUpdateAlerts",
+                                value: e.target.checked,
+                            }),
+                        ),
+                    ),
+                );
             }
 
             // Render //
@@ -1977,6 +1994,40 @@
             // Function tab (reuses the macro step canvas) //
             let _fnCanvas = null;
             let _fnEditor = null;
+            let _fnHotkeysBound = false;
+
+            // Copy/cut/paste/select-all/delete for the function canvas — the same
+            // ToolCanvas clipboard the macro builder drives, gated on the function
+            // canvas being on-screen (its otab section active and the panel open).
+            function bindFunctionHotkeys() {
+                if (_fnHotkeysBound) return;
+                _fnHotkeysBound = true;
+                document.addEventListener("keydown", function(e) {
+                    if (!_fnCanvas) return;
+                    const host = _fnCanvas._root;
+                    if (!host || host.offsetParent === null) return;   // not visible
+                    const t = e.target;
+                    if (t && t.closest && t.closest("input, textarea, [contenteditable='true']")) return;
+                    const mod = e.metaKey || e.ctrlKey;
+                    if (mod && (e.key === "a" || e.key === "A")) {
+                        e.preventDefault(); _fnCanvas.selectAll(); return;
+                    }
+                    if (mod && (e.key === "v" || e.key === "V")) {
+                        e.preventDefault(); _fnCanvas.pasteAfter(); return;
+                    }
+                    if (e.key === "Escape" && _fnCanvas.hasSelection()) {
+                        e.preventDefault(); _fnCanvas.clearSelection(); return;
+                    }
+                    if (!_fnCanvas.hasSelection()) return;
+                    if (mod && (e.key === "c" || e.key === "C")) {
+                        e.preventDefault(); _fnCanvas.copySelected();
+                    } else if (mod && (e.key === "x" || e.key === "X")) {
+                        e.preventDefault(); _fnCanvas.cutSelected();
+                    } else if (e.key === "Delete" || e.key === "Backspace") {
+                        e.preventDefault(); _fnCanvas.removeSelected();
+                    }
+                });
+            }
             let _fnEditingId = null;
 
             function renderToolFunctionsTab() {
@@ -2043,6 +2094,7 @@
                     if (typeof window.ToolEditor === "function") {
                         _fnEditor = new window.ToolEditor({ canvas: _fnCanvas });
                     }
+                    bindFunctionHotkeys();
                 } else {
                     canvasHost.textContent = "Step canvas unavailable.";
                 }
@@ -2052,13 +2104,15 @@
                     const addSel = mkSelect({
                         className: "input-sm",
                         placeholder: "+ Add step…",
+                        action: true,
+                        searchable: true,
+                        searchPlaceholder: "Search modules…",
                         options: buildStepOptions(),
                         value: undefined,
                         onChange: (v) => {
                             if (!v || !_fnCanvas) return;
                             const def = buildStepDef(v);
                             if (def) _fnCanvas.addTool(def);
-                            addSel.value = "";
                         },
                     });
                     body.appendChild(row("Step", "Right-click a step to set its parameters",
@@ -2099,9 +2153,19 @@
             function buildStepOptions() {
                 const reg = (window.fnPicker && window.fnPicker.registry) || [];
                 const skip = { "if": 1, "for": 1, "while": 1, "repeat": 1 };
-                return reg.filter((f) => !skip[f.id]).map((f) => ({
-                    value: f.id, label: f.name,
-                }));
+                // Carry the module's category through as a group header, and keep
+                // categories contiguous (in first-seen registry order) so the
+                // shared select can render one header per section.
+                const order = [];
+                const byCat = {};
+                reg.filter((f) => !skip[f.id]).forEach((f) => {
+                    const cat = f.category || "other";
+                    if (!byCat[cat]) { byCat[cat] = []; order.push(cat); }
+                    byCat[cat].push({ value: f.id, label: f.name, group: cat });
+                });
+                const out = [];
+                order.forEach((cat) => { byCat[cat].forEach((o) => out.push(o)); });
+                return out;
             }
 
             function buildFunctionList(body) {
@@ -2121,13 +2185,19 @@
                     return;
                 }
                 fns.forEach((fn) => {
+                    // Pack macros and plugin-defined tools are both reference-only
+                    // callables: no builder Edit/Delete (the compiler doesn't own
+                    // them), just a "Call in macro" action.
                     const isPack = fn.source === "pack";
+                    const isPlugin = fn.source === "plugin";
+                    const callOnly = isPack || isPlugin;
                     const r = h("div", { cls: "row row-sub" });
                     const lbl = h("div", { cls: "row-label" }, fn.name || fn.id);
                     if (isPack) lbl.appendChild(h("small", {}, "from pack · call by id “" + fn.id + "”"));
+                    else if (isPlugin) lbl.appendChild(h("small", {}, "from plugin · call by id “" + fn.id + "”"));
                     r.appendChild(lbl);
                     const controls = h("div", { style: "display:flex;gap:6px" });
-                    if (isPack) {
+                    if (callOnly) {
                         controls.appendChild(actionBtn("Call in macro", "", () => {
                             if (window.macroLab && window.macroLab.addTool) {
                                 window.macroLab.addTool({
@@ -2160,7 +2230,9 @@
                         buildVariableBuilder,
                         "A shared value macros can read and write, saved to disk"));
                     scroll.appendChild(section("var-list", "Your variables",
-                        buildVariableList, "Declared helper variables"));
+                        buildVariableList,
+                        "Insert drops a {name} token into the focused Value field — "
+                        + "it resolves to the variable's value when the macro runs"));
                 } else {
                     const listBody = document.getElementById("tool-var-list-body");
                     if (listBody) fillVariableList(listBody);
@@ -2176,14 +2248,20 @@
                 });
                 body.appendChild(row("Name", "Identifier macros use to read it",
                     nameInput));
+                // Placeholder tracks the chosen type so the Default hint matches
+                // what's expected (0 / text / true) instead of always showing 0.
+                const DEF_PLACEHOLDER = { number: "0", string: "text", boolean: "true" };
                 body.appendChild(row("Type", "How the value is stored",
                     seg([
                         { label: "Number", value: "number" },
                         { label: "Text", value: "string" },
                         { label: "True/False", value: "boolean" },
-                    ], draft.type, (v) => { draft.type = v; })));
+                    ], draft.type, (v) => {
+                        draft.type = v;
+                        defInput.placeholder = DEF_PLACEHOLDER[v] || "";
+                    })));
                 const defInput = h("input", {
-                    type: "text", cls: "input-sm", placeholder: "0",
+                    type: "text", cls: "input-sm", placeholder: DEF_PLACEHOLDER[draft.type],
                     oninput: (e) => { draft.default = e.target.value; },
                 });
                 body.appendChild(row("Default", "Starting value", defInput, "row-sub"));
@@ -2235,6 +2313,21 @@
                         ? String(v.value) : "";
                     r.appendChild(h("div", { cls: "row-label" },
                         (v.label || v.key) + "  =  " + val));
+                    // Insert the {name} interpolation token into the last-focused
+                    // Value field; if none is focused, copy it so it can be pasted.
+                    const token = "{" + v.key + "}";
+                    const ins = actionBtn("Insert", "", () => {
+                        const placed = typeof window.msInsertValueToken === "function"
+                            && window.msInsertValueToken(token);
+                        if (placed) {
+                            showAlert("Inserted " + token);
+                        } else {
+                            try { navigator.clipboard.writeText(token); } catch (e) {}
+                            showAlert("Copied " + token + " — paste into a Value field");
+                        }
+                    });
+                    ins.title = "Insert " + token + " into the focused Value field";
+                    r.appendChild(ins);
                     const del = actionBtn("Delete", "danger", () => {
                         sendToTools("deleteHelperVar", { name: v.key });
                     });

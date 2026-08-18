@@ -255,47 +255,47 @@
         #browse-results-box { flex:1 1 auto; min-height:0; overflow-y:auto; }
         .browse-toolbar { display:flex; gap:8px; align-items:center;
             padding:10px 14px; flex:0 0 auto;
-            background:var(//bg); border-bottom:1px solid var(//border-dim); }
+            background:var(--bg); border-bottom:1px solid var(--border-dim); }
         .browse-search { flex:1 1 auto; min-width:0; padding:6px 10px;
-            border:1px solid var(//border); border-radius:var(//radius-s);
-            background:var(//surface); color:var(//text);
+            border:1px solid var(--border); border-radius:var(--radius-s);
+            background:var(--surface); color:var(--text);
             font-family:inherit; font-size:13px; outline:none; }
-        .browse-search:focus { border-color:var(//accent); }
-        .browse-search::placeholder { color:var(//text3); opacity:1; }
+        .browse-search:focus { border-color:var(--accent); }
+        .browse-search::placeholder { color:var(--text3); opacity:1; }
         .browse-results { display:flex; flex-direction:column; gap:8px;
             padding:12px 14px; }
-        .browse-card { border:1px solid var(//border-dim);
-            border-radius:var(//radius); background:var(//surface);
+        .browse-card { border:1px solid var(--border-dim);
+            border-radius:var(--radius); background:var(--surface);
             padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
         .browse-card-top { display:flex; justify-content:space-between;
             align-items:flex-start; gap:8px; }
-        .browse-name { font-weight:600; color:var(//text);
+        .browse-name { font-weight:600; color:var(--text);
             display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-        .browse-meta { color:var(//text3); font-size:11px; margin-top:3px; }
-        .browse-desc { color:var(//text2); font-size:12px; line-height:1.45; }
+        .browse-meta { color:var(--text3); font-size:11px; margin-top:3px; }
+        .browse-desc { color:var(--text2); font-size:12px; line-height:1.45; }
         .browse-actions { display:flex; gap:8px; }
         .browse-bonus { display:flex; align-items:center; gap:6px;
-            color:var(//text2); font-size:11px; cursor:pointer; user-select:none; }
+            color:var(--text2); font-size:11px; cursor:pointer; user-select:none; }
         /* Custom checkbox, the native macOS control ignores our theme, so we
            strip its appearance and draw a themed box + check ourselves. */
         .browse-bonus input[type="checkbox"] { -webkit-appearance:none;
             appearance:none; margin:0; width:14px; height:14px; flex:0 0 14px;
-            border:1px solid var(//border); border-radius:3px;
-            background:var(//surface); cursor:pointer; position:relative;
+            border:1px solid var(--border); border-radius:3px;
+            background:var(--surface); cursor:pointer; position:relative;
             transition:background 0.12s, border-color 0.12s; }
-        .browse-bonus input[type="checkbox"]:hover { border-color:var(//accent); }
+        .browse-bonus input[type="checkbox"]:hover { border-color:var(--accent); }
         /* The global input:focus-visible rule strips the outline, so a keyboard
            tab to this checkbox showed nothing, restore a themed focus ring. */
-        .browse-bonus input[type="checkbox"]:focus-visible { box-shadow:0 0 0 2px var(//accent-hi); }
-        .browse-bonus input[type="checkbox"]:checked { background:var(//accent);
-            border-color:var(//accent); }
+        .browse-bonus input[type="checkbox"]:focus-visible { box-shadow:0 0 0 2px var(--accent-hi); }
+        .browse-bonus input[type="checkbox"]:checked { background:var(--accent);
+            border-color:var(--accent); }
         .browse-bonus input[type="checkbox"]:checked::after { content:"";
             position:absolute; left:4px; top:1px; width:4px; height:8px;
-            border:solid var(//bg); border-width:0 2px 2px 0;
+            border:solid var(--bg); border-width:0 2px 2px 0;
             transform:rotate(45deg); }
         .browse-empty { padding:40px 16px; text-align:center;
-            color:var(//text2); }
-        .browse-empty-sub { margin-top:8px; color:var(//text3);
+            color:var(--text2); }
+        .browse-empty-sub { margin-top:8px; color:var(--text3);
             font-size:12px; line-height:1.5; max-width:34ch;
             margin-left:auto; margin-right:auto; }
         `;

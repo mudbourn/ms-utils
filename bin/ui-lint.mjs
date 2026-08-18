@@ -146,6 +146,18 @@ for (const file of files) {
                 `setProperty("${badProp[1]}", …) — a theme variable must start with "--" (this "//"/"-" name is silently ignored).`);
         }
 
+        // Rule 1e — the same wrong-sigil typo on the CONSUMPTION side: a CSS
+        // string that reads var(//x) or var(-x) (single dash) instead of
+        // var(--x). The reference is invalid, so the property falls back to its
+        // inherited/initial value — e.g. a placeholder color silently reverts to
+        // the field's own --text and renders bright. Matched anywhere on the
+        // line (these live inside JS template-literal CSS as well as .html).
+        const badVar = line.match(/var\(\s*(\/\/[\w-]+|-(?!-)[\w-]+)/);
+        if (badVar) {
+            report(file, i + 1, "bad-var-ref", line,
+                `var(${badVar[1]}…) — a theme variable reference must start with "--" (this "//"/"-" ref is invalid and silently falls back).`);
+        }
+
         // Rule 1c — hardcoded color literals in the modules that must theme, and
         // in the shell/popout HTML component rules (the palette DEFINITIONS in
         // :root are exempted below by the `--x:` / setProperty("--x") guards, so

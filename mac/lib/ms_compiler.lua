@@ -27,11 +27,56 @@
                 return nil
             end
 
+            -- Expand {name} tokens in a string literal into live helper-var
+            -- reads, emitting a Lua concatenation. A string with no valid token
+            -- returns a plain quoted literal unchanged, so existing macros (and
+            -- text that merely contains braces, e.g. NBT like {Health:20}) are
+            -- untouched. `{{` / `}}` escape literal braces inside an interpolated
+            -- string. Reads are coerced with tostring(x or "") so numeric or
+            -- unset vars concatenate cleanly instead of erroring.
+            local function interpString(s)
+                if not s:match("{[%a_][%w_]*}") then
+                    return string.format("%q", s)
+                end
+                local parts, lit = {}, {}
+                local function flushLit()
+                    if #lit > 0 then
+                        parts[#parts + 1] = string.format("%q", table.concat(lit))
+                        lit = {}
+                    end
+                end
+                local i, n = 1, #s
+                while i <= n do
+                    local c = s:sub(i, i)
+                    if c == "{" and s:sub(i + 1, i + 1) == "{" then
+                        lit[#lit + 1] = "{"; i = i + 2
+                    elseif c == "}" and s:sub(i + 1, i + 1) == "}" then
+                        lit[#lit + 1] = "}"; i = i + 2
+                    elseif c == "{" then
+                        local close = s:find("}", i + 1, true)
+                        local name = close and s:sub(i + 1, close - 1) or nil
+                        if name and name:match("^[%a_][%w_]*$") then
+                            flushLit()
+                            parts[#parts + 1] = 'tostring(ms.vars.get("' .. name .. '") or "")'
+                            i = close + 1
+                        else
+                            lit[#lit + 1] = "{"; i = i + 1
+                        end
+                    else
+                        lit[#lit + 1] = c; i = i + 1
+                    end
+                end
+                flushLit()
+                if #parts == 0 then return '""' end
+                if #parts == 1 then return parts[1] end
+                return "(" .. table.concat(parts, " .. ") .. ")"
+            end
+
             local function serialize(val)
                 local ref = toolRef(val)
                 if ref then return ref end
                 local t = type(val)
-                if t == "string"  then return string.format("%q", val) end
+                if t == "string"  then return interpString(val) end
                 if t == "number"  then return tostring(val) end
                 if t == "boolean" then return tostring(val) end
                 if t == "nil"     then return "nil" end
@@ -275,11 +320,19 @@
                 ["repeat"] = true,
             }
 
+            -- In an expression context (if/while conditions) a {name} token is
+            -- the variable's live value, so it expands to a bare `ms.vars.get`
+            -- call — no quoting/tostring like the string-literal case. Keeps the
+            -- {name} UI convention uniform across every field the user types in.
+            local function interpExpr(s)
+                return (s:gsub("{([%a_][%w_]*)}", 'ms.vars.get("%1")'))
+            end
+
             local function stepCond(step)
                 local c = step.condition
                 if c == nil then c = step.params and step.params.condition end
                 if c == nil or c == "" then c = "true" end
-                return c
+                return interpExpr(c)
             end
 
             local function thenSteps(step) return step["then"] or step.then_steps end

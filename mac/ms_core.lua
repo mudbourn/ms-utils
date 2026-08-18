@@ -2700,6 +2700,11 @@
                 -- authored as `local X = ms.fn(...)` and bound, not registered).
                 local wired = ms.bind and ms.bind._wires and ms.bind._wires[id]
                 if callable(wired) then return wired() end
+                -- Then a tool registered via ms.tools.define (e.g. a plugin's
+                -- open-folder/open-file action). These surface in the Functions
+                -- list, so a Call-function block can invoke them by id.
+                local tool = ms._toolIndex and ms._toolIndex[id]
+                if tool and callable(tool.run) then return tool.run() end
                 print("ms.callFn: no function tool or macro named '" .. tostring(id) .. "'")
             end
 
@@ -5768,6 +5773,25 @@
                                 end
                             end
                         end
+                        -- Tools registered via ms.tools.define with a run fn
+                        -- (e.g. a plugin's "open folder/file" actions) are
+                        -- callable, function-like items — surface them in the
+                        -- Functions list so they show up and can be invoked from
+                        -- a macro (ms.callFn resolves them, see ms_core callFn).
+                        if ms._toolDefs then
+                            for _, def in ipairs(ms._toolDefs) do
+                                if type(def) == "table" and def.id
+                                    and type(def.run) == "function"
+                                    and not seenFn[def.id] then
+                                    seenFn[def.id] = true
+                                    fns[#fns + 1] = {
+                                        id     = def.id,
+                                        name   = def.name or def.id,
+                                        source = "plugin",
+                                    }
+                                end
+                            end
+                        end
                         local fjson = hs.json.encode(fns)
                         _macroShellEval("if(window.macroLab&&window.macroLab.setFunctionList)macroLab.setFunctionList(" .. fjson .. ")")
                     end)
@@ -6268,7 +6292,7 @@
                                     local header = (#lines == 1) and "Update available:"
                                         or (#lines .. " updates available:")
                                     ms.alert(header .. "\n" .. table.concat(lines, "\n")
-                                        .. "\n\nOpen Settings to install \xe2\x80\x94 turn these off under Help.",
+                                        .. "\n\nOpen Browse to install. Turn these off under Help.",
                                         9, true)
                                 end
                                 if ms.integrity and ms.integrity.checkContentUpdates then

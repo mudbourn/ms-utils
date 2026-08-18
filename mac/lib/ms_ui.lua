@@ -967,13 +967,17 @@ return function(ms)
                         ms.showGuardian()
                     end
                 end
+                -- Reload plugins BEFORE settings + rebind, matching boot order
+                -- (ms_core loadAll -> loadSettings -> bind.rebind). Loading them
+                -- afterwards left plugin binds registered but never wired, and
+                -- their setting-defs unseen by loadSettings.
+                if ms.plugins and ms.plugins.loadAll then
+                    pcall(ms.plugins.loadAll)
+                end
                 ms.loadSettings()
                 if not ms.registry._defs["__panicButton"] then ms.bind._registerSystemBinds() end
                 ms.bind.rebind()
                 ms.socdApply()
-                if ms.plugins and ms.plugins.loadAll then
-                    pcall(ms.plugins.loadAll)
-                end
                 if not ms._quickReloading then
                     ms.playSlot("update")
                     ms.alert("Macros reloaded.", 4, true)
@@ -1196,6 +1200,14 @@ return function(ms)
                 ms.socdEnabled = (data.value == true)
                 ms.saveSettings()
                 ms.socdApply()
+                ms.ui.refresh()
+            end,
+
+            -- Shell toggle is phrased positively ("alerts on"); the stored flag
+            -- is the inverse. Mirrors the menubar Help toggle so both stay in sync.
+            setUpdateAlerts = function(data)
+                ms._updateAlertsDisabled = not (data.value == true)
+                ms.saveSettings()
                 ms.ui.refresh()
             end,
 

@@ -1114,4 +1114,35 @@
 // Expose for IIFE contexts //
 if (typeof window !== "undefined") {
     window.ToolEditor = ToolEditor;
+
+    // Remember the last-focused Value field so the Variable tab can insert a
+    // {name} token straight into it. Both string values (.tool-ed-text) and
+    // condition/expression fields (.tool-ed-condition) qualify: the compiler
+    // expands {name} in each context (a quoted concat in strings, a bare
+    // ms.vars.get in expressions), so the token is uniformly valid.
+    document.addEventListener("focusin", function(e) {
+        var t = e.target;
+        if (t && t.classList &&
+            (t.classList.contains("tool-ed-text")
+             || t.classList.contains("tool-ed-condition"))) {
+            window._msLastValueField = t;
+        }
+    }, true);
+
+    // Insert `token` at the caret of the last-focused Value field. Returns true
+    // when it landed in a field; false (caller falls back to clipboard) when no
+    // live field is focused — e.g. it was popped out or the editor closed.
+    window.msInsertValueToken = function(token) {
+        var el = window._msLastValueField;
+        if (!el || !el.isConnected || el.offsetParent === null) return false;
+        var start = el.selectionStart, end = el.selectionEnd;
+        if (typeof start !== "number") { start = el.value.length; end = start; }
+        el.value = el.value.slice(0, start) + token + el.value.slice(end);
+        var caret = start + token.length;
+        el.focus();
+        try { el.setSelectionRange(caret, caret); } catch (err) {}
+        // Fire input so ToolEditor persists the edited value live.
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+    };
 }
