@@ -364,16 +364,23 @@ YQIDAQAB
                 return done(nil, "Package download location is not permitted.")
             end
 
-            hs.http.asyncGet(entry.url, nil, function(code, body, _)
-                if code ~= 200 or not body or body == "" then
-                    return done(nil, "Download failed (HTTP " .. tostring(code) .. ").")
+            -- Download with curl via hs.task, NOT hs.http.asyncGet. asyncGet
+            -- returns the body as a Lua string through a lossy NSData->string
+            -- conversion that corrupts non-UTF8 bytes, so a .mspkg (a zip) comes
+            -- out with a different hash than the registry's — every binary
+            -- download "fails the hash" and updates never take. curl writes the
+            -- exact bytes; -L follows GitHub's release-asset redirect, and args
+            -- are passed as an array (no shell), so the URL needs no escaping.
+            local path = tmpPath("dl") .. ".mspkg"
+            local args = {
+                "-sSL", "--fail", "--max-time", "120", "-o", path, entry.url,
+            }
+            local task = hs.task.new("/usr/bin/curl", function(code, _, stderr)
+                if code ~= 0 then
+                    os.remove(path)
+                    return done(nil, "Download failed (curl exit "
+                        .. tostring(code) .. ").")
                 end
-
-                local path = tmpPath("dl") .. ".mspkg"
-                local f = io.open(path, "wb")
-                if not f then return done(nil, "Could not write the download.") end
-                f:write(body)
-                f:close()
 
                 local out = hs.execute("shasum -a 256 " .. sq(path) .. " 2>/dev/null")
                 local got = (out and #out >= 64) and out:sub(1, 64):lower() or nil
@@ -383,7 +390,12 @@ YQIDAQAB
                 end
 
                 done(path, nil)
-            end)
+            end, args)
+
+            if not task or not task:start() then
+                os.remove(path)
+                return done(nil, "Could not start the download.")
+            end
         end
     -- END download --
 

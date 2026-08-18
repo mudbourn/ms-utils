@@ -528,20 +528,21 @@ YQIDAQAB
 
             if onProgress then pcall(onProgress, "Downloading signed bundle...") end
 
-            hs.http.asyncGet(downloadUrl, nil, function(fCode, fBody, _)
-                if fCode ~= 200 or not fBody then
-                    if onDone then pcall(onDone, false, "Bundle download returned HTTP " .. tostring(fCode)) end
+            -- Download the bundle with curl, NOT hs.http.asyncGet: asyncGet
+            -- returns the body through a lossy NSData->string conversion that
+            -- corrupts non-UTF8 bytes, so the .zip came out unextractable and
+            -- the update silently failed at unzip. curl writes exact bytes; -L
+            -- follows the release-asset redirect; args are an array (no shell).
+            local tmpArchive = _archivePath .. "ms_bundle_update.zip"
+            local _dlTask = hs.task.new("/usr/bin/curl", function(fCode)
+                if fCode ~= 0 then
+                    if onDone then pcall(onDone, false, "Bundle download failed (curl exit " .. tostring(fCode) .. ")") end
                     return
                 end
-
-                local tmpArchive = _archivePath .. "ms_bundle_update.zip"
-                local tmpF = io.open(tmpArchive, "wb")
-                if not tmpF then
-                    if onDone then pcall(onDone, false, "Could not write temp file") end
+                if not hs.fs.attributes(tmpArchive) then
+                    if onDone then pcall(onDone, false, "Bundle download produced no file") end
                     return
                 end
-                tmpF:write(fBody)
-                tmpF:close()
 
                 if onProgress then pcall(onProgress, "Extracting bundle...") end
 
@@ -648,7 +649,11 @@ YQIDAQAB
 
                 if onProgress then pcall(onProgress, "Update applied, reloading...") end
                 if onDone then pcall(onDone, true) end
-            end)
+            end, { "-sSL", "--fail", "--max-time", "300", "-o", tmpArchive, downloadUrl })
+
+            if not _dlTask or not _dlTask:start() then
+                if onDone then pcall(onDone, false, "Could not start the bundle download") end
+            end
         end)
     end
 
