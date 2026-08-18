@@ -3336,6 +3336,187 @@
                 return false
             end
 
+            -- ── Screen text (OCR) ────────────────────────────────────
+            -- Backed by the Vision helper binary (~/.local/bin/ms_ocr_read,
+            -- compiled from mac/bin/ms_ocr_read.swift at deploy). Each call
+            -- captures the region, hands the PNG to the helper, and maps the
+            -- returned image-pixel boxes back to absolute screen points.
+            -- Synchronous (~100ms) — same spirit as screen:snapshot.
+            ms.screen._ocrBin = os.getenv("HOME") .. "/.local/bin/ms_ocr_read"
+
+            -- Normalise a region arg into an absolute {x,y,w,h} in screen
+            -- points. nil -> whole main screen. A region may carry `ref` to
+            -- resolve its origin the way pixelColor does (e.g. "WindowTL").
+            local function _resolveRegion(region)
+                local f = hs.screen.mainScreen():frame()
+                if type(region) ~= "table" then
+                    return { x = f.x, y = f.y, w = f.w, h = f.h }
+                end
+                local x, y = region.x or 0, region.y or 0
+                if region.ref then
+                    x, y = ms.resolvePoint(x, y, region.ref)
+                end
+                return {
+                    x = x, y = y,
+                    w = region.w or f.w,
+                    h = region.h or f.h,
+                }
+            end
+
+            -- Capture a region to a temp PNG. Returns path, resolvedRegion
+            -- or nil on failure.
+            ms.screen.capture = function(region)
+                local rg = _resolveRegion(region)
+                if not rg.w or not rg.h or rg.w < 1 or rg.h < 1 then return nil end
+                -- Pick the screen the region originates on (multi-monitor).
+                local scr = hs.screen.mainScreen()
+                for _, s in ipairs(hs.screen.allScreens()) do
+                    local f = s:frame()
+                    if rg.x >= f.x and rg.x < f.x + f.w
+                    and rg.y >= f.y and rg.y < f.y + f.h then
+                        scr = s
+                        break
+                    end
+                end
+                local snap = scr:snapshot(hs.geometry.rect(rg.x, rg.y, rg.w, rg.h))
+                if not snap then return nil end
+                -- os.tmpname() creates the base file; we want the .png sibling,
+                -- so drop the empty base to avoid leaking one per call.
+                local base = os.tmpname()
+                os.remove(base)
+                local path = base .. ".png"
+                if not snap:saveToFile(path) then return nil end
+                return path, rg
+            end
+
+            -- OCR a region. Returns { text = "line\nline", blocks = { ... } }
+            -- where each block carries text, conf, an absolute-screen center
+            -- {x, y} ready to click, corner {left, top}, and {w, h} — all in
+            -- screen points. Returns nil if OCR is unavailable or failed.
+            ms.screen.ocr = function(region, opts)
+                opts = opts or {}
+                local path, rg = ms.screen.capture(region)
+                if not path then return nil end
+
+                local cmd = "'" .. ms.screen._ocrBin .. "' '" .. path .. "'"
+                    .. (opts.fast and " fast" or "")
+                local out = hs.execute(cmd)
+                os.remove(path)
+                if not out or out == "" then return nil end
+
+                local ok, data = pcall(function() return hs.json.decode(out) end)
+                if not ok or type(data) ~= "table"
+                or type(data.blocks) ~= "table" then
+                    return nil
+                end
+                if data.error then
+                    print("ms.screen.ocr: " .. tostring(data.error))
+                    return nil
+                end
+
+                -- Pixels-per-point: helper's reported pixel width over the
+                -- region's point width folds out the Retina backing scale
+                -- without us having to query it.
+                local sx = (data.w or rg.w) / rg.w
+                local sy = (data.h or rg.h) / rg.h
+                if sx == 0 then sx = 1 end
+                if sy == 0 then sy = 1 end
+
+                local blocks, texts = {}, {}
+                for _, b in ipairs(data.blocks) do
+                    local left = rg.x + (b.x or 0) / sx
+                    local top  = rg.y + (b.y or 0) / sy
+                    local w    = (b.w or 0) / sx
+                    local h    = (b.h or 0) / sy
+                    blocks[#blocks + 1] = {
+                        text = b.text or "",
+                        conf = b.conf or 0,
+                        x    = left + w / 2,
+                        y    = top + h / 2,
+                        left = left, top = top, w = w, h = h,
+                    }
+                    texts[#texts + 1] = b.text or ""
+                end
+                return { text = table.concat(texts, "\n"), blocks = blocks }
+            end
+
+            -- OCR a region and pull the first number out of it. Drops commas
+            -- and any non-numeric decoration (currency glyphs, "HP", etc.).
+            -- Returns a Lua number or nil.
+            ms.screen.readNumber = function(region, opts)
+                local res = ms.screen.ocr(region, opts)
+                if not res then return nil end
+                local cleaned = res.text:gsub(",", "")
+                local match = cleaned:match("%-?%d+%.?%d*")
+                return match and tonumber(match) or nil
+            end
+
+            -- Find on-screen text (case-insensitive substring). Returns the
+            -- center {x, y} of the first matching block (and the block), or
+            -- nil.
+            ms.screen.findText = function(text, region, opts)
+                if not text or text == "" then return nil end
+                local res = ms.screen.ocr(region, opts)
+                if not res then return nil end
+                local needle = tostring(text):lower()
+                for _, b in ipairs(res.blocks) do
+                    if b.text:lower():find(needle, 1, true) then
+                        return { x = b.x, y = b.y }, b
+                    end
+                end
+                return nil
+            end
+
+            -- Poll until `text` appears in the region (or disappears, with
+            -- opts.gone). Returns the match coords {x, y} on success — false
+            -- on timeout.
+            ms.screen.waitText = function(text, region, timeout, opts)
+                opts = opts or {}
+                timeout = timeout or 5000
+                local deadline = hs.timer.absoluteTime() + timeout * 1000000
+                while hs.timer.absoluteTime() < deadline do
+                    local hit = ms.screen.findText(text, region, opts)
+                    if opts.gone then
+                        if not hit then return true end
+                    elseif hit then
+                        return hit
+                    end
+                    ms.wait(200)
+                end
+                return false
+            end
+
+            -- Pixel scanning is also exposed under ms.screen.* as its
+            -- canonical home; the bare ms.pixelColor/etc. names stay as
+            -- back-compat aliases (the macro registry and existing packs
+            -- still call them).
+            ms.screen.pixelColor   = ms.pixelColor
+            ms.screen.pixelMatch   = ms.pixelMatch
+            ms.screen.waitPixel    = ms.waitPixel
+            ms.screen.waitNotPixel = ms.waitNotPixel
+
+            -- Flat positional wrappers for the visual builder, whose step
+            -- params are individual numbers rather than a region table. A
+            -- zero/omitted w or h means "whole screen". Handwritten macros
+            -- use the richer ms.screen.* region-table API directly.
+            local function _regionFromArgs(x, y, w, h)
+                if not w or w <= 0 or not h or h <= 0 then return nil end
+                return { x = x or 0, y = y or 0, w = w, h = h }
+            end
+            ms.ocr = function(x, y, w, h)
+                local res = ms.screen.ocr(_regionFromArgs(x, y, w, h))
+                return res and res.text or nil
+            end
+            ms.readNumber = function(x, y, w, h)
+                return ms.screen.readNumber(_regionFromArgs(x, y, w, h))
+            end
+            ms.findText = function(text, x, y, w, h)
+                return ms.screen.findText(text, _regionFromArgs(x, y, w, h))
+            end
+            ms.waitText = function(text, x, y, w, h, timeout)
+                return ms.screen.waitText(text, _regionFromArgs(x, y, w, h), timeout)
+            end
+
             ms.waitApp = function(appName, timeout)
                 timeout = timeout or 10000
                 local deadline = hs.timer.absoluteTime() + timeout * 1000000
@@ -4231,6 +4412,57 @@
                     type = "string",
                 } },
                 icon   = "inputs",
+            })
+            ms.fn.define("ms.ocr", ms.ocr, {
+                label  = "Read Text",
+                group  = "sensing",
+                info   = "OCR a screen region (x,y,w,h); blank size = whole screen",
+                params = {
+                    { name = "x", type = "number" },
+                    { name = "y", type = "number" },
+                    { name = "w", type = "number" },
+                    { name = "h", type = "number" },
+                },
+                icon   = "ocr",
+            })
+            ms.fn.define("ms.readNumber", ms.readNumber, {
+                label  = "Read Number",
+                group  = "sensing",
+                info   = "OCR a region and return the first number in it",
+                params = {
+                    { name = "x", type = "number" },
+                    { name = "y", type = "number" },
+                    { name = "w", type = "number" },
+                    { name = "h", type = "number" },
+                },
+                icon   = "ocr",
+            })
+            ms.fn.define("ms.findText", ms.findText, {
+                label  = "Find Text",
+                group  = "sensing",
+                info   = "Find text on screen; returns its center {x,y} to click",
+                params = {
+                    { name = "text", type = "string" },
+                    { name = "x", type = "number" },
+                    { name = "y", type = "number" },
+                    { name = "w", type = "number" },
+                    { name = "h", type = "number" },
+                },
+                icon   = "ocr",
+            })
+            ms.fn.define("ms.waitText", ms.waitText, {
+                label  = "Wait for Text",
+                group  = "sensing",
+                info   = "Wait until text appears in a region; returns its {x,y}",
+                params = {
+                    { name = "text", type = "string" },
+                    { name = "x", type = "number" },
+                    { name = "y", type = "number" },
+                    { name = "w", type = "number" },
+                    { name = "h", type = "number" },
+                    { name = "timeout", type = "number" },
+                },
+                icon   = "ocr",
             })
 
             ms.fn.define("ms.copy", ms.copy, {
@@ -5866,7 +6098,13 @@
                 end
                 ms.loading.pushMeta()
                 if not next(ms.registry._defs) then
-                    error("ms_macros.lua: no ms.bind.define calls found, file may be malformed.")
+                    -- A bindless file is a legitimately empty profile (see
+                    -- createNewProfile), not necessarily malformed — warn, don't
+                    -- fault, matching the tolerant hotswap reload path.
+                    print("Warning: ms_macros.lua declared no ms.bind.define calls (empty profile?).")
+                    hs.timer.doAfter(0.5, function()
+                        ms.alert("This profile has no macros yet. Add some in the Macros panel.", 5)
+                    end)
                 end
             end
 
@@ -5883,6 +6121,37 @@
                     end
                 end
             -- END 14a. Visual Macros --
+
+            -- 14b. Macro Pack Library Migration --
+                -- Surface the live pack and every saved profile's pack in the
+                -- Installed Macro Packs library (one-time, non-destructive). Runs
+                -- here because ms.package (13c) and ms.macroMeta (14/14a) are both
+                -- ready. Never let a migration hiccup block boot.
+                if ms.package and ms.package.migrateMacroPacks then
+                    local migOk, migErr = pcall(ms.package.migrateMacroPacks)
+                    if not migOk then
+                        print("ms.package.migrateMacroPacks (boot): " .. tostring(migErr))
+                    end
+                end
+                -- Always-run: keep the active marker tracking the live pack, so a
+                -- wholesale profile switch still flags the right Installed entry.
+                if ms.package and ms.package.reconcileActiveMacro then
+                    local rcOk, rcErr = pcall(ms.package.reconcileActiveMacro)
+                    if not rcOk then
+                        print("ms.package.reconcileActiveMacro (boot): " .. tostring(rcErr))
+                    end
+                end
+                -- Themes and sounds reconcile by content (no macroMeta name to
+                -- match on), so the live theme/sound flags correctly too.
+                if ms.package and ms.package.reconcileActive then
+                    for _, k in ipairs({ "theme", "sound" }) do
+                        local rcOk, rcErr = pcall(ms.package.reconcileActive, k)
+                        if not rcOk then
+                            print("ms.package.reconcileActive(" .. k .. ") (boot): " .. tostring(rcErr))
+                        end
+                    end
+                end
+            -- END 14b. Macro Pack Library Migration --
 
             ms.macroDefaults = {
                 trackpadMode = false,

@@ -6,7 +6,7 @@ local obj = {}
 obj.__index = obj
 
 obj.name    = "Roblox"
-obj.version = "0.1.1"
+obj.version = "0.1.2"
 obj.author  = "mudbourn"
 obj.license = "MIT"
 
@@ -214,27 +214,6 @@ function obj:init()
         })
     -- END Cache Cleaner Toggle --
 
-    -- Show Settings Action --
-        ms.settings.define({
-            type    = "action",
-            key     = "robloxShowSettings",
-            label   = "Show Roblox Settings",
-            section = "roblox",
-            onAction = function()
-                local sens = ms.roblox.sensitivity()
-                local fps  = ms.roblox.framerateCap()
-                local q    = ms.roblox.graphicsQuality()
-                if sens or fps or q then
-                    ms.alert(string.format(
-                        "Sensitivity: %s   FPS cap: %s   Quality: %s",
-                        tostring(sens or "?"), tostring(fps or "?"), tostring(q or "?")), 4)
-                else
-                    ms.alert("Roblox settings not found.", 3)
-                end
-            end,
-        })
-    -- END Show Settings Action --
-
     -- Builder Tools --
         if ms.tools and ms.tools.define then
             ms.tools.define({
@@ -253,6 +232,59 @@ function obj:init()
                 id   = "roblox.isFocused",
                 name = "Roblox: Is Focused",
                 run  = function() return ms.roblox.isFocused() end,
+            })
+
+            -- Moved here from the roblox settings section: a function that
+            -- pops the live Roblox settings as an alert.
+            ms.tools.define({
+                id   = "roblox.showSettings",
+                name = "Roblox: Show Settings",
+                run  = function()
+                    local sens = ms.roblox.sensitivity()
+                    local fps  = ms.roblox.framerateCap()
+                    local q    = ms.roblox.graphicsQuality()
+                    if sens or fps or q then
+                        ms.alert(string.format(
+                            "Sensitivity: %s   FPS cap: %s   Quality: %s",
+                            tostring(sens or "?"), tostring(fps or "?"), tostring(q or "?")), 4)
+                    else
+                        ms.alert("Roblox settings not found.", 3)
+                    end
+                end,
+            })
+
+            -- Open the FastFlags file (ClientAppSettings.json), creating it
+            -- (and its parent dir) empty if it does not exist yet.
+            ms.tools.define({
+                id   = "roblox.openFastFlags",
+                name = "Roblox: Open Fast Flags",
+                run  = function()
+                    local path = "/Applications/Roblox.app/Contents/MacOS/ClientSettings/ClientAppSettings.json"
+                    local dir  = path:match("^(.*)/[^/]+$")
+                    if dir and not hs.fs.attributes(dir) then
+                        os.execute("mkdir -p '" .. dir .. "'")
+                    end
+                    if not hs.fs.attributes(path) then
+                        local f = io.open(path, "w")
+                        if f then
+                            f:write("{\n}\n")
+                            f:close()
+                        else
+                            ms.alert("Could not create ClientAppSettings.json (permission?).", 4)
+                            return
+                        end
+                    end
+                    os.execute("open '" .. path .. "'")
+                end,
+            })
+
+            -- Reveal the app bundle's Contents/ folder in Finder.
+            ms.tools.define({
+                id   = "roblox.openAppFolder",
+                name = "Roblox: Open Roblox.app Folder",
+                run  = function()
+                    os.execute("open '/Applications/Roblox.app/Contents'")
+                end,
             })
         end
     -- END Builder Tools --

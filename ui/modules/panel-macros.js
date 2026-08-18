@@ -340,6 +340,63 @@
                 ]
             },
 
+            /* -- ocr (screen text) -- */
+            {
+                id: "ms.ocr",
+                name: "ms.ocr",
+                sig: "ms.ocr(x, y, w, h)",
+                desc: "OCR a screen region and return its text. Blank W/H = whole screen.",
+                category: "ocr",
+                params: [
+                    { name: "x", type: "number", label: "X",          required: false },
+                    { name: "y", type: "number", label: "Y",          required: false },
+                    { name: "w", type: "number", label: "Width",      required: false },
+                    { name: "h", type: "number", label: "Height",     required: false }
+                ]
+            },
+            {
+                id: "ms.readNumber",
+                name: "ms.readNumber",
+                sig: "ms.readNumber(x, y, w, h)",
+                desc: "OCR a region and return the first number in it.",
+                category: "ocr",
+                params: [
+                    { name: "x", type: "number", label: "X",          required: false },
+                    { name: "y", type: "number", label: "Y",          required: false },
+                    { name: "w", type: "number", label: "Width",      required: false },
+                    { name: "h", type: "number", label: "Height",     required: false }
+                ]
+            },
+            {
+                id: "ms.findText",
+                name: "ms.findText",
+                sig: "ms.findText(text, x, y, w, h)",
+                desc: "Find text on screen; returns its center {x,y} to click.",
+                category: "ocr",
+                params: [
+                    { name: "text", type: "string", label: "Text",    required: true },
+                    { name: "x",    type: "number", label: "X",        required: false },
+                    { name: "y",    type: "number", label: "Y",        required: false },
+                    { name: "w",    type: "number", label: "Width",    required: false },
+                    { name: "h",    type: "number", label: "Height",   required: false }
+                ]
+            },
+            {
+                id: "ms.waitText",
+                name: "ms.waitText",
+                sig: "ms.waitText(text, x, y, w, h, timeout)",
+                desc: "Wait until text appears in a region; returns its {x,y}.",
+                category: "ocr",
+                params: [
+                    { name: "text",    type: "string", label: "Text",       required: true },
+                    { name: "x",       type: "number", label: "X",          required: false },
+                    { name: "y",       type: "number", label: "Y",          required: false },
+                    { name: "w",       type: "number", label: "Width",      required: false },
+                    { name: "h",       type: "number", label: "Height",     required: false },
+                    { name: "timeout", type: "number", label: "Timeout (ms)", required: false }
+                ]
+            },
+
             /* -- state -- */
             {
                 id: "ms.app",
@@ -1685,6 +1742,7 @@
         "ms.setMacros":"power","ms.enable":"power","ms.disable":"power",
         "ms.screenshot":"camera","ms.clipChanged":"clipboard",
         "ms.randWait":"timer","ms.jitter":"timer","ms.waitPixel":"pixelscan","ms.waitNotPixel":"pixelscan",
+        "ms.ocr":"ocr","ms.readNumber":"ocr","ms.findText":"ocr","ms.waitText":"ocr",
         "ms.waitApp":"search","ms.waitNotApp":"search",
         "ms.focus":"window","ms.appRunning":"window","ms.appIsFront":"window",
         "ms.toggle":"keyboard","ms.multiPress":"keyboard",
@@ -3064,12 +3122,22 @@
         if (r.confirmed) window.msLibraryClient.capture("macro", (r.value || "").trim());
     });
 
+    // Import routes by the package's manifest; Export is scoped to macros.
+    // Same Save / Import / Export trio the theme & sound managers carry.
+    var packImportBtn = _kit.actionBtn("Import macro pack...", "", function() {
+        if (window.sendToHost) window.sendToHost({ action: "importPackage" });
+    });
+    var packExportBtn = _kit.actionBtn("Export macro pack...", "", function() {
+        if (window.sendToHost) window.sendToHost({ action: "exportPackage", type: "macro" });
+    });
+
     var packCard = _kit.section("installed-macro", "Installed Macro Packs", function(body) {
         packList = _kit.h("div", { id: "library-list-macro", cls: "library-list" });
         body.appendChild(packList);
-        body.appendChild(_kit.btnRow(packSaveBtn));
+        body.appendChild(_kit.btnRow(packSaveBtn, packImportBtn, packExportBtn));
     }, "Hotswap a saved macro set");
-    bindsScroll.insertBefore(packCard, bindList);
+    // Installed list sits at the bottom, matching the theme/sound managers.
+    bindsScroll.appendChild(packCard);
 
     function fillMacroLib() {
         var kit = window.msUI;
@@ -3085,11 +3153,16 @@
 
         for (var i = 0; i < _macroLib.length; i++) {
             (function(e) {
-                var meta = [e.origin, e.version].filter(Boolean).join(" · ");
-                packList.appendChild(kit.row(e.name, meta || null, kit.btnRow(
-                    kit.actionBtn("Activate", "accent", function() {
+                var meta = [e.active ? "active" : null, e.origin, e.version]
+                    .filter(Boolean).join(" · ");
+                var activateBtn = e.active
+                    ? kit.actionBtn("Active", "", function() {})
+                    : kit.actionBtn("Activate", "accent", function() {
                         window.msLibraryClient.activate("macro", e.slug, e.name);
-                    }),
+                    });
+                if (e.active) activateBtn.disabled = true;
+                packList.appendChild(kit.row(e.name, meta || null, kit.btnRow(
+                    activateBtn,
                     kit.actionBtn("Delete", "danger", async function() {
                         var r = await window.openModal(
                             "Delete " + e.name + "?",

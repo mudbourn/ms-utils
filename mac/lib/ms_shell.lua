@@ -8,6 +8,48 @@
 
         ms.shell = {}
 
+        -- Base (100%-zoom) minimum window sizes. The live floor is these
+        -- scaled by ms._uiZoom, so a zoomed-in UI needs a bigger window and a
+        -- zoomed-out one can go smaller. Shared by the resize math and the
+        -- zoom rescaler below.
+        local BASE_SHELL_W, BASE_SHELL_H = 800, 500
+        local BASE_POP_W,   BASE_POP_H   = 460, 320
+        ms._shellBaseMin = { w = BASE_SHELL_W, h = BASE_SHELL_H }
+        ms._popBaseMin   = { w = BASE_POP_W,   h = BASE_POP_H }
+
+        -- applyZoom --
+            -- Set the global UI zoom, applied uniformly to the shell and every
+            -- popout via CSS `zoom` (documentElement). Rescales open window
+            -- frames proportionally so apparent content size is preserved, and
+            -- clamps to the new zoom-scaled minimum. Range 0.5–2.0.
+            ms.shell.applyZoom = function(newZoom, opts)
+                opts = opts or {}
+                local old = ms._uiZoom or 1.0
+                newZoom = math.max(0.5, math.min(2.0, tonumber(newZoom) or 1.0))
+                ms._uiZoom = newZoom
+                local ratio = (old ~= 0) and (newZoom / old) or 1
+
+                if _shellView and not opts.noRescale
+                and math.abs(ratio - 1) > 0.001 then
+                    pcall(function()
+                        local f = _shellView:frame()
+                        local nf = { x = f.x, y = f.y,
+                                     w = f.w * ratio, h = f.h * ratio }
+                        local minW = BASE_SHELL_W * newZoom
+                        local minH = BASE_SHELL_H * newZoom
+                        if nf.w < minW then nf.w = minW end
+                        if nf.h < minH then nf.h = minH end
+                        _shellView:frame(nf)
+                    end)
+                end
+
+                ms.shell.eval("if(window.applyZoom)applyZoom(" .. newZoom .. ")")
+                if ms.dev then
+                    pcall(function() ms.dev:rezoom(newZoom, ratio, opts.noRescale) end)
+                end
+            end
+        -- END --
+
         -- eval --
             ms.shell.eval = function(js)
                 if type(js) ~= "string" then return end
@@ -170,7 +212,8 @@
                             local edge = body.edge
                             local startFrame = _shellView:frame()
                             local startMouse = hs.mouse.absolutePosition()
-                            local MIN_W, MIN_H = 800, 500
+                            local _z = ms._uiZoom or 1.0
+                            local MIN_W, MIN_H = BASE_SHELL_W * _z, BASE_SHELL_H * _z
                             ms.shell.eval("window.__msResizing = true")
                             pcall(function() _shellView:shadow(false) end)
                             local et = hs.eventtap.event.types
@@ -1029,7 +1072,8 @@
                             local edge = body.edge
                             local startFrame = popView:frame()
                             local startMouse = hs.mouse.absolutePosition()
-                            local MIN_W, MIN_H = 460, 320
+                            local _z = ms._uiZoom or 1.0
+                            local MIN_W, MIN_H = BASE_POP_W * _z, BASE_POP_H * _z
                             local resScreen = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
                             local topLimit = resScreen:frame().y
                             pcall(function() popView:shadow(false) end)

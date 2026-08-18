@@ -7,6 +7,12 @@ return function(ms)
     MsUI.version = "1.0"
 
     local function sq(s) return "'" .. tostring(s):gsub("'", "'\\''") .. "'" end
+
+    -- Shared with ms_settings.lua, which owns getProfiles(). The profile
+    -- handlers below (deleteProfile/clearProfiles/export) build paths under
+    -- here; without this local it resolved to a nil global and every handler
+    -- errored out under pcall, so deletes silently no-op'd until a reload.
+    local profilesPath = os.getenv("HOME") .. "/.hammerspoon/profiles/"
 -- END MsUI --
 
 -- Init --
@@ -294,6 +300,28 @@ return function(ms)
                     table.insert(userSettings, item)
                 end
             end
+            -- The other two user-defined tool kinds, for the Tuning tab's
+            -- Functions and Variables sections. Functions are the builder-authored
+            -- ones only (ms.compiler.listFunctions) — NOT the whole ms.fn registry,
+            -- which is full of built-in/pack tools. Variables come from ms.vars.
+            local userFunctions = {}
+            if ms.compiler and ms.compiler.listFunctions then
+                local okF, flist = pcall(ms.compiler.listFunctions)
+                if okF and type(flist) == "table" then
+                    for _, f in ipairs(flist) do
+                        userFunctions[#userFunctions + 1] = {
+                            id    = f.id,
+                            label = f.name or f.id,
+                        }
+                    end
+                end
+            end
+            local userVariables = {}
+            if ms.vars and ms.vars.list then
+                local okV, listV = pcall(ms.vars.list)
+                if okV and type(listV) == "table" then userVariables = listV end
+            end
+
             local userMenus = {}
             for _, menuDef in ipairs(ms._userMenuDefs) do
                 local items = {}
@@ -415,6 +443,8 @@ return function(ms)
                 docsURL                 = ms._docsURL,
                 updateManifestURL       = ms._updateManifestURL,
                 userSettings            = userSettings,
+                userFunctions           = userFunctions,
+                userVariables           = userVariables,
                 userCalibrationSettings = userCalibrationSettings,
                 userSoundSlots          = userSoundSlots,
                 userMenus               = userMenus,
@@ -423,6 +453,7 @@ return function(ms)
                 devArchiveLimit         = ms._devArchiveLimit or 15,
                 updateChannel           = ms._updateChannel or "stable",
                 testingSource           = ms._testingSource or "release",
+                uiZoom                  = ms._uiZoom or 1.0,
                 octaneMode              = ms._octaneMode or false,
                 octaneMuteSounds        = ms._octaneMuteSounds or false,
                 macroLabEnabled         = ms._macroLabEnabled ~= false,
@@ -1072,6 +1103,25 @@ return function(ms)
                 ms.ui.refresh()
             end,
 
+            setUiZoom = function(data)
+                local cur = ms._uiZoom or 1.0
+                local target
+                if data.reset then
+                    target = 1.0
+                elseif data.delta then
+                    target = cur + (tonumber(data.delta) or 0)
+                else
+                    target = tonumber(data.value) or cur
+                end
+                if ms.shell and ms.shell.applyZoom then
+                    ms.shell.applyZoom(target)   -- clamps + sets ms._uiZoom
+                else
+                    ms._uiZoom = math.max(0.5, math.min(2.0, target))
+                end
+                ms.saveSettings()
+                ms.ui.refresh()
+            end,
+
             setOctaneMode = function(data)
                 local enabled = data.value and true or false
                 ms._octaneMode = enabled
@@ -1700,53 +1750,6 @@ return function(ms)
                 end)
             end,
 
-            splitProfile = function()
-                if not (ms.package and ms.package.split) then return end
-                ms.playSlot("alert")
-                hs.focus()
-                local pick = hs.dialog.chooseFileOrFolder(
-                    "Select a profile .mspkg to split into packages",
-                    os.getenv("HOME") .. "/Documents", true, false, false, { "mspkg" }
-                )
-                local path
-                for _, v in pairs(pick or {}) do if type(v) == "string" then path = v
-                break end end
-                if not path then ms.ui.show()
-                return end
-
-                hs.focus()
-                local dest = hs.dialog.chooseFileOrFolder(
-                    "Choose where to save the component packages",
-                    os.getenv("HOME") .. "/Documents", false, true, false
-                )
-                local dir
-                for _, v in pairs(dest or {}) do if type(v) == "string" then dir = v
-                break end end
-                ms.ui.show()
-                if not dir then return end
-
-                local res, err = ms.package.split(path, dir)
-                hs.timer.doAfter(0.15, function()
-                    if not res then ms.alert("Split failed:\n" .. tostring(err), 5)
-                    return end
-                    local parts = {}
-                    for _, m in ipairs(res.made) do parts[#parts + 1] = m.type end
-                    if #parts == 0 then
-                        ms.alert("Nothing splittable in that profile.", 4)
-                        return
-                    end
-                    ms.playSlot("update")
-                    local msg = "Split into " .. #parts .. " package" ..
-                        (#parts > 1 and "s" or "") .. ": " .. table.concat(parts, ", ") .. "."
-                    if #res.skipped > 0 then
-                        local sk = {}
-                        for _, s in ipairs(res.skipped) do sk[#sk + 1] = s.type end
-                        msg = msg .. "\nSkipped: " .. table.concat(sk, ", ") .. "."
-                    end
-                    ms.alert(msg, 5, true)
-                end)
-            end,
-
             importPackage = function()
                 if not (ms.package and ms.package.install) then return end
                 ms.playSlot("alert")
@@ -2156,6 +2159,29 @@ return function(ms)
                 if not def or def.default == nil then return end
                 ms.settings.set(data.key, def.default)
                 ms.playSlot("reset")
+                ms.ui.refresh()
+            end,
+
+            -- Run a function tool from the Tuning tab's Functions section. Run it
+            -- inside a coroutine (as bound macros are) so its ms.wait calls yield
+            -- and resume properly instead of hitting the main-thread gotcha.
+            runFunction = function(data)
+                if not data or type(data.id) ~= "string" then return end
+                if ms.callFn then
+                    local co = coroutine.create(function() ms.callFn(data.id) end)
+                    local ok, err = coroutine.resume(co)
+                    if not ok then print("runFunction: " .. tostring(err)) end
+                end
+                ms.playSlot("interact")
+            end,
+
+            -- Live-set a helper var's value from the Variables section. markDirty
+            -- so the re-pushed state carries the new value (ms.vars.list reads it).
+            setHelperVarValue = function(data)
+                if not data or type(data.name) ~= "string" then return end
+                if ms.vars and ms.vars.set then ms.vars.set(data.name, data.value) end
+                ms.playSlot("update")
+                if ms.ui.markDirty then ms.ui.markDirty() end
                 ms.ui.refresh()
             end,
 

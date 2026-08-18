@@ -121,10 +121,15 @@
         }
 
         for (const e of entries) {
-            const meta = [e.origin, e.version].filter(Boolean).join(" · ");
+            const meta = [e.active ? "active" : null, e.origin, e.version]
+                .filter(Boolean).join(" · ");
+            const activateBtn = e.active
+                ? actionBtn("Active", "", () => {})
+                : actionBtn("Activate", "accent", () =>
+                    window.msLibraryClient.activate(kind, e.slug, e.name));
+            if (e.active) activateBtn.disabled = true;
             wrap.appendChild(row(e.name, meta || null, btnRow(
-                actionBtn("Activate", "accent", () =>
-                    window.msLibraryClient.activate(kind, e.slug, e.name)),
+                activateBtn,
                 actionBtn("Delete", "danger", async () => {
                     const r = await window.openModal(
                         "Delete " + e.name + "?",
@@ -149,6 +154,9 @@
             fillLibList(kind, list);
             body.appendChild(list);
 
+            // Save current / Import / Export — the manager's own actions,
+            // folded in from the retired Import / Export tab. Export is scoped
+            // to this section's kind; Import routes by the package's manifest.
             body.appendChild(btnRow(
                 actionBtn(captureLabel, "", async () => {
                     const r = await window.openModal(
@@ -159,6 +167,10 @@
                         window.msLibraryClient.capture(kind, (r.value || "").trim());
                     }
                 }),
+                actionBtn("Import " + LIB_NOUN[kind] + "...", "", () =>
+                    sendToHost({ action: "importPackage" })),
+                actionBtn("Export " + LIB_NOUN[kind] + "...", "", () =>
+                    sendToHost({ action: "exportPackage", type: kind })),
             ));
         });
 
@@ -768,36 +780,6 @@
     }
 
     // Share tab //
-    function buildShare(root) {
-        const { h, btnRow, actionBtn } = ui();
-
-        sec(root, "export", "Export", "Package what you have made", (body) => {
-            body.appendChild(h("div", { cls: "theme-note" },
-                "A theme package carries ms_theme.json, any font files in "
-                + "ui/fonts/, and, unless you turn it off under Sounds, your "
-                + "sounds and their slot assignments. Export Sounds is for "
-                + "sharing a sound set on its own, without the colours."));
-
-            body.appendChild(btnRow(
-                actionBtn("Export Theme...", "", () =>
-                    sendToHost({ action: "exportPackage", type: "theme" })),
-                actionBtn("Export Sounds...", "", () =>
-                    sendToHost({ action: "exportPackage", type: "sound" })),
-            ));
-        });
-
-        sec(root, "import", "Import", "Install a package someone shared", (body) => {
-            body.appendChild(h("div", { cls: "theme-note" },
-                "Importing a package replaces the files it carries, keeping a .bak "
-                + "of anything it overwrites. A package outside the validated "
-                + "library asks before it installs."));
-            body.appendChild(btnRow(
-                actionBtn("Import Package...", "", () =>
-                    sendToHost({ action: "importPackage" })),
-            ));
-        });
-    }
-
     // Tabs //
     function tabs() {
         if (_tabs) return _tabs;
@@ -836,7 +818,6 @@
         if (!ui()) return;
 
         renderInto("sound-scroll", buildSound);
-        renderInto("share-scroll", buildShare);
 
         if (editing()) {
             clearTimeout(_rerenderTimer);

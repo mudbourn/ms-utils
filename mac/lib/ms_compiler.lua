@@ -513,13 +513,22 @@
                 local fnName = id .. "Tool"
                 local lines = {}
 
+                -- coroutine=false makes ms.fn return the raw function, so the
+                -- tool runs inline in its caller's coroutine; otherwise it is
+                -- wrapped to run in its own (async). Legacy defs (nil) stay
+                -- wrapped, preserving how they already behave.
+                local asCoroutine = fnDef.coroutine ~= false
+                local secondArg = asCoroutine
+                    and ('"' .. label:gsub('[\r\n"]', " ") .. '"')
+                    or "false"
+
                 lines[#lines + 1] = "local " .. fnName .. " = ms.fn(function()"
                 lines[#lines + 1] = indent(1) .. "local t = 100"
                 _actionDelay = 0
                 for _, step in ipairs(steps) do
                     lines[#lines + 1] = emitStep(step, 1)
                 end
-                lines[#lines + 1] = 'end, "' .. label:gsub('[\r\n"]', " ") .. '")'
+                lines[#lines + 1] = "end, " .. secondArg .. ")"
                 lines[#lines + 1] = ""
                 lines[#lines + 1] = 'ms.fn.define("' .. id .. '", ' .. fnName .. ", {"
                 lines[#lines + 1] = indent(1) .. 'group = "tool",'
@@ -990,8 +999,9 @@
                 end
                 local data = readData()
                 data.functions[fnId] = {
-                    name  = fnDef.name,
-                    steps = fnDef.steps,
+                    name      = fnDef.name,
+                    steps     = fnDef.steps,
+                    coroutine = fnDef.coroutine == true,
                 }
                 writeData(data)
                 ms.compiler.rebuild()

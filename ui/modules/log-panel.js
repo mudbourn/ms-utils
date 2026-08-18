@@ -9,6 +9,18 @@ function hexToRgb(hex) {
     return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
+// Global UI zoom. WebKit's CSS `zoom` scales all content (fonts, padding,
+// controls, canvas) in one property, so the shell and every popout share this
+// one applier — same seam as applyTheme. Called from the pushed state and from
+// the Lua-side zoom broadcast (ms.dev:rezoom / ms.shell.applyZoom).
+function applyZoom(z) {
+    var v = parseFloat(z);
+    if (!isFinite(v) || v <= 0) v = 1;
+    v = Math.max(0.5, Math.min(2.0, v));
+    document.documentElement.style.zoom = String(v);
+}
+if (typeof window !== "undefined") window.applyZoom = applyZoom;
+
 function applyTheme(t) {
     if (!t) return;
     const r = document.documentElement.style;

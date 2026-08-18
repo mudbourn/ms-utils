@@ -1353,6 +1353,14 @@ return function(ms)
                 if tj ~= "" then
                     pcall(function() panel:evaluateJavaScript(tj) end)
                 end
+                -- Freshly opened popout inherits the current UI zoom.
+                local z = ms and ms._uiZoom or 1.0
+                if z ~= 1.0 then
+                    pcall(function()
+                        panel:evaluateJavaScript(
+                            "if(window.applyZoom)applyZoom(" .. z .. ")")
+                    end)
+                end
             end)
 
             if onReady then onReady() end
@@ -2483,6 +2491,35 @@ return function(ms)
         if _watcherPanel then pcall(function() _watcherPanel:evaluateJavaScript(js) end) end
         if _keysPanel    then pcall(function() _keysPanel:evaluateJavaScript(js) end) end
         if _windowPanel  then pcall(function() _windowPanel:evaluateJavaScript(js) end) end
+    end
+
+    -- Apply a new UI zoom to every open popout: rescale its frame by `ratio`
+    -- (so apparent content size holds and nothing clips), clamped to the
+    -- zoom-scaled popout minimum, then set CSS zoom via applyZoom(z).
+    function MsDevTools:rezoom(z, ratio, noRescale)
+        z = tonumber(z) or 1.0
+        ratio = tonumber(ratio) or 1.0
+        local minW = (ms._popBaseMin and ms._popBaseMin.w or 460) * z
+        local minH = (ms._popBaseMin and ms._popBaseMin.h or 320) * z
+        local js = "if(window.applyZoom)applyZoom(" .. z .. ")"
+        local function apply(panel)
+            if not panel then return end
+            if not noRescale and math.abs(ratio - 1) > 0.001 then
+                pcall(function()
+                    local f = panel:frame()
+                    local nf = { x = f.x, y = f.y,
+                                 w = f.w * ratio, h = f.h * ratio }
+                    if nf.w < minW then nf.w = minW end
+                    if nf.h < minH then nf.h = minH end
+                    panel:frame(nf)
+                end)
+            end
+            pcall(function() panel:evaluateJavaScript(js) end)
+        end
+        apply(_consolePanel)
+        apply(_watcherPanel)
+        apply(_keysPanel)
+        apply(_windowPanel)
     end
 
     function MsDevTools:prewarmStep(which)

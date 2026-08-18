@@ -978,9 +978,12 @@ return function(ms)
             end
 
             if kind == "macro" then
-                addIf("ms_macros.lua",         _hsDir .. "/ms_macros.lua")
-                addIf("ms_macros_visual.json", _dataDir .. "/ms_macros_visual.json")
-                addDir("sounds/macro/",        _hsDir .. "/sounds/macro/")
+                -- baseDir lets us collect a pack from an arbitrary folder (a
+                -- profile dir) rather than the live locations, for migration.
+                local base = opts and opts.baseDir
+                addIf("ms_macros.lua",         base and (base .. "/ms_macros.lua")         or (_hsDir   .. "/ms_macros.lua"))
+                addIf("ms_macros_visual.json", base and (base .. "/ms_macros_visual.json") or (_dataDir .. "/ms_macros_visual.json"))
+                addDir("sounds/macro/",        base and (base .. "/sounds/macro/")         or (_hsDir   .. "/sounds/macro/"))
 
             elseif kind == "theme" then
                 addIf("ms_theme.json", _dataDir .. "/ms_theme.json")
@@ -1065,6 +1068,30 @@ return function(ms)
             return nil
         end
 
+        -- Which stored slice of a kind is currently live. Persisted as a plain
+        -- slug in data/library/<kind>/.active so the panels can flag the active
+        -- entry and boot can tell whether a pack still needs importing.
+        local function activeMarkerPath(kind) return LIBRARY_ROOT .. "/" .. kind .. "/.active" end
+
+        ms.package.libraryGetActive = function(kind)
+            if not LIBRARY_KINDS[kind] then return nil end
+            local s = readFile(activeMarkerPath(kind))
+            if not s then return nil end
+            s = s:gsub("%s+$", "")
+            return s ~= "" and s or nil
+        end
+
+        ms.package.librarySetActive = function(kind, slug)
+            if not LIBRARY_KINDS[kind] then return end
+            if slug and slug ~= "" then
+                local dir = LIBRARY_ROOT .. "/" .. kind
+                hs.execute("mkdir -p " .. sq(dir))
+                writeFile(activeMarkerPath(kind), librarySlug(slug) .. "\n")
+            else
+                os.remove(activeMarkerPath(kind))
+            end
+        end
+
         -- Copy a slice into the library. `files` is { relpath = absSource },
         -- exactly the shape collect() returns. `meta` carries the display name
         -- (which inherits its origin profile's name), origin, and version.
@@ -1121,11 +1148,13 @@ return function(ms)
             local base = LIBRARY_ROOT .. "/" .. kind
             if not hs.fs.attributes(base) then return out end
 
+            local activeSlug = ms.package.libraryGetActive(kind)
             for entry in hs.fs.dir(base) do
                 if entry ~= "." and entry ~= ".." and not entry:find("^%.") then
                     local rec = readJSON(base .. "/" .. entry .. "/meta.json")
                     if rec then
                         rec.slug = rec.slug or entry
+                        rec.active = (activeSlug ~= nil and rec.slug == activeSlug)
                         out[#out + 1] = rec
                     end
                 end
@@ -1145,6 +1174,19 @@ return function(ms)
 
             local filesDir = libraryDir(kind, slug) .. "/files"
             if not hs.fs.attributes(filesDir) then return nil, "No such library entry." end
+
+            -- A macro pack's ms_macros.lua is executed on the next reload, so it
+            -- must pass the same security scan install runs before it goes live.
+            if kind == "macro" and ms.auditMacros then
+                local src = readFile(filesDir .. "/ms_macros.lua")
+                if type(src) == "string" and src ~= "" then
+                    local errs = ms.auditMacros(src)
+                    if type(errs) == "table" and #errs > 0 then
+                        return nil, "Macro security scan failed:\n  - " ..
+                            table.concat(errs, "\n  - ")
+                    end
+                end
+            end
 
             local rels = hs.execute(
                 "cd " .. sq(filesDir) .. " && find . -type f ! -name '.DS_Store' 2>/dev/null"
@@ -1173,6 +1215,7 @@ return function(ms)
             if #installed == 0 then return nil, "Nothing could be activated." end
 
             applyDropped(installed)
+            ms.package.librarySetActive(kind, slug)
 
             return {
                 kind      = kind,
@@ -1191,6 +1234,9 @@ return function(ms)
 
             hs.execute("/bin/rm -rf " .. sq(dir))
             if hs.fs.attributes(dir) then return false, "Could not remove entry." end
+            if ms.package.libraryGetActive(kind) == slug then
+                ms.package.librarySetActive(kind, nil)
+            end
             return true
         end
 
@@ -1204,10 +1250,156 @@ return function(ms)
                 return nil, "Nothing live to capture as a " .. kind .. "."
             end
 
-            return ms.package.librarySave(kind, files, {
+            local rec, err = ms.package.librarySave(kind, files, {
                 name   = (type(name) == "string" and name ~= "" and name) or "Current " .. kind,
                 origin = "captured",
             })
+            -- Capturing banks the live slice, so that entry is what is live now.
+            if rec then ms.package.librarySetActive(kind, rec.slug) end
+            return rec, err
+        end
+
+        -- Import a slice sitting in an arbitrary folder (e.g. a profile dir)
+        -- into the library. Copy only; the source folder is left untouched.
+        ms.package.libraryImportDir = function(kind, baseDir, meta)
+            if not LIBRARY_KINDS[kind] then return nil, "Not a library kind." end
+            if not hs.fs.attributes(baseDir) then return nil, "No such folder." end
+            local files = ms.package.collect(kind, { baseDir = baseDir })
+            if next(files) == nil then return nil, "Nothing to import." end
+            return ms.package.librarySave(kind, files, meta or {})
+        end
+
+        -- One-time, non-destructive migration: surface every macro pack the user
+        -- already has — the live pack plus each saved profile's pack — as library
+        -- entries so they appear in Installed Macro Packs and can be hotswapped.
+        -- Copies only; never deletes profile files. Idempotent by slug + marker.
+        ms.package.migrateMacroPacks = function()
+            local macroRoot  = LIBRARY_ROOT .. "/macro"
+            local doneMarker = macroRoot .. "/.migrated"
+            if hs.fs.attributes(doneMarker) then return end
+
+            local function slugExists(name)
+                return hs.fs.attributes(libraryDir("macro", librarySlug(name))) ~= nil
+            end
+
+            -- 1. The live pack, named from its own credits when present.
+            local liveName = (ms.macroMeta and type(ms.macroMeta.name) == "string"
+                and ms.macroMeta.name ~= "" and ms.macroMeta.name) or "Current Macros"
+            local liveFiles = ms.package.collect("macro")
+            if next(liveFiles) ~= nil and not slugExists(liveName) then
+                local rec = ms.package.librarySave("macro", liveFiles, {
+                    name    = liveName,
+                    origin  = "current",
+                    version = ms.macroMeta and ms.macroMeta.version or nil,
+                })
+                -- The live pack is, by definition, what is active right now.
+                if rec and not ms.package.libraryGetActive("macro") then
+                    ms.package.librarySetActive("macro", rec.slug)
+                end
+            end
+
+            -- 2. Each saved profile's pack, named after its profile folder.
+            local profilesDir = _hsDir .. "/profiles/"
+            if hs.fs.attributes(profilesDir) then
+                for entry in hs.fs.dir(profilesDir) do
+                    if entry ~= "." and entry ~= ".." and not entry:find("^%.") then
+                        local pdir = profilesDir .. entry
+                        if hs.fs.attributes(pdir .. "/ms_macros.lua") and not slugExists(entry) then
+                            ms.package.libraryImportDir("macro", pdir, {
+                                name = entry, origin = "profile",
+                            })
+                        end
+                    end
+                end
+            end
+
+            hs.execute("mkdir -p " .. sq(macroRoot))
+            writeFile(doneMarker, os.date("!%Y-%m-%dT%H:%M:%SZ") .. "\n")
+        end
+
+        -- Point the active marker at whatever macro pack is actually live now,
+        -- and bank it if it is not in the library yet. Runs every boot (unlike
+        -- the one-time migration) so a wholesale profile switch — which swaps
+        -- the live ms_macros.lua and reloads — leaves Installed Macro Packs
+        -- flagging the correct entry. Cheap: a handful of file checks.
+        ms.package.reconcileActiveMacro = function()
+            local liveFiles = ms.package.collect("macro")
+            if next(liveFiles) == nil then return end
+
+            local liveName = (ms.macroMeta and type(ms.macroMeta.name) == "string"
+                and ms.macroMeta.name ~= "" and ms.macroMeta.name) or "Current Macros"
+            local slug = librarySlug(liveName)
+
+            if not hs.fs.attributes(libraryDir("macro", slug)) then
+                local rec = ms.package.librarySave("macro", liveFiles, {
+                    name    = liveName,
+                    origin  = "current",
+                    version = ms.macroMeta and ms.macroMeta.version or nil,
+                })
+                if rec then slug = rec.slug end
+            end
+
+            ms.package.librarySetActive("macro", slug)
+        end
+
+        -- Files whose bytes are regenerated on the fly (so they never compare
+        -- equal even when the slice is otherwise identical) — excluded from the
+        -- reconcile fingerprint. sound_assign.json is re-encoded by collect().
+        local RECONCILE_SKIP = { ["sound_assign.json"] = true }
+
+        -- A stable content fingerprint of a { rel = abs } slice: sorted rel paths
+        -- each md5'd. Returns nil if the slice is empty or md5 is unavailable, so
+        -- a failed hash never masquerades as a match.
+        local function sliceFingerprint(files)
+            local rels = {}
+            for rel in pairs(files) do
+                if not RECONCILE_SKIP[rel] then rels[#rels + 1] = rel end
+            end
+            table.sort(rels)
+            if #rels == 0 then return nil end
+
+            local parts = {}
+            for _, rel in ipairs(rels) do
+                local h = hs.execute("/sbin/md5 -q " .. sq(files[rel]) .. " 2>/dev/null") or ""
+                h = h:gsub("%s+", "")
+                if h == "" then return nil end
+                parts[#parts + 1] = rel .. ":" .. h
+            end
+            return table.concat(parts, "|")
+        end
+
+        -- The { rel = abs } map of a stored entry's files.
+        local function entryFiles(kind, slug)
+            local out = {}
+            local filesDir = libraryDir(kind, slug) .. "/files"
+            if not hs.fs.attributes(filesDir) then return out end
+            local rels = hs.execute(
+                "cd " .. sq(filesDir) .. " && find . -type f ! -name '.DS_Store' 2>/dev/null"
+            ) or ""
+            for line in rels:gmatch("[^\r\n]+") do
+                local rel = line:gsub("^%./", "")
+                out[rel] = filesDir .. "/" .. rel
+            end
+            return out
+        end
+
+        -- Point the active marker at whichever stored entry matches the live
+        -- slice by content, so themes/sounds flag correctly even when the live
+        -- state was set outside the library (theme editor, wholesale profile
+        -- switch). If nothing matches, the live state is custom/unsaved and no
+        -- entry is claimed. Runs every boot; a handful of md5s over small slices.
+        ms.package.reconcileActive = function(kind)
+            if not LIBRARY_KINDS[kind] then return end
+            local liveFp = sliceFingerprint(ms.package.collect(kind))
+            if not liveFp then return end   -- can't fingerprint — leave marker be
+
+            for _, rec in ipairs(ms.package.libraryList(kind)) do
+                if sliceFingerprint(entryFiles(kind, rec.slug)) == liveFp then
+                    ms.package.librarySetActive(kind, rec.slug)
+                    return
+                end
+            end
+            ms.package.librarySetActive(kind, nil)
         end
     -- END Installed Library --
 

@@ -574,7 +574,7 @@
                 const qr = S.qrOptions || {};
                 const targets = [
                     ["macros", "Macro pack"],
-                    ["theme", "Theme and sounds"],
+                    ["theme", "Appearance (theme & sounds)"],
                     ["settings", "Settings file"],
                     ["ui", "Shell windows"],
                 ];
@@ -631,6 +631,48 @@
                 const hidden = S.hiddenFeatures || {};
                 const hasTrackpad = !hidden.trackpad;
                 const hasSocd = !hidden.socd;
+
+                // Display zoom — scales the whole UI (shell + popouts) for
+                // large or small displays. Also driven by Cmd +/- / Cmd 0.
+                (function () {
+                    const z = S.uiZoom || 1.0;
+                    const pct = Math.round(z * 100) + "%";
+                    const zoomCtl = h("div", {});
+                    zoomCtl.style.cssText =
+                        "display:flex;align-items:center;gap:8px;";
+                    const send = (data) =>
+                        sendToHost(Object.assign({ action: "setUiZoom" }, data));
+                    const minus = actionBtn("−", "", () =>
+                        send({ delta: -0.1 }));
+                    const plus = actionBtn("+", "", () =>
+                        send({ delta: 0.1 }));
+                    const pctEl = h("span", {}, pct);
+                    pctEl.style.cssText =
+                        "min-width:42px;text-align:center;font-size:12px;"
+                        + "color:var(--text2);font-variant-numeric:tabular-nums;";
+                    minus.disabled = z <= 0.5;
+                    plus.disabled = z >= 2.0;
+                    zoomCtl.appendChild(minus);
+                    zoomCtl.appendChild(pctEl);
+                    zoomCtl.appendChild(plus);
+                    body.appendChild(
+                        row(
+                            "Display Zoom",
+                            "Scale the whole interface — shell and popouts "
+                                + "(Cmd +/−, Cmd 0 to reset)",
+                            zoomCtl,
+                            "",
+                            [
+                                {
+                                    icon: "",
+                                    label: "Reset to 100%",
+                                    action: () => send({ reset: true }),
+                                },
+                            ],
+                        ),
+                    );
+                    body.appendChild(divider());
+                })();
 
                 if (hasTrackpad) {
                     body.appendChild(
@@ -940,6 +982,59 @@
                 }
             }
 
+            // Function tools — each callable from here or from a macro.
+            function buildFunctions(body) {
+                const items = S.userFunctions || [];
+                if (!items.length) {
+                    body.appendChild(groupLabel("No functions defined."));
+                    return;
+                }
+                for (const fn of items) {
+                    const label = fn.icon
+                        ? fn.icon + " " + (fn.label || fn.id)
+                        : (fn.label || fn.id);
+                    body.appendChild(
+                        row(label, fn.info || null,
+                            actionBtn("Run", "", () =>
+                                sendToHost({ action: "runFunction", id: fn.id })),
+                        ),
+                    );
+                }
+            }
+
+            // Shared helper variables, each editable by its declared type.
+            function varControl(v) {
+                const type = v.type || "string";
+                const cur = (v.value !== undefined && v.value !== null)
+                    ? v.value : v.default;
+                const send = (val) =>
+                    sendToHost({ action: "setHelperVarValue", name: v.name, value: val });
+                if (type === "boolean") {
+                    return toggle(cur === true || cur === "true",
+                        (e) => send(e.target.checked));
+                }
+                const inp = h("input", {
+                    type: type === "number" ? "number" : "text",
+                    cls: "input-sm",
+                    value: (cur !== undefined && cur !== null) ? String(cur) : "",
+                });
+                inp.addEventListener("change", () =>
+                    send(type === "number" ? Number(inp.value) : inp.value));
+                inp.addEventListener("keydown", (e) => e.stopPropagation());
+                return inp;
+            }
+
+            function buildVariables(body) {
+                const items = S.userVariables || [];
+                if (!items.length) {
+                    body.appendChild(groupLabel("No variables defined."));
+                    return;
+                }
+                for (const v of items) {
+                    body.appendChild(row(v.label || v.name, v.hint || null, varControl(v)));
+                }
+            }
+
             // buildUserSection, custom user-defined sections //
             function buildUserSection(body, menu) {
                 for (const item of menu.items || []) {
@@ -1157,16 +1252,6 @@
                         ),
                         actionBtn("Export Profile", "", () =>
                             sendToHost({ action: "exportPackage", type: "profile" }),
-                        ),
-                        actionBtn("Split Profile...", "", () =>
-                            sendToHost({ action: "splitProfile" }),
-                        ),
-                    ),
-                );
-                body.appendChild(
-                    btnRow(
-                        actionBtn("Export Macros...", "", () =>
-                            sendToHost({ action: "exportPackage", type: "macro" }),
                         ),
                     ),
                 );
@@ -1814,20 +1899,6 @@
                 const scrollTop = scroll.scrollTop;
                 scroll.innerHTML = "";
 
-                scroll.appendChild(
-                    section("settings", "Tuning", buildSettings,
-                        "Defined by your macro pack"),
-                );
-
-                const calib = S.userCalibrationSettings || [];
-                if (calib.length > 0) {
-                    scroll.appendChild(
-                        section("calibration", "Calibration", (body) => {
-                            for (const item of calib) renderUserItem(body, item);
-                        }, "Tune the pack to your setup"),
-                    );
-                }
-
                 for (const menu of S.userMenus || []) {
                     const title = menu.icon
                         ? menu.icon + " " + menu.title
@@ -1836,6 +1907,31 @@
                         section("user_" + menu.id, title, (body) =>
                             buildUserSection(body, menu),
                         ),
+                    );
+                }
+
+                // The three user-defined tool kinds sit at the bottom of the
+                // window: Settings (adjustable values), Functions (callable), and
+                // Variables (shared helper vars).
+                scroll.appendChild(
+                    section("settings", "Settings", buildSettings,
+                        "Defined by your macro pack"),
+                );
+                scroll.appendChild(
+                    section("functions", "Functions", buildFunctions,
+                        "Function tools your macros can call"),
+                );
+                scroll.appendChild(
+                    section("variables", "Variables", buildVariables,
+                        "Shared helper variables"),
+                );
+
+                const calib = S.userCalibrationSettings || [];
+                if (calib.length > 0) {
+                    scroll.appendChild(
+                        section("calibration", "Calibration", (body) => {
+                            for (const item of calib) renderUserItem(body, item);
+                        }, "Tune the pack to your setup"),
                     );
                 }
 
@@ -1902,8 +1998,31 @@
                 const nameInput = h("input", {
                     type: "text", cls: "input-sm", placeholder: "My Function",
                 });
-                body.appendChild(row("Name", "Shown in the Call function block",
-                    nameInput));
+                // Coroutine toggle sits beside the name: on = run async in its
+                // own coroutine; off = run inline in the caller's.
+                const coroToggle = toggle(false, () => {});
+                const nameControls = h("div", {});
+                nameControls.style.cssText =
+                    "display:flex;align-items:center;gap:8px;flex:2;min-width:0;";
+                nameInput.style.flex = "1";
+                const coroLabel = h("span", {});
+                coroLabel.style.cssText =
+                    "display:flex;align-items:center;gap:6px;white-space:nowrap;"
+                    + "font-size:12px;color:var(--text2);";
+                coroLabel.appendChild(document.createTextNode("Coroutine"));
+                coroLabel.appendChild(coroToggle);
+                nameControls.appendChild(nameInput);
+                nameControls.appendChild(coroLabel);
+                const setCoro = (on) => {
+                    const cb = coroToggle.querySelector("input");
+                    if (cb) cb.checked = !!on;
+                };
+                const getCoro = () => {
+                    const cb = coroToggle.querySelector("input");
+                    return !!(cb && cb.checked);
+                };
+                body.appendChild(row("Name",
+                    "Shown in the Call function block", nameControls));
                 body.appendChild(divider());
 
                 const canvasHost = h("div", { cls: "tool-fn-canvas" });
@@ -1955,12 +2074,13 @@
                         const steps = _fnCanvas ? _fnCanvas.serialize() : [];
                         sendToTools("saveFunction", {
                             id: id,
-                            def: { name: nm, steps: steps },
+                            def: { name: nm, steps: steps, coroutine: getCoro() },
                         });
                     }),
                     actionBtn("Clear", "", () => {
                         _fnEditingId = null;
                         nameInput.value = "";
+                        setCoro(false);
                         if (_fnCanvas) _fnCanvas.load([]);
                     }),
                 ));
@@ -1968,6 +2088,9 @@
                 window._loadFunctionIntoEditor = (fnDef) => {
                     _fnEditingId = fnDef.id || null;
                     nameInput.value = fnDef.name || fnDef.id || "";
+                    // Legacy defs (no flag) were wrapped as coroutines, so default
+                    // on unless the stored flag is explicitly false.
+                    setCoro(fnDef.coroutine !== false);
                     if (_fnCanvas) _fnCanvas.load(fnDef.steps || []);
                     switchToolsTab("functions");
                 };
@@ -2286,6 +2409,9 @@
             function receiveState(state) {
                 S = state;
                 applyTheme(S.theme);
+                if (typeof applyZoom === "function" && S.uiZoom !== undefined) {
+                    applyZoom(S.uiZoom);
+                }
                 const verEl = document.getElementById("rail-version");
                 if (verEl && S.msVersion) verEl.textContent = "v" + S.msVersion;
                 render();

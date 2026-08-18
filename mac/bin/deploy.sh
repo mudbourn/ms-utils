@@ -94,6 +94,12 @@ if command -v swiftc &>/dev/null && [ -f "$REPO/mac/bin/ms_gc_read.swift" ]; the
     swiftc -O -o "$HOME/.local/bin/ms_gc_read" "$REPO/mac/bin/ms_gc_read.swift" -framework GameController 2>/dev/null || true
 fi
 
+# Compile and copy the Vision OCR reader binary (drives ms.screen.ocr and friends).
+if command -v swiftc &>/dev/null && [ -f "$REPO/mac/bin/ms_ocr_read.swift" ]; then
+    mkdir -p "$HOME/.local/bin"
+    swiftc -O -o "$HOME/.local/bin/ms_ocr_read" "$REPO/mac/bin/ms_ocr_read.swift" -framework Vision -framework AppKit 2>/dev/null || true
+fi
+
 # Copy sounds (defaults + active + macro).
 #
 # The guard used to read $REPO/sounds/Default, which is not a directory in this
