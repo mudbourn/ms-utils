@@ -1007,6 +1007,7 @@ return function(ms)
                 ms.loadTheme()
                 pcall(function() ms.alert:recolor() end)
                 pcall(function() ms.dev:recolor() end)
+                pcall(function() ms.shell.recolorPopouts() end)
                 ms.playSlot("update")
                 ms.alert("Theme reloaded.", 4, true, { priority = "low" })
                 ms.ui.hide()
@@ -1067,6 +1068,7 @@ return function(ms)
                 end
                 pcall(function() ms.alert:recolor() end)
                 pcall(function() ms.dev:recolor() end)
+                pcall(function() ms.shell.recolorPopouts() end)
                 local snd = ms.sounds[data.value and 'a_Update' or 'd_Update']
                 if snd then ms.sound(snd) end
                 ms.ui.refresh()

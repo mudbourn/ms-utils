@@ -47,6 +47,11 @@
                 if ms.dev then
                     pcall(function() ms.dev:rezoom(newZoom, ratio, opts.noRescale) end)
                 end
+                if ms.shell._rezoomPopouts then
+                    pcall(function()
+                        ms.shell._rezoomPopouts(newZoom, ratio, opts.noRescale)
+                    end)
+                end
             end
         -- END --
 
@@ -648,6 +653,45 @@
         local _popResizeTaps = {}
         local _popDragTaps = {}
 
+        -- Broadcasts to the general panel popouts (browse, appearance, tools,
+        -- profiles, macros …). These live in _popouts and, unlike the four dev
+        -- panels, are NOT covered by ms.dev:recolor / ms.dev:rezoom — so theme
+        -- changes and zoom changes must be pushed to them here too. Called
+        -- from applyZoom above (via ms.shell) and from the theme-change sites.
+        ms.shell.recolorPopouts = function()
+            local themeJson = hs.json.encode(ms._theme or {})
+            for _, pop in pairs(_popouts) do
+                if pop and pop.view then
+                    pcall(function()
+                        pop.view:evaluateJavaScript(
+                            "applyTheme(" .. themeJson .. ")")
+                    end)
+                end
+            end
+        end
+
+        ms.shell._rezoomPopouts = function(z, ratio, noRescale)
+            z = tonumber(z) or 1.0
+            ratio = tonumber(ratio) or 1.0
+            local minW, minH = BASE_POP_W * z, BASE_POP_H * z
+            local js = "if(window.applyZoom)applyZoom(" .. z .. ")"
+            for _, pop in pairs(_popouts) do
+                if pop and pop.view then
+                    if not noRescale and math.abs(ratio - 1) > 0.001 then
+                        pcall(function()
+                            local f = pop.view:frame()
+                            local nf = { x = f.x, y = f.y,
+                                         w = f.w * ratio, h = f.h * ratio }
+                            if nf.w < minW then nf.w = minW end
+                            if nf.h < minH then nf.h = minH end
+                            pop.view:frame(nf)
+                        end)
+                    end
+                    pcall(function() pop.view:evaluateJavaScript(js) end)
+                end
+            end
+        end
+
         -- finderInterlude --
         -- Runs `fn` (a blocking Finder panel) with the shell and popouts hidden,
         -- then restores them.
@@ -709,7 +753,13 @@
 
         local _popAnimTimers = {}
         -- animatePopWindow --
-            local function animatePopWindow(panelId, view, fromFrame, toFrame, fromAlpha, toAlpha, onDone)
+            -- easing: p (0..1) -> eased t. Defaults to ease-out cubic, which
+            -- decelerates into the final frame — the gentle settle lands while
+            -- the window is fully visible, so it reads well for growing OUT.
+            -- The close animation is the temporal reverse, so it passes an
+            -- ease-IN instead (see popIn) to keep the gentle motion on the
+            -- still-visible end rather than after it has faded away.
+            local function animatePopWindow(panelId, view, fromFrame, toFrame, fromAlpha, toAlpha, onDone, easing)
                 if _popAnimTimers[panelId] then
                     _popAnimTimers[panelId]:stop()
                     _popAnimTimers[panelId] = nil
@@ -717,10 +767,11 @@
 
                 local step, steps = 0, 30
                 local fadeMs = (ms._theme and ms._theme.fadeMs) or 250
+                local ease = easing or function(p) return 1 - (1 - p) ^ 3 end
 
                 _popAnimTimers[panelId] = hs.timer.doEvery(fadeMs / 1000 / steps, function()
                     step = step + 1
-                    local t = 1 - (1 - step / steps) ^ 3
+                    local t = ease(step / steps)
 
                     pcall(function()
                         view:frame({
@@ -992,7 +1043,7 @@
                             pcall(function()
                                 animatePopWindow(panelId, popView, popView:frame(), endFrame, 1, 0, function()
                                     pcall(function() popView:hide() end)
-                                end)
+                                end, function(p) return p ^ 3 end)
                             end)
                         else
                             pcall(function() popView:hide() end)
@@ -1205,6 +1256,14 @@
                     if not popView then return end
                     local themeJson = hs.json.encode(ms._theme or {})
                     pcall(function() popView:evaluateJavaScript("applyTheme(" .. themeJson .. ")") end)
+                    -- Inherit the current UI zoom, same as the dev panels do.
+                    local z = ms._uiZoom or 1.0
+                    if z ~= 1.0 then
+                        pcall(function()
+                            popView:evaluateJavaScript(
+                                "if(window.applyZoom)applyZoom(" .. z .. ")")
+                        end)
+                    end
                 end)
 
                 _popouts[panelId] = {

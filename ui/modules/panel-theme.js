@@ -27,6 +27,23 @@
         { key: "dangerBg", label: "Danger (bg)",   hint: "Backdrop behind danger text" },
     ];
 
+    // Advanced overrides. These are normally *derived* from the colours above
+    // (see applyTheme in log-panel.js). Leaving a field blank keeps the derived
+    // value; setting one overrides it — the same keys the theme file exposes.
+    const ADVANCED_KEYS = [
+        { key: "text2",          label: "Text (secondary)", hint: "Labels, sublabels" },
+        { key: "text3",          label: "Text (muted)",     hint: "Hints, placeholders" },
+        { key: "border",         label: "Border",           hint: "Panel and control edges" },
+        { key: "borderDim",      label: "Border (dim)",     hint: "Faint separators" },
+        { key: "accentGlow",     label: "Accent glow",      hint: "Focus/active glow" },
+        { key: "accentGlowFaint",label: "Accent glow (faint)", hint: "Subtle accent wash" },
+        { key: "dangerGlow",     label: "Danger glow",      hint: "Destructive emphasis" },
+        { key: "dangerBorder",   label: "Danger border",    hint: "Destructive edges" },
+        { key: "key",            label: "Key indicator",    hint: "Keyboard key colour" },
+        { key: "mouse",          label: "Mouse indicator",  hint: "Mouse button colour" },
+        { key: "scroll",         label: "Scrollbar",        hint: "Scrollbar thumb" },
+    ];
+
     // Live preview //
     function previewTheme() {
         const t = Object.assign({}, S.theme || {}, _pending);
@@ -71,7 +88,7 @@
         const wrap = h("div", { cls: "color-field" });
 
         const swatch = h("input", { type: "color", cls: "color-swatch" });
-        const hex    = h("input", { type: "text", cls: "color-hex", spellcheck: "false", maxlength: "7" });
+        const hex    = h("input", { type: "text", cls: "color-hex", spellcheck: "false", maxlength: "7", placeholder: "auto" });
 
         const long = longHex(current) || "#000000";
         swatch.value = long;
@@ -232,6 +249,28 @@
                 );
             }
         });
+
+        // Advanced / derived colour overrides //
+        sec(root, "colours-adv", "Derived colours",
+            "Normally computed from the colours above — set to override, blank to derive",
+            (body) => {
+                for (const c of ADVANCED_KEYS) {
+                    const value = theme[c.key] || "";
+                    body.appendChild(
+                        row(
+                            c.label,
+                            set[c.key] ? c.hint : c.hint + " · derived",
+                            colorField(c.key, value),
+                            "",
+                            [{
+                                icon: "",
+                                label: "Reset to derived",
+                                action: () => { delete _pending[c.key]; commit(c.key, ""); },
+                            }],
+                        ),
+                    );
+                }
+            });
 
         // Radius //
         sec(root, "shape", "Shape", "Corner rounding across every panel", (body) => {

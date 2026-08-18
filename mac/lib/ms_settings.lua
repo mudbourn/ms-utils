@@ -1322,6 +1322,7 @@ return function(ms)
                     ms.loadTheme()
                     pcall(function() ms.alert:recolor() end)
                     pcall(function() ms.dev:recolor() end)
+                    pcall(function() ms.shell.recolorPopouts() end)
                     if ms._macroLabEnabled and ms.shell and ms.shell.eval then
                         ms.shell.eval("applyTheme(" .. hs.json.encode(ms._theme or {}) .. ")")
                     else
