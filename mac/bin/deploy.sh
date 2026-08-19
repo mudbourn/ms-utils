@@ -146,9 +146,38 @@ else
     echo "$NEW" > "$BUILD_NUM_FILE"
 fi
 
-# Re-seed the trusted hash from the file we just deployed.
+# Re-seed the trusted hash from the files we just deployed.
+#
+# We write a FULL per-file manifest (JSON: {relpath: sha256}), not just the
+# ms_core.lua hash. Guardian's legacy _checkAll only verifies files that appear
+# in this manifest, so a core-only seed left all of lib/ui/bin unchecked between
+# deploys — anything that could drop a file there got code execution on the next
+# reload with no integrity signal. Listing every tracked file closes that window:
+# a hand-edit (or any write) to a deployed file now mismatches on reload and
+# Guardian blocks, until the next deploy re-seeds with the new hashes.
+#
+# Scope mirrors Guardian's _trackedFiles() EXCEPT Spoons/: plugins are governed
+# by the signed plugin ledger, not this manifest, so including their hashes here
+# would make a later plugin update spuriously trip _checkAll. A real signed
+# release still overrides all of this with its own .ms_file_manifest.json.
 HASH=$(shasum -a 256 "$HS/ms_core.lua" | awk '{print $1}')
-echo "$HASH" > "$HS/data/.ms_trusted_hash"
+(
+    cd "$HS" || exit 1
+    {
+        echo "ms_core.lua"
+        [ -d ui ]  && find ui -type f \( -name '*.js' -o \( -name '*.html' ! -name '_popout_*' \) \)
+        [ -d bin ] && find bin -maxdepth 1 -type f -name '*.sh'
+        [ -d lib ] && find lib -type f -name '*.lua'
+    } | LC_ALL=C sort | tr '\n' '\0' | xargs -0 shasum -a 256 2>/dev/null | awk '
+        BEGIN { printf "{" }
+        {
+            h = $1; $1 = ""; sub(/^ +\*?/, ""); path = $0
+            if (seen++) printf ","
+            printf "\"%s\":\"%s\"", path, h
+        }
+        END { print "}" }
+    '
+) > "$HS/data/.ms_trusted_hash"
 
 # Drop the CI per-file manifest. A dev deploy edits files that a signed release
 # manifest still vouches for, so leaving it in place makes Guardian block every

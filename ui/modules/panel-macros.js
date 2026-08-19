@@ -3727,6 +3727,97 @@
         return b;
     }
 
+    // Builds the target list for the "Link to another macro" submenu, mapping
+    // each candidate to a bindToMacro action. A ✓ marks the current parent.
+    function linkMenuItems(m) {
+        return linkTargets(m).map(function(o) {
+            return {
+                icon:  "",
+                label: (m.parent === o.value ? "✓ " : "") + o.label,
+                action: function() {
+                    shellPost("macros", "bindToMacro", {
+                        action:   "bindToMacro",
+                        id:       m.id,
+                        targetId: o.value,
+                    });
+                },
+            };
+        });
+    }
+
+    // Opens the per-bind "⋯" options menu at (x, y). `mode` is the sub-bind's
+    // shared rebind-mode closure so the menu can flip it and the inline chord
+    // pill reads the same value on its next click.
+    function openBindMenu(m, isSub, mode, x, y) {
+        var kit = window.msUI;
+        if (!kit || typeof kit.showCtxMenu !== "function") return;
+        var items = [];
+
+        // Sub-bind rebind mode (was the inline "Mod/Full" toggle). Governs what
+        // clicking the chord pill captures: just a modifier, or a full trigger.
+        if (isSub) {
+            items.push({
+                icon:  "",
+                label: mode.full
+                    ? "Rebind captures: full trigger → switch to modifier only"
+                    : "Rebind captures: modifier only → switch to full trigger",
+                action: function() { mode.full = !mode.full; },
+            });
+        }
+
+        // Ignore extra modifiers (subset match). Only meaningful for key/combo
+        // triggers: device binds already tolerate extras and mods-only binds
+        // have no base key.
+        if (m.group !== "system" && !m.systemBind
+            && (m.bindType === "key" || m.bindType === "combo")) {
+            items.push({
+                icon:  "",
+                label: (m.ignoreMods ? "✓ " : "") + "Ignore extra modifiers",
+                action: function() {
+                    shellPost("macros", "setBindIgnoreMods", {
+                        action: "setBindIgnoreMods",
+                        id:     m.id,
+                        value:  !m.ignoreMods,
+                    });
+                },
+            });
+        }
+
+        // Link this macro to follow another macro's trigger.
+        if (m.group !== "system" && !m.systemBind) {
+            var targets = linkMenuItems(m);
+            if (targets.length) {
+                items.push({
+                    icon:  "",
+                    label: (m.parent ? "Change linked macro…" : "Link to another macro…"),
+                    action: function() { kit.showCtxMenu(x, y, targets, m.label || m.id); },
+                });
+            }
+        }
+
+        // Delete. Only user-authored macros can be removed.
+        if (m.group !== "system" && !m.systemBind) {
+            items.push({
+                icon:  "",
+                label: "Delete macro",
+                danger: true,
+                action: function() {
+                    confirmDelete(m.label || m.id).then(function(ok) {
+                        if (!ok) return;
+                        if (window.playSlot) playSlot("back");
+                        shellPost("macros", "deleteMacro", { id: m.id });
+                        _bindList = _bindList.filter(function(x) { return x.id !== m.id; });
+                        renderBindList();
+                    });
+                },
+            });
+        }
+
+        if (!items.length) return;
+        if (window.playSlot) playSlot("interact");
+        kit.showCtxMenu(x, y, items, m.label || m.id);
+    }
+
     function bindRow(m, isSub) {
         var r = document.createElement("div");
         r.className = "bind-row" + (isSub ? " bind-row-sub" : "");
@@ -3745,29 +3836,12 @@
         var acts = document.createElement("div");
         acts.className = "bind-acts";
 
-        // A sub-bind inherits its parent's trigger and owns only its modifier.
+        // Inline controls are the primary two: the chord pill (click to rebind)
+        // and the rebind-reset icon. Everything else lives in the ⋯ menu.
+        var mode = { full: false };
         if (isSub) {
-            // Two rebind modes: Mod changes the modifier, Full captures a new trigger.
-            var mode = { full: false };
-            var modeBtn = document.createElement("button");
-            modeBtn.className = "bind-act bind-mode-toggle";
-            function syncMode() {
-                modeBtn.textContent = mode.full ? "Full" : "Mod";
-                modeBtn.title = mode.full
-                    ? "Full rebind, branches this off into its own bind"
-                    : "Modifier only, stays attached to the parent";
-            }
-            syncMode();
-            modeBtn.addEventListener("mouseenter", function() {
-                if (window.playSlot) playSlot("hover");
-            });
-            modeBtn.addEventListener("click", function(e) {
-                e.stopPropagation();
-                if (window.playSlot) playSlot("interact");
-                mode.full = !mode.full;
-                syncMode();
-            });
-
+            // A sub-bind inherits its parent's trigger and owns only its modifier.
+            // The rebind mode (modifier-only vs full trigger) is chosen in ⋯.
             acts.appendChild(bindPill(m.bind, function() {
                 if (mode.full) {
                     shellPost("macros", "startRebind", {
@@ -3781,9 +3855,7 @@
                         id:     m.id,
                     });
                 }
-            }, "Click to rebind, Mod/Full toggle selects the mode"));
-
-            acts.appendChild(modeBtn);
+            }, "Click to rebind · capture mode is set in the ⋯ menu"));
 
             // Clearing writes the derived link back (re-nesting a severed
             // sub) and drops the modifier.
@@ -3793,22 +3865,6 @@
                     id:     m.id,
                 });
             }));
-
-            // Re-tether this sub to a different parent macro.
-            if (m.group !== "system" && !m.systemBind && typeof window.createSelect === "function") {
-                acts.appendChild(macroLinkControl(m));
-            }
-
-            // Delete a peer/sub macro, guarded by a confirm.
-            if (m.group !== "system" && !m.systemBind) {
-                acts.appendChild(iconBtn("trash", "Delete macro", function() {
-                    confirmDelete(m.label || m.id).then(function(ok) {
-                        if (!ok) return;
-                        if (window.playSlot) playSlot("back");
-                        shellPost("macros", "deleteMacro", { id: m.id });
-                    });
-                }));
-            }
         } else {
             acts.appendChild(bindPill(m.bind, function() {
                 shellPost("macros", "startRebind", {
@@ -3825,26 +3881,25 @@
                     systemBind: m.systemBind || false,
                 });
             }));
+        }
 
-            // Tether this macro to another macro's trigger. Not offered for
-            // system binds (their triggers are fixed).
-            if (m.group !== "system" && !m.systemBind && typeof window.createSelect === "function") {
-                acts.appendChild(macroLinkControl(m));
-            }
-
-            // Delete. Only user-authored macros can be removed.
-            if (m.group !== "system" && !m.systemBind) {
-                acts.appendChild(iconBtn("trash", "Delete macro", function() {
-                    confirmDelete(m.label || m.id).then(function(ok) {
-                        if (!ok) return;
-                        if (window.playSlot) playSlot("back");
-                        shellPost("macros", "deleteMacro", { id: m.id });
-                        // Optimistic: drop locally and repaint, host refresh reconciles.
-                        _bindList = _bindList.filter(function(x) { return x.id !== m.id; });
-                        renderBindList();
-                    });
-                }));
-            }
+        // The ⋯ options menu: link, ignore-modifiers, rebind mode (subs), delete.
+        // Not offered for system binds, whose triggers are fixed and undeletable.
+        if (m.group !== "system" && !m.systemBind) {
+            var moreBtn = document.createElement("button");
+            moreBtn.className = "bind-act bind-more";
+            moreBtn.textContent = "⋯";
+            moreBtn.title = "Bind options";
+            moreBtn.addEventListener("mouseenter", function() {
+                if (window.playSlot) playSlot("hover");
+            });
+            moreBtn.addEventListener("click", function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var rect = moreBtn.getBoundingClientRect();
+                openBindMenu(m, isSub, mode, rect.right, rect.bottom);
+            });
+            acts.appendChild(moreBtn);
         }
 
         // System binds are always live; every other macro — including peers

@@ -469,6 +469,11 @@
             ms._keyBindingsByCode = {}
             ms.bindConfig = {}
             ms.bindHandles = {}
+            -- Per-macro "ignore extra modifiers" flags (id -> true). When set, a
+            -- key/combo bind matches as long as its DECLARED modifiers are held,
+            -- tolerating any additional modifiers held at the time (subset match)
+            -- instead of demanding an exact modifier set. Persisted in settings.
+            ms.bindIgnoreMods = ms.bindIgnoreMods or {}
             -- Modifier-only triggers ({ type="mods", mods={...} }). Evaluated in
             -- the keyboard listener's flagsChanged branch, not via keycode.
             ms._modBindings = {}
@@ -1119,7 +1124,18 @@
                         for _, binding in ipairs(bucket) do
                             if binding then
                                 local modsMatch = true
-                                if not binding.modsAny then
+                                if binding.modsAny then
+                                    -- Fire on the keycode regardless of modifiers.
+                                elseif binding.subsetMods then
+                                    -- Declared modifiers must be held; extras are
+                                    -- tolerated (so plain-key binds fire even while
+                                    -- an unrelated modifier is down).
+                                    if binding.mods.cmd   and not flags.cmd   then modsMatch = false end
+                                    if binding.mods.alt   and not flags.alt   then modsMatch = false end
+                                    if binding.mods.ctrl  and not flags.ctrl  then modsMatch = false end
+                                    if binding.mods.shift and not flags.shift then modsMatch = false end
+                                else
+                                    -- Exact: declared set must equal held set.
                                     if (not binding.mods.cmd)   ~= (not flags.cmd)   then modsMatch = false end
                                     if (not binding.mods.alt)   ~= (not flags.alt)   then modsMatch = false end
                                     if (not binding.mods.ctrl)  ~= (not flags.ctrl)  then modsMatch = false end
@@ -1306,7 +1322,7 @@
                     ms.release(key, mods)
                 end
 
-                ms.key = function(mods, key, swallow, pressFn, releaseFn, isSystem)
+                ms.key = function(mods, key, swallow, pressFn, releaseFn, isSystem, subsetMods)
                     local keyCode = getCode(key)
                     if not keyCode then
                         print("Error: Could not find keyCode for " .. tostring(key))
@@ -1323,6 +1339,7 @@
                         keyCode = keyCode,
                         mods = modSet,
                         modsAny = modsAny,
+                        subsetMods = subsetMods or false,
                         swallow = swallow,
                         pressFn = pressFn,
                         releaseFn = releaseFn,
@@ -1355,7 +1372,7 @@
                     end}
                 end
 
-                ms.keyCombo = function(mods, keys, swallow, pressFn, isSystem)
+                ms.keyCombo = function(mods, keys, swallow, pressFn, isSystem, subsetMods)
                     local codes = {}
                     for _, k in ipairs(keys or {}) do
                         local c = getCode(k)
@@ -1366,7 +1383,7 @@
                         codes[#codes + 1] = c
                     end
                     if #codes < 2 then
-                        return ms.key(mods, keys and keys[1], swallow, pressFn, nil, isSystem)
+                        return ms.key(mods, keys and keys[1], swallow, pressFn, nil, isSystem, subsetMods)
                     end
 
                     local modSet = {}
@@ -1382,6 +1399,7 @@
                             keyCode  = code,
                             mods     = modSet,
                             modsAny  = false,
+                            subsetMods = subsetMods or false,
                             swallow  = swallow,
                             pressFn  = pressFn,
                             alsoHeld = others,
@@ -3696,31 +3714,34 @@
             end
 
             ms.moveMouse = function(x, y, ref, durationMs)
-                durationMs = durationMs or 200
+                durationMs = tonumber(durationMs) or 200
                 local targetX, targetY = ms.resolvePoint(x, y, ref or "Absolute")
                 local startPos = hs.mouse.absolutePosition()
                 local startX, startY = startPos.x, startPos.y
                 local dx = targetX - startX
                 local dy = targetY - startY
-                local steps = math.max(10, math.floor(durationMs / 16))
-                local step = 0
-                local timer = hs.timer.doEvery(0.016, function()
-                    step = step + 1
-                    local t = math.min(step / steps, 1)
+                -- Zero-distance or near-instant move: jump and return. Recorded
+                -- move steps use a tiny durationMs (~8), so they land here.
+                if durationMs <= 16 or (dx == 0 and dy == 0) then
+                    hs.mouse.absolutePosition({ x = targetX, y = targetY })
+                    return
+                end
+                -- Animate synchronously: block this coroutine (via ms.wait)
+                -- frame-by-frame so playback stays ordered. The old async
+                -- timer returned immediately, so a macro's move steps all
+                -- fired at once (teleport at start, replay-fast at the end).
+                local frameMs = 16
+                local steps = math.max(1, math.floor(durationMs / frameMs + 0.5))
+                for step = 1, steps do
+                    local t = step / steps
                     t = 1 - (1 - t) ^ 3
                     hs.mouse.absolutePosition({
                         x = startX + dx * t,
                         y = startY + dy * t,
                     })
-                    if step >= steps then
-                        hs.mouse.absolutePosition({
-                            x = targetX,
-                            y = targetY,
-                        })
-                        return false
-                    end
-                end)
-                return timer
+                    if step < steps then ms.wait(frameMs) end
+                end
+                hs.mouse.absolutePosition({ x = targetX, y = targetY })
             end
 
             ms.dragPath = function(points, button, ref, delayMs)
@@ -4899,8 +4920,9 @@
                         ms._pendingLabel = def.label
                         fn()
                     end
+                    local ignoreMods = ms.bindIgnoreMods and ms.bindIgnoreMods[id] or false
                     if c.type == "key" then
-                        ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn)
+                        ms.bindHandles[id] = ms.key(c.mods, c.key, false, firedFn, nil, false, ignoreMods)
                     elseif c.type == "mods" then
                         local modSet = {}
                         for _, m in ipairs(c.mods or {}) do modSet[m] = true end
@@ -4913,7 +4935,7 @@
                             }
                         end
                     elseif c.type == "combo" then
-                        ms.bindHandles[id] = ms.keyCombo(c.mods, c.keys, false, firedFn)
+                        ms.bindHandles[id] = ms.keyCombo(c.mods, c.keys, false, firedFn, false, ignoreMods)
                     elseif c.type == "mouse" or c.type == "scroll" or c.type == "gamepad" then
                         local tkey = triggerKey(c)
                         local grp  = deviceGroups[tkey]
@@ -5372,6 +5394,7 @@
                             tap = nil, winFilter = nil, lastTs = nil,
                             threshold = 50, opts = {}, drag = nil, winFrames = {},
                             move = nil, _inFlush = false, _resample = nil,
+                            _moveFlushTimer = nil,
                         }
                         ms._macroRecord = rec
 
@@ -5440,6 +5463,10 @@
                         -- Emit any buffered free-cursor movement as a run of
                         -- moveMouse steps, resampled by moveGranularity.
                         flushMoves = function()
+                            if rec._moveFlushTimer then
+                                rec._moveFlushTimer:stop()
+                                rec._moveFlushTimer = nil
+                            end
                             local m = rec.move
                             rec.move = nil
                             if not m or not m.points or #m.points < 2 then return end
@@ -5468,6 +5495,10 @@
                             rec.drag = nil
                             rec.move = nil
                             rec._inFlush = false
+                            if rec._moveFlushTimer then
+                                rec._moveFlushTimer:stop()
+                                rec._moveFlushTimer = nil
+                            end
                             local et = hs.eventtap.event.types
 
                             local mode  = rec.opts.pressMode or "type"
@@ -5603,6 +5634,16 @@
                                                 pt.y,
                                             }
                                         end
+                                        -- Commit a movement run once the cursor
+                                        -- goes idle, so pure movement streams into
+                                        -- steps instead of waiting for a button.
+                                        if rec._moveFlushTimer then
+                                            rec._moveFlushTimer:stop()
+                                        end
+                                        rec._moveFlushTimer = hs.timer.doAfter(0.15, function()
+                                            rec._moveFlushTimer = nil
+                                            pcall(flushMoves)
+                                        end)
                                         return
                                     end
 
@@ -5612,6 +5653,10 @@
                                         if inShell(pt) then return end
                                         local button = buttonOf(t, et)
                                         if rec.opts.recordDrags then
+                                            -- Commit any free movement leading up
+                                            -- to the press so the drag doesn't
+                                            -- absorb or reorder it.
+                                            flushMoves()
                                             rec.drag = {
                                                 button = button, moved = false,
                                                 x1 = pt.x, y1 = pt.y, x2 = pt.x, y2 = pt.y,
@@ -5761,6 +5806,10 @@
                         end
 
                         rec.stop = function()
+                            if rec._moveFlushTimer then
+                                rec._moveFlushTimer:stop()
+                                rec._moveFlushTimer = nil
+                            end
                             flushMoves()
                             if rec.tap then rec.tap:stop()
                             rec.tap = nil end

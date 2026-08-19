@@ -54,6 +54,7 @@ return function(ms)
 
         ms.bindConfig = {}
         ms.bindHandles = {}
+        ms.bindIgnoreMods = ms.bindIgnoreMods or {}
 
         ms.parseBind = function(str)
             local btn = str:match("^mouse:(%d+)$")
@@ -259,6 +260,9 @@ return function(ms)
                         local n = tonumber(entry.cooldown)
                         if n and n >= 0 then ms.cooldowns[id] = math.floor(n) end
                     end
+                    if entry.ignoreMods then
+                        ms.bindIgnoreMods[id] = true
+                    end
                 end
             end
             if data.systemBinds and type(data.systemBinds) == "table" then
@@ -437,6 +441,12 @@ return function(ms)
             for id, cooldown in pairs(ms.cooldowns or {}) do
                 data.macros[id] = data.macros[id] or {}
                 data.macros[id].cooldown = cooldown
+            end
+            for id, ignore in pairs(ms.bindIgnoreMods or {}) do
+                if ignore then
+                    data.macros[id] = data.macros[id] or {}
+                    data.macros[id].ignoreMods = true
+                end
             end
             for id in pairs(ms._suppressedMacros or {}) do
                 data.macros[id] = data.macros[id] or {}
@@ -752,6 +762,7 @@ return function(ms)
             end
             ms.bindConfig = {}
             ms.cooldowns  = {}
+            ms.bindIgnoreMods = {}
             ms._applySettings(data)
             for key, def in pairs(ms._userSettingIndex) do
                 if def.type ~= "action" and def.default ~= nil then

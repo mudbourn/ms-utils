@@ -251,6 +251,16 @@
                 return indent(lvl) .. "ms.Mouse(" .. table.concat(parts, ", ") .. ")"
             end
 
+            emitters["ms.moveMouse"] = function(step, lvl)
+                local p = step.params or {}
+                local x   = numArg(p.x, 0)
+                local y   = numArg(p.y, 0)
+                local ref = serialize(p.ref or p.reference or "Absolute")
+                local dur = numArg(p.durationMs, 200)
+                return indent(lvl) .. "ms.moveMouse("
+                    .. x .. ", " .. y .. ", " .. ref .. ", " .. dur .. ")"
+            end
+
             emitters["ms.dragPath"] = function(step, lvl)
                 local p = step.params or {}
                 local pts   = serialize(p.points or "")

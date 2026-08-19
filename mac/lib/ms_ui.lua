@@ -129,6 +129,8 @@ return function(ms)
                         bind      = _bindDisplay(eff),
                         enabled   = (enabled and bindable) and true or false,
                         bindable  = bindable,
+                        bindType  = eff and eff.type or nil,
+                        ignoreMods = (ms.bindIgnoreMods and ms.bindIgnoreMods[id]) and true or false,
                         subs      = {},
                     }
                     byId[id] = entry
@@ -163,6 +165,8 @@ return function(ms)
                             parent   = directParent,
                             enabled  = (subEnabled and subBindable) and true or false,
                             bindable = subBindable,
+                            bindType = eff and eff.type or nil,
+                            ignoreMods = (ms.bindIgnoreMods and ms.bindIgnoreMods[id]) and true or false,
                         })
                     end
                 end
@@ -1230,6 +1234,20 @@ return function(ms)
                     return
                 end
                 ms.binds[data.id] = want
+                ms.saveSettings()
+                ms.bind.rebind()
+                ms.ui.refresh()
+            end,
+
+            -- Per-macro "ignore extra modifiers": when on, the bind matches with
+            -- its declared modifiers held but tolerates extras (subset match),
+            -- instead of requiring an exact modifier set. System binds excluded.
+            setBindIgnoreMods = function(data)
+                if not data.id then return end
+                local def = ms.registry._defs[data.id]
+                if def and def.system then return end
+                ms.bindIgnoreMods = ms.bindIgnoreMods or {}
+                ms.bindIgnoreMods[data.id] = (data.value == true) or nil
                 ms.saveSettings()
                 ms.bind.rebind()
                 ms.ui.refresh()

@@ -955,15 +955,21 @@ YQIDAQAB
             print("Guardian: could not hash " .. (_failedFile or "unknown") .. ", skipping check.")
 
         elseif _checkResult == "mismatch" then
-            if _signedManifestConfirms() then
-                _seedTrustedFromDisk()
-                print("Guardian: hash mismatch but signed MANIFEST.json confirms update, re-seeded all files.")
-            else
-                _blocked = true
-                local _exp = _manifest and _manifest["ms_core.lua"] or nil
-                local _got = _hashFile(_corePath)
-                _showGuardianBlock(_exp, _got)
-            end
+            -- A tracked file differs from the (deploy-written) trusted manifest.
+            -- We do NOT reseed on _signedManifestConfirms() here: that check
+            -- covers ms_core.lua alone, but _seedTrustedFromDisk() would re-bless
+            -- EVERY on-disk file -- so a non-core tamper (lib/ui/bin) would pass
+            -- whenever core still matched the shipped signed hash. Legacy mode has
+            -- no signed per-file coverage to fall back on, so the safe action is
+            -- to block. A genuine signed core+files update arrives through the
+            -- install/repair flow with .ms_file_manifest.json restored, landing on
+            -- the per-file "ok" path above rather than as a legacy mismatch; a
+            -- local edit is fixed by re-running deploy, which re-seeds the manifest.
+            _blocked = true
+            local _exp = _manifest and _manifest[_failedFile or "ms_core.lua"] or nil
+            local _got = _hashFile(_home .. "/.hammerspoon/" .. (_failedFile or "ms_core.lua"))
+            _showGuardianBlock(_exp, _got)
+            print("Guardian: legacy hash mismatch for " .. (_failedFile or "unknown") .. ", blocking.")
         end -- if _checkResult
     elseif _fmResult == "tampered" then
         _blocked = true
@@ -971,20 +977,24 @@ YQIDAQAB
         print("Guardian: per-file manifest signature verification failed, blocking.")
 
     elseif _fmResult == "mismatch" then
-        if _signedManifestConfirms() then
-            _seedTrustedFromDisk()
-            print("Guardian: per-file mismatch but signed MANIFEST.json confirms update, re-seeded trusted manifest.")
-        else
-            _blocked = true
-            local _exp, _got = nil, nil
-            if _fmFailedFile then
-                local fm = _readFileManifest()
-                if fm and fm.files then _exp = fm.files[_fmFailedFile] end
-                _got = _hashFile(_home .. "/.hammerspoon/" .. _fmFailedFile)
-            end
-            _showGuardianBlock(_exp, _got)
-            print("Guardian: per-file hash mismatch for " .. (_fmFailedFile or "unknown") .. ", blocking.")
+        -- Reached only after the per-file manifest's OWN signature already
+        -- verified (_checkFileManifest returns "mismatch" past that gate), so a
+        -- file differing from a validly-signed manifest is unambiguous tamper.
+        -- A legitimate update ships a fresh matching signed manifest and lands
+        -- as "ok", never "mismatch" -- so there is no update to confirm here.
+        -- We must NOT fall back to _signedManifestConfirms()/_seedTrustedFromDisk():
+        -- that escape validates ms_core.lua ALONE and would then re-bless every
+        -- other on-disk file, letting a non-core tamper (lib/ui/bin) pass as long
+        -- as core matched a signed hash. Block instead.
+        _blocked = true
+        local _exp, _got = nil, nil
+        if _fmFailedFile then
+            local fm = _readFileManifest()
+            if fm and fm.files then _exp = fm.files[_fmFailedFile] end
+            _got = _hashFile(_home .. "/.hammerspoon/" .. _fmFailedFile)
         end
+        _showGuardianBlock(_exp, _got)
+        print("Guardian: per-file hash mismatch for " .. (_fmFailedFile or "unknown") .. ", blocking.")
     end
 
     if not _blocked then
