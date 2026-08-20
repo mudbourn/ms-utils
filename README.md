@@ -16,7 +16,7 @@ The primary use case is game macros: automating repetitive actions, building com
 - **Visual macro builder**: drag-and-drop steps, inline editors, test-run with one click
 - **Live debugging**: console, macro monitor, input monitor, window monitor
 - **Profiles**: save, switch, export, and import macro packs
-- **Plugins**: opt-in bundles that set the target game and add live capabilities (Roblox, Minecraft, and more), each reviewed and removable
+- **Plugins**: opt-in bundles that set the target game and add live capabilities (Roblox, Minecraft and more in development), each reviewed and removable
 - **Browse**: install profiles, themes, sounds, macros, and plugins from a signed package library, in whole or by the slice
 - **Theming**: customize colors, fonts, window radius (icons and language changes planned)
 - **Sound system**: assign sounds to macro events, import custom audio
