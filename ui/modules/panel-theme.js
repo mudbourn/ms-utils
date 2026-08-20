@@ -216,8 +216,9 @@
         if (wrap) fillLibList(kind, wrap);
     }
 
-    // Three sub-sections mirroring the profiles panel: Installed (the hotswap
-    // list), Manage (Create New / Save current), and Packages (Import/Export).
+    // Two sub-sections mirroring the profiles panel: Installed (the hotswap
+    // list) and Manage — create/save plus import/export, since moving a pack
+    // between machines is just another way of managing it.
     function librarySection(root, kind, title, desc, captureLabel) {
         const { h, btnRow, actionBtn } = ui();
         const noun = LIB_NOUN[kind];
@@ -229,7 +230,7 @@
         });
 
         sec(root, "manage-" + kind, "Manage",
-            "Creating and saving " + noun + "s", (body) => {
+            "Creating, saving and moving " + noun + "s", (body) => {
             body.appendChild(btnRow(
                 actionBtn("Create New " + noun, "", async () => {
                     const r = await window.openModal(
@@ -249,10 +250,6 @@
                     }
                 }),
             ));
-        });
-
-        sec(root, "packages-" + kind, "Packages",
-            "Moving a " + noun + " between machines", (body) => {
             // Import routes by the package's manifest; Export here is scoped to
             // the live slice of this kind (per-pack export lives in the ⋯ menu).
             body.appendChild(btnRow(

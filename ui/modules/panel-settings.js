@@ -1053,11 +1053,7 @@
 
                 root.appendChild(section("profiles-manage", "Manage",
                     (body) => buildProfileManage(body, current, profiles, hasOthers),
-                    "Creating, saving and clearing profiles"));
-
-                root.appendChild(section("profiles-packages", "Packages",
-                    buildProfilePackages,
-                    "Moving a profile between machines"));
+                    "Creating, saving, moving and clearing profiles"));
             }
 
             function profileMenuItems(name, isCurrent) {
@@ -1231,6 +1227,19 @@
                         })(),
                     ),
                 );
+                // Moving a profile between machines is just another way of
+                // managing it, so import/export live here rather than in a
+                // separate section (matching the theme/sound/macro panels).
+                body.appendChild(
+                    btnRow(
+                        actionBtn("Import Profile", "", () =>
+                            sendToHost({ action: "importPackage" }),
+                        ),
+                        actionBtn("Export Profile", "", () =>
+                            sendToHost({ action: "exportPackage", type: "profile" }),
+                        ),
+                    ),
+                );
                 if (hasOthers) {
                     body.appendChild(divider());
                     body.appendChild(
@@ -1251,19 +1260,6 @@
                         ),
                     );
                 }
-            }
-
-            function buildProfilePackages(body) {
-                body.appendChild(
-                    btnRow(
-                        actionBtn("Import Profile", "", () =>
-                            sendToHost({ action: "importPackage" }),
-                        ),
-                        actionBtn("Export Profile", "", () =>
-                            sendToHost({ action: "exportPackage", type: "profile" }),
-                        ),
-                    ),
-                );
             }
 
             function buildDeveloper(body) {

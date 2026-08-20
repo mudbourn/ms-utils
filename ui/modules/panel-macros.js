@@ -3180,8 +3180,8 @@
     bindsScroll.insertBefore(metaCard, bindList);
 
     // Installed Macro Packs: hotswap library, mirrors the theme/sound managers.
-    // Full parity with the profiles panel: ⋯ menu per pack, plus Create New /
-    // Save current (Manage) and Import / Export (Packages) sub-sections.
+    // Full parity with the profiles panel: ⋯ menu per pack, plus a single
+    // Manage sub-section (Create New / Save current / Import / Export).
     var _macroLib = [];
     var packList;
 
@@ -3258,14 +3258,11 @@
     }, "Hotswap a saved macro set");
     var packManageCard = _kit.section("manage-macro", "Manage", function(body) {
         body.appendChild(_kit.btnRow(packCreateBtn, packSaveBtn));
-    }, "Creating and saving macro packs");
-    var packPackagesCard = _kit.section("packages-macro", "Packages", function(body) {
         body.appendChild(_kit.btnRow(packImportBtn, packExportBtn));
-    }, "Moving a macro pack between machines");
+    }, "Creating, saving and moving macro packs");
     // Managers sit at the bottom, matching the theme/sound panels' order.
     bindsScroll.appendChild(packCard);
     bindsScroll.appendChild(packManageCard);
-    bindsScroll.appendChild(packPackagesCard);
 
     function fillMacroLib() {
         var kit = window.msUI;
@@ -3390,7 +3387,14 @@
         onSame: function() { if (window.playSlot) playSlot("back"); },
         onSwitch: function(tab) {
             if (window.playSlot) playSlot("interact");
-            if (tab === "binds") { refreshBindList(); refreshMeta(); }
+            if (tab === "binds") {
+                refreshBindList();
+                refreshMeta();
+                // Re-fetch the library each time the tab is shown so a request
+                // dropped at boot (host bridge not ready yet) self-heals rather
+                // than leaving Installed Macro Packs permanently empty.
+                if (window.msLibraryClient) window.msLibraryClient.request("macro");
+            }
         },
     });
 
@@ -3669,63 +3673,6 @@
         return out;
     }
 
-    // A compact "link to another macro" menu. Reuses the shell's dropdown so it
-    // matches the app's styling and outside-click behaviour. When the macro is
-    // already a peer, the control shows its current parent (a plain select) so
-    // you can see and change what it follows; otherwise it's an action menu
-    // that reads "Link…".
-    function macroLinkControl(m) {
-        var opts    = linkTargets(m);
-        var current = m.parent || "";
-        var linked  = !!current;
-        var sel = window.createSelect({
-            className:   "bind-link-select",
-            action:      !linked,
-            searchable:  opts.length > 6,
-            placeholder: "Link…",
-            options:     opts,
-            value:       linked ? current : undefined,
-            onChange:    function(targetId) {
-                if (!targetId) return;
-                shellPost("macros", "bindToMacro", {
-                    action:   "bindToMacro",
-                    id:       m.id,
-                    targetId: targetId,
-                });
-            },
-        });
-        sel.title = linked
-            ? "Following another macro — pick a different one to re-link"
-            : "Bind this macro to follow another macro's trigger";
-        if (!opts.length) {
-            sel.classList.add("disabled");
-            sel.title = "No other macros to link to";
-        }
-        return sel;
-    }
-
-    // Takes an ICONS name, not a glyph.
-    function iconBtn(iconName, title, onClick) {
-        var b = document.createElement("button");
-        b.className = "bind-act";
-        // Falls back to the name rather than rendering nothing, so a typo in
-        // an icon name is visible instead of an empty button.
-        b.innerHTML = (typeof window.icon === "function" && window.ICONS
-            && window.ICONS[iconName])
-            ? window.icon(iconName)
-            : "";
-        if (!b.innerHTML) b.textContent = iconName;
-        b.title = title;
-        b.addEventListener("mouseenter", function() {
-            if (window.playSlot) playSlot("hover");
-        });
-        b.addEventListener("click", function(e) {
-            e.stopPropagation();
-            if (window.playSlot) playSlot("interact");
-            onClick();
-        });
-        return b;
-    }
 
     // Builds the target list for the "Link to another macro" submenu, mapping
     // each candidate to a bindToMacro action. A ✓ marks the current parent.
@@ -3753,14 +3700,57 @@
         if (!kit || typeof kit.showCtxMenu !== "function") return;
         var items = [];
 
+        // Enable / disable (was the inline toggle). System binds are always live.
+        // The host guards the "no bind set" case with its own alert, so we can
+        // always post and let it decide.
+        if (m.group !== "system" && !m.systemBind) {
+            items.push({
+                icon:  "",
+                label: m.enabled ? "Disable macro" : "Enable macro",
+                action: function() {
+                    shellPost("macros", "setMacroEnabled", {
+                        action: "setMacroEnabled",
+                        id:     m.id,
+                        value:  !m.enabled,
+                    });
+                    if (window.playSlot) playSlot(m.enabled ? "toggleOff" : "toggleOn");
+                },
+            });
+        }
+
+        // Reset / clear (was the inline refresh icon). A sub drops its modifier
+        // and re-attaches to its parent; everything else resets to its default.
+        if (isSub) {
+            items.push({
+                icon:  "",
+                label: "Re-attach to parent",
+                action: function() {
+                    shellPost("macros", "clearModifier", {
+                        action: "clearModifier",
+                        id:     m.id,
+                    });
+                },
+            });
+        } else {
+            items.push({
+                icon:  "",
+                label: "Reset to default bind",
+                action: function() {
+                    shellPost("macros", "resetBind", {
+                        action:     "resetBind",
+                        id:         m.id,
+                        systemBind: m.systemBind || false,
+                    });
+                },
+            });
+        }
+
         // Sub-bind rebind mode (was the inline "Mod/Full" toggle). Governs what
         // clicking the chord pill captures: just a modifier, or a full trigger.
         if (isSub) {
             items.push({
                 icon:  "",
-                label: mode.full
-                    ? "Rebind captures: full trigger → switch to modifier only"
-                    : "Rebind captures: modifier only → switch to full trigger",
+                label: mode.full ? "Switch to modifier only" : "Switch to full trigger",
                 action: function() { mode.full = !mode.full; },
             });
         }
@@ -3836,105 +3826,43 @@
         var acts = document.createElement("div");
         acts.className = "bind-acts";
 
-        // Inline controls are the primary two: the chord pill (click to rebind)
-        // and the rebind-reset icon. Everything else lives in the ⋯ menu.
+        // Inline is just the two the user asked for: the chord pill (click to
+        // rebind) and the ⋯ button. Enable/disable, reset, rebind mode, link,
+        // ignore-modifiers and delete all live in the ⋯ menu.
         var mode = { full: false };
-        if (isSub) {
-            // A sub-bind inherits its parent's trigger and owns only its modifier.
-            // The rebind mode (modifier-only vs full trigger) is chosen in ⋯.
-            acts.appendChild(bindPill(m.bind, function() {
-                if (mode.full) {
-                    shellPost("macros", "startRebind", {
-                        action:     "startRebind",
-                        id:         m.id,
-                        systemBind: false,
-                    });
-                } else {
-                    shellPost("macros", "startModRebind", {
-                        action: "startModRebind",
-                        id:     m.id,
-                    });
-                }
-            }, "Click to rebind · capture mode is set in the ⋯ menu"));
-
-            // Clearing writes the derived link back (re-nesting a severed
-            // sub) and drops the modifier.
-            acts.appendChild(iconBtn("refresh", "Clear modifier / re-attach to parent", function() {
-                shellPost("macros", "clearModifier", {
-                    action: "clearModifier",
+        acts.appendChild(bindPill(m.bind, function() {
+            if (isSub && !mode.full) {
+                shellPost("macros", "startModRebind", {
+                    action: "startModRebind",
                     id:     m.id,
                 });
-            }));
-        } else {
-            acts.appendChild(bindPill(m.bind, function() {
+            } else {
                 shellPost("macros", "startRebind", {
                     action:     "startRebind",
                     id:         m.id,
                     systemBind: m.systemBind || false,
                 });
-            }, "Click to rebind"));
+            }
+        }, isSub
+            ? "Click to rebind · capture mode is set in the ⋯ menu"
+            : "Click to rebind"));
 
-            acts.appendChild(iconBtn("refresh", "Reset to default bind", function() {
-                shellPost("macros", "resetBind", {
-                    action:     "resetBind",
-                    id:         m.id,
-                    systemBind: m.systemBind || false,
-                });
-            }));
-        }
-
-        // The ⋯ options menu: link, ignore-modifiers, rebind mode (subs), delete.
-        // Not offered for system binds, whose triggers are fixed and undeletable.
-        if (m.group !== "system" && !m.systemBind) {
-            var moreBtn = document.createElement("button");
-            moreBtn.className = "bind-act bind-more";
-            moreBtn.textContent = "⋯";
-            moreBtn.title = "Bind options";
-            moreBtn.addEventListener("mouseenter", function() {
-                if (window.playSlot) playSlot("hover");
-            });
-            moreBtn.addEventListener("click", function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                var rect = moreBtn.getBoundingClientRect();
-                openBindMenu(m, isSub, mode, rect.right, rect.bottom);
-            });
-            acts.appendChild(moreBtn);
-        }
-
-        // System binds are always live; every other macro — including peers
-        // (subs) — can be enabled/disabled on its own.
-        if (m.group !== "system" && !m.systemBind) {
-            // Reuses the settings panel toggle markup. A macro with no bind is locked off.
-            var bindable = (m.bindable !== false);
-            var lbl = document.createElement("label");
-            lbl.className = "toggle bind-toggle" + (bindable ? "" : " disabled");
-            if (!bindable) lbl.title = "Set a bind before enabling this macro";
-            lbl.addEventListener("mouseenter", function() {
-                if (window.playSlot) playSlot("hover");
-            });
-            var t = document.createElement("input");
-            t.type = "checkbox";
-            t.checked = !!m.enabled;
-            t.disabled = !bindable;
-            t.addEventListener("change", function() {
-                if (!bindable) { t.checked = false; return; }
-                shellPost("macros", "setMacroEnabled", {
-                    action: "setMacroEnabled",
-                    id:     m.id,
-                    value:  t.checked,
-                });
-                // Matches the settings panel's toggle(): the shell sounds the
-                // toggle, the host handler does not.
-                if (window.playSlot) playSlot(t.checked ? "toggleOn" : "toggleOff");
-            });
-            var track = document.createElement("div");
-            track.className = "toggle-track";
-            var thumb = document.createElement("div");
-            thumb.className = "toggle-thumb";
-            lbl.appendChild(t); lbl.appendChild(track); lbl.appendChild(thumb);
-            acts.appendChild(lbl);
-        }
+        // The ⋯ options menu. Rendered for every row — even system binds, whose
+        // only option is Reset — so the row layout stays uniform.
+        var moreBtn = document.createElement("button");
+        moreBtn.className = "bind-act bind-more";
+        moreBtn.textContent = "⋯";
+        moreBtn.title = "Bind options";
+        moreBtn.addEventListener("mouseenter", function() {
+            if (window.playSlot) playSlot("hover");
+        });
+        moreBtn.addEventListener("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var rect = moreBtn.getBoundingClientRect();
+            openBindMenu(m, isSub, mode, rect.right, rect.bottom);
+        });
+        acts.appendChild(moreBtn);
 
         r.appendChild(acts);
         return r;
@@ -4540,7 +4468,18 @@
     });
 
     /* -- Panel handler (consolidated Lua -> JS dispatch) -- */
+    var _libSelfHealed = false;
     window.registerPanel("macros", function(action, body) {
+        // The Installed Macro Packs list is filled by a request() fired during
+        // eager panel build, which can beat the host's library subscription and
+        // be dropped, leaving the shelf empty until a reload. The first host
+        // push to this panel proves the bridge is live, so re-request once then
+        // — a boot-race self-heal that does not depend on the early request or
+        // the host's own ready-time re-push landing.
+        if (!_libSelfHealed && window.msLibraryClient) {
+            _libSelfHealed = true;
+            window.msLibraryClient.request("macro");
+        }
         // Function picker messages
         if (window.fnPicker && window.fnPicker.handler) {
             window.fnPicker.handler(action, body);

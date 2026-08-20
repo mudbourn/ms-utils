@@ -2030,6 +2030,12 @@ return function(ms)
             local currentName = sanitizeName(
                 (ms.macroMeta and ms.macroMeta.name) or "unnamed"
             )
+            -- Flush live state (binds, enabled flags, cooldowns, ...) to
+            -- ms_settings.json BEFORE archiving it below. Without this, a bind
+            -- set since the last save is written to disk only by the target's
+            -- reload — i.e. never for the profile we are leaving — so the
+            -- archived copy is stale and the bind is lost on switch-back.
+            pcall(ms.saveSettings)
             hs.fs.mkdir(profilesPath)
             hs.fs.mkdir(profilesPath .. currentName)
 

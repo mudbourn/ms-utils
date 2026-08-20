@@ -909,18 +909,10 @@
         .bind-act { width: 22px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-s); cursor: pointer; transition: color 0.15s, border-color 0.15s; }
         .bind-act .icon { width: 13px; height: 13px; }
         .bind-act:hover { color: var(--accent); border-color: var(--accent); }
-        /* Link-to-macro menu: sized like the other bind actions, not the full
-           macro-select width it uses elsewhere. */
-        .bind-link-select { min-width: 0; height: 22px; padding: 0 6px; font-size: 11px; }
-        .bind-link-select .macro-select-label { color: var(--text2); }
-        .bind-link-select.disabled { opacity: 0.4; pointer-events: none; }
-        /* Sub-bind Mod/Full mode toggle: text, so it needs to size to content
-           rather than sit in the 22px icon square. Its active state carries
-           the accent so the current mode reads at a glance. */
-        .bind-mode-toggle { width: auto; min-width: 34px; padding: 0 8px; font: 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; }
-        /* The ⋯ options button: same 22px chip as .bind-act, but the glyph needs a
-           larger size and a slight upward nudge to sit centered on the baseline. */
-        .bind-more { font-size: 16px; padding-bottom: 3px; }
+        /* The ⋯ options button: same 22px chip as .bind-act, just a larger glyph.
+           The ⋯ character already sits on the vertical centre, so let the flex
+           centering place it — no padding nudge (which skewed it upward). */
+        .bind-more { font-size: 16px; }
         .bind-toggle { margin-left: 2px; }
         /* An unbound macro can't be enabled, the track dims and the toggle
            stops taking the pointer so it reads as locked, not merely off. */
