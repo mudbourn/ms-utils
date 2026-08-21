@@ -70,6 +70,16 @@
         -- isReady --
             ms.shell.isReady = function() return _shellReady end
             ms.shell.webview = function() return _shellView end
+            -- Whether the shell window is actually on screen right now. Used so
+            -- a live settings reload (profile switch / pack hotswap) reflects the
+            -- shell's real state instead of forcing it "closed" — otherwise the
+            -- shell stays visible but its toggle thinks it is hidden and re-runs
+            -- the open sequence on the next Alt+P.
+            ms.shell.isVisible = function()
+                if not _shellView then return false end
+                local ok, w = pcall(function() return _shellView:hswindow() end)
+                return ok and w ~= nil and w:isVisible() == true
+            end
         -- END --
 
         -- resizeEdgeMath --

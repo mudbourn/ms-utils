@@ -440,7 +440,12 @@ return function(ms)
                 soundEntries            = soundEntries,
                 bundleSoundsWithTheme   = ms.bundleSoundsWithTheme ~= false,
                 soundPresets            = soundPresets,
-                currentProfile          = meta.name and ms.sanitizeName(meta.name) or "",
+                -- Active only when macro+theme+sound packs all align to one
+                -- profile; a mixed set reads as no active profile (see
+                -- ms.alignedProfile). Falls back to the macro-meta name only if
+                -- the alignment helper is unavailable.
+                currentProfile          = (ms.alignedProfile and ms.alignedProfile())
+                    or (meta.name and ms.sanitizeName(meta.name)) or "",
                 profiles                = ms.getProfiles(),
                 integrityStatus         = status,
                 integrityHash           = curHash,
@@ -982,14 +987,10 @@ return function(ms)
                     end)
                     return false
                 end
-                if not next(ms.registry._defs) then
-                    ms.alert("Reload failed:\nNo ms.bind.define calls found.", 6)
-                    pcall(function()
-                        ms.bind._registerSystemBinds()
-                        ms.bind.rebindSystem()
-                    end)
-                    return false
-                end
+                -- An empty registry is valid: a macro pack may ship only
+                -- credits, visual macros, or nothing at all. Swapping to such a
+                -- pack must not be treated as a reload failure. System binds are
+                -- (re)registered below regardless of how many user binds exist.
                 ms._macroMetaFromHand = ms.macroMeta ~= nil
                 if ms.compiler and ms.compiler.paths
                     and hs.fs.attributes(ms.compiler.paths.json) then
@@ -1353,6 +1354,12 @@ return function(ms)
 
             switchProfile = function(data) if data.name then ms.switchProfile(data.name) end end,
 
+            renameProfile = function(data)
+                if data.name and data.newName and ms.renameProfile then
+                    ms.renameProfile(data.name, data.newName)
+                end
+            end,
+
             deleteProfile = function(data)
                 if not data.name then return end
                 local targetName = ms.sanitizeName(data.name)
@@ -1361,12 +1368,28 @@ return function(ms)
                 local dir = profilesPath .. targetName
                 if not hs.fs.attributes(dir) then return end
                 os.execute("rm -rf " .. sq(dir))
+                -- Also remove the profile's same-named packs, so deleting a
+                -- profile does not leave orphaned macro/theme/sound entries in
+                -- the Installed Library. Only entries whose slug matches this
+                -- profile are touched — an off-convention pack (e.g. a shared
+                -- sound pack named for a font) survives. libraryRemove clears
+                -- the .active marker for any it removes.
+                if ms.package and ms.package.libraryRemove then
+                    for _, k in ipairs({ "macro", "theme", "sound" }) do
+                        pcall(ms.package.libraryRemove, k, targetName)
+                    end
+                end
                 ms._profilesDirty = true
                 ms.ui.markDirty()
                 ms.playSlot("reset")
                 hs.timer.doAfter(0.05, function()
                     ms.alert("Profile \"" .. data.name .. "\" deleted.", 2, true)
                     ms.ui.refresh()
+                    if ms.ui._actions and ms.ui._actions.libraryList then
+                        for _, k in ipairs({ "macro", "theme", "sound" }) do
+                            pcall(ms.ui._actions.libraryList, { kind = k })
+                        end
+                    end
                 end)
             end,
 
@@ -1383,6 +1406,14 @@ return function(ms)
                             local attr = hs.fs.attributes(dir)
                             if attr and attr.mode == "directory" then
                                 os.execute("rm -rf " .. sq(dir))
+                                -- Remove this profile's same-named packs too (see
+                                -- deleteProfile). The active profile is skipped
+                                -- above, so its packs are never removed here.
+                                if ms.package and ms.package.libraryRemove then
+                                    for _, k in ipairs({ "macro", "theme", "sound" }) do
+                                        pcall(ms.package.libraryRemove, k, safe)
+                                    end
+                                end
                                 deleted = deleted + 1
                             end
                         end
@@ -1394,6 +1425,11 @@ return function(ms)
                 hs.timer.doAfter(0.05, function()
                     ms.alert(deleted .. " profile" .. (deleted == 1 and "" or "s") .. " deleted.", 3, true)
                     ms.ui.refresh()
+                    if ms.ui._actions and ms.ui._actions.libraryList then
+                        for _, k in ipairs({ "macro", "theme", "sound" }) do
+                            pcall(ms.ui._actions.libraryList, { kind = k })
+                        end
+                    end
                 end)
             end,
 
@@ -2010,15 +2046,17 @@ return function(ms)
                 if not (ms.package.isLibraryKind and ms.package.isLibraryKind(kind)) then return end
 
                 local entries = ms.package.libraryList(kind)
+                -- Encode the payload table (never the bare `kind` string):
+                -- hs.json.encode is NSJSONSerialization, which rejects a
+                -- top-level JSON fragment, so hs.json.encode(kind) throws. The
+                -- kind is a validated identifier, so pass it as a quoted literal.
                 local ok, json = pcall(hs.json.encode, {
                     kind    = kind,
                     entries = entries,
                 })
                 if ok and json then
-                    pcall(function()
-                        ms.shell.eval("shellReceive('library', " .. hs.json.encode(kind) ..
-                            ", " .. json .. ")")
-                    end)
+                    ms.shell.eval("shellReceive('library', '" .. kind ..
+                        "', " .. json .. ")")
                 end
             end,
 
@@ -2032,12 +2070,86 @@ return function(ms)
                     return
                 end
 
-                if ms._soundsDirty and ms._discoverSounds then ms._discoverSounds() end
-                if ms.loadTheme then ms.loadTheme() end
+                -- A manual single-pack hotswap diverges the live setup from any
+                -- one profile — it is now a custom mix. Clear the active-profile
+                -- marker so the Settings panel stops showing a profile as Active.
+                -- (switchProfile calls the package-level libraryActivate, not
+                -- this UI action, so its own alignment activations are unaffected
+                -- and it re-sets the marker afterward.)
+                if ms.package.setActiveProfile then
+                    pcall(ms.package.setActiveProfile, nil)
+                end
+
+                -- Hotswap the running state in place for whatever the slice
+                -- touched — the same surfaces boot/reloadMacros rebuild — so no
+                -- full Hammerspoon reload is needed. Quiet-flagged so the
+                -- sub-reloads suppress their own toasts and refocus dance; our
+                -- single "activated" toast stands in. Steps are additive, not
+                -- exclusive: a macro pack can bundle macro sounds and a theme
+                -- can bundle fonts/sounds, so the sound rescan runs for every
+                -- kind (gated on the _soundsDirty flag applyDropped set from
+                -- the files it actually dropped).
+                local wasQuick = ms._quickReloading
+                ms._quickReloading = true
+                if data.kind == "macro" then
+                    -- A macro pack carries handwritten (ms_macros.lua) and
+                    -- visual (ms_macros_visual.*) macros plus authored
+                    -- settings/vars. Copying the files is not enough: the
+                    -- sandbox still holds the old registrations, so both kinds
+                    -- must re-register and their binds be restored — otherwise
+                    -- visual macros silently never appear.
+                    if ms.ui._actions.reloadMacros then pcall(ms.ui._actions.reloadMacros) end
+                    if ms._loadAuthoredSettings then pcall(ms._loadAuthoredSettings) end
+                    if ms._defineAuthoredSettings then pcall(ms._defineAuthoredSettings) end
+                elseif data.kind == "theme" then
+                    if ms.loadTheme then pcall(ms.loadTheme) end
+                    pcall(function() ms.alert:recolor() end)
+                    pcall(function() ms.dev:recolor() end)
+                end
+                if ms._soundsDirty and ms._discoverSounds then pcall(ms._discoverSounds) end
+                if data.kind == "sound" then
+                    -- Re-derive the stored sound-preset marker from the live
+                    -- assignments the activated pack just dropped, so it tracks
+                    -- the new pack (a blank pack = Default) instead of the
+                    -- previous pack's saved value — which the theme-toggle path
+                    -- (ms_ui.lua ~1101) would otherwise re-apply over it. Same
+                    -- match logic the Presets UI uses: all default → "default",
+                    -- else a numbered preset, else "custom".
+                    pcall(function()
+                        local sa       = ms.soundAssign or {}
+                        local defaults = ms.soundSlotDefaults and ms.soundSlotDefaults() or {}
+                        local preset   = "custom"
+                        local isDefault = next(defaults) ~= nil
+                        for sid, d in pairs(defaults) do
+                            if (sa[sid] or "") ~= (d or "") then isDefault = false break end
+                        end
+                        if isDefault then
+                            preset = "default"
+                        elseif ms.buildSoundPresets then
+                            for _, p in ipairs(ms.buildSoundPresets()) do
+                                local match = next(p.assigns or {}) ~= nil
+                                for sid, name in pairs(p.assigns or {}) do
+                                    if (sa[sid] or "") ~= (name or "") then match = false break end
+                                end
+                                if match then preset = tostring(p.num) break end
+                            end
+                        end
+                        ms._soundPreset = preset
+                        if ms.saveSettings then ms.saveSettings() end
+                    end)
+                end
+                ms._quickReloading = wasQuick
+
                 ms.playSlot("update")
                 ms.alert((data.name or "Slice") .. " activated.", 3, true)
                 ms.ui.markDirty()
                 ms.ui.refresh()
+                -- Repaint the shelf so the newly-active badge moves without a
+                -- panel re-open; the JS activate() posts but never re-requests
+                -- the list, so the host must push the updated markers itself.
+                if ms.ui._actions.libraryList then
+                    pcall(ms.ui._actions.libraryList, { kind = data.kind })
+                end
             end,
 
             libraryRemove = function(data)
@@ -2081,13 +2193,28 @@ return function(ms)
             libraryCreateEmpty = function(data)
                 if not (data and data.kind and ms.package
                         and ms.package.libraryCreateEmpty) then return end
-                local rec, err = ms.package.libraryCreateEmpty(data.kind, data.name)
+                local rec, err
+                if data.seed == true and ms.package.libraryCreateSeeded then
+                    rec, err = ms.package.libraryCreateSeeded(data.kind, data.name)
+                else
+                    rec, err = ms.package.libraryCreateEmpty(data.kind, data.name)
+                end
                 if not rec then
                     ms.alert("Could not create:\n" .. tostring(err), 4)
                     return
                 end
                 ms.playSlot("update")
                 ms.alert("Created \"" .. rec.name .. "\".", 3, true)
+                ms.ui._actions.libraryList({ kind = data.kind })
+            end,
+
+            libraryClear = function(data)
+                if not (data and data.kind and ms.package
+                        and ms.package.libraryClear) then return end
+                local removed = ms.package.libraryClear(data.kind)
+                ms.playSlot("reset")
+                ms.alert(removed .. " " .. tostring(data.kind) .. " pack" ..
+                    (removed == 1 and "" or "s") .. " removed.", 3, true)
                 ms.ui._actions.libraryList({ kind = data.kind })
             end,
 

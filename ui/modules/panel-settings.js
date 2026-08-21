@@ -1058,6 +1058,23 @@
 
             function profileMenuItems(name, isCurrent) {
                 const items = [];
+                items.push({
+                    icon: "",
+                    label: "Rename...",
+                    action: async () => {
+                        const r = await openModal(
+                            "Rename Profile",
+                            `New name for "${name}".`,
+                            "Rename",
+                            "Cancel",
+                            true,
+                            name,
+                        );
+                        const v = (r.value || "").trim();
+                        if (r.confirmed && v)
+                            sendToHost({ action: "renameProfile", name, newName: v });
+                    },
+                });
                 if (!isCurrent) {
                     items.push({
                         icon: "",

@@ -701,10 +701,15 @@ return function(ms)
                 if isAudioRel(rel) then sawAudio = true end
             end
 
-            if ms.compiler and ms.compiler.compile then
+            -- A dropped visual-macros source must be recompiled to its .lua.
+            -- rebuild() is the compile-all entry point (compile(macroDef) is a
+            -- single-macro helper and needs an argument), and load() brings the
+            -- result into the live sandbox so the macros actually register.
+            if ms.compiler and ms.compiler.rebuild then
                 for _, rel in ipairs(installed) do
                     if rel == "ms_macros_visual.json" then
-                        pcall(function() ms.compiler.compile() end)
+                        pcall(function() ms.compiler.rebuild() end)
+                        if ms.compiler.load then pcall(function() ms.compiler.load() end) end
                         break
                     end
                 end
@@ -981,7 +986,12 @@ return function(ms)
             local function addDir(relDir, absDir)
                 if not hs.fs.attributes(absDir) then return end
                 for entry in hs.fs.dir(absDir) do
-                    if entry ~= "." and entry ~= ".." and not entry:find("^%.") then
+                    -- Skip dotfiles and .bak backups. Activation writes a
+                    -- <file>.bak next to each overwritten asset, and those
+                    -- siblings live right inside sounds/macro/; collecting them
+                    -- pollutes the slice and breaks the reconcile fingerprint.
+                    if entry ~= "." and entry ~= ".." and not entry:find("^%.")
+                        and not entry:find("%.bak") then
                         local abs = absDir .. entry
                         if fileExists(abs) then files[relDir .. entry] = abs end
                     end
@@ -1078,6 +1088,29 @@ return function(ms)
             return LIBRARY_ROOT .. "/" .. kind .. "/" .. slug
         end
 
+        -- Exposed so profile code can map a profile name to its pack slug and
+        -- test whether the profile's same-named pack exists in a kind.
+        ms.package.librarySlug = librarySlug
+        ms.package.libraryHasEntry = function(kind, slug)
+            if not LIBRARY_KINDS[kind] then return false end
+            return hs.fs.attributes(libraryDir(kind, librarySlug(slug)) .. "/meta.json") ~= nil
+        end
+
+        -- The canonical blank macro source. Shared by createNewProfile and
+        -- libraryCreateEmpty so a blank profile's live ms_macros.lua and its
+        -- blank macro pack are byte-identical — which lets the reconcile
+        -- fingerprint match them and keeps the pack marked active across boots.
+        ms.package.blankMacroSrc = function(name)
+            return table.concat({
+                "-- New profile — add your macros below.",
+                "ms.macroMeta = {",
+                "    name   = \"" .. tostring(name or "") .. "\",",
+                "    author = \"\",",
+                "}",
+                "",
+            }, "\n")
+        end
+
         local function readJSON(path)
             local raw = readFile(path)
             if not raw then return nil end
@@ -1107,6 +1140,30 @@ return function(ms)
                 writeFile(activeMarkerPath(kind), librarySlug(slug) .. "\n")
             else
                 os.remove(activeMarkerPath(kind))
+            end
+        end
+
+        -- The profile the live setup is "on", tracked explicitly rather than
+        -- inferred from the three pack markers. A profile switch records the
+        -- profile name here; a manual single-pack hotswap clears it (the live
+        -- state is now a custom mix, not any one profile). This decouples "which
+        -- profile is active" from pack naming — same-named packs are not required
+        -- to exist, and packs named off-convention (e.g. a shared sound pack) no
+        -- longer make the profile read as unaligned. The value is a raw profile
+        -- folder name (what getProfiles returns), or nil when nothing is claimed.
+        local activeProfilePath = LIBRARY_ROOT .. "/.active_profile"
+        ms.package.getActiveProfile = function()
+            local s = readFile(activeProfilePath)
+            if not s then return nil end
+            s = s:gsub("%s+$", "")
+            return s ~= "" and s or nil
+        end
+        ms.package.setActiveProfile = function(name)
+            if name and name ~= "" then
+                hs.execute("mkdir -p " .. sq(LIBRARY_ROOT))
+                writeFile(activeProfilePath, tostring(name) .. "\n")
+            else
+                os.remove(activeProfilePath)
             end
         end
 
@@ -1207,8 +1264,43 @@ return function(ms)
             end
 
             local rels = hs.execute(
-                "cd " .. sq(filesDir) .. " && find . -type f ! -name '.DS_Store' 2>/dev/null"
+                "cd " .. sq(filesDir) .. " && find . -type f ! -name '.DS_Store' ! -name '*.bak' 2>/dev/null"
             ) or ""
+
+            -- The set of relpaths the incoming slice provides, so the replace
+            -- step below can spare live files this slice is about to overwrite.
+            local incoming = {}
+            for line in rels:gmatch("[^\r\n]+") do
+                local clean = safeRelPath(line:gsub("^%./", ""))
+                if clean and pathAllowed(kind, clean) then incoming[clean] = true end
+            end
+
+            -- Clean replace: activation must swap the slice, not layer onto it.
+            -- Remove exactly the files the previously-active entry owned that
+            -- this one does not carry (e.g. a blank macro pack must clear the
+            -- prior pack's ms_macros_visual.*). Scoped to the prior entry's own
+            -- file list, so shared assets (sounds/macro/) another pack placed
+            -- are never collateral. Skipped when there is no prior marker — the
+            -- live state is custom and we cannot know what it owns.
+            local prev = ms.package.libraryGetActive(kind)
+            if prev and prev ~= slug then
+                local prevDir = libraryDir(kind, prev) .. "/files"
+                if hs.fs.attributes(prevDir) then
+                    local prevRels = hs.execute(
+                        "cd " .. sq(prevDir) .. " && find . -type f ! -name '.DS_Store' ! -name '*.bak' 2>/dev/null"
+                    ) or ""
+                    for line in prevRels:gmatch("[^\r\n]+") do
+                        local clean = safeRelPath(line:gsub("^%./", ""))
+                        if clean and pathAllowed(kind, clean) and not incoming[clean] then
+                            local dest = destFor(clean)
+                            if fileExists(dest) then
+                                hs.execute("/bin/cp " .. sq(dest) .. " " .. sq(dest .. ".bak"))
+                                os.remove(dest)
+                            end
+                        end
+                    end
+                end
+            end
 
             local installed, failed = {}, {}
             for line in rels:gmatch("[^\r\n]+") do
@@ -1230,7 +1322,38 @@ return function(ms)
                 end
             end
 
-            if #installed == 0 then return nil, "Nothing could be activated." end
+            -- A blank pack carries no files. That is a valid "reset to
+            -- default" activation (the same way a blank macro pack or profile
+            -- is), NOT a failure — only error if the slice HAD files and every
+            -- copy failed. The clean-replace above already removed the prior
+            -- entry's files; also clear this kind's live default targets so it
+            -- resets even when there was no prior marker (custom/unmanaged live
+            -- state). Non-destructive: only the config file that pins a
+            -- non-default look/preset is removed, never the user's audio.
+            local hadFiles = next(incoming) ~= nil
+            if hadFiles and #installed == 0 then
+                return nil, "Nothing could be activated."
+            end
+            if not hadFiles then
+                if kind == "theme" then
+                    os.remove(_dataDir .. "/ms_theme.json")
+                elseif kind == "sound" then
+                    os.remove(_hsDir .. "/sound_assign.json")
+                    ms._soundsDirty = true
+                elseif kind == "macro" then
+                    -- Clean-replace just removed the prior pack's ms_macros.lua
+                    -- and a blank pack carries none — leaving the live macros
+                    -- file absent, which breaks reloadMacros and would crash the
+                    -- next cold boot's audit. Seed the same minimal stub boot
+                    -- and switchProfile use so there is always a valid file.
+                    if not fileExists(_hsDir .. "/ms_macros.lua") then
+                        writeFile(_hsDir .. "/ms_macros.lua",
+                            "-- Blank macro pack — add your macros below.\n"
+                            .. "ms.macroMeta = { name = \"" .. tostring(slug)
+                            .. "\", author = \"\" }\n")
+                    end
+                end
+            end
 
             applyDropped(installed)
             ms.package.librarySetActive(kind, slug)
@@ -1274,6 +1397,71 @@ return function(ms)
             return rec
         end
 
+        -- Rename a stored slice's SLUG (folder) as well as its display name, so
+        -- a profile rename can keep its same-named packs aligned (alignment
+        -- matches by slug). Moves the entry folder, updates meta, and carries
+        -- the .active marker across if this entry was active. No-op if the entry
+        -- does not exist; refuses to clobber an existing target slug.
+        ms.package.libraryRenameEntry = function(kind, oldSlug, newName)
+            if not LIBRARY_KINDS[kind] then return nil, "Not a library kind." end
+            oldSlug = librarySlug(oldSlug)
+            newName = type(newName) == "string" and newName:gsub("^%s+", ""):gsub("%s+$", "") or ""
+            if newName == "" then return nil, "Name cannot be empty." end
+            local oldDir = libraryDir(kind, oldSlug)
+            if not hs.fs.attributes(oldDir) then return nil end   -- nothing to rename
+            local newSlug = librarySlug(newName)
+            if newSlug ~= oldSlug then
+                local newDir = libraryDir(kind, newSlug)
+                if hs.fs.attributes(newDir) then
+                    return nil, "A pack with that name already exists."
+                end
+                local _, ok = hs.execute("/bin/mv " .. sq(oldDir) .. " " .. sq(newDir))
+                if not ok or not hs.fs.attributes(newDir) then
+                    return nil, "Could not rename entry."
+                end
+                if ms.package.libraryGetActive(kind) == oldSlug then
+                    ms.package.librarySetActive(kind, newSlug)
+                end
+            end
+            local dir = libraryDir(kind, newSlug)
+            local rec = readJSON(dir .. "/meta.json") or {}
+            rec.name = newName
+            rec.slug = newSlug
+            writeFile(dir .. "/meta.json", hs.json.encode(rec) .. "\n")
+            return rec
+        end
+
+        -- Record each visual macro's current key bind into the LIVE
+        -- ms_macros_visual.json, so a subsequent capture banks it and the bind
+        -- travels with the pack. Visual macros register with no built-in bind —
+        -- the key lives only in ms_settings.json (profile-owned) — so swapping a
+        -- pack onto another profile's settings loses the bind. The compiler
+        -- already emits a `default` bind from a macro's `bind` field
+        -- (ms_compiler.lua), so recording it here makes the activated pack
+        -- self-bind. Folding the LIVE file (not just the stored copy) keeps live
+        -- and stored byte-identical, so the reconcile fingerprint still matches.
+        -- Only key binds are folded (the shape the compiler fully restores);
+        -- other bind types stay settings-only.
+        local function foldLiveMacroBinds()
+            if type(ms.bindConfig) ~= "table" then return end
+            local jsonPath = _dataDir .. "/ms_macros_visual.json"
+            local data = readJSON(jsonPath)
+            if type(data) ~= "table" or type(data.macros) ~= "table" then return end
+
+            local changed = false
+            for id, macro in pairs(data.macros) do
+                local cfg = ms.bindConfig[id]
+                if type(macro) == "table" and type(cfg) == "table"
+                    and (cfg.type == nil or cfg.type == "key") and cfg.key ~= nil then
+                    local mods = {}
+                    for _, m in ipairs(cfg.mods or {}) do mods[#mods + 1] = m end
+                    macro.bind = { type = "key", key = cfg.key, mods = mods }
+                    changed = true
+                end
+            end
+            if changed then writeFile(jsonPath, hs.json.encode(data) .. "\n") end
+        end
+
         -- Create a bare-bones, empty library slot the user can populate later —
         -- the pack analogue of Create New Profile ([[create-new-profile-makes-empty-entry]]).
         -- Meta only, no files; activating it copies nothing (the live slice
@@ -1285,16 +1473,82 @@ return function(ms)
             local dir  = libraryDir(kind, slug)
             if hs.fs.attributes(dir) then return nil, "A pack with that name already exists." end
             hs.execute("mkdir -p " .. sq(dir .. "/files"))
+
+            -- A blank SOUND pack is not silent-empty: like a blank profile
+            -- (seeded default rather than silent), it represents the DEFAULT
+            -- preset. Seed a full default sound_assign.json (every slot mapped
+            -- to its built-in default sample) so activating the pack resets the
+            -- live assignments — and therefore the Presets indicator — to
+            -- Default. Without it, activation kept the previous pack's slot map
+            -- (applyDropped only merges the assigns a slice carries), so the
+            -- preset never showed Default.
+            local fileCount = 0
+            if kind == "sound" and ms.soundSlotDefaults then
+                local assigns = ms.soundSlotDefaults()
+                if next(assigns) then
+                    writeFile(dir .. "/files/sound_assign.json",
+                        hs.json.encode(assigns) .. "\n")
+                    fileCount = 1
+                end
+            elseif kind == "macro" then
+                -- A blank macro pack carries the same stub ms_macros.lua a blank
+                -- profile goes live with, so the two are byte-identical and the
+                -- pack's active marker survives the reconcile fingerprint.
+                writeFile(dir .. "/files/ms_macros.lua",
+                    ms.package.blankMacroSrc(name))
+                fileCount = 1
+            end
+
             local record = {
                 slug        = slug,
                 kind        = kind,
                 name        = name,
                 origin      = "new",
-                fileCount   = 0,
+                fileCount   = fileCount,
                 installedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
             }
             writeFile(dir .. "/meta.json", hs.json.encode(record) .. "\n")
             return record
+        end
+
+        -- Create a new named entry seeded from the current live slice — the
+        -- pack analogue of Create New Profile ▸ "Seed from current". Unlike
+        -- libraryCapture it does NOT flip the active marker (creating a profile
+        -- doesn't switch to it), and it refuses to clobber an existing name.
+        -- If nothing is live to seed, it falls back to an empty slot.
+        ms.package.libraryCreateSeeded = function(kind, name)
+            if not LIBRARY_KINDS[kind] then return nil, "Not a library kind." end
+            name = (type(name) == "string" and name ~= "") and name or ("New " .. kind)
+            local slug = librarySlug(name)
+            if hs.fs.attributes(libraryDir(kind, slug)) then
+                return nil, "A pack with that name already exists."
+            end
+
+            if kind == "macro" then foldLiveMacroBinds() end
+            local files = ms.package.collect(kind)
+            if next(files) == nil then
+                return ms.package.libraryCreateEmpty(kind, name)
+            end
+            return ms.package.librarySave(kind, files, {
+                slug   = slug,
+                name   = name,
+                origin = "seeded",
+            })
+        end
+
+        -- Remove every stored entry of a kind except the active one — the pack
+        -- analogue of Clear Saved Profiles. Returns the count removed.
+        ms.package.libraryClear = function(kind)
+            if not LIBRARY_KINDS[kind] then return 0, "Not a library kind." end
+            local active = ms.package.libraryGetActive(kind)
+            local removed = 0
+            for _, rec in ipairs(ms.package.libraryList(kind)) do
+                if rec.slug ~= active then
+                    hs.execute("/bin/rm -rf " .. sq(libraryDir(kind, rec.slug)))
+                    removed = removed + 1
+                end
+            end
+            return removed
         end
 
         -- Absolute path to a stored slice's files, so export can pack a
@@ -1309,6 +1563,7 @@ return function(ms)
         ms.package.libraryCapture = function(kind, name)
             if not LIBRARY_KINDS[kind] then return nil, "Not a library kind." end
 
+            if kind == "macro" then foldLiveMacroBinds() end
             local files = ms.package.collect(kind)
             if next(files) == nil then
                 return nil, "Nothing live to capture as a " .. kind .. "."
@@ -1381,35 +1636,15 @@ return function(ms)
             writeFile(doneMarker, os.date("!%Y-%m-%dT%H:%M:%SZ") .. "\n")
         end
 
-        -- Point the active marker at whatever macro pack is actually live now,
-        -- and bank it if it is not in the library yet. Runs every boot (unlike
-        -- the one-time migration) so a wholesale profile switch — which swaps
-        -- the live ms_macros.lua and reloads — leaves Installed Macro Packs
-        -- flagging the correct entry. Cheap: a handful of file checks.
-        ms.package.reconcileActiveMacro = function()
-            local liveFiles = ms.package.collect("macro")
-            if next(liveFiles) == nil then return end
-
-            local liveName = (ms.macroMeta and type(ms.macroMeta.name) == "string"
-                and ms.macroMeta.name ~= "" and ms.macroMeta.name) or "Current Macros"
-            local slug = librarySlug(liveName)
-
-            if not hs.fs.attributes(libraryDir("macro", slug)) then
-                local rec = ms.package.librarySave("macro", liveFiles, {
-                    name    = liveName,
-                    origin  = "current",
-                    version = ms.macroMeta and ms.macroMeta.version or nil,
-                })
-                if rec then slug = rec.slug end
-            end
-
-            ms.package.librarySetActive("macro", slug)
-        end
-
         -- Files whose bytes are regenerated on the fly (so they never compare
         -- equal even when the slice is otherwise identical) — excluded from the
-        -- reconcile fingerprint. sound_assign.json is re-encoded by collect().
-        local RECONCILE_SKIP = { ["sound_assign.json"] = true }
+        -- reconcile fingerprint. sound_assign.json is re-encoded by collect();
+        -- ms_macros_visual.lua is recompiled from its .json on every rebuild()
+        -- (the .json source stays in the fingerprint), so its bytes drift.
+        local RECONCILE_SKIP = {
+            ["sound_assign.json"]     = true,
+            ["ms_macros_visual.lua"]  = true,
+        }
 
         -- A stable content fingerprint of a { rel = abs } slice: sorted rel paths
         -- each md5'd. Returns nil if the slice is empty or md5 is unavailable, so
@@ -1438,7 +1673,7 @@ return function(ms)
             local filesDir = libraryDir(kind, slug) .. "/files"
             if not hs.fs.attributes(filesDir) then return out end
             local rels = hs.execute(
-                "cd " .. sq(filesDir) .. " && find . -type f ! -name '.DS_Store' 2>/dev/null"
+                "cd " .. sq(filesDir) .. " && find . -type f ! -name '.DS_Store' ! -name '*.bak' 2>/dev/null"
             ) or ""
             for line in rels:gmatch("[^\r\n]+") do
                 local rel = line:gsub("^%./", "")

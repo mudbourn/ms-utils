@@ -1996,22 +1996,52 @@
     // drive the host. The 'library' push carries the kind as its action.
     (function() {
         var kinds = {};
+        // Kinds the host has answered at least once, and their in-flight retry
+        // timers. Panels fire request(kind) during their eager boot build, which
+        // can beat the host's library subscription and be dropped -- leaving the
+        // shelf permanently empty until a manual reload. request() now re-issues
+        // on a short backoff until the host answers for that kind, so the boot
+        // race self-heals for every shelf (theme, sound, macro) at this one seam.
+        var answered = {};
+        var retryTimers = {};
         function post(action, body) {
             if (window.shellPost) window.shellPost('library', action,
                 Object.assign({ action: action }, body || {}));
         }
+        function requestUntilAnswered(kind) {
+            post('libraryList', { kind: kind });
+            if (answered[kind] || retryTimers[kind]) return;
+            var attempts = 0;
+            retryTimers[kind] = setInterval(function() {
+                if (answered[kind] || attempts >= 10) {
+                    clearInterval(retryTimers[kind]);
+                    retryTimers[kind] = null;
+                    return;
+                }
+                attempts++;
+                post('libraryList', { kind: kind });
+            }, 500);
+        }
         window.msLibraryClient = {
             on:       function(kind, fn) { kinds[kind] = fn; },
-            request:  function(kind) { post('libraryList', { kind: kind }); },
+            request:  function(kind) { requestUntilAnswered(kind); },
             activate: function(kind, slug, name) {
                 post('libraryActivate', { kind: kind, slug: slug, name: name });
             },
             remove:   function(kind, slug) { post('libraryRemove', { kind: kind, slug: slug }); },
             capture:  function(kind, name) { post('libraryCapture', { kind: kind, name: name }); },
             rename:   function(kind, slug, name) { post('libraryRename', { kind: kind, slug: slug, name: name }); },
-            createEmpty: function(kind, name) { post('libraryCreateEmpty', { kind: kind, name: name }); },
+            // seed:true fills the new entry from the current live slice; false leaves it empty.
+            createEmpty: function(kind, name, seed) { post('libraryCreateEmpty', { kind: kind, name: name, seed: seed === true }); },
+            clear:    function(kind) { post('libraryClear', { kind: kind }); },
         };
         window.registerPanel('library', function(kind, payload) {
+            // Any push for this kind proves the host is live; stop retrying.
+            answered[kind] = true;
+            if (retryTimers[kind]) {
+                clearInterval(retryTimers[kind]);
+                retryTimers[kind] = null;
+            }
             var fn = kinds[kind];
             if (fn) fn((payload && payload.entries) || []);
         });

@@ -3227,12 +3227,19 @@
 
     var packCreateBtn = _kit.actionBtn("Create New macro pack", "", async function() {
         if (!window.openModal || !window.msLibraryClient) return;
+        // Name the pack, then choose seed-or-blank — the mirror of Create New
+        // Profile. Macro packs seed their whole slice, ms_macros.lua included.
         var r = await window.openModal(
             "Create New macro pack",
-            "Name a fresh, empty macro pack you can save into later.",
-            "Create", "Cancel", true, "");
+            "Name a fresh macro pack.",
+            "Next", "Cancel", true, "");
         var v = (r.value || "").trim();
-        if (r.confirmed && v) window.msLibraryClient.createEmpty("macro", v);
+        if (!r.confirmed || !v) return;
+        var s = await window.openModal(
+            "Create \"" + v + "\"",
+            "Start it from your current macros, or blank?",
+            "Seed from current", "Start blank");
+        window.msLibraryClient.createEmpty("macro", v, s.confirmed);
     });
     var packSaveBtn = _kit.actionBtn("Save current macros...", "", async function() {
         if (!window.openModal || !window.msLibraryClient) return;
@@ -3256,9 +3263,22 @@
         packList = _kit.h("div", { id: "library-list-macro", cls: "library-list" });
         body.appendChild(packList);
     }, "Hotswap a saved macro set");
+    // Clear every stored pack except the active one, mirroring the profiles
+    // panel. Always rendered (manage section is not repainted per push); the
+    // host clears only non-active entries.
+    var packClearBtn = _kit.actionBtn("Clear Saved macro packs", "danger", async function() {
+        if (!window.openModal || !window.msLibraryClient) return;
+        var r = await window.openModal(
+            "Clear Saved macro packs",
+            "Delete all saved macro packs except the active one?"
+            + "\n\nThis cannot be undone.",
+            "Delete All", "Cancel");
+        if (r.confirmed) window.msLibraryClient.clear("macro");
+    });
     var packManageCard = _kit.section("manage-macro", "Manage", function(body) {
         body.appendChild(_kit.btnRow(packCreateBtn, packSaveBtn));
         body.appendChild(_kit.btnRow(packImportBtn, packExportBtn));
+        body.appendChild(_kit.btnRow(packClearBtn));
     }, "Creating, saving and moving macro packs");
     // Managers sit at the bottom, matching the theme/sound panels' order.
     bindsScroll.appendChild(packCard);

@@ -233,12 +233,19 @@
             "Creating, saving and moving " + noun + "s", (body) => {
             body.appendChild(btnRow(
                 actionBtn("Create New " + noun, "", async () => {
+                    // Name the entry, then choose seed-or-blank — the pack
+                    // mirror of Create New Profile.
                     const r = await window.openModal(
                         "Create New " + noun,
-                        "Name a fresh, empty " + noun + " you can save into later.",
-                        "Create", "Cancel", true, "");
+                        "Name a fresh " + noun + ".",
+                        "Next", "Cancel", true, "");
                     const v = (r.value || "").trim();
-                    if (r.confirmed && v) window.msLibraryClient.createEmpty(kind, v);
+                    if (!r.confirmed || !v) return;
+                    const s = await window.openModal(
+                        "Create \"" + v + "\"",
+                        "Start it from your current " + noun + ", or blank?",
+                        "Seed from current", "Start blank");
+                    window.msLibraryClient.createEmpty(kind, v, s.confirmed);
                 }),
                 actionBtn(captureLabel, "", async () => {
                     const r = await window.openModal(
@@ -257,6 +264,19 @@
                     sendToHost({ action: "importPackage" })),
                 actionBtn("Export current " + noun + "...", "", () =>
                     sendToHost({ action: "exportPackage", type: kind })),
+            ));
+            // Clear every stored entry except the active one, mirroring the
+            // profiles panel. Always rendered (the manage section is not
+            // repainted per push); the host clears only non-active entries.
+            body.appendChild(btnRow(
+                actionBtn("Clear Saved " + noun + "s", "danger", async () => {
+                    const r = await window.openModal(
+                        "Clear Saved " + noun + "s",
+                        "Delete all saved " + noun + "s except the active one?"
+                        + "\n\nThis cannot be undone.",
+                        "Delete All", "Cancel");
+                    if (r.confirmed) window.msLibraryClient.clear(kind);
+                }),
             ));
         });
 

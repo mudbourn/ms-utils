@@ -250,11 +250,20 @@ return function(ms)
                     if entry.enabled ~= nil then
                         ms.binds[id] = entry.enabled
                     end
-                    if entry.bind then
-                        local def = ms.registry._defs and ms.registry._defs[id]
-                        if def and type(entry.bind) == "table" and entry.bind.type then
-                            ms.bindConfig[id] = entry.bind
-                        end
+                    -- Load a stored bind regardless of whether the macro is
+                    -- registered right now. The old `def and ...` gate dropped
+                    -- the bind for any macro not in the registry at load time —
+                    -- which, for a VISUAL macro (whose bind lives ONLY here in
+                    -- settings, never as a define() default), meant a load run
+                    -- while ms_macros_visual.json was mid-hotswap or its compile
+                    -- transiently failed would strip the bind from bindConfig,
+                    -- and the next saveSettings would then erase it from disk for
+                    -- good. Round-tripping the raw bind keeps it alive across
+                    -- such windows; an orphan entry is harmless (rebind iterates
+                    -- the registry, save just writes it back) and is cleaned up
+                    -- properly when the macro is actually deleted.
+                    if type(entry.bind) == "table" and entry.bind.type then
+                        ms.bindConfig[id] = entry.bind
                     end
                     if entry.cooldown ~= nil then
                         local n = tonumber(entry.cooldown)
@@ -282,7 +291,20 @@ return function(ms)
                 if s.w ~= nil then ms._shellState.w = tonumber(s.w) end
                 if s.h ~= nil then ms._shellState.h = tonumber(s.h) end
                 if s.lastPanel ~= nil then ms._shellState.lastPanel = tostring(s.lastPanel) end
-                ms._shellState.visible = false
+                -- Shell visibility: force hidden on a COLD boot (the loading
+                -- screen owns the screen then, and the shell starts closed).
+                -- Only during a live hotswap (profile switch / pack activate,
+                -- flagged by _quickReloading) do we preserve the shell's REAL
+                -- on-screen state — otherwise the toggle forgets it is open and
+                -- replays the open sequence on the next Alt+P. Calling
+                -- ms.shell.isVisible() at boot also perturbed the loading
+                -- choreography, so it must stay out of the cold-boot path.
+                if ms._quickReloading then
+                    ms._shellState.visible =
+                        (ms.shell and ms.shell.isVisible and ms.shell.isVisible()) or false
+                else
+                    ms._shellState.visible = false
+                end
             end
             if data.user and type(data.user) == "table" then
                 for key, value in pairs(data.user) do
@@ -2097,13 +2119,103 @@ return function(ms)
                 if hs.fs.attributes(arch) then moveFile(arch, cf.live) end
             end
 
-            ms.alert("Switched to \"" .. targetName .. "\".\nReloading in 3 seconds...", 4)
+            -- Safety net: never leave the live ms_macros.lua absent. If the
+            -- target profile had no ms_macros.lua (a freshly created empty
+            -- profile), the archive step above removed the current one and
+            -- nothing replaced it — which would hard-crash the next cold boot's
+            -- security audit. Seed the same minimal stub boot uses so the live
+            -- install always has a valid, auditable macros file.
+            if not hs.fs.attributes(macrosPath) then
+                local stub = io.open(macrosPath, "w")
+                if stub then
+                    stub:write(
+                        "-- New profile — add your macros below.\n"
+                        .. "ms.macroMeta = { name = \"" .. targetName .. "\", author = \"\" }\n"
+                    )
+                    stub:close()
+                end
+            end
+
+            -- Bring the live content in line with the profile's same-named
+            -- packs so the profile counts as aligned ("Active"). Activating each
+            -- pack (content + marker) BEFORE the hotswap means the follow-on
+            -- reloadMacros/loadSettings pick up the applied state, and — because
+            -- the live content now matches the pack — the boot-time fingerprint
+            -- reconcile keeps the profile aligned across restarts (a plain
+            -- marker set would drift back on reboot, e.g. sound assignments).
+            -- Kinds with no same-named pack are left to fingerprint reconcile
+            -- after the hotswap; they will not match the profile slug, so the
+            -- profile stays unaligned there until the user sets that pack, which
+            -- is exactly the intended "mix = not a specific profile" behaviour.
+            local alignedKinds = {}
+            if ms.package and ms.package.librarySlug
+                and ms.package.libraryActivate and ms.package.libraryHasEntry then
+                local pslug = ms.package.librarySlug(targetName)
+                for _, k in ipairs({ "theme", "sound", "macro" }) do
+                    if pslug and ms.package.libraryHasEntry(k, pslug) then
+                        local ok, res = pcall(ms.package.libraryActivate, k, pslug)
+                        if ok and res then alignedKinds[k] = true end
+                    end
+                end
+            end
+
             ms.dev.log({
                 type   = "system",
                 event  = "profile_switch_complete",
                 target = targetName,
             })
-            hs.timer.doAfter(3, function() hs.reload() end)
+
+            -- Hotswap the running state in place instead of a full hs.reload().
+            -- Everything the target profile just moved onto disk is re-read
+            -- here, the same surfaces boot rebuilds: macros (handwritten +
+            -- visual) + plugins + settings + binds via reloadMacros, then
+            -- theme, sounds, and authored settings. Quiet-flagged so the
+            -- individual reloads suppress their own toasts and refocus dance;
+            -- our single "Switched" toast stands in for all of them.
+            local wasQuick = ms._quickReloading
+            ms._quickReloading = true
+            if ms.ui and ms.ui._actions and ms.ui._actions.reloadMacros then
+                pcall(ms.ui._actions.reloadMacros)
+            end
+            if ms.loadTheme then pcall(ms.loadTheme) end
+            pcall(function() ms.alert:recolor() end)
+            pcall(function() ms.dev:recolor() end)
+            ms._soundsDirty = true
+            if ms._discoverSounds then pcall(ms._discoverSounds) end
+            if ms._loadAuthoredSettings then pcall(ms._loadAuthoredSettings) end
+            if ms._defineAuthoredSettings then pcall(ms._defineAuthoredSettings) end
+            ms._quickReloading = wasQuick
+
+            -- Kinds already aligned above (a same-named pack was activated) keep
+            -- that marker. Any remaining kind is reconciled to whatever slice is
+            -- now live by content fingerprint — which won't match the profile
+            -- slug, leaving the profile intentionally unaligned there.
+            if ms.package and ms.package.reconcileActive then
+                for _, k in ipairs({ "theme", "sound", "macro" }) do
+                    if not alignedKinds[k] then
+                        pcall(ms.package.reconcileActive, k)
+                    end
+                end
+            end
+
+            -- Record the live setup as "on" this profile. Set last, after the
+            -- internal libraryActivate calls above, so it is the final word (a
+            -- manual pack hotswap later clears it — see ms_ui libraryActivate).
+            if ms.package and ms.package.setActiveProfile then
+                pcall(ms.package.setActiveProfile, targetName)
+            end
+
+            ms.playSlot("update")
+            ms.alert("Switched to \"" .. targetName .. "\".", 3, true)
+            ms.ui.markDirty()
+            ms.ui.refresh()
+            -- Repaint the Installed Library shelves so the reconciled markers
+            -- show up as moved badges without waiting for a panel re-open.
+            if ms.ui._actions and ms.ui._actions.libraryList then
+                for _, k in ipairs({ "theme", "sound", "macro" }) do
+                    pcall(ms.ui._actions.libraryList, { kind = k })
+                end
+            end
         end
 
         auditMacros = function(src)
@@ -2380,14 +2492,18 @@ return function(ms)
 
             -- Empty-but-valid macros: just credits, no binds. The boot loader
             -- treats a bindless file as an empty profile (a warning, not a fault).
-            local blankSrc = table.concat({
-                "-- New profile — add your macros below.",
-                "ms.macroMeta = {",
-                "    name   = \"" .. folderName .. "\",",
-                "    author = \"\",",
-                "}",
-                "",
-            }, "\n")
+            -- Uses the same canonical stub the blank macro PACK is seeded with,
+            -- so the two are byte-identical and the pack reconciles as active.
+            local blankSrc = (ms.package and ms.package.blankMacroSrc
+                and ms.package.blankMacroSrc(folderName))
+                or table.concat({
+                    "-- New profile — add your macros below.",
+                    "ms.macroMeta = {",
+                    "    name   = \"" .. folderName .. "\",",
+                    "    author = \"\",",
+                    "}",
+                    "",
+                }, "\n")
 
             local mf = io.open(dir .. "/ms_macros.lua", "w")
             if not mf then
@@ -2414,7 +2530,48 @@ return function(ms)
                 copyDirContents(SoundMacroDir,  dir .. "/sounds/macro/")
             end
 
+            -- Parity: a blank profile spawns matching blank theme + sound packs
+            -- in their libraries, so a fresh profile's look and sounds can be
+            -- hotswapped the same way its macros can. Seeded profiles skip this
+            -- (they already carry the live theme/sounds). Best-effort — a name
+            -- clash just leaves the existing pack in place.
+            if not seed and ms.package and ms.package.libraryCreateEmpty then
+                for _, k in ipairs({ "macro", "theme", "sound" }) do
+                    local ok, rec, err = pcall(ms.package.libraryCreateEmpty, k, folderName)
+                    -- Surface a failed pack creation instead of swallowing it —
+                    -- a silent pcall here is what let a missing macro pack go
+                    -- unnoticed. rec==nil means the create declined (name clash)
+                    -- or errored; log both so a real failure is diagnosable.
+                    if not ok or not rec then
+                        local why = (not ok) and tostring(rec) or tostring(err)
+                        print("createNewProfile: libraryCreateEmpty(" .. k
+                            .. ") did not create a pack: " .. why)
+                        if ms.dev and ms.dev.log then
+                            pcall(ms.dev.log, {
+                                type  = "warning",
+                                event = "profile_pack_create_failed",
+                                kind  = k,
+                                msg   = why,
+                            })
+                        end
+                    end
+                end
+            end
+
             ms._profilesDirty = true
+
+            -- A blank profile switches to itself: its three same-named packs
+            -- all become active together, so the profile reads as aligned
+            -- ("Active") in one step. switchProfile runs the full hotswap and
+            -- its own toast, so return here rather than double-toasting. Seeded
+            -- profiles are left inactive (creating != switching for those).
+            if not seed then
+                ms.playSlot("update")
+                if ms.ui and ms.ui.markDirty then ms.ui.markDirty() end
+                switchProfile(folderName)
+                return
+            end
+
             ms.playSlot("update")
             ms.alert("Created \"" .. folderName .. "\".", 3)
             -- markDirty forces refresh to rebuild the pushed state (which reads
@@ -2479,6 +2636,97 @@ return function(ms)
                 ms.alert("Profile \"" .. name .. "\" updated.", 3, true)
             end)
         end
+
+        -- Rewrite the name field inside a macros file's ms.macroMeta table, so a
+        -- renamed profile's credits (and the name saveCurrentProfile looks up)
+        -- stay in step with its folder. Scoped to the first name= after
+        -- macroMeta; strips quotes/backslashes from the value so the result is
+        -- always valid, auditable Lua.
+        local function rewriteMacroMetaName(path, newName)
+            local f = io.open(path, "r")
+            if not f then return false end
+            local src = f:read("*all"); f:close()
+            local i = src:find("macroMeta")
+            if not i then return false end
+            local safe = tostring(newName):gsub('[\\"]', "")
+            local repl = "name%1\"" .. (safe:gsub("%%", "%%%%")) .. "\""
+            local head, tail = src:sub(1, i - 1), src:sub(i)
+            local newTail, n = tail:gsub('name(%s*=%s*)"[^"]*"', repl, 1)
+            if n == 0 then return false end
+            local g = io.open(path, "w")
+            if not g then return false end
+            g:write(head .. newTail); g:close()
+            return true
+        end
+
+        -- Rename a profile: its folder, its live/stored macros credit, and its
+        -- three same-named packs (so the alignment slug follows). Works for the
+        -- active profile (whose files are live) and inactive ones alike.
+        local function renameProfile(oldName, newName)
+            local oldFolder = sanitizeName(oldName or "")
+            newName = type(newName) == "string" and newName:gsub("^%s+", ""):gsub("%s+$", "") or ""
+            local newFolder = sanitizeName(newName)
+            if oldFolder == "" or newFolder == "" then
+                ms.alert("Rename failed: invalid name.", 4)
+                return
+            end
+            if newFolder ~= oldFolder then
+                for _, p in ipairs(getProfiles()) do
+                    if p == newFolder then
+                        ms.alert("A profile named \"" .. newFolder .. "\" already exists.", 4)
+                        return
+                    end
+                end
+            end
+
+            local activeName = ms.macroMeta and sanitizeName(ms.macroMeta.name or "") or ""
+            local isActive = (oldFolder == activeName)
+
+            if isActive then
+                rewriteMacroMetaName(macrosPath, newFolder)
+                ms.macroMeta = ms.macroMeta or {}
+                ms.macroMeta.name = newFolder
+            end
+            if newFolder ~= oldFolder and hs.fs.attributes(profilesPath .. oldFolder) then
+                os.rename(profilesPath .. oldFolder, profilesPath .. newFolder)
+            end
+            if not isActive then
+                rewriteMacroMetaName(profilesPath .. newFolder .. "/ms_macros.lua", newFolder)
+            end
+
+            -- Keep the profile's same-named packs aligned (slug follows the
+            -- folder). Pass newFolder so the pack slug derives from the same
+            -- sanitized base the alignment check uses.
+            if ms.package and ms.package.libraryRenameEntry and ms.package.librarySlug then
+                for _, k in ipairs({ "macro", "theme", "sound" }) do
+                    pcall(ms.package.libraryRenameEntry, k,
+                        ms.package.librarySlug(oldFolder), newFolder)
+                end
+            end
+
+            -- Carry the active-profile marker to the new name if this was the
+            -- profile the live setup is on, so it stays "Active" after a rename.
+            if ms.package and ms.package.getActiveProfile and ms.package.setActiveProfile then
+                local cur = ms.package.getActiveProfile()
+                if cur and sanitizeName(cur) == oldFolder then
+                    pcall(ms.package.setActiveProfile, newFolder)
+                end
+            end
+
+            ms._profilesDirty = true
+            ms.playSlot("update")
+            ms.alert("Renamed to \"" .. newFolder .. "\".", 3, true)
+            if ms.ui then
+                if ms.ui.markDirty then ms.ui.markDirty() end
+                if ms.ui.refresh then ms.ui.refresh() end
+                if ms.ui._actions and ms.ui._actions.libraryList then
+                    for _, k in ipairs({ "macro", "theme", "sound" }) do
+                        pcall(ms.ui._actions.libraryList, { kind = k })
+                    end
+                end
+            end
+        end
+        ms.renameProfile = renameProfile
 
         local function exportProfilePkg()
             local sq = function(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
@@ -2969,8 +3217,28 @@ return function(ms)
             end
         end
 
+        -- The profile the live setup is "on". Read from the explicit marker a
+        -- profile switch records (ms.package.setActiveProfile), NOT inferred from
+        -- the three pack markers — those are named per-pack and rarely share the
+        -- profile's slug, so the old all-three-must-match rule left every profile
+        -- reading as unaligned. A manual single-pack hotswap clears the marker
+        -- (the live state is then a custom mix, no profile). Validated against
+        -- the profiles that still exist so a stale marker can't claim a deleted
+        -- profile. Returns the profile folder name, or "" when nothing is active.
+        local function alignedProfile()
+            if not (ms.package and ms.package.getActiveProfile) then return "" end
+            local active = ms.package.getActiveProfile()
+            if not active or active == "" then return "" end
+            active = sanitizeName(active)
+            for _, p in ipairs(getProfiles()) do
+                if p == active then return p end
+            end
+            return ""
+        end
+
         ms.sanitizeName       = sanitizeName
         ms.getProfiles        = getProfiles
+        ms.alignedProfile     = alignedProfile
         ms.switchProfile      = switchProfile
         ms.importProfile      = importProfile
         ms.importProfilePkg   = importProfilePkg

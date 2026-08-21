@@ -3155,6 +3155,47 @@
                         end
                     end
                 end
+
+                -- Health catch: if the active-sound folder was emptied or
+                -- misplaced (e.g. a broken pack switch loses the custom sound
+                -- library), assignments point at samples that no longer resolve.
+                -- Surface ONE clear, de-duplicated warning instead of leaving
+                -- playSlot to print a quiet per-file "could not load sound" line
+                -- forever. _resolveSlot already falls back to the default sample
+                -- so playback keeps working — this just tells the user why.
+                local missing = 0
+                for _, name in pairs(ms.soundAssign or {}) do
+                    if type(name) == "string" and name ~= ""
+                        and not ms.sounds[name] and not ms.macroSounds[name] then
+                        missing = missing + 1
+                    end
+                end
+                if missing > 0 then
+                    local sig = missing .. "@" .. SoundActiveDir
+                    if sig ~= ms._missingSoundsSig then
+                        ms._missingSoundsSig = sig
+                        local msg = missing .. " assigned sound"
+                            .. (missing == 1 and "" or "s")
+                            .. " could not be found — active sound folder may be "
+                            .. "empty or misplaced (" .. SoundActiveDir
+                            .. "). Falling back to defaults."
+                        print("ms.sound: " .. msg)
+                        if ms.dev and ms.dev.log then
+                            pcall(ms.dev.log, {
+                                type  = "warning",
+                                event = "active_sounds_missing",
+                                msg   = msg,
+                                count = missing,
+                            })
+                        end
+                        if ms.alert and ms.shell and ms.shell.isReady
+                            and ms.shell.isReady() then
+                            pcall(ms.alert, "Missing sounds\n" .. msg, 6)
+                        end
+                    end
+                else
+                    ms._missingSoundsSig = nil
+                end
             end
 
             ms.sound = function(path, async, device)
@@ -3225,6 +3266,17 @@
                 return s
             end
 
+            -- Only accept a resolved path that still exists on disk. The map
+            -- ms.sounds is built at discovery time; if the active-sound folder
+            -- is later emptied or misplaced (e.g. a broken pack switch), its
+            -- entries point at files that are now gone. Verifying here lets
+            -- resolution fall through to the built-in default sample instead of
+            -- handing ms.sound a dead path (which only printed a per-sound
+            -- "could not load sound" line, once per file, forever).
+            local function _slotPathExists(p)
+                return type(p) == "string" and hs.fs.attributes(p) ~= nil
+            end
+
             local function _resolveSlot(id)
                 local assigned = ms.soundAssign and ms.soundAssign[id]
                 if assigned then
@@ -3234,15 +3286,18 @@
                         and hs.fs.attributes(assigned) then
                         p = assigned
                     end
-                    if p then return p end
+                    if _slotPathExists(p) then return p end
                 end
 
                 local p = (ms.sounds and ms.sounds[id])
                     or (ms.macroSounds and ms.macroSounds[id])
-                if p then return p end
+                if _slotPathExists(p) then return p end
 
                 local def = ms.soundSlot(id)
-                if def and def.d then return ms.sounds and ms.sounds[def.d] end
+                if def and def.d then
+                    local dp = ms.sounds and ms.sounds[def.d]
+                    if _slotPathExists(dp) then return dp end
+                end
                 return nil
             end
 
@@ -6231,10 +6286,23 @@
                 do
                     local af = io.open(macrosPath, "r")
                     if not af then
-                        error("ms_macros.lua: cannot open file for security audit: " .. macrosPath)
+                        -- A missing ms_macros.lua must not take down all of
+                        -- Hammerspoon. It can be absent mid-move (an interrupted
+                        -- profile switch or pack activate) or for a freshly
+                        -- created empty profile. Seed a minimal valid stub and
+                        -- carry on with an empty macro set instead of error()ing
+                        -- out of boot; the user can re-activate a pack from the
+                        -- Installed Library once the shell is up.
+                        print("ms_macros.lua missing at boot; seeding an empty stub: " .. macrosPath)
+                        rawSrc = "-- ms_macros.lua was missing at boot and has been reset.\n"
+                            .. "-- Activate a macro pack from the Installed Library to restore your macros.\n"
+                            .. "ms.macroMeta = { name = \"Recovered\", author = \"\" }\n"
+                        local seed = io.open(macrosPath, "w")
+                        if seed then seed:write(rawSrc); seed:close() end
+                    else
+                        rawSrc = af:read("*all")
+                        af:close()
                     end
-                    rawSrc = af:read("*all")
-                    af:close()
                     local auditErrs = ms.auditMacros(rawSrc)
                     if #auditErrs > 0 then
                         local msg = "ms_macros.lua failed security audit ("
@@ -6306,18 +6374,15 @@
                         print("ms.package.migrateMacroPacks (boot): " .. tostring(migErr))
                     end
                 end
-                -- Always-run: keep the active marker tracking the live pack, so a
-                -- wholesale profile switch still flags the right Installed entry.
-                if ms.package and ms.package.reconcileActiveMacro then
-                    local rcOk, rcErr = pcall(ms.package.reconcileActiveMacro)
-                    if not rcOk then
-                        print("ms.package.reconcileActiveMacro (boot): " .. tostring(rcErr))
-                    end
-                end
-                -- Themes and sounds reconcile by content (no macroMeta name to
-                -- match on), so the live theme/sound flags correctly too.
+                -- Always-run: keep each kind's active marker tracking whatever
+                -- slice is actually live, by content fingerprint. All three
+                -- kinds reconcile the same way now — the old macro-only name-slug
+                -- path (reconcileActiveMacro) matched a fragile ms.macroMeta.name
+                -- and flipped the badge to the wrong entry after a swap. With
+                -- clean-replace activation the live macro slice is byte-identical
+                -- to the activated entry, so content matching flags it correctly.
                 if ms.package and ms.package.reconcileActive then
-                    for _, k in ipairs({ "theme", "sound" }) do
+                    for _, k in ipairs({ "theme", "sound", "macro" }) do
                         local rcOk, rcErr = pcall(ms.package.reconcileActive, k)
                         if not rcOk then
                             print("ms.package.reconcileActive(" .. k .. ") (boot): " .. tostring(rcErr))

@@ -921,11 +921,34 @@
                     end
                 end
 
+                -- Preserve the macro's key bind across a builder save. The
+                -- builder canvas has no bind editor, so macroDef.bind arrives
+                -- nil; writing it blindly would strip a bind the user set via the
+                -- rebind UI (which lives in ms.bindConfig / ms_settings.json, not
+                -- in this JSON) or one previously baked here. Fall back to the
+                -- live bindConfig entry — folded to the stored { type,key,mods }
+                -- shape the compiler emits as a `default` bind — then to the
+                -- existing JSON entry. This both prevents the clobber AND bakes
+                -- the current bind in, so it travels with the pack and survives
+                -- profile switches instead of being settings-only.
+                local bind = macroDef.bind
+                if bind == nil then
+                    local cfg = ms.bindConfig and ms.bindConfig[macroId]
+                    if type(cfg) == "table"
+                        and (cfg.type == nil or cfg.type == "key") and cfg.key ~= nil then
+                        local mods = {}
+                        for _, m in ipairs(cfg.mods or {}) do mods[#mods + 1] = m end
+                        bind = { type = "key", key = cfg.key, mods = mods }
+                    elseif type(data.macros[macroId]) == "table" then
+                        bind = data.macros[macroId].bind
+                    end
+                end
+
                 data.macros[macroId] = {
                     name     = macroDef.name,
                     author   = macroDef.author,
                     group    = macroDef.group,
-                    bind     = macroDef.bind,
+                    bind     = bind,
                     steps    = macroDef.steps,
                     cooldown = macroDef.cooldown,
                 }
